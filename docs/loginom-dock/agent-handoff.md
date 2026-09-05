@@ -1,3 +1,15 @@
+**Последняя live диагностика P3:** 20260905-215859-f2878b83 file-upload-probe,
+36/36 frozen PASS. Audit SHA 10a973d4…; runtime ed30bddc…; harness 594efa2e.
+Hermes ChatGPT/Luna/medium на Mac, test и /test. Один dock_artifact_upload
+передал CSV в native input, затем inspect подтвердил pending, без новых mutations.
+Destination /test/Dock-upload-20260905-215859-f2878b83.csv, 230 bytes SHA f628434c….
+ЭТО НЕ server upload acceptance: байты на сервере и transfer completion НЕ
+проверены, reject не реализован. Probe завершён, активного Hermes/browser нет.
+Далее bind server transfer + download event к этой операции в ОДНОЙ живой сессии,
+stageDownload verify/server bytes, budget/reconciliation/reject, затем весь P3–P9.
+Новый harness goal file-upload-probe пинит fixture и даёт run-specific replace
+grant; прочие goals запрещают upload. Python 89 PASS. Точные SHA в status.
+
 **Текущая P3 реализация:** dock_artifact_upload подключён только к replay /
 allowCandidate с artifactStore. Принимает только artifact_id/upload_grant_id /
 observation_id/operation_id. Точный grant, свежий directory/context/epoch,

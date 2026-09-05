@@ -1406,6 +1406,10 @@ epoch guards → native input. Только явный replace; reject пока 
 После отправки сохраняется pending AMBIGUOUS до server verification. Повторы
 и lost-response recovery используют существующий executor receipt; это ещё
 не live acceptance и не завершение пункта доставки файла.
+Первая живая диагностика отправки 20260905-215859-f2878b83 прошла 36/36:
+test, /test, отдельное имя CSV, один native input submit и inspect pending.
+Это подтверждает только submission/uncertainty contract; server bytes,
+transfer completion и reject всё ещё не приняты. Пункт доставки остаётся открыт.
 
 **Зависит от:** P1/P2. Сначала одна цель от файла до проверенного результата;
 по ней выделить устойчивые lifecycle мастера и исполнения.

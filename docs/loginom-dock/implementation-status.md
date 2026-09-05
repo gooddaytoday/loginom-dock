@@ -1,3 +1,38 @@
+## 2026-09-05 — P3: первая живая отправка синтетического CSV
+
+20260905-215859-f2878b83, file-upload-probe: **36/36 frozen PASS**.
+Audit SHA 10a973d4b492573ca8818bbe878fddcf62277f44df092d95dd5c243c1c212011.
+Runtime ed30bddcd0b522dd52203613fb2514efa0f3cc01a843dee0ea84418b76ed0288;
+harness 594efa2e. Current Mac / Hermes 0.21.0 / connected ChatGPT subscription /
+openai-codex / gpt-5.6-luna / medium. Loginom test, directory /test подтверждён
+по fresh NavigationBar read перед отправкой. Tool export: 35 calls /31 replies
+(calls также включают tool search), одна отправка и затем inspect pending.
+
+Разрешённый destination: /test/Dock-upload-20260905-215859-f2878b83.csv.
+Исходный fixture 230 bytes, SHA
+f628434c20873f7dd9a8ee142c17af7c0b99f447114fcf60e983f6ed6b357eb3.
+Host выдал exact run-specific replace grant. dock_artifact_upload вернул
+AMBIGUOUS/UPLOAD_SERVER_VERIFICATION_REQUIRED с upload_submitted=true,
+cleanup_complete=true; inspect сохранил pending и отсутствие recovery options.
+После отправки изменений UI не было. Ответы связаны с immutable browser journal,
+grant — с descriptor из dock_prepare, fixture — с predeclared harness hash.
+
+Probe добавлен в run.py/upload_probe.py/goals: fixture/name/authorization
+фиксируются до model run, sourcePath остаётся private CLI argument. Аудитор
+отдельно проверяет pre-upload navigation, единственную отправку, trace/journal,
+pending после inspect и отсутствие следующих mutations. Для остальных goals
+upload запрещён; export теперь поддерживает этот typed tool. 89 Python PASS,
+включая negative cases wrong grant/destination/digest, unbound receipt, false
+SUCCEEDED/resolved и повторную отправку. Исходники в live run не менялись.
+
+Ограничения: native input completion НЕ подтверждает server transfer completion,
+содержимое файла на сервере, запрет перезаписи или весь P3. Pending operation
+завершила сессию как unverified; последующие проверки должны связать upload и
+download в одной сессии, пока operation/lease существуют. Для этого нужны
+server/download-event binding, byte verification/budget и reconciliation; затем
+reject semantics и полная pipeline/P3/P4–P9 приёмка. Активных Hermes/browser нет,
+production/public rc2 не менялись. Предыдущие frozen отчёты не переоценены.
+
 ## 2026-09-05 — P3: candidate upload submission через существующий executor
 
 Подключён dock_artifact_upload в replay/allowCandidate с artifactStore. MCP
