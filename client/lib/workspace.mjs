@@ -132,10 +132,12 @@ export async function prepareWorkspaceSession({ metadata, assertAllowed, prepare
 
 export const workspaceObserveTool = {
   name: 'dock_workspace_observe',
-  description: 'Read a compact page of the prepared Loginom workspace. Before preparation, scope bootstrap reads only application/build/login/blocker state without navigation, login, draft creation or capture activation. Otherwise choose all (default), palette, graph or dialogs. Continue with cursor=page.next_cursor alone; pages share observation_id and revision. If the workspace changes, start a new observation. Only delivered UI refs can be used. visible means rendered, not necessarily reachable: prefer interaction.state=point_observed for gestures. outside_viewport and point_not_observed indicate that no interaction point was seen; read other pages to find a reachable target, especially after scroll. Truncation and full_dom_complete=false mean this is not proof of the whole workspace. Read-only.',
+  description: 'Read a compact page of the prepared Loginom workspace. Before preparation, scope bootstrap reads only application/build/login/blocker state without navigation, login, draft creation or capture activation. Otherwise choose all (default), palette, graph or dialogs. Optionally supply root_ref plus its observation_id to limit detailed UI elements/cells to an already delivered element and its descendants. Global context and guards are retained; this still performs a global scan and does not yet bypass UI_SCAN_LIMIT. Continue with cursor=page.next_cursor alone; pages share observation_id and revision. If the workspace changes, start a new observation. Only delivered UI refs can be used. visible means rendered, not necessarily reachable: prefer interaction.state=point_observed for gestures. outside_viewport and point_not_observed indicate that no interaction point was seen; read other pages to find a reachable target, especially after scroll. Truncation and full_dom_complete=false mean this is not proof of the whole workspace. Read-only.',
   inputSchema: { type: 'object', properties: {
     scope: { type: 'string', enum: ['bootstrap', 'all', 'palette', 'graph', 'dialogs'] },
     cursor: { type: 'string', minLength: 1, maxLength: 128 },
+    root_ref: {type:'string',minLength:1,maxLength:128},
+    observation_id: {type:'string',minLength:1,maxLength:128},
   }, additionalProperties: false },
   annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: false },
 };

@@ -1,5 +1,22 @@
 # Выполнение плана Loginom Dock
 
+## P2: root binding и browser detail filtering — 5 сентября 2026
+
+Добавлены root_ref + observation_id к workspace.observe и bridge. Root допускается
+только из доставленных refs; нельзя смешивать его с bootstrap/cursor или менять
+область при продолжении страниц. Browser фильтрует controls/cells выбранным
+элементом/subtree, сохраняя глобальные auth/build/active-tab, masks/dialogs и граф.
+UI action повторно читает тот же root, stale/hidden/inactive root отклоняется.
+observation_root входит в digest/projection и явно сообщает global_scan=true;
+truncation не выдаёт область за полный UI. 176 client / 80 Python / 10 packaging
+PASS: внешняя маска, detached root, cursor binding, admission неизвестных refs.
+
+**Глобальный TreeWalker ещё не ограничен выбранным root**, UI_SCAN_LIMIT остаётся.
+Это фильтрация деталей в браузере и привязка протокола, не готовность больших DOM.
+Далее отделить bounded discovery global guards/roots от detail scan, проверить
+initial discovery при большом DOM, глобальные перекрытия и duplicate tids.
+Live root ещё не выполнялся; active Hermes нет. Далее весь оставшийся P2/P3–P9.
+
 ## P2: явное усечение значений полей — 5 сентября 2026
 
 Editable field observation теперь содержит value_truncated и value_length_utf16;

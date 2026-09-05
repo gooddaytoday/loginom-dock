@@ -3,6 +3,14 @@ import assert from 'node:assert/strict';
 import { actionDescribeTool, actionRunTool, assertActionOutcome, validateActionParameters } from '../lib/action-catalog.mjs';
 import { actions, selectors, build, Page, nodeParameters, linkPage, linkParameters, runtime } from './support/executor-fixture.mjs';
 
+test('root observation requires a delivered reference and cannot override a cursor', async () => {
+  const engine=runtime(linkPage());
+  await assert.rejects(()=>engine.observe({rootRef:'ui-unknown'}),/requires/);
+  await assert.rejects(()=>engine.observe({rootRef:'ui-unknown',observationId:'unknown'}),/not been delivered/);
+  await assert.rejects(()=>engine.observe({rootRef:'ui-unknown',observationId:'unknown',scope:'bootstrap'}),/prepared workspace/);
+  await assert.rejects(()=>engine.observe({cursor:'cursor',rootRef:'ui-unknown',observationId:'unknown'}),/cursor alone/);
+});
+
 function partialInputAdd() {
   const page = linkPage();
   page.nodes[1].ports = ['Input_Add', 'Input_Data-0', 'Input_Data-1'];

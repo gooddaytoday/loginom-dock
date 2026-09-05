@@ -44,6 +44,17 @@ test('unchanged visible values cannot revive a cursor after a DOM mutation round
   assert.throws(()=>pages.next(first.output.page.next_cursor,fresh),/Workspace changed/);
 });
 
+test('cursor retains the selected root and cannot switch to an unscoped snapshot', () => {
+  const pages=createObservationPages(),source=fixture();
+  source.output.observation_root={ref:'ui-root',identity:{anchor_tid:'root',path:[]},global_scan:true,detail_scope:'elements_and_cells'};
+  const first=pages.retain(structuredClone(source)),cursor=first.output.page.next_cursor;
+  assert.equal(pages.rootForCursor(cursor),'ui-root');
+  assert.deepEqual(pages.next(cursor,structuredClone(source)).output.observation_root,source.output.observation_root);
+  const outside=structuredClone(source);delete outside.output.observation_root;
+  assert.throws(()=>pages.next(cursor,outside),/Workspace changed/);
+  assert.throws(()=>pages.rootForCursor(cursor),/stale/);
+});
+
 test('changed, cleared, evicted and foreign cursors cannot combine observations', () => {
   const pages = createObservationPages({ capacity: 1 }), source = fixture();
   const first = pages.retain(structuredClone(source));

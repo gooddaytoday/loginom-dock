@@ -1,5 +1,12 @@
 # Следующему агенту: с чего начать
 
+**Последнее изменение:** root_ref + observation_id / cursor binding / browser
+detail filtering controls/cells, 176 client / 80 Python / 10 packaging PASS.
+Global guards/graph сохранены, global_scan=true. Active Hermes нет, live root
+ещё нет. ВАЖНО: полный TreeWalker остаётся — UI_SCAN_LIMIT этим НЕ решён.
+Следующий шаг именно bounded global guards/root discovery + scoped traversal,
+не повтор меню и не объявление root готовым. Подробности — верх architecture/status.
+
 **Последнее изменение:** value_truncated/value_length_utf16 у editable fields;
 усечённый value не допускает generic gestures (неполная precondition).
 173 client / 80 Python. Active Hermes нет, live этого изменения нет.

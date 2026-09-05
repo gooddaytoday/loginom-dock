@@ -49,7 +49,7 @@ function workspaceUiCapability(page, task) {
   // A WeakMap records DOM incarnations, without adding attributes or mutating
   // Loginom. Re-rendering an identical-looking control invalidates its old ref.
   // The state is document-bound; navigation invalidates every previous reference.
-  const readUi = () => page.evaluate(() => {
+  const readUi = () => page.evaluate(({rootRef}) => {
     const scanStarted = Date.now(), maxElements = 6000, maxWork = 250000, maxMs = 500;
     let work = 0;
     const charge = () => {
@@ -174,6 +174,10 @@ function workspaceUiCapability(page, task) {
     };
     const candidates = select('button,input,textarea,select,[contenteditable="true"],[role="button"],[role="checkbox"],[role="radio"],[role="combobox"],[role="menuitem"],[role="tab"],[role="treeitem"],[role="option"],[role="spinbutton"],[data-tid]')
       .filter(element => visible(element) && !sensitive(element) && scopeOf(element) !== 'inactive_workflow');
+    const selectedRoot = rootRef ? dom.find(element=>state.ids.get(element)===rootRef) : null;
+    if (rootRef && (!selectedRoot || !visible(selectedRoot) || sensitive(selectedRoot) || scopeOf(selectedRoot)==='inactive_workflow')) {
+      const error=new Error('Observed root is detached, hidden or belongs to another workspace');error.code='UI_ROOT_STALE';throw error;
+    }
     const interesting = element => element.matches('button,input,textarea,select,[contenteditable="true"],[role="button"],[role="checkbox"],[role="radio"],[role="combobox"],[role="menuitem"],[role="tab"],[role="treeitem"],[role="option"],[role="spinbutton"]')
       || /;(?:Input|Output)_[^;]+$|;Label;Label$|;Graph;[^;]+$|;btn[^;]+$|;edt[^;]+$|;mi[^;]+$|;tb(?:-\d+)?$/.test(getTid(element) ?? '')
       // Pinned E2E bg/selectors.ts:272,279,286: palette tree labels and
@@ -192,7 +196,8 @@ function workspaceUiCapability(page, task) {
     const priority = { graph_editor: 0, dialog: 1, graph: 2, workflow: 3, global: 4 };
     const controlPriority = element => /^mn;mni[^;]+$/.test(getTid(element) ?? '') ? -2
       : element.getAttribute('role') === 'menuitem' ? -1 : priority[scopeOf(element)];
-    const controls = candidates.filter(interesting).sort((left, right) => controlPriority(left) - controlPriority(right));
+    const controls = candidates.filter(interesting).filter(element=>!selectedRoot || selectedRoot===element || selectedRoot.contains(element))
+      .sort((left, right) => controlPriority(left) - controlPriority(right));
     const checkStateOf = element => {
       const type=element.getAttribute('type'),role=element.getAttribute('role');
       if (element.tagName.toLowerCase()==='input' && ['checkbox','radio'].includes(type)) {
@@ -294,7 +299,8 @@ function workspaceUiCapability(page, task) {
     });
     const messages = readTexts('[role="alert"],[role="status"],.bg-message,.x-message-box,.x-form-invalid-under');
     const allCells = select('td,th,[role="gridcell"],[role="columnheader"],.x-grid-cell-inner');
-    const cells = allCells.filter(visible).filter(element => !allCells.some(other => { charge(); return other !== element && element.contains(other); }));
+    const cells = allCells.filter(visible).filter(element=>!selectedRoot || selectedRoot===element || selectedRoot.contains(element))
+      .filter(element => !allCells.some(other => { charge(); return other !== element && element.contains(other); }));
     const tableCells = cells.slice(0, 120).map(element => {
       const column = element.getAttribute('aria-colindex');
       const table = element.closest('table,[role="grid"]');
@@ -307,11 +313,12 @@ function workspaceUiCapability(page, task) {
     return { origin: location.origin, authenticated: !!tids.get('MF;cntMain;tlbMainToolbar;btnAvatar')?.some(visible), loginom_build: globalThis.bg?.app?.Version ?? null,
       workflow_ref: workflow, active_identity: active ? textOf(active) : null, package_identity: packageIdentity,
       dom_epoch: {document:state.epoch,revision:state.revision},
+      ...(selectedRoot ? {observation_root:{ref:rootRef,identity:identityOf(selectedRoot),detail_scope:'elements_and_cells',global_scan:true}} : {}),
       scan: { complete: true, visited_elements: dom.length, max_elements: maxElements, max_work: maxWork, max_ms: maxMs },
       nodes, links: links.slice(0, 500), workarea: workarea ? boxOf(workarea) : null,
       ui: { elements, dialogs: dialogs.slice(0, 12), messages: messages.slice(0, 30), masks: masks.slice(0, 12), table_cells: tableCells,
-        truncated: { elements: controls.length > 240, nodes: labels.length > 200, links: links.length > 500, ports: nodes.some(node => node.ports.length === 100), dialogs: dialogs.length > 12, messages: messages.length > 30, masks: masks.length > 12, table_cells: cells.length > 120 } } };
-  });
+        truncated: { elements: !!selectedRoot || controls.length > 240, nodes: labels.length > 200, links: links.length > 500, ports: nodes.some(node => node.ports.length === 100), dialogs: dialogs.length > 12, messages: messages.length > 30, masks: masks.length > 12, table_cells: !!selectedRoot || cells.length > 120 } } };
+  },{rootRef:task.root_ref ?? task.snapshot?.observation_root?.ref ?? null});
 
   const locatorFor = identity => {
     if (!identity || !Array.isArray(identity.path) || identity.path.some(index => !Number.isInteger(index) || index < 0) || identity.path.length > 64) fail('UI_REFERENCE_INVALID', 'Observed control identity is invalid');

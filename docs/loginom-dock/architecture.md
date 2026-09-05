@@ -170,6 +170,14 @@ workspace не раскрывает raw browser API. Node refs включают 
 
 ### Наблюдение, выбор действия и восстановление — расширение 5 сентября
 
+workspace.observe принимает optional root_ref + observation_id: root должен быть
+доставленным UI ref сессии. Browser фильтрует controls/cells выбранным element/
+subtree, сохраняя глобальные auth/build/active-tab, dialogs/masks/messages и граф.
+observation_root явно указывает detail_scope=elements_and_cells, global_scan=true.
+Курсор хранит тот же root; UI action повторно читает эту область. Detached/hidden/
+inactive root отвергается. Это первая часть root contract: global TreeWalker
+пока полный; отдельное bounded global-guard/root discovery ещё нужно.
+
 DOM snapshot содержит `dom_epoch`: document identity и монотонный счётчик
 MutationObserver (childList/attributes/characterData, subtree). Observer не
 сохраняет тексты или targets; перед чтением учитываются pending records через

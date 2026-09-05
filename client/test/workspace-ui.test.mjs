@@ -494,6 +494,27 @@ test('right click uses the checked ref and releases the right button after a los
   assert.throws(()=>validateUiAction({verb:'right_click',ref:'ui-one',x:100}), /fields/);
 });
 
+test('root detail preserves global masks and rejects a detached root', async () => {
+  const page=new Page(),root=page.add('div','Form;btnSection','Section',{x:30,y:100,width:300,height:100});
+  const inside=page.add('input','Form;edtInside','',{x:35,y:110,width:100,height:25},root);
+  page.add('input','Other;edtOutside','',{x:400,y:110,width:100,height:25});
+  const initial=await page.observe(),ref=initial.ui.elements.find(e=>e.tid==='Form;btnSection').ref;
+  const result=await page.execute({mode:'observe',root_ref:ref});
+  assert.equal(result.status,'SUCCEEDED');
+  assert.equal(result.output.authenticated,true);assert.deepEqual(result.output.workflow_ref,initial.workflow_ref);
+  assert.equal(result.output.observation_root.ref,ref);
+  assert.ok(result.output.ui.elements.some(e=>e.tid==='Form;edtInside'));
+  assert.ok(!result.output.ui.elements.some(e=>e.tid==='Other;edtOutside'));
+  assert.equal(result.output.ui.truncated.elements,true);
+  const mask=page.add('div',null,'Busy',{x:0,y:0,width:1000,height:800});mask.attrs.class='bg-mask-message';
+  const blocked=await page.execute({mode:'observe',root_ref:ref});
+  assert.equal(blocked.output.ui.masks.length,1);
+  const target=blocked.output.ui.elements.find(e=>e.tid===inside.getAttribute('data-tid'));
+  assert.equal((await page.act({verb:'fill',ref:target.ref,text:'x'},blocked.output)).error.code,'UI_MASKED');
+  root.remove();
+  assert.equal((await page.execute({mode:'observe',root_ref:ref})).error.code,'UI_ROOT_STALE');
+});
+
 test('field observation labels bounded prefixes and never admits a gesture against an unseen suffix', async () => {
   const page=new Page();const field=page.add('textarea','Form;edtLong');
   field.value='x'.repeat(2048);
