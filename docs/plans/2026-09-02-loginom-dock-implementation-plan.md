@@ -1286,6 +1286,12 @@ Effect contracts реализованы в `4743d427` (семь kinds и binding
 
 ### P2. Общие UI-драйверы и доступное наблюдение
 
+DOM epoch реализован и совместимость принята в `20260905-172843-f90ebea6`:
+25/25 frozen PASS, runtime `f4db7d2a…`. 172 client / 80 Python / 10 packaging.
+Локально проверен DOM A→B→A и устаревший cursor; live run подтвердил работу
+меню/мастера/checkbox, а не отдельную ABA fault injection. Root/filter всё ещё
+не реализованы; property-only/canvas/server изменения вне MutationObserver.
+
 Context-menu opening + Text Import checkbox cycle приняты 5 сентября в
 `20260905-171627-dab12302`: **25/25 frozen PASS**, runtime `65c1e28a…`.
 Правый клик, выбор observed SetupNode и отложенное появление мастера доказаны.

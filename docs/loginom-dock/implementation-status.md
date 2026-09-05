@@ -1,5 +1,21 @@
 # Выполнение плана Loginom Dock
 
+## DOM epoch: live совместимость принята — 5 сентября 2026
+
+Run `20260905-172843-f90ebea6` — **25/25 frozen PASS**, audit SHA
+`253f7bc2abb9d04b3a69381c2ec76e70f79cc4112a01f571c4787397797fd2d1`.
+Runtime `f4db7d2a41bc5c47a9d4f1ada6bd00ba02f827bfcd883b4ea963598a7c2b1843`,
+harness `194f8a8d`, Hermes ChatGPT/openai-codex/gpt-5.6-luna/medium.
+Context menu → SetupNode → Text Import → checkbox cycle приняты с dom_epoch.
+В реальных наблюдениях revision растёт при изменении UI и остаётся одинаковым
+при стабильных чтениях. UI_EPOCH_CHANGED в run не было; два REQUEST_REJECTED
+не имели browser effect. 172 client / 80 Python / 10 packaging актуальны.
+
+Это live compatibility текущего сценария, не fault-injected ABA acceptance,
+не все анимации/виртуализированные виджеты. Active Hermes нет. Следующий этап —
+root/filter на уровне browser scan с глобальными guards; затем остальные P2
+и P3–P9. Не повторять этот menu goal без новых изменений/конкретной проверки.
+
 ## P2: DOM mutation epoch — 5 сентября 2026
 
 Observer теперь ведёт document identity + монотонный счётчик DOM mutations,

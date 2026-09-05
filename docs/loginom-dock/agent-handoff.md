@@ -1,5 +1,12 @@
 # Следующему агенту: с чего начать
 
+**Последняя приёмка:** `20260905-172843-f90ebea6` — 25/25 frozen PASS,
+runtime `f4db7d2a…` с DOM epoch. Menu → SetupNode → checkbox cycle прошёл,
+epoch растёт/стабилен по состоянию UI; live ABA fault этим не доказан.
+172 client / 80 Python / 10 packaging. Active Hermes нет. Далее browser-level
+root/filter с global auth/build/active-tab/mask guards, затем остальные P2/P3–P9.
+Повтор меню без новой причины не нужен. Точные SHA/границы — верх status.
+
 **Последняя реализация:** DOM mutation epoch в workspace-ui и страницах,
 172 client / 80 Python. Live ещё не было, active Hermes нет. Последний menu
 PASS относится к runtime до epoch. Далее проверить live совместимость нового
