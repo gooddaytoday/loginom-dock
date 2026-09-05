@@ -1,3 +1,27 @@
+## 2026-09-06 — подтверждаемый одиночный переход мастера
+
+Добавлен wizard_step в существующий dock_ui_action: observed Next/Previous ref
+и явный expected_stage из распознаваемых этапов. Исходный wizard/context/epoch
+проверяется до одного click. Наблюдение wizard теперь содержит root_ref текущей
+DOM incarnation; переход подтверждается только при том же root, workflow/package,
+авторизации, отсутствии масок и неизменном наборе диалогов. После click допустимы
+до 24 ограниченных ожиданий по 200 ms в пределах общей 15 s deadline. Повторного
+click нет. Неизменившийся этап, закрытие, подмена мастера, новый диалог или
+неподтверждённая загрузка сохраняют AMBIGUOUS через существующий pending/receipt.
+
+Trace wizard_step_verified подтверждает только другой явно запрошенный шаг;
+settings_applied=false и syntax_validity=unverified сохранены. Кнопки btnDone,
+btnExecute и btnClose этим действием не обслуживаются. E2E bg/selectors.ts и
+bg/helpers/wizard.ts различают переход, сохранение, выполнение и отмену;
+Close требует отдельного подтверждения, а Save проходит страницы с проверкой
+ошибок. Нельзя подменять эти операции одним click/закрытием окна.
+
+256 client /110 Python /10 packaging PASS, включая Next/Previous, временную маску, один click
+при отсутствии перехода, закрытый/подменённый root и stale исходный этап.
+Live пока не запускался. Далее node/settings identity и lifecycle apply/cancel
+с проверкой сохранённых настроек, затем полный data-pipeline через Hermes на
+ChatGPT subscription / openai-codex / gpt-5.6-luna / medium. Полный P3–P9 открыт.
+
 ## 2026-09-06 — типизированное изменение поля формата импорта
 
 В существующий dock_ui_action добавлен set_wizard_field (ref + text), только

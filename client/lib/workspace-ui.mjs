@@ -3,7 +3,8 @@
 export const uiActionSchema = {
   type: 'object', additionalProperties: false, required: ['verb'],
   properties: {
-    verb: { type: 'string', enum: ['click', 'double_click', 'right_click', 'fill', 'press', 'drag', 'scroll', 'set_checked', 'replace_expression', 'set_wizard_field'] },
+    verb: { type: 'string', enum: ['click', 'double_click', 'right_click', 'fill', 'press', 'drag', 'scroll', 'set_checked', 'replace_expression', 'set_wizard_field', 'wizard_step'] },
+    expected_stage: { type: 'string', enum: ['text_import_file','text_import_format','input_mapping','output_mapping','calculator','grouping','done'] },
     checked: { type: 'boolean' },
     delta_y: { type: 'integer', minimum: -1000, maximum: 1000 },
     ref: { type: 'string', maxLength: 128 }, text: { type: 'string', maxLength: 2048 },
@@ -14,7 +15,7 @@ export const uiActionSchema = {
 
 export function validateUiAction(action, snapshot) {
   if (!action || typeof action !== 'object' || Array.isArray(action) || !uiActionSchema.properties.verb.enum.includes(action.verb)) throw new Error('Unsupported observed UI action');
-  const fields = action.verb === 'drag' ? ['verb', 'source_ref', 'target_ref']
+  const fields = action.verb === 'wizard_step' ? ['verb','ref','expected_stage'] : action.verb === 'drag' ? ['verb', 'source_ref', 'target_ref']
     : ['fill','replace_expression','set_wizard_field'].includes(action.verb) ? ['verb', 'ref', 'text'] : action.verb === 'press' ? ['verb', 'ref', 'key'] : action.verb === 'scroll' ? ['verb', 'ref', 'delta_y'] : action.verb === 'set_checked' ? ['verb','ref','checked'] : ['verb', 'ref'];
   if (Object.keys(action).some(key => !fields.includes(key)) || fields.some(key => !(key in action))) throw new Error('UI action fields do not match its verb');
   const refs = action.verb === 'drag' ? [action.source_ref, action.target_ref] : [action.ref];
@@ -23,10 +24,12 @@ export function validateUiAction(action, snapshot) {
   if (['fill','replace_expression','set_wizard_field'].includes(action.verb) && (typeof action.text !== 'string' || action.text.length > 2048 || /\0/.test(action.text))) throw new Error('UI text must be at most 2048 characters without NUL');
   if(action.verb==='set_wizard_field' && (action.text.length>256 || /[\r\n]/.test(action.text)))throw new Error('Wizard field text requires at most 256 characters without line breaks');
   if(action.verb==='replace_expression' && (/\r/.test(action.text) || action.text.split('\n').length>128))throw new Error('Expression replacement requires LF lines, at most 128');
+  if(action.verb==='wizard_step' && !uiActionSchema.properties.expected_stage.enum.includes(action.expected_stage))throw new Error('wizard_step requires a recognized expected_stage');
   if (action.verb === 'press' && !uiActionSchema.properties.key.enum.includes(action.key)) throw new Error('Unsupported UI key; clipboard and navigation shortcuts are not allowed');
   if (action.verb === 'scroll' && (!Number.isInteger(action.delta_y) || !action.delta_y || Math.abs(action.delta_y)>1000)) throw new Error('Scroll requires a nonzero integer delta_y within -1000..1000');
   if (action.verb === 'set_checked' && typeof action.checked !== 'boolean') throw new Error('set_checked requires a boolean checked value');
   if (snapshot) {
+    if(action.verb==='wizard_step' && (snapshot.wizard?.status!=='observed' || snapshot.wizard.stage===action.expected_stage))throw new Error('wizard_step requires a different destination stage and an observed wizard');
     if (!Array.isArray(snapshot.ui?.elements)) throw new Error('UI action requires an observation snapshot');
     for (const ref of refs) {
       const elements = snapshot.ui.elements.filter(element => element.ref === ref);
@@ -229,7 +232,7 @@ function workspaceUiCapability(page, task) {
       const matching=suffix=>(tids.get(base+suffix)??[]).filter(element=>form.contains(element) && visible(element) && !sensitive(element));
       const titles=matching(';cardWizardPanel;p.h;p.t');
       const stages=Object.entries(wizardMarkers).filter(([,suffix])=>matching(suffix).length===1).map(([key])=>key);
-      wizard={status:'observed',root_tid:base,title:titles.length===1?textOf(titles[0],true):null,
+      wizard={status:'observed',root_tid:base,root_ref:refOf(form),title:titles.length===1?textOf(titles[0],true):null,
         title_status:titles.length===1?'observed':titles.length?'ambiguous':'unobserved',
         stage:stages.length===1?stages[0]:null,stage_status:stages.length===1?'observed':stages.length?'ambiguous':'unrecognized',
         controls:Object.fromEntries(wizardButtons.map(name=>{const found=matching(';'+name);return [name,
@@ -422,6 +425,9 @@ function workspaceUiCapability(page, task) {
       const interaction = interactionOf(element);
       const checkState=checkStateOf(element);
       const calculatorEditor=calculatorEditorOf(element);
+      const wizardStep=wizard.status==='observed' && wizard.stage && ['btnNext','btnPrev'].some(name=>tid===wizard.root_tid+';'+name)
+        && wizard.controls[tid.split(';').at(-1)]?.status==='observed'
+        ? {direction:tid.endsWith(';btnNext')?'next':'previous',root_ref:wizard.root_ref,stage:wizard.stage}:null;
       const expressionWritable=identity && isEnabled && calculatorEditor?.status==='observed' && calculatorEditor.mode==='expression'
         && calculatorEditor.selected_expression && calculatorEditor.document.full_text_verified && calculatorEditor.document.writable;
       const fullValue = editable && !sensitive(element) ? String(element.value ?? (element.isContentEditable ? element.textContent : '') ?? '') : undefined;
@@ -431,12 +437,13 @@ function workspaceUiCapability(page, task) {
         ...(scroll ? { scroll } : {}),
         ...(checkState ? {check_state:checkState} : {}),
         ...(calculatorEditor ? {calculator_editor:calculatorEditor} : {}),
+        ...(wizardStep ? {wizard_step:wizardStep} : {}),
         ...(wizardFields.has(element) ? {wizard_field:wizardFields.get(element)} : {}),
         signature: { tag, tid, role, type: element.getAttribute('type'), name: element.getAttribute('name'), label, ...fieldValue, dialog_ref: dialogRef(element), scroll, check_state:checkState },
         enabled: isEnabled, visible: true, interaction, bounding_box: boxOf(element),
         // A bounded prefix is not a sufficient value precondition. A dedicated
         // large-field driver must establish its own complete read/write contract.
-        allowed_actions: expressionWritable ? ['replace_expression'] : allowed && !valueTruncated ? ['click', 'double_click', 'right_click', 'press', 'drag', ...(editable ? ['fill',...(wizardFields.has(element)?['set_wizard_field']:[])] : []), ...(checkState ? ['set_checked'] : []), ...(scroll && interaction.state === 'point_observed' ? ['scroll'] : [])] : [] };
+        allowed_actions: expressionWritable ? ['replace_expression'] : allowed && !valueTruncated ? ['click', 'double_click', 'right_click', 'press', 'drag', ...(editable ? ['fill',...(wizardFields.has(element)?['set_wizard_field']:[])] : []), ...(checkState ? ['set_checked'] : []), ...(wizardStep?['wizard_step']:[]), ...(scroll && interaction.state === 'point_observed' ? ['scroll'] : [])] : [] };
     });
     const graphPrefix = workflow ? workflow.prefix + ';Graph;' : null;
     const graphElements = graphPrefix ? all.filter(element => (getTid(element) ?? '').startsWith(graphPrefix)) : [];
@@ -615,7 +622,8 @@ function workspaceUiCapability(page, task) {
     if (!current || !same(before.identity, current.identity) || !same(before.signature, current.signature)
       || !current.allowed_actions.includes(task.action.verb)
       || task.action.verb==='replace_expression' && !same(before.calculator_editor,current.calculator_editor)
-      || task.action.verb==='set_wizard_field' && !same(before.wizard_field,current.wizard_field)) fail('UI_REFERENCE_STALE', 'The observed control changed; observe the workspace again');
+      || task.action.verb==='set_wizard_field' && !same(before.wizard_field,current.wizard_field)
+      || task.action.verb==='wizard_step' && !same(before.wizard_step,current.wizard_step)) fail('UI_REFERENCE_STALE', 'The observed control changed; observe the workspace again');
     const locator = locatorFor(current.identity);
     if (await locator.count() !== 1) fail('UI_REFERENCE_STALE', 'Observed control is no longer unique');
     const handle = await locator.elementHandle({ timeout: timeout() });
@@ -698,7 +706,7 @@ function workspaceUiCapability(page, task) {
         if (!current.authenticated) fail('LOGIN_REQUIRED', 'Loginom authentication is required before changing the workspace');
         if (!same(task.snapshot.dom_epoch, current.dom_epoch)) fail('UI_EPOCH_CHANGED', 'The document changed since this observation; observe again even if its visible state looks unchanged');
         if (!same(current.ui.dialogs.map(item => item.ref), task.snapshot.ui.dialogs.map(item => item.ref))) fail('UI_CONTEXT_CHANGED', 'The visible dialog changed; observe the workspace again');
-        if(task.action.verb==='set_wizard_field' && (!same(task.snapshot.wizard,current.wizard)
+        if(['set_wizard_field','wizard_step'].includes(task.action.verb) && (!same(task.snapshot.wizard,current.wizard)
           || !same(task.snapshot.active_identity,current.active_identity) || !same(task.snapshot.package_identity,current.package_identity)))
           fail('WIZARD_CONTEXT_CHANGED','Wizard settings or package changed; observe again');
         const refs = task.action.verb === 'drag' ? [task.action.source_ref, task.action.target_ref] : [task.action.ref];
@@ -733,7 +741,7 @@ function workspaceUiCapability(page, task) {
           await page.mouse.click(targets[0].point.x, targets[0].point.y, { clickCount, button });
           mouseHeld = false;
         };
-        if (task.action.verb === 'click') await clickTarget(1);
+        if (task.action.verb === 'click' || task.action.verb==='wizard_step') await clickTarget(1);
         else if (task.action.verb === 'double_click') await clickTarget(2);
         else if (task.action.verb === 'right_click') await clickTarget(1, 'right');
         else if (task.action.verb === 'press') await first.press(task.action.key, { timeout: timeout() });
@@ -828,7 +836,23 @@ function workspaceUiCapability(page, task) {
         } else fail('UI_ACTION_INVALID', 'Unsupported UI gesture');
         if (effectPossible) record('ui_gesture_applied', { verb: task.action.verb });
         phase = 'observing'; timeout();
-        const observed = await readUi();
+        let observed = await readUi();
+        if(task.action.verb==='wizard_step') {
+          const unchangedContext=fresh=>fresh.authenticated && fresh.origin===current.origin && fresh.loginom_build===current.loginom_build
+            && same(fresh.workflow_ref,current.workflow_ref) && same(fresh.package_identity,current.package_identity)
+            && same(fresh.active_identity,current.active_identity) && fresh.wizard.status==='observed'
+            && fresh.wizard.root_ref===current.wizard.root_ref && same(fresh.ui.dialogs,current.ui.dialogs);
+          // Wait only for this one click. No timeout or intermediate mask can
+          // issue a second click or turn a closed wizard into an applied claim.
+          for(let attempt=0;attempt<24 && unchangedContext(observed)
+            && (observed.wizard.stage!==task.action.expected_stage || observed.ui.masks.length);attempt++) {
+            timeout();await page.waitForTimeout(Math.min(200,timeout()));observed=await readUi();
+          }
+          if(!unchangedContext(observed) || observed.ui.masks.length || observed.wizard.stage!==task.action.expected_stage)
+            fail('WIZARD_STEP_NOT_CONFIRMED','The requested destination stage was not confirmed after one click; inspect before retry');
+          record('wizard_step_verified',{from_stage:current.wizard.stage,to_stage:observed.wizard.stage,
+            root_ref:observed.wizard.root_ref,settings_applied:false,syntax_validity:'unverified'});
+        }
         if(task.action.verb==='set_wizard_field') {
           const before=current.ui.elements.find(item=>item.ref===task.action.ref);
           const after=observed.ui.elements.find(item=>item.ref===before.ref);

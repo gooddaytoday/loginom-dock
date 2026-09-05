@@ -1,3 +1,10 @@
+**Checkpoint:** wizard_step (Next/Previous ref + expected_stage) подтверждает
+переход в том же wizard root после одного click, с bounded wait и AMBIGUOUS при
+неподтверждённом результате. 256 client /110 Python /10 packaging PASS. Applied/syntax proof
+нет; btnDone/Execute/Close отдельны. Далее node/settings binding и apply/cancel
+с readback, затем полный data-pipeline. Hermes ChatGPT subscription/Luna/medium;
+active Hermes/browser нет, полный P3–P9 открыт. Детали сверху status.
+
 **Checkpoint:** set_wizard_field подключён через dock_ui_action и существующий
 receipt/pending: текущий import-format owner/root, исходные значения, focus,
 keyboard и точный draft readback. 252 client /110 Python /10 packaging PASS. Не доказывает

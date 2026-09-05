@@ -1212,3 +1212,62 @@ test('satisfied wizard field issues no keyboard or click and read-only editor de
   assert.deepEqual(page.events,[]);
   c.input.readOnly=true;assert.ok(!(await page.observe()).ui.elements.some(e=>e.wizard_field));
 });
+
+function wizardStepFixture(page,direction='next') {
+  const base='MF;TF-1;WizrdMCF',form=page.add('div',base);
+  const marker=page.add('div',base+';ImportTextFileParamsWizard;edtValueNull','',undefined,form);
+  const button=page.add('button',base+(direction==='next'?';btnNext':';btnPrev'),'Step',undefined,form);
+  const advance=()=>{marker.remove();page.add('div',base+';TuneDataSourceInputPortWizard;btnAddMappingColumn','',undefined,form);};
+  return {base,form,marker,button,advance};
+}
+
+test('wizard step clicks once and verifies only the requested stage in the same form',async()=>{
+  for(const direction of ['next','previous']) {
+    const page=new Page(),c=wizardStepFixture(page,direction),snapshot=await page.observe();
+    const button=snapshot.ui.elements.find(e=>e.wizard_step);
+    assert.equal(button.wizard_step.direction,direction);
+    const click=page.mouse.click;page.mouse.click=async(...args)=>{await click(...args);c.advance();};
+    const result=await page.act({verb:'wizard_step',ref:button.ref,expected_stage:'input_mapping'},snapshot);
+    assert.equal(result.status,'SUCCEEDED',JSON.stringify(result.error));
+    assert.equal(page.events.filter(e=>e==='click').length,1);
+    assert.ok(result.trace.some(e=>e.event==='wizard_step_verified' && e.to_stage==='input_mapping' && e.settings_applied===false));
+    assert.equal(result.output.verification_required,true);
+  }
+});
+
+test('wizard transition waits through a transient mask without repeating its click',async()=>{
+  const page=new Page(),c=wizardStepFixture(page),snapshot=await page.observe();
+  const button=snapshot.ui.elements.find(e=>e.wizard_step);let mask,waits=0;
+  const click=page.mouse.click;page.mouse.click=async(...args)=>{await click(...args);c.advance();
+    mask=page.add('div',null,'Processing');mask.attrs.class='bg-mask-message';};
+  page.waitForTimeout=async()=>{waits++;mask.remove();};
+  const result=await page.act({verb:'wizard_step',ref:button.ref,expected_stage:'input_mapping'},snapshot);
+  assert.equal(result.status,'SUCCEEDED',JSON.stringify(result.error));assert.equal(waits,1);
+  assert.equal(page.events.filter(e=>e==='click').length,1);
+});
+
+test('wizard step never confirms an unchanged stage, a closed form or its replacement',async()=>{
+  for(const mode of ['unchanged','closed','replacement']) {
+    const page=new Page(),c=wizardStepFixture(page),snapshot=await page.observe();
+    const button=snapshot.ui.elements.find(e=>e.wizard_step);let waits=0;
+    const click=page.mouse.click;page.mouse.click=async(...args)=>{await click(...args);
+      if(mode==='closed')c.form.remove();
+      if(mode==='replacement'){c.form.remove();const replacement=wizardStepFixture(page);replacement.advance();}
+    };
+    page.waitForTimeout=async()=>{waits++;};
+    const result=await page.act({verb:'wizard_step',ref:button.ref,expected_stage:'input_mapping'},snapshot);
+    assert.equal(result.status,'AMBIGUOUS',mode);assert.equal(result.error.code,'WIZARD_STEP_NOT_CONFIRMED');
+    assert.equal(page.events.filter(e=>e==='click').length,1);assert.ok(waits<=24);
+    assert.ok(!result.trace.some(e=>e.event==='wizard_step_verified'));
+  }
+});
+
+test('wizard step rejects unsupported destinations and changed original form before input',async()=>{
+  const page=new Page(),c=wizardStepFixture(page),snapshot=await page.observe();
+  const button=snapshot.ui.elements.find(e=>e.wizard_step);
+  assert.throws(()=>validateUiAction({verb:'wizard_step',ref:button.ref,expected_stage:'arbitrary'}),/recognized/);
+  assert.throws(()=>validateUiAction({verb:'wizard_step',ref:button.ref,expected_stage:'text_import_format'},snapshot),/different/);
+  c.advance();
+  const result=await page.act({verb:'wizard_step',ref:button.ref,expected_stage:'input_mapping'},snapshot);
+  assert.equal(result.status,'NOT_APPLIED');assert.deepEqual(page.events,[]);
+});
