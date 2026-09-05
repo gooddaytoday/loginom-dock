@@ -1,5 +1,21 @@
 # Выполнение плана Loginom Dock
 
+## Context menu: live FAIL и распознавание menu wrappers — 5 сентября
+
+Run `20260905-165713-56812027` — **21/25 frozen FAIL**, SHA
+`440bc013e6bd3f27fcd32b003cc2756c50dff93f200f262d3a8585ac5e1996fd`.
+Правые клики реально выполнены, агент сначала получил меню метки, затем меню
+узла. До мастера/checkbox не дошёл. В доставленных элементах меню присутствовали
+анонимные ARIA menuitem, но не E2E wrappers `mn;mniSetupNode`; пункты были
+далеко в страницах после graph/palette. Run завершён, active Hermes нет.
+
+Добавлено точное распознавание `mn;mni*` без произвольного CSS от агента.
+Видимые wrappers меню и затем ARIA menuitem теперь первыми в bounded controls;
+остальные элементы сохраняются в последующих страницах в пределах прежнего cap.
+Тест проверяет wrapper+анонимного child, порядок, click и stale после удаления.
+170 client tests, 80 Python. Live новой выдачи ещё нет. Следующее: повтор
+context-menu-checkbox, затем оставшиеся P2/P3–P9. Старый FAIL не пересчитывать.
+
 ## Checkbox принят; добавлен right_click — 5 сентября 2026
 
 Run `20260905-164903-1372db2d` — **24/24 frozen PASS**, audit SHA

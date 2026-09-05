@@ -1,5 +1,12 @@
 # Следующему агенту: с чего начать
 
+**Последний run:** context-menu-checkbox `20260905-165713-56812027` — 21/25
+frozen FAIL, right_click работал, мастер не открыт. После run observer получил
+`mn;mni*` wrappers и menu-first порядок; 170 client / 80 Python. Active Hermes
+нет. Далее повтор context-menu-checkbox --require-verification с Luna/medium/
+ChatGPT; старый FAIL не пересчитывать. Аудитор сейчас требует ровно один right
+click и затем один click SetupNode до checkbox cycle. Детали — верх status.
+
 **Актуально:** checkbox-roundtrip `20260905-164903-1372db2d` — 24/24 frozen
 PASS, false→true→true(no-op)→false в Text Import. Runtime `9f70441a…`,
 Hermes Luna/medium/ChatGPT. Active Hermes нет. После run реализован right_click

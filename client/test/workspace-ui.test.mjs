@@ -487,6 +487,20 @@ test('right click uses the checked ref and releases the right button after a los
   assert.throws(()=>validateUiAction({verb:'right_click',ref:'ui-one',x:100}), /fields/);
 });
 
+test('context menu wrapper keeps its E2E identity alongside the anonymous ARIA child', async () => {
+  const page = new Page();
+  const wrapper = page.add('div','mn;mniSetupNode','',{x:30,y:100,width:200,height:25});
+  const inner = page.add('a',null,'Настроить узел...',wrapper.box,wrapper);
+  inner.attrs.role = 'menuitem';
+  const snapshot = await page.observe();
+  const target = snapshot.ui.elements.find(e=>e.tid==='mn;mniSetupNode');
+  assert.ok(target?.allowed_actions.includes('click'));
+  assert.equal(snapshot.ui.elements[0].tid,'mn;mniSetupNode');
+  assert.equal((await page.act({verb:'click',ref:target.ref},snapshot)).status,'SUCCEEDED');
+  wrapper.remove();
+  assert.equal((await page.act({verb:'click',ref:target.ref},snapshot)).status,'NOT_APPLIED');
+});
+
 test('node settings affordance without button role is observable and guarded', async () => {
   const page = new Page();
   const settings = page.add('g', 'MF;TF-1;Graph;Текстовый_файл;Setting', '', {x:30,y:50,width:20,height:20});

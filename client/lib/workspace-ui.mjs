@@ -168,12 +168,17 @@ function workspaceUiCapability(page, task) {
       // E2E bg/selectors.ts:1068 and bg/helpers/wizard.ts:29: the node
       // settings affordance can be SVG without a button role.
       || /;Graph;[^;]+;Setting$/.test(getTid(element) ?? '')
+      // E2E bg/selectors.ts:970: context-menu item wrappers carry stable
+      // mn;mni* tids even when their inner ARIA menuitem has no test ID.
+      || /^mn;mni[^;]+$/.test(getTid(element) ?? '')
       || /;(?:Display|Input)El$/.test(getTid(element) ?? '') && element.matches('.x-form-checkbox,.x-form-radio')
       // Loginom message-box buttons are anchors without an ARIA button role;
       // their pinned test identifiers end with tlb;yes / tlb;no, not btn*.
       || ((getTid(element) ?? '').startsWith('msgbox') && /;tlb;(?:yes|no|ok|cancel)$/.test(getTid(element)) && !!dialogRef(element));
     const priority = { graph_editor: 0, dialog: 1, graph: 2, workflow: 3, global: 4 };
-    const controls = candidates.filter(interesting).sort((left, right) => priority[scopeOf(left)] - priority[scopeOf(right)]);
+    const controlPriority = element => /^mn;mni[^;]+$/.test(getTid(element) ?? '') ? -2
+      : element.getAttribute('role') === 'menuitem' ? -1 : priority[scopeOf(element)];
+    const controls = candidates.filter(interesting).sort((left, right) => controlPriority(left) - controlPriority(right));
     const checkStateOf = element => {
       const type=element.getAttribute('type'),role=element.getAttribute('role');
       if (element.tagName.toLowerCase()==='input' && ['checkbox','radio'].includes(type)) {
