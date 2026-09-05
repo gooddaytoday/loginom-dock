@@ -724,3 +724,27 @@ test('Loginom Ext DisplayEl state is read from its exact checked owner and radio
   assert.throws(()=>validateUiAction({verb:'set_checked',ref:target.ref,checked:false},s),/radio/);
   assert.equal((await page.act({verb:'set_checked',ref:target.ref,checked:true},s)).status,'SUCCEEDED');
 });
+
+test('file storage directory uses active complete breadcrumbs and never proves file absence', async () => {
+  const page=new Page();
+  page.add('div','MF;TF-1;FileStorageForm;pnlFileStorage;tbl');
+  const bar=page.add('div','MF;TF-1;NavigationBar;NavigationPanel');
+  const labels=[];
+  for (const [index,text] of ['user','data','Приёмка 1'].entries()) {
+    const button=page.add('div',`MF;TF-1;cnrNaviMode;b.s-${index}`,'',undefined,bar);
+    const label=page.add('span',null,text,undefined,button);
+    label.attrs.class='x-btn-inner-default-toolbar-small';labels.push(label);
+  }
+  let output=await page.observe();
+  assert.equal(output.file_storage.directory,'/user/data/Приёмка 1');
+  assert.equal(output.file_storage.listing_complete,false);
+  const duplicate=page.add('div','MF;TF-1;Other;NavigationBar;NavigationPanel');
+  assert.equal((await page.observe()).file_storage.status,'unobserved');duplicate.remove();
+  labels[1].style.display='none';
+  assert.equal((await page.observe()).file_storage.directory,null);labels[1].style.display='';
+  for (const bad of ['../data','data/other',' data','x'.repeat(201)]) {
+    labels[1].ownText=bad;assert.equal((await page.observe()).file_storage.status,'unobserved');
+  }
+  labels[1].ownText='data';bar.attrs['data-tid']='MF;TF-2;NavigationBar;NavigationPanel';
+  assert.equal((await page.observe()).file_storage.directory,null);
+});

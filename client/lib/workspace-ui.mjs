@@ -350,8 +350,38 @@ function workspaceUiCapability(page, task) {
       return { text: sensitivePattern.test(header) ? '[REDACTED]' : textOf(element), row: element.parentElement?.getAttribute('aria-rowindex') ?? null, column };
     });
     const workarea = graphPrefix ? all.find(element => getTid(element) === workflow.prefix + ';ModelForm;pnlWorkarea') : null;
+    // E2E navigation.GetCurrentTabPath reads the visible breadcrumb labels.
+    // This is destination evidence only: virtualized rows cannot prove absence
+    // of a conflicting filename, nor do labels establish server byte identity.
+    let fileStorage = {status:'unobserved',directory:null,listing_complete:false};
+    const storagePrefix = workflow?.prefix + ';FileStorageForm;';
+    if (workflow && all.some(element => (getTid(element) ?? '').startsWith(storagePrefix + 'pnlFileStorage;tbl') && visible(element))) {
+      const bars = all.filter(element => (getTid(element) ?? '').startsWith(workflow.prefix + ';')
+        && (getTid(element) ?? '').endsWith('NavigationBar;NavigationPanel') && visible(element) && !sensitive(element));
+      if (bars.length === 1) {
+        const bar=bars[0], buttons=all.filter(element => bar.contains(element)
+          && (getTid(element) ?? '').includes('cnrNaviMode;b.s'));
+        const labels=select('.x-btn-inner-default-toolbar-small').filter(element => bar.contains(element)
+          && buttons.some(button => {charge();return button.contains(element);}));
+        const segments=[];let valid=labels.length>0 && labels.length<=32 && labels.length===buttons.length
+          && buttons.every(button => labels.filter(label => {charge();return button.contains(label);}).length===1);
+        for (const label of labels.slice(0,32)) {
+          if (!visible(label) || sensitive(label)) {valid=false;break;}
+          const reader=document.createTreeWalker(label,4);let node,value='';
+          while ((node=reader.nextNode())) {
+            charge();if(sensitive(node.parentElement)) {valid=false;break;}
+            value+=String(node.textContent ?? '').slice(0,201);if(value.length>200) break;
+          }
+          if (!value || value.length>200 || value!==value.trim() || /[\\/\x00-\x1f\x7f]/.test(value) || value==='.' || value==='..') {valid=false;break;}
+          segments.push(value);
+        }
+        if (valid && segments.join('/').length<=2000) fileStorage={status:'observed',directory:'/'+segments.join('/'),
+          navigation_identity:identityOf(bar),source:'visible_breadcrumbs',listing_complete:false};
+      }
+    }
     return { origin: location.origin, authenticated: !!tids.get('MF;cntMain;tlbMainToolbar;btnAvatar')?.some(visible), loginom_build: globalThis.bg?.app?.Version ?? null,
       workflow_ref: workflow, active_identity: active ? textOf(active) : null, package_identity: packageIdentity,
+      file_storage:fileStorage,
       dom_epoch: {document:state.epoch,revision:state.revision},
       ...(selectedRoot ? {observation_root:{ref:rootRef,identity:identityOf(selectedRoot),detail_scope:'elements_and_cells',global_scan:false,global_guards:'fixed_native_queries'}} : {}),
       scan: { complete: true, visited_elements: dom.length, detail_elements:detailElements, max_elements: maxElements, max_work: maxWork, max_ms: maxMs },

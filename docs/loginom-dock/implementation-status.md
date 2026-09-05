@@ -1,3 +1,28 @@
+## 2026-09-05 — P3: наблюдение каталога файлового хранилища
+
+Добавлен `file_storage` в подробное workspace observation и его страницы:
+активная вкладка + FileStorageForm table + единственная navigation bar,
+видимые breadcrumb labels → точный directory. Неоднозначность, скрытые,
+чувствительные, слишком длинные или неполные segments дают `unobserved`.
+Путь не нормализуется с потерей пробелов/разделителей. Изменение directory
+инвалидирует cursor; compact receipt auditor сохраняет metadata.
+`listing_complete:false` всегда: видимый DOM не доказывает отсутствие файла
+в виртуализированном списке. Это ещё НЕ upload precondition/команда/receipt,
+не серверный SHA и не live acceptance. Roots discovery не читает каталог.
+
+Источники: E2E navigation.ts GetCurrentTabPath/GetCurrentPath, selectors.ts
+navBar.AddressBar, filestorage.ts OpenFileStorageTab/UploadFiles;
+Help data/location_user_files.md. Текущий E2E HEAD 986c87134ac221b7af4cd4ebc75e1d0c9e050111:
+три указанных файла не отличаются от pinned 2cad5602158fd2e4836d821d644a2b8d92f571a2.
+Help HEAD 353e506ba04b77a2926d8ddf8472b36c684b67fd.
+
+Проверки: 183 client / 81 Python / 10 packaging PASS; после уточнения
+однозначности segments дополнительно 49 workspace-ui/observation-pages PASS.
+Active Hermes нет. Следующее: typed upload по admitted artifact_id с fresh
+проверкой destination, no-overwrite, reconciliation и серверным byte proof;
+затем вся CSV → Import → Calculator → Group → save/reopen цепочка P3.
+Production/public rc2 не изменены. P0–P9 не завершён.
+
 # Выполнение плана Loginom Dock
 
 ## P3: host-only artifact admission — 5 сентября 2026

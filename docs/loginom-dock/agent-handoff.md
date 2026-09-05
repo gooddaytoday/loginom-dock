@@ -1,3 +1,10 @@
+**Последняя P3 реализация:** file_storage.directory из breadcrumb активной
+вкладки, bounded/ambiguous → unobserved, metadata на страницах и в auditor.
+listing_complete всегда false; upload ещё не реализован. 183/81/10 PASS,
+после tightening 49 targeted PASS. Live не запускался. Источники и границы
+сверху implementation-status; следующий шаг typed upload/no-overwrite/server
+byte proof, затем полная цепочка P3 и остальные P0–P9.
+
 # Следующему агенту: с чего начать
 
 **Последняя P3 реализация:** artifacts.mjs, private session.artifactStore,

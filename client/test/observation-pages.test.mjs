@@ -130,3 +130,12 @@ test('palette starts with reachable rows after scrolling without discarding offs
   }
   assert.equal(refs.length,80);assert.equal(new Set(refs).size,80);
 });
+
+test('file storage destination is delivered and invalidates cursors when it changes', () => {
+  const pages=createObservationPages(),source=fixture();
+  source.output.file_storage={status:'observed',directory:'/user/data',source:'visible_breadcrumbs',listing_complete:false};
+  const first=pages.retain(structuredClone(source));
+  assert.deepEqual(first.output.file_storage,source.output.file_storage);
+  const changed=structuredClone(source);changed.output.file_storage.directory='/user/other';
+  assert.throws(()=>pages.next(first.output.page.next_cursor,changed),/Workspace changed/);
+});

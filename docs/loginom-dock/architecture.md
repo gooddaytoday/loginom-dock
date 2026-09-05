@@ -1,3 +1,14 @@
+### P3 destination observation (2026-09-05)
+
+Detailed workspace observation exposes `file_storage` as destination evidence:
+active tab's storage table and unique navigation bar, bounded visible breadcrumb
+segments without lossy normalization. Missing/ambiguous/hidden/sensitive segments
+produce `unobserved`. Pages retain this metadata and bind it into the revision.
+`listing_complete:false` is unconditional; rendered rows never establish remote
+filename absence. This observer is not an upload capability or a server byte
+verification. Future upload must establish its own fresh guards and reconcile
+uncertain effects. Root discovery intentionally does not read directory contents.
+
 # Архитектура Loginom Dock
 
 Канонический проектный URI: `viking://resources/loginom-dock`.
