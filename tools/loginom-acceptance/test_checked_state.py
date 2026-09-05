@@ -1,7 +1,7 @@
 import copy
 import unittest
 
-from checked_state import prove, audit_goal, TARGET_SUFFIX
+from checked_state import prove, audit_goal, menu_proof, TARGET_SUFFIX
 
 
 class CheckedStateProofTest(unittest.TestCase):
@@ -66,6 +66,35 @@ class CheckedStateProofTest(unittest.TestCase):
             data = self.roundtrip()
             mutate(data)
             self.assertFalse(audit_goal(data, [], '', {'dock_ui_action'})['all_assertions_passed'])
+
+    def test_menu_chain_requires_delivered_item_and_immutable_wizard_receipt(self):
+        data = {'calls': [], 'tools': [], 'events': []}
+        targets = [
+            {'ref':'ui-node','tid':'MF;TF-1;Graph;Текстовый_файл','allowed_actions':['right_click']},
+            {'ref':'ui-menu','tid':'mn;mniSetupNode','allowed_actions':['click']},
+            {'ref':'ui-check','tid':'MF;TF;' + TARGET_SUFFIX},
+        ]
+        for i, verb in enumerate(('right_click', 'click')):
+            call = {'tool':'dock_ui_action','row':i*4+2,'session_id':'s','tool_call_id':f'c{i}',
+                    'arguments':{'observation_id':f'o{i}','action':{'verb':verb,'ref':targets[i]['ref']}}}
+            raw = {'status':'SUCCEEDED','operation_id':f'op{i}','effect_possible':True,'cleanup_complete':True,
+                   'trace':[{'event':'ui_preconditions_verified','verb':verb,'refs':[targets[i]['ref']]},
+                            {'event':'ui_gesture_applied','verb':verb}],
+                   'output':{'ui':{'elements':[targets[i+1]]}}}
+            data['calls'].append(call)
+            data['tools'].extend([
+                {'row':i*4+1,'result':{'output':{'observation_id':f'o{i}','ui':{'elements':[targets[i]]}}}},
+                {**call,'row':i*4+3,'result':copy.deepcopy(raw)}])
+            data['events'].append({'phase':'completed','operation_id':f'op{i}','outcome':raw})
+        self.assertTrue(menu_proof(data, '', {'dock_ui_action'}, 10))
+        for mutate in (
+            lambda d:d['calls'][1]['arguments'].update(observation_id='old'),
+            lambda d:d['events'][1]['outcome']['output']['ui']['elements'].clear(),
+            lambda d:d['tools'][3]['result'].update(status='AMBIGUOUS'),
+            lambda d:d['calls'].append({'tool':'dock_ui_action','row':9,'arguments':{}}),
+        ):
+            changed = copy.deepcopy(data); mutate(changed)
+            self.assertFalse(menu_proof(changed, '', {'dock_ui_action'}, 10))
 
     def test_tampered_evidence(self):
         for mutate in (
