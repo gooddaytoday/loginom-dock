@@ -1286,6 +1286,11 @@ Effect contracts реализованы в `4743d427` (семь kinds и binding
 
 ### P2. Общие UI-драйверы и доступное наблюдение
 
+Run `20260905-154306-0e121bd2` — 26/26: bootstrap not_open до prepare с
+неактивным архивом и неподготовленным workspace; затем bounded readUi на 1920
+DOM элементах, 77 компонентов/12 групп. Runtime `e579941f…`. Ветки bootstrap
+login/blocked/incompatible пока только unit; root/filter/scroll ещё предстоят.
+
 Реальные страницы приняты в palette run `20260905-151931-7698def0`:
 24/24, runtime `7eaebd2e…`, 77 компонентов/12 групп. Строки coverage получили
 только presence evidence; скрытые элементы и режимы не объявлены полными.

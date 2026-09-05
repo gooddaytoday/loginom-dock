@@ -1,5 +1,13 @@
 # Следующему агенту: с чего начать
 
+**Последняя приёмка:** `20260905-154306-0e121bd2` — 26/26 frozen PASS,
+runtime `e579941f…`, 45 inputs. Bootstrap not_open до prepare, diagnostics
+подтвердила неактивный архив/неподготовленный workspace; затем bounded scan
+1920 DOM элементов, 77 компонентов/12 групп. 160 client / 73 Python / 10 packaging.
+Активных Hermes нет. Далее browser root/filter, targets/scroll, P2/P3–P9.
+Bootstrap login/blocked live branches и прежний full graph FAIL ещё открыты.
+Точные SHA/границы — верх implementation-status, ниже история.
+
 **Текущая точка:** подробный readUi получил cooperative scan budget
 (6000 DOM elements/250000 steps/500ms), UI_SCAN_LIMIT без пустого графа/refs
 и без жеста при неполном pre-read. 160 client / 72 Python / 10 packaging.

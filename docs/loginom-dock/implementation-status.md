@@ -1,5 +1,26 @@
 # Выполнение плана Loginom Dock
 
+## P2 bootstrap + scan: реальная приёмка — 5 сентября 2026
+
+Run `20260905-154306-0e121bd2` завершён: **26/26 frozen PASS**, audit SHA
+`0a39690507aee5ea3e69cac8dbd20b1c5e8a495e5d17296c7ae87809f6393fbd`.
+Runtime `e579941f71707a3dfb9f46f0cf71898e73dc4eab6031b7b01dddaea604fe3f5a`,
+45 inputs; Hermes/openai-codex/gpt-5.6-luna/medium. Harness `3e14a385`.
+160 client / 73 Python / 10 packaging checks перед этим runtime/harness.
+
+До prepare выполнен bootstrap: фактическое состояние **not_open**, без ui refs.
+Следующая diagnostics подтвердила archiveActive=false и отсутствие workspaceReady;
+лишь затем prepare создал один чистый draft. Подробное наблюдение прочитало
+1920 DOM elements в пределах scan budget и доставило все страницы палитры.
+Собраны 77 компонентов/12 групп, пустой наблюдаемый граф проверен до/после.
+Это реальная проверка not_open/lifecycle и нормального bounded scan. Ветки
+bootstrap login_required/blocked/incompatible пока покрыты локальными тестами,
+не живой матрицей. Полнота скрытых/виртуализированных компонентов не заявлена.
+
+Активных Hermes нет. Далее browser root/filter для больших UI, явная доступность
+targets/scroll и остальные P2/P3–P9. Прежний full graph regression 35/39 FAIL
+не изменён и не закрыт этой palette-приёмкой.
+
 ## P2: ограничение подробного browser scan — 5 сентября 2026
 
 readUi обходит DOM через TreeWalker с пределом 6000 элементов, 250000
