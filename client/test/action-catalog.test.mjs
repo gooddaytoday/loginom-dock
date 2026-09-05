@@ -101,6 +101,8 @@ test('rejects tampering, stale actions, server code and raw selectors before exe
     values => { values['actions.json'].actions[0].javascript = 'return true'; },
     values => { values['selectors.json'].selectors[0].css = '#unsafe'; },
     values => { values['actions.json'].actions[0].required_capabilities = ['unknown.v1']; },
+    values => { values['actions.json'].actions[0].capability = 'link.create.v1'; },
+    values => { values['actions.json'].actions[0].effect.kind = 'save'; },
     values => { values['source-index.json'].dependencies['link.create'].selectors = ['workspace.active_tab']; },
     values => { values['source-index.json'].dependencies['link.create'].files = ['bg/selectors.ts']; },
     values => { values['actions.json'].actions[0].evidence[0].sha256 = 'c'.repeat(64); },
@@ -153,9 +155,9 @@ test('validates action parameters before browser preparation and checks successf
   const runtime = createActionRuntime({ pinned, execute: async (code, options) => {
     calls.push({ code, options });
     if (calls.length === 1) return { status: 'NOT_APPLIED', action_key: 'node.add', action_revision: '2',
-      operation_id: 'unit-node-add', phase: 'prepared', checkpoint: { workflow_ref: { tab_tid: 'test-tab', prefix: 'test-prefix' } },
+      operation_id: 'unit-node-add', phase: 'prepared', effect_possible: false, checkpoint: { workflow_ref: { tab_tid: 'test-tab', prefix: 'test-prefix' } },
       output: {}, error: null, trace: [] };
-    return { status: 'SUCCEEDED', action_key: 'node.add', action_revision: '2', operation_id: 'unit-node-add', output: {
+    return { status: 'SUCCEEDED', action_key: 'node.add', action_revision: '2', operation_id: 'unit-node-add', phase: 'verified', effect_possible: true, output: {
       node_ref: { kind: 'node', node_label: 'Калькулятор', workflow_ref: { tab_tid: 'test-tab', prefix: 'test-prefix' } },
       auto_created_links: [], goal_verified: false,
     }, cleanup_complete: true, error: null, trace: [{ at_ms: 0, event: 'test' }] };
@@ -170,9 +172,9 @@ test('validates action parameters before browser preparation and checks successf
   assert.equal(calls[0].options.timeout, 65000);
   let brokenCalls = 0;
   const broken = createActionRuntime({ pinned, execute: async () => ++brokenCalls === 1
-    ? { status: 'NOT_APPLIED', action_key: 'node.add', action_revision: '2', operation_id: 'unit-broken', phase: 'prepared',
+    ? { status: 'NOT_APPLIED', action_key: 'node.add', action_revision: '2', operation_id: 'unit-broken', phase: 'prepared', effect_possible: false,
       checkpoint: { workflow_ref: { tab_tid: 'test-tab', prefix: 'test-prefix' } }, output: {}, error: null, trace: [] }
-    : { status: 'SUCCEEDED', action_key: 'node.add', action_revision: '2', operation_id: 'unit-broken',
+    : { status: 'SUCCEEDED', action_key: 'node.add', action_revision: '2', operation_id: 'unit-broken', phase: 'verified', effect_possible: true,
       output: { auto_created_links: [], goal_verified: false }, error: null, trace: [] } });
   const invalid = await broken.run('node.add', { component_key: 'imports.text', target_position: { x: 100, y: 100 } }, { operationId: 'unit-broken' });
   assert.equal(invalid.status, 'AMBIGUOUS');
@@ -180,7 +182,7 @@ test('validates action parameters before browser preparation and checks successf
 });
 
 test('parses only a typed capability outcome', () => {
-  const value = { status: 'NOT_APPLIED', action_key: 'link.create', action_revision: '1', output: {}, error: null, trace: [] };
+  const value = { status: 'NOT_APPLIED', action_key: 'link.create', action_revision: '1', phase: 'reconciling', effect_possible: false, output: {}, error: null, trace: [] };
   assert.deepEqual(parseCapabilityResult({ content: [{ type: 'text', text: `### Result\n${JSON.stringify(value)}\n### Ran Playwright code` }] }), value);
   assert.throws(() => parseCapabilityResult({ content: [{ type: 'text', text: '{"ok":true}' }] }), /no typed result/);
 });

@@ -1230,7 +1230,7 @@ tool schemas в `bridge.mjs`/`catalog.mjs`, bootstrap/full skills и publisher
   шаг. Статусы различают `planned`, `implemented`, `live_verified`, `released`,
   `blocked`, `unsupported`. Области §13.1 и E2E-карта — исходный перечень, который
   дополнить инвентаризацией реально доступных компонентов и режимов.
-- [ ] Выбрать явный локальный registry capabilities с версионированными handlers
+- [x] Выбрать явный локальный registry capabilities с версионированными handlers
   и contracts. Убрать расхождение трёх повторённых allowlists, сохранив отказ
   неизвестным actions. Один JSON action без handler не должен стать исполняемым.
 - [ ] Определить новые effect kinds для настройки, удаления, исполнения,
@@ -1241,11 +1241,11 @@ tool schemas в `bridge.mjs`/`catalog.mjs`, bootstrap/full skills и publisher
   наблюдения, проверенные настройки/данные, выполненные обязательства цели.
   Усилить validation discriminated outcome: сейчас `assertActionOutcome`
   проверяет только object/status/trace, а предметный output — отдельная schema.
-- [ ] Устранить путаницу operation/recovery IDs и `recovery_options` из §16.3.
+- [x] Устранить путаницу operation/recovery IDs и `recovery_options` из §16.3.
   Ошибка должна возвращать доступный tool, обязательные поля, требование нового
   observation/receipt, а не предлагать несуществующий enum. Добавить contract
   проверки на реально повторявшиеся неправильные вызовы Hermes.
-- [ ] Описать версии schemas и ABI. Текущий JSON Schema validator поддерживает
+- [x] Описать версии schemas и ABI. Текущий JSON Schema validator поддерживает
   лишь type/properties/required/additionalProperties/enum, числовые и строковые
   bounds/pattern, items/description; `$ref`, `oneOf` и defaults не реализованы.
   Либо явно сохранить небольшой subset, либо выпустить проверенную реализацию
@@ -1255,6 +1255,16 @@ tool schemas в `bridge.mjs`/`catalog.mjs`, bootstrap/full skills и publisher
 контракта согласованно отражается в schema/describe/dispatch/admission, а старый
 клиент отказывает ему до browser call. Неполный snapshot и успешный жест нельзя
 принять как доказанный сценарий. Старые три actions продолжают работать.
+
+P1 начат 5 сентября: локальный registry связывает key/capability/handler/effect;
+tool schemas, admission и dispatch согласованы, неизвестные и перепутанные
+действия отклоняются до браузера. Next steps содержат реальные tools/поля/роли
+IDs; recovery_options больше не предлагает несуществующие strategies.
+Subset схем проверяет типы/место keywords и не игнорирует неизвестные поля;
+закрыт обход через prototype properties. Outcome envelope усилен, но полный
+раздельный proof ещё предстоит. Начальный coverage: 78 E2E компонентов +
+68 общих операций; live/Help inventory остаются незавершёнными.
+См. `docs/loginom-dock/executor-contracts.md` и `coverage.md`.
 
 ### P2. Общие UI-драйверы и доступное наблюдение
 

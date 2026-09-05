@@ -1,4 +1,5 @@
 import { randomUUID, createHash } from 'node:crypto';
+import { requireCapability } from './capability-registry.mjs';
 import { actionDescribeTool, actionRunTool, assertActionOutcome, validateActionParameters } from './action-catalog.mjs';
 import { makeWorkspaceUiCode, validateUiAction, uiActionSchema } from './workspace-ui.mjs';
 
@@ -639,24 +640,29 @@ function browserCapability(page, task) {
   };
   return (async () => {
     record('action_started', { capability: task.action.capability, mode: task.mode ?? 'apply' });
+    const handlers = {
+      nodeAdd: { prepare: nodeCheckpoint, apply: runNodeAdd, reconcile: () => reconcileNode(task.checkpoint) },
+      linkCreate: { prepare: linkCheckpoint, apply: runLinkCreate, reconcile: () => reconcileLink(task.checkpoint), recover_link: recoverLink },
+      packageSaveAs: { prepare: packageCheckpoint, apply: runPackageSaveAs,
+        reconcile: () => result('AMBIGUOUS', {}, { code: 'SAVE_RECEIPT_MISSING', message: 'A lost save response cannot prove close/reopen from a read-only DOM snapshot' }) },
+    };
     let outcome;
     try {
+      const handler = handlers[task.handler];
+      if (!handler) throw new Error('Unknown local capability handler');
       if (task.mode === 'observe') outcome = await observe();
       else if (task.mode === 'prepare') {
-        const checkpoint = task.action.capability === 'node.add.v1' ? await nodeCheckpoint()
-          : task.action.capability === 'link.create.v1' ? await linkCheckpoint() : await packageCheckpoint();
+        const checkpoint = await handler.prepare();
         phase = 'prepared';
         outcome = { ...result('NOT_APPLIED'), checkpoint };
       } else if (task.mode === 'reconcile') {
         phase = 'reconciling';
-        if (task.action.capability === 'node.add.v1') outcome = await reconcileNode(task.checkpoint);
-        else if (task.action.capability === 'link.create.v1') outcome = await reconcileLink(task.checkpoint);
-        else outcome = result('AMBIGUOUS', {}, { code: 'SAVE_RECEIPT_MISSING', message: 'A lost save response cannot prove close/reopen from a read-only DOM snapshot' });
-      } else if (task.mode === 'recover_link') outcome = await recoverLink();
-      else if (task.action.capability === 'node.add.v1') outcome = await runNodeAdd();
-      else if (task.action.capability === 'link.create.v1') outcome = await runLinkCreate();
-      else if (task.action.capability === 'package.save_as.v1') outcome = await runPackageSaveAs();
-      else throw new Error('Unknown local capability');
+        outcome = await handler.reconcile();
+      } else if (task.mode === 'recover_link') {
+        if (!handler.recover_link) throw new Error('Recovery is unavailable for this handler');
+        outcome = await handler.recover_link();
+      } else if (!task.mode || task.mode === 'apply') outcome = await handler.apply();
+      else throw new Error('Unknown capability execution mode');
     } catch (error) {
       record('action_failed', { phase, effect_possible: effectPossible });
       outcome = result(effectPossible || task.mode === 'reconcile' ? 'AMBIGUOUS' : 'FAILED', {}, { code: 'CAPABILITY_ERROR', message: safeMessage(error) });
@@ -681,8 +687,9 @@ function browserCapability(page, task) {
 }
 
 export function makeCapabilityCode(action, selectors, parameters, options = {}) {
+  const handler = requireCapability(action).handler;
   const allowedSelectors = Object.fromEntries(action.selector_symbols.map(symbol => [symbol, selectors.get(symbol)]));
-  const task = { action: structuredClone(action), selectors: structuredClone(allowedSelectors), parameters: structuredClone(parameters), ...structuredClone(options) };
+  const task = { action: structuredClone(action), selectors: structuredClone(allowedSelectors), parameters: structuredClone(parameters), ...structuredClone(options), handler };
   const body = `(${browserCapability.toString()})(page, ${JSON.stringify(task)})`;
   return ['apply', 'recover_link'].includes(task.mode) && task.receipt_namespace
     ? withBrowserReceipt(body, task) : `async (page) => ${body}`;
@@ -753,6 +760,7 @@ export function createActionRuntime({ pinned, execute, allowCandidate = false, o
     if (typeof actionKey !== 'string' || !actionKey.trim()) throw new Error('action_key is required');
     const action = pinned.actions.get(actionKey);
     if (!action) throw new Error(`Action ${actionKey} is not present in the pinned catalog`);
+    requireCapability(action);
     const accepted = pinned.acceptanceVerified === true && pinned.pins?.catalogLifecycleStatus === 'production';
     if (action.status !== 'production' && !(action.status === 'candidate' && (allowCandidate || accepted))) {
       throw new Error(`Action ${actionKey} is not executable in this session (${action.status})`);
@@ -761,7 +769,7 @@ export function createActionRuntime({ pinned, execute, allowCandidate = false, o
   };
   const failed = (operation, code, message, status = 'AMBIGUOUS') => ({ status,
     action_key: operation.action.action_key, action_revision: operation.action.revision,
-    operation_id: operation.id, output: {}, error: { code, message }, trace: [] });
+    operation_id: operation.id, phase: 'unverified', effect_possible: status === 'AMBIGUOUS', output: {}, error: { code, message }, trace: [] });
   const receiptOptions = (operation, id, key, signature) => {
     operation.lastReceipt = { id, signature, action_key: key, operation_id: id };
     return { receipt_namespace: receiptNamespace, receipt_id: id, receipt_signature: signature };
@@ -844,16 +852,40 @@ export function createActionRuntime({ pinned, execute, allowCandidate = false, o
       return outcome;
     } catch (error) { return failed(operation, 'RECONCILIATION_FAILED', String(error?.message ?? error).slice(0, 1000)); }
   };
+  const recoveryAdvice = operation => {
+    const base = [{ tool: 'dock_workspace_observe', arguments: {}, required_fields: [],
+      requires: [], provides: ['observation_id', 'fresh_ui_refs'] }];
+    if (!operation || pending !== operation) return { recovery_options: [], next_steps: base };
+    base.unshift({ tool: 'dock_operation_inspect', arguments: { operation_id: operation.id },
+      required_fields: [], requires: [], provides: ['completion_receipt', 'cleanup_state'] });
+    if (operation.transportUncertain) return { recovery_options: [], next_steps: base };
+    const strategies = operation.cleanupConfirmed === false ? ['restore_control']
+      : ['abandon_operation', ...(operation.action.capability === 'ui.act' ? ['accept_observed_state'] : []),
+        ...(operation.action.capability === 'link.create.v1' && operation.parameters.target_port.kind === 'add'
+          && !operation.outcome?.output?.reason && operation.outcome?.output?.added_ports?.length === 1
+          && operation.outcome?.output?.added_links?.length === 0 ? ['complete_link'] : [])];
+    for (const strategy of strategies) {
+      const observed = ['abandon_operation', 'accept_observed_state'].includes(strategy);
+      base.push({ tool: 'dock_operation_recover', arguments: { operation_id: operation.id, strategy },
+        required_fields: ['recovery_operation_id', ...(observed ? ['observation_id'] : [])],
+        id_roles: { operation_id: 'original_pending_operation', recovery_operation_id: 'new_unique_request' },
+        requires: ['confirmed_browser_completion', ...(strategy === 'restore_control' ? [] : ['confirmed_cleanup']),
+          ...(observed ? ['fresh_observation_id'] : [])], provides: ['recovery_receipt'] });
+    }
+    if (operation.cleanupConfirmed === true) base.push({ tool: 'dock_ui_action',
+      arguments: { recovery_operation_id: operation.id }, required_fields: ['operation_id', 'observation_id', 'action'],
+      id_roles: { operation_id: 'new_unique_request', recovery_operation_id: 'original_pending_operation' },
+      requires: ['fresh_observation_id', 'observed_owned_ui_ref', 'confirmed_browser_completion', 'confirmed_cleanup'],
+      provides: ['gesture_receipt', 'reconciliation'] });
+    return { recovery_options: strategies, next_steps: base };
+  };
   const view = (operation, outcome) => ({ status: 'SUCCEEDED', action_key: 'operation.inspect', action_revision: '1',
     operation_id: operation?.id, phase: 'observed', effect_possible: false, error: null, trace: [], output: {
       operation_id: operation?.id ?? null, state: !operation ? 'idle' : pending === operation ? 'pending' : 'resolved',
       outcome: outcome ?? operation?.outcome ?? null, cleanup_confirmed: operation ? operation.cleanupConfirmed === true : true,
       effect_state: !operation ? 'none' : operation.transportUncertain ? 'unknown' : pending === operation ? 'partial_or_unverified'
         : operation.outcome?.resolution ? 'observed_unverified' : 'verified',
-      recovery_options: !operation || pending !== operation || operation.transportUncertain ? []
-        : operation.cleanupConfirmed === false ? ['restore_control']
-          : ['abandon_operation', ...(operation.action.capability === 'ui.act' ? ['accept_observed_state'] : []), ...(operation.action.capability === 'link.create.v1' && operation.parameters.target_port.kind === 'add'
-            && !operation.outcome?.output?.reason && operation.outcome?.output?.added_ports?.length === 1 && operation.outcome?.output?.added_links?.length === 0 ? ['complete_link'] : []), 'inspect_ui', 'ui_repair'],
+      ...recoveryAdvice(operation),
     } });
   const retainObservation = outcome => {
     if (outcome?.output?.ui) {

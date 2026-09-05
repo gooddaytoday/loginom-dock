@@ -100,8 +100,13 @@ def validate_build(texts, activate=False, acceptance=None):
     require(revision_tuple(manifest["min_executor_revision"]) == max(revision_tuple(item.get("min_executor_revision")) for item in actions),
             "Manifest minimum executor revision differs from its actions")
     if activate:
-        require({item["action_key"] for item in actions} == {"node.add", "link.create", "package.save_as"},
+        require({item["action_key"] for item in actions} == {entry["action_key"] for entry in EXECUTOR_PROFILE["capabilities"].values()},
                 "Production admission requires all three MVP actions")
+    for action in actions:
+        contract = EXECUTOR_PROFILE["capabilities"].get(action.get("capability"))
+        require(contract is not None and action.get("action_key") == contract["action_key"]
+                and action.get("effect", {}).get("kind") == contract["effect_kind"],
+                "Action does not match a local capability contract")
     selectors = {item["symbol"]: item for item in documents["selectors.json"]["selectors"]}
     require(bool(selectors) and len(selectors) == len(documents["selectors.json"]["selectors"]), "Selector keys are empty or duplicated")
     require(all(isinstance(path, str) and path.strip() and isinstance(sha, str) and SHA256.fullmatch(sha)

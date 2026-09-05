@@ -61,7 +61,7 @@ class ClientPackagingTest(unittest.TestCase):
         clean = self.preflight.preflight(self.source)
         self.assertTrue(clean["source"]["build_inputs_match_commit"])
         self.assertFalse(clean["model_started"])
-        self.assertEqual(len(clean["runtime"]["inputs"]), 41)
+        self.assertEqual(len(clean["runtime"]["inputs"]), 42)
         self.assertIn("client/lib/recovery-context.mjs", clean["runtime"]["inputs"])
         (self.source / "client/lib/config.mjs").write_text("// changed\n")
         (self.source / "client/lib/new.mjs").write_text("// new\n")

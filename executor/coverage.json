@@ -1,0 +1,3817 @@
+{
+  "schema_version": 1,
+  "scope": "post-mvp-required",
+  "inventory_completeness": {
+    "e2e_component_labels": "complete_for_pinned_node_namespace",
+    "live_catalog": "pending",
+    "help_modes": "pending",
+    "not_a_release_attestation": true
+  },
+  "statuses": [
+    "planned",
+    "implemented",
+    "live_verified",
+    "released",
+    "blocked",
+    "unsupported"
+  ],
+  "sources": {
+    "e2e-labels": {
+      "repository": "e2e-tests",
+      "commit": "2cad5602158fd2e4836d821d644a2b8d92f571a2",
+      "path": "bg/labels.ts",
+      "sha256": "059353e36203ba86c8f27edbebcfa4d87093579b5c1615f57f9e66a79f4783ea",
+      "attribution": "Loginom E2E tests, BaseGroup Labs"
+    },
+    "scope-plan": {
+      "path": "docs/plans/2026-09-02-loginom-dock-implementation-plan.md"
+    }
+  },
+  "contracts": {
+    "component_pipeline": {
+      "inputs": [
+        "owned_node_ref",
+        "typed_settings",
+        "authorized_input_artifacts"
+      ],
+      "outputs": [
+        "settings_readback",
+        "execution_identity",
+        "schema_and_data_proof",
+        "reopened_settings_and_result"
+      ],
+      "effects": [
+        "configure",
+        "execute",
+        "inspect",
+        "save"
+      ],
+      "ownership": "Only the requested node/package and explicitly authorized output artifacts"
+    },
+    "domain_operation": {
+      "inputs": [
+        "observed_owned_context",
+        "typed_operation_parameters"
+      ],
+      "outputs": [
+        "domain_receipt",
+        "completeness",
+        "goal_obligations"
+      ],
+      "effects": [
+        "declared_per_handler"
+      ],
+      "ownership": "Exact objects bound before mutation; preserve unrelated objects"
+    }
+  },
+  "capabilities": [
+    {
+      "id": "component.imports.OneCRequest",
+      "family": "imports",
+      "component_label": "1С Запрос",
+      "goal": "Настроить «1С Запрос», выполнить, проверить данные и воспроизвести после открытия пакета",
+      "modes": [
+        "configure",
+        "execute",
+        "inspect_result",
+        "save_reopen"
+      ],
+      "contract": "component_pipeline",
+      "status": "planned",
+      "source_dependencies": [
+        {
+          "source": "e2e-labels",
+          "line": 68
+        }
+      ],
+      "supported_profiles": [],
+      "unit_evidence": [],
+      "live_evidence": [],
+      "known_gaps": [
+        "Наличие в E2E labels не подтверждает доступность в текущей лицензии/UI",
+        "Нет принятого сквозного контракта"
+      ],
+      "next_step": "Проверить доступность в live UI; source review мастера и отдельная цепочка с данными"
+    },
+    {
+      "id": "component.imports.DataBase",
+      "family": "imports",
+      "component_label": "База данных",
+      "goal": "Настроить «База данных», выполнить, проверить данные и воспроизвести после открытия пакета",
+      "modes": [
+        "configure",
+        "execute",
+        "inspect_result",
+        "save_reopen"
+      ],
+      "contract": "component_pipeline",
+      "status": "planned",
+      "source_dependencies": [
+        {
+          "source": "e2e-labels",
+          "line": 70
+        }
+      ],
+      "supported_profiles": [],
+      "unit_evidence": [],
+      "live_evidence": [],
+      "known_gaps": [
+        "Наличие в E2E labels не подтверждает доступность в текущей лицензии/UI",
+        "Нет принятого сквозного контракта"
+      ],
+      "next_step": "Проверить доступность в live UI; source review мастера и отдельная цепочка с данными"
+    },
+    {
+      "id": "component.imports.Text",
+      "family": "imports",
+      "component_label": "Текстовый файл",
+      "goal": "Настроить «Текстовый файл», выполнить, проверить данные и воспроизвести после открытия пакета",
+      "modes": [
+        "configure",
+        "execute",
+        "inspect_result",
+        "save_reopen"
+      ],
+      "contract": "component_pipeline",
+      "status": "planned",
+      "source_dependencies": [
+        {
+          "source": "e2e-labels",
+          "line": 72
+        }
+      ],
+      "supported_profiles": [],
+      "unit_evidence": [],
+      "live_evidence": [],
+      "known_gaps": [
+        "Наличие в E2E labels не подтверждает доступность в текущей лицензии/UI",
+        "Нет принятого сквозного контракта"
+      ],
+      "next_step": "Проверить доступность в live UI; source review мастера и отдельная цепочка с данными"
+    },
+    {
+      "id": "component.imports.Warehouse",
+      "family": "imports",
+      "component_label": "Deductor Warehouse",
+      "goal": "Настроить «Deductor Warehouse», выполнить, проверить данные и воспроизвести после открытия пакета",
+      "modes": [
+        "configure",
+        "execute",
+        "inspect_result",
+        "save_reopen"
+      ],
+      "contract": "component_pipeline",
+      "status": "planned",
+      "source_dependencies": [
+        {
+          "source": "e2e-labels",
+          "line": 74
+        }
+      ],
+      "supported_profiles": [],
+      "unit_evidence": [],
+      "live_evidence": [],
+      "known_gaps": [
+        "Наличие в E2E labels не подтверждает доступность в текущей лицензии/UI",
+        "Нет принятого сквозного контракта"
+      ],
+      "next_step": "Проверить доступность в live UI; source review мастера и отдельная цепочка с данными"
+    },
+    {
+      "id": "component.imports.Excel",
+      "family": "imports",
+      "component_label": "Excel файл",
+      "goal": "Настроить «Excel файл», выполнить, проверить данные и воспроизвести после открытия пакета",
+      "modes": [
+        "configure",
+        "execute",
+        "inspect_result",
+        "save_reopen"
+      ],
+      "contract": "component_pipeline",
+      "status": "planned",
+      "source_dependencies": [
+        {
+          "source": "e2e-labels",
+          "line": 76
+        }
+      ],
+      "supported_profiles": [],
+      "unit_evidence": [],
+      "live_evidence": [],
+      "known_gaps": [
+        "Наличие в E2E labels не подтверждает доступность в текущей лицензии/UI",
+        "Нет принятого сквозного контракта"
+      ],
+      "next_step": "Проверить доступность в live UI; source review мастера и отдельная цепочка с данными"
+    },
+    {
+      "id": "component.imports.Kafka",
+      "family": "imports",
+      "component_label": "Kafka",
+      "goal": "Настроить «Kafka», выполнить, проверить данные и воспроизвести после открытия пакета",
+      "modes": [
+        "configure",
+        "execute",
+        "inspect_result",
+        "save_reopen"
+      ],
+      "contract": "component_pipeline",
+      "status": "planned",
+      "source_dependencies": [
+        {
+          "source": "e2e-labels",
+          "line": 78
+        }
+      ],
+      "supported_profiles": [],
+      "unit_evidence": [],
+      "live_evidence": [],
+      "known_gaps": [
+        "Наличие в E2E labels не подтверждает доступность в текущей лицензии/UI",
+        "Нет принятого сквозного контракта"
+      ],
+      "next_step": "Проверить доступность в live UI; source review мастера и отдельная цепочка с данными"
+    },
+    {
+      "id": "component.imports.Lgd",
+      "family": "imports",
+      "component_label": "Loginom Data файл",
+      "goal": "Настроить «Loginom Data файл», выполнить, проверить данные и воспроизвести после открытия пакета",
+      "modes": [
+        "configure",
+        "execute",
+        "inspect_result",
+        "save_reopen"
+      ],
+      "contract": "component_pipeline",
+      "status": "planned",
+      "source_dependencies": [
+        {
+          "source": "e2e-labels",
+          "line": 80
+        }
+      ],
+      "supported_profiles": [],
+      "unit_evidence": [],
+      "live_evidence": [],
+      "known_gaps": [
+        "Наличие в E2E labels не подтверждает доступность в текущей лицензии/UI",
+        "Нет принятого сквозного контракта"
+      ],
+      "next_step": "Проверить доступность в live UI; source review мастера и отдельная цепочка с данными"
+    },
+    {
+      "id": "component.imports.Xml",
+      "family": "imports",
+      "component_label": "XML файл",
+      "goal": "Настроить «XML файл», выполнить, проверить данные и воспроизвести после открытия пакета",
+      "modes": [
+        "configure",
+        "execute",
+        "inspect_result",
+        "save_reopen"
+      ],
+      "contract": "component_pipeline",
+      "status": "planned",
+      "source_dependencies": [
+        {
+          "source": "e2e-labels",
+          "line": 82
+        }
+      ],
+      "supported_profiles": [],
+      "unit_evidence": [],
+      "live_evidence": [],
+      "known_gaps": [
+        "Наличие в E2E labels не подтверждает доступность в текущей лицензии/UI",
+        "Нет принятого сквозного контракта"
+      ],
+      "next_step": "Проверить доступность в live UI; source review мастера и отдельная цепочка с данными"
+    },
+    {
+      "id": "component.transform.GroupData",
+      "family": "transform",
+      "component_label": "Группировка",
+      "goal": "Настроить «Группировка», выполнить, проверить данные и воспроизвести после открытия пакета",
+      "modes": [
+        "configure",
+        "execute",
+        "inspect_result",
+        "save_reopen"
+      ],
+      "contract": "component_pipeline",
+      "status": "planned",
+      "source_dependencies": [
+        {
+          "source": "e2e-labels",
+          "line": 87
+        }
+      ],
+      "supported_profiles": [],
+      "unit_evidence": [],
+      "live_evidence": [],
+      "known_gaps": [
+        "Наличие в E2E labels не подтверждает доступность в текущей лицензии/UI",
+        "Нет принятого сквозного контракта"
+      ],
+      "next_step": "Проверить доступность в live UI; source review мастера и отдельная цепочка с данными"
+    },
+    {
+      "id": "component.transform.DateTimeReform",
+      "family": "transform",
+      "component_label": "Дата и время",
+      "goal": "Настроить «Дата и время», выполнить, проверить данные и воспроизвести после открытия пакета",
+      "modes": [
+        "configure",
+        "execute",
+        "inspect_result",
+        "save_reopen"
+      ],
+      "contract": "component_pipeline",
+      "status": "planned",
+      "source_dependencies": [
+        {
+          "source": "e2e-labels",
+          "line": 89
+        }
+      ],
+      "supported_profiles": [],
+      "unit_evidence": [],
+      "live_evidence": [],
+      "known_gaps": [
+        "Наличие в E2E labels не подтверждает доступность в текущей лицензии/UI",
+        "Нет принятого сквозного контракта"
+      ],
+      "next_step": "Проверить доступность в live UI; source review мастера и отдельная цепочка с данными"
+    },
+    {
+      "id": "component.transform.EnrichData",
+      "family": "transform",
+      "component_label": "Дополнение данных",
+      "goal": "Настроить «Дополнение данных», выполнить, проверить данные и воспроизвести после открытия пакета",
+      "modes": [
+        "configure",
+        "execute",
+        "inspect_result",
+        "save_reopen"
+      ],
+      "contract": "component_pipeline",
+      "status": "planned",
+      "source_dependencies": [
+        {
+          "source": "e2e-labels",
+          "line": 91
+        }
+      ],
+      "supported_profiles": [],
+      "unit_evidence": [],
+      "live_evidence": [],
+      "known_gaps": [
+        "Наличие в E2E labels не подтверждает доступность в текущей лицензии/UI",
+        "Нет принятого сквозного контракта"
+      ],
+      "next_step": "Проверить доступность в live UI; source review мастера и отдельная цепочка с данными"
+    },
+    {
+      "id": "component.transform.Replace",
+      "family": "transform",
+      "component_label": "Замена",
+      "goal": "Настроить «Замена», выполнить, проверить данные и воспроизвести после открытия пакета",
+      "modes": [
+        "configure",
+        "execute",
+        "inspect_result",
+        "save_reopen"
+      ],
+      "contract": "component_pipeline",
+      "status": "planned",
+      "source_dependencies": [
+        {
+          "source": "e2e-labels",
+          "line": 93
+        }
+      ],
+      "supported_profiles": [],
+      "unit_evidence": [],
+      "live_evidence": [],
+      "known_gaps": [
+        "Наличие в E2E labels не подтверждает доступность в текущей лицензии/UI",
+        "Нет принятого сквозного контракта"
+      ],
+      "next_step": "Проверить доступность в live UI; source review мастера и отдельная цепочка с данными"
+    },
+    {
+      "id": "component.transform.Calculator",
+      "family": "transform",
+      "component_label": "Калькулятор",
+      "goal": "Настроить «Калькулятор», выполнить, проверить данные и воспроизвести после открытия пакета",
+      "modes": [
+        "configure",
+        "execute",
+        "inspect_result",
+        "save_reopen"
+      ],
+      "contract": "component_pipeline",
+      "status": "planned",
+      "source_dependencies": [
+        {
+          "source": "e2e-labels",
+          "line": 95
+        }
+      ],
+      "supported_profiles": [],
+      "unit_evidence": [],
+      "live_evidence": [],
+      "known_gaps": [
+        "Наличие в E2E labels не подтверждает доступность в текущей лицензии/UI",
+        "Нет принятого сквозного контракта"
+      ],
+      "next_step": "Проверить доступность в live UI; source review мастера и отдельная цепочка с данными"
+    },
+    {
+      "id": "component.transform.CrossTable",
+      "family": "transform",
+      "component_label": "Кросс-таблица",
+      "goal": "Настроить «Кросс-таблица», выполнить, проверить данные и воспроизвести после открытия пакета",
+      "modes": [
+        "configure",
+        "execute",
+        "inspect_result",
+        "save_reopen"
+      ],
+      "contract": "component_pipeline",
+      "status": "planned",
+      "source_dependencies": [
+        {
+          "source": "e2e-labels",
+          "line": 97
+        }
+      ],
+      "supported_profiles": [],
+      "unit_evidence": [],
+      "live_evidence": [],
+      "known_gaps": [
+        "Наличие в E2E labels не подтверждает доступность в текущей лицензии/UI",
+        "Нет принятого сквозного контракта"
+      ],
+      "next_step": "Проверить доступность в live UI; source review мастера и отдельная цепочка с данными"
+    },
+    {
+      "id": "component.transform.UnionData",
+      "family": "transform",
+      "component_label": "Объединение",
+      "goal": "Настроить «Объединение», выполнить, проверить данные и воспроизвести после открытия пакета",
+      "modes": [
+        "configure",
+        "execute",
+        "inspect_result",
+        "save_reopen"
+      ],
+      "contract": "component_pipeline",
+      "status": "planned",
+      "source_dependencies": [
+        {
+          "source": "e2e-labels",
+          "line": 99
+        }
+      ],
+      "supported_profiles": [],
+      "unit_evidence": [],
+      "live_evidence": [],
+      "known_gaps": [
+        "Наличие в E2E labels не подтверждает доступность в текущей лицензии/UI",
+        "Нет принятого сквозного контракта"
+      ],
+      "next_step": "Проверить доступность в live UI; source review мастера и отдельная цепочка с данными"
+    },
+    {
+      "id": "component.transform.ReformColumns",
+      "family": "transform",
+      "component_label": "Параметры полей",
+      "goal": "Настроить «Параметры полей», выполнить, проверить данные и воспроизвести после открытия пакета",
+      "modes": [
+        "configure",
+        "execute",
+        "inspect_result",
+        "save_reopen"
+      ],
+      "contract": "component_pipeline",
+      "status": "planned",
+      "source_dependencies": [
+        {
+          "source": "e2e-labels",
+          "line": 101
+        }
+      ],
+      "supported_profiles": [],
+      "unit_evidence": [],
+      "live_evidence": [],
+      "known_gaps": [
+        "Наличие в E2E labels не подтверждает доступность в текущей лицензии/UI",
+        "Нет принятого сквозного контракта"
+      ],
+      "next_step": "Проверить доступность в live UI; source review мастера и отдельная цепочка с данными"
+    },
+    {
+      "id": "component.transform.UngroupData",
+      "family": "transform",
+      "component_label": "Разгруппировка",
+      "goal": "Настроить «Разгруппировка», выполнить, проверить данные и воспроизвести после открытия пакета",
+      "modes": [
+        "configure",
+        "execute",
+        "inspect_result",
+        "save_reopen"
+      ],
+      "contract": "component_pipeline",
+      "status": "planned",
+      "source_dependencies": [
+        {
+          "source": "e2e-labels",
+          "line": 103
+        }
+      ],
+      "supported_profiles": [],
+      "unit_evidence": [],
+      "live_evidence": [],
+      "known_gaps": [
+        "Наличие в E2E labels не подтверждает доступность в текущей лицензии/UI",
+        "Нет принятого сквозного контракта"
+      ],
+      "next_step": "Проверить доступность в live UI; source review мастера и отдельная цепочка с данными"
+    },
+    {
+      "id": "component.transform.ColumnFlipping",
+      "family": "transform",
+      "component_label": "Свертка столбцов",
+      "goal": "Настроить «Свертка столбцов», выполнить, проверить данные и воспроизвести после открытия пакета",
+      "modes": [
+        "configure",
+        "execute",
+        "inspect_result",
+        "save_reopen"
+      ],
+      "contract": "component_pipeline",
+      "status": "planned",
+      "source_dependencies": [
+        {
+          "source": "e2e-labels",
+          "line": 105
+        }
+      ],
+      "supported_profiles": [],
+      "unit_evidence": [],
+      "live_evidence": [],
+      "known_gaps": [
+        "Наличие в E2E labels не подтверждает доступность в текущей лицензии/UI",
+        "Нет принятого сквозного контракта"
+      ],
+      "next_step": "Проверить доступность в live UI; source review мастера и отдельная цепочка с данными"
+    },
+    {
+      "id": "component.transform.SlidingWindow",
+      "family": "transform",
+      "component_label": "Скользящее окно",
+      "goal": "Настроить «Скользящее окно», выполнить, проверить данные и воспроизвести после открытия пакета",
+      "modes": [
+        "configure",
+        "execute",
+        "inspect_result",
+        "save_reopen"
+      ],
+      "contract": "component_pipeline",
+      "status": "planned",
+      "source_dependencies": [
+        {
+          "source": "e2e-labels",
+          "line": 107
+        }
+      ],
+      "supported_profiles": [],
+      "unit_evidence": [],
+      "live_evidence": [],
+      "known_gaps": [
+        "Наличие в E2E labels не подтверждает доступность в текущей лицензии/UI",
+        "Нет принятого сквозного контракта"
+      ],
+      "next_step": "Проверить доступность в live UI; source review мастера и отдельная цепочка с данными"
+    },
+    {
+      "id": "component.transform.JoinData",
+      "family": "transform",
+      "component_label": "Слияние",
+      "goal": "Настроить «Слияние», выполнить, проверить данные и воспроизвести после открытия пакета",
+      "modes": [
+        "configure",
+        "execute",
+        "inspect_result",
+        "save_reopen"
+      ],
+      "contract": "component_pipeline",
+      "status": "planned",
+      "source_dependencies": [
+        {
+          "source": "e2e-labels",
+          "line": 109
+        }
+      ],
+      "supported_profiles": [],
+      "unit_evidence": [],
+      "live_evidence": [],
+      "known_gaps": [
+        "Наличие в E2E labels не подтверждает доступность в текущей лицензии/UI",
+        "Нет принятого сквозного контракта"
+      ],
+      "next_step": "Проверить доступность в live UI; source review мастера и отдельная цепочка с данными"
+    },
+    {
+      "id": "component.transform.ColUnionData",
+      "family": "transform",
+      "component_label": "Соединение",
+      "goal": "Настроить «Соединение», выполнить, проверить данные и воспроизвести после открытия пакета",
+      "modes": [
+        "configure",
+        "execute",
+        "inspect_result",
+        "save_reopen"
+      ],
+      "contract": "component_pipeline",
+      "status": "planned",
+      "source_dependencies": [
+        {
+          "source": "e2e-labels",
+          "line": 111
+        }
+      ],
+      "supported_profiles": [],
+      "unit_evidence": [],
+      "live_evidence": [],
+      "known_gaps": [
+        "Наличие в E2E labels не подтверждает доступность в текущей лицензии/UI",
+        "Нет принятого сквозного контракта"
+      ],
+      "next_step": "Проверить доступность в live UI; source review мастера и отдельная цепочка с данными"
+    },
+    {
+      "id": "component.transform.Sorting",
+      "family": "transform",
+      "component_label": "Сортировка",
+      "goal": "Настроить «Сортировка», выполнить, проверить данные и воспроизвести после открытия пакета",
+      "modes": [
+        "configure",
+        "execute",
+        "inspect_result",
+        "save_reopen"
+      ],
+      "contract": "component_pipeline",
+      "status": "planned",
+      "source_dependencies": [
+        {
+          "source": "e2e-labels",
+          "line": 113
+        }
+      ],
+      "supported_profiles": [],
+      "unit_evidence": [],
+      "live_evidence": [],
+      "known_gaps": [
+        "Наличие в E2E labels не подтверждает доступность в текущей лицензии/UI",
+        "Нет принятого сквозного контракта"
+      ],
+      "next_step": "Проверить доступность в live UI; source review мастера и отдельная цепочка с данными"
+    },
+    {
+      "id": "component.transform.FilterData",
+      "family": "transform",
+      "component_label": "Фильтр строк",
+      "goal": "Настроить «Фильтр строк», выполнить, проверить данные и воспроизвести после открытия пакета",
+      "modes": [
+        "configure",
+        "execute",
+        "inspect_result",
+        "save_reopen"
+      ],
+      "contract": "component_pipeline",
+      "status": "planned",
+      "source_dependencies": [
+        {
+          "source": "e2e-labels",
+          "line": 115
+        }
+      ],
+      "supported_profiles": [],
+      "unit_evidence": [],
+      "live_evidence": [],
+      "known_gaps": [
+        "Наличие в E2E labels не подтверждает доступность в текущей лицензии/UI",
+        "Нет принятого сквозного контракта"
+      ],
+      "next_step": "Проверить доступность в live UI; source review мастера и отдельная цепочка с данными"
+    },
+    {
+      "id": "component.control.ExecNode",
+      "family": "control",
+      "component_label": "Выполнение_узла",
+      "goal": "Настроить «Выполнение_узла», выполнить, проверить данные и воспроизвести после открытия пакета",
+      "modes": [
+        "configure",
+        "execute",
+        "inspect_result",
+        "save_reopen"
+      ],
+      "contract": "component_pipeline",
+      "status": "planned",
+      "source_dependencies": [
+        {
+          "source": "e2e-labels",
+          "line": 121
+        }
+      ],
+      "supported_profiles": [],
+      "unit_evidence": [],
+      "live_evidence": [],
+      "known_gaps": [
+        "Наличие в E2E labels не подтверждает доступность в текущей лицензии/UI",
+        "Нет принятого сквозного контракта"
+      ],
+      "next_step": "Проверить доступность в live UI; source review мастера и отдельная цепочка с данными"
+    },
+    {
+      "id": "component.control.SuperNode",
+      "family": "control",
+      "component_label": "Подмодель",
+      "goal": "Настроить «Подмодель», выполнить, проверить данные и воспроизвести после открытия пакета",
+      "modes": [
+        "configure",
+        "execute",
+        "inspect_result",
+        "save_reopen"
+      ],
+      "contract": "component_pipeline",
+      "status": "planned",
+      "source_dependencies": [
+        {
+          "source": "e2e-labels",
+          "line": 123
+        }
+      ],
+      "supported_profiles": [],
+      "unit_evidence": [],
+      "live_evidence": [],
+      "known_gaps": [
+        "Наличие в E2E labels не подтверждает доступность в текущей лицензии/UI",
+        "Нет принятого сквозного контракта"
+      ],
+      "next_step": "Проверить доступность в live UI; source review мастера и отдельная цепочка с данными"
+    },
+    {
+      "id": "component.control.ReferenceNode",
+      "family": "control",
+      "component_label": "Узел-ссылка",
+      "goal": "Настроить «Узел-ссылка», выполнить, проверить данные и воспроизвести после открытия пакета",
+      "modes": [
+        "configure",
+        "execute",
+        "inspect_result",
+        "save_reopen"
+      ],
+      "contract": "component_pipeline",
+      "status": "planned",
+      "source_dependencies": [
+        {
+          "source": "e2e-labels",
+          "line": 125
+        }
+      ],
+      "supported_profiles": [],
+      "unit_evidence": [],
+      "live_evidence": [],
+      "known_gaps": [
+        "Наличие в E2E labels не подтверждает доступность в текущей лицензии/UI",
+        "Нет принятого сквозного контракта"
+      ],
+      "next_step": "Проверить доступность в live UI; source review мастера и отдельная цепочка с данными"
+    },
+    {
+      "id": "component.control.Condition",
+      "family": "control",
+      "component_label": "Условие",
+      "goal": "Настроить «Условие», выполнить, проверить данные и воспроизвести после открытия пакета",
+      "modes": [
+        "configure",
+        "execute",
+        "inspect_result",
+        "save_reopen"
+      ],
+      "contract": "component_pipeline",
+      "status": "planned",
+      "source_dependencies": [
+        {
+          "source": "e2e-labels",
+          "line": 127
+        }
+      ],
+      "supported_profiles": [],
+      "unit_evidence": [],
+      "live_evidence": [],
+      "known_gaps": [
+        "Наличие в E2E labels не подтверждает доступность в текущей лицензии/UI",
+        "Нет принятого сквозного контракта"
+      ],
+      "next_step": "Проверить доступность в live UI; source review мастера и отдельная цепочка с данными"
+    },
+    {
+      "id": "component.control.Loop",
+      "family": "control",
+      "component_label": "Цикл",
+      "goal": "Настроить «Цикл», выполнить, проверить данные и воспроизвести после открытия пакета",
+      "modes": [
+        "configure",
+        "execute",
+        "inspect_result",
+        "save_reopen"
+      ],
+      "contract": "component_pipeline",
+      "status": "planned",
+      "source_dependencies": [
+        {
+          "source": "e2e-labels",
+          "line": 129
+        }
+      ],
+      "supported_profiles": [],
+      "unit_evidence": [],
+      "live_evidence": [],
+      "known_gaps": [
+        "Наличие в E2E labels не подтверждает доступность в текущей лицензии/UI",
+        "Нет принятого сквозного контракта"
+      ],
+      "next_step": "Проверить доступность в live UI; source review мастера и отдельная цепочка с данными"
+    },
+    {
+      "id": "component.research.AutoCorrelation",
+      "family": "research",
+      "component_label": "Автокорреляция",
+      "goal": "Настроить «Автокорреляция», выполнить, проверить данные и воспроизвести после открытия пакета",
+      "modes": [
+        "configure",
+        "execute",
+        "inspect_result",
+        "save_reopen"
+      ],
+      "contract": "component_pipeline",
+      "status": "planned",
+      "source_dependencies": [
+        {
+          "source": "e2e-labels",
+          "line": 135
+        }
+      ],
+      "supported_profiles": [],
+      "unit_evidence": [],
+      "live_evidence": [],
+      "known_gaps": [
+        "Наличие в E2E labels не подтверждает доступность в текущей лицензии/UI",
+        "Нет принятого сквозного контракта"
+      ],
+      "next_step": "Проверить доступность в live UI; source review мастера и отдельная цепочка с данными"
+    },
+    {
+      "id": "component.research.Duplicates",
+      "family": "research",
+      "component_label": "Дубликаты и противоречия",
+      "goal": "Настроить «Дубликаты и противоречия», выполнить, проверить данные и воспроизвести после открытия пакета",
+      "modes": [
+        "configure",
+        "execute",
+        "inspect_result",
+        "save_reopen"
+      ],
+      "contract": "component_pipeline",
+      "status": "planned",
+      "source_dependencies": [
+        {
+          "source": "e2e-labels",
+          "line": 137
+        }
+      ],
+      "supported_profiles": [],
+      "unit_evidence": [],
+      "live_evidence": [],
+      "known_gaps": [
+        "Наличие в E2E labels не подтверждает доступность в текущей лицензии/UI",
+        "Нет принятого сквозного контракта"
+      ],
+      "next_step": "Проверить доступность в live UI; source review мастера и отдельная цепочка с данными"
+    },
+    {
+      "id": "component.research.Quality",
+      "family": "research",
+      "component_label": "Качество данных",
+      "goal": "Настроить «Качество данных», выполнить, проверить данные и воспроизвести после открытия пакета",
+      "modes": [
+        "configure",
+        "execute",
+        "inspect_result",
+        "save_reopen"
+      ],
+      "contract": "component_pipeline",
+      "status": "planned",
+      "source_dependencies": [
+        {
+          "source": "e2e-labels",
+          "line": 139
+        }
+      ],
+      "supported_profiles": [],
+      "unit_evidence": [],
+      "live_evidence": [],
+      "known_gaps": [
+        "Наличие в E2E labels не подтверждает доступность в текущей лицензии/UI",
+        "Нет принятого сквозного контракта"
+      ],
+      "next_step": "Проверить доступность в live UI; source review мастера и отдельная цепочка с данными"
+    },
+    {
+      "id": "component.research.CorrAnalysis",
+      "family": "research",
+      "component_label": "Корреляционный анализ",
+      "goal": "Настроить «Корреляционный анализ», выполнить, проверить данные и воспроизвести после открытия пакета",
+      "modes": [
+        "configure",
+        "execute",
+        "inspect_result",
+        "save_reopen"
+      ],
+      "contract": "component_pipeline",
+      "status": "planned",
+      "source_dependencies": [
+        {
+          "source": "e2e-labels",
+          "line": 141
+        }
+      ],
+      "supported_profiles": [],
+      "unit_evidence": [],
+      "live_evidence": [],
+      "known_gaps": [
+        "Наличие в E2E labels не подтверждает доступность в текущей лицензии/UI",
+        "Нет принятого сквозного контракта"
+      ],
+      "next_step": "Проверить доступность в live UI; source review мастера и отдельная цепочка с данными"
+    },
+    {
+      "id": "component.research.FactorAnalysis",
+      "family": "research",
+      "component_label": "Факторный анализ",
+      "goal": "Настроить «Факторный анализ», выполнить, проверить данные и воспроизвести после открытия пакета",
+      "modes": [
+        "configure",
+        "execute",
+        "inspect_result",
+        "save_reopen"
+      ],
+      "contract": "component_pipeline",
+      "status": "planned",
+      "source_dependencies": [
+        {
+          "source": "e2e-labels",
+          "line": 143
+        }
+      ],
+      "supported_profiles": [],
+      "unit_evidence": [],
+      "live_evidence": [],
+      "known_gaps": [
+        "Наличие в E2E labels не подтверждает доступность в текущей лицензии/UI",
+        "Нет принятого сквозного контракта"
+      ],
+      "next_step": "Проверить доступность в live UI; source review мастера и отдельная цепочка с данными"
+    },
+    {
+      "id": "component.preprocessing.DataRecovery",
+      "family": "preprocessing",
+      "component_label": "Заполнение пропусков",
+      "goal": "Настроить «Заполнение пропусков», выполнить, проверить данные и воспроизвести после открытия пакета",
+      "modes": [
+        "configure",
+        "execute",
+        "inspect_result",
+        "save_reopen"
+      ],
+      "contract": "component_pipeline",
+      "status": "planned",
+      "source_dependencies": [
+        {
+          "source": "e2e-labels",
+          "line": 148
+        }
+      ],
+      "supported_profiles": [],
+      "unit_evidence": [],
+      "live_evidence": [],
+      "known_gaps": [
+        "Наличие в E2E labels не подтверждает доступность в текущей лицензии/UI",
+        "Нет принятого сквозного контракта"
+      ],
+      "next_step": "Проверить доступность в live UI; source review мастера и отдельная цепочка с данными"
+    },
+    {
+      "id": "component.preprocessing.Binning",
+      "family": "preprocessing",
+      "component_label": "Квантование",
+      "goal": "Настроить «Квантование», выполнить, проверить данные и воспроизвести после открытия пакета",
+      "modes": [
+        "configure",
+        "execute",
+        "inspect_result",
+        "save_reopen"
+      ],
+      "contract": "component_pipeline",
+      "status": "planned",
+      "source_dependencies": [
+        {
+          "source": "e2e-labels",
+          "line": 150
+        }
+      ],
+      "supported_profiles": [],
+      "unit_evidence": [],
+      "live_evidence": [],
+      "known_gaps": [
+        "Наличие в E2E labels не подтверждает доступность в текущей лицензии/UI",
+        "Нет принятого сквозного контракта"
+      ],
+      "next_step": "Проверить доступность в live UI; source review мастера и отдельная цепочка с данными"
+    },
+    {
+      "id": "component.preprocessing.CoarseClasses",
+      "family": "preprocessing",
+      "component_label": "Конечные классы",
+      "goal": "Настроить «Конечные классы», выполнить, проверить данные и воспроизвести после открытия пакета",
+      "modes": [
+        "configure",
+        "execute",
+        "inspect_result",
+        "save_reopen"
+      ],
+      "contract": "component_pipeline",
+      "status": "planned",
+      "source_dependencies": [
+        {
+          "source": "e2e-labels",
+          "line": 152
+        }
+      ],
+      "supported_profiles": [],
+      "unit_evidence": [],
+      "live_evidence": [],
+      "known_gaps": [
+        "Наличие в E2E labels не подтверждает доступность в текущей лицензии/UI",
+        "Нет принятого сквозного контракта"
+      ],
+      "next_step": "Проверить доступность в live UI; source review мастера и отдельная цепочка с данными"
+    },
+    {
+      "id": "component.preprocessing.DataPartition",
+      "family": "preprocessing",
+      "component_label": "Разбиение на множества",
+      "goal": "Настроить «Разбиение на множества», выполнить, проверить данные и воспроизвести после открытия пакета",
+      "modes": [
+        "configure",
+        "execute",
+        "inspect_result",
+        "save_reopen"
+      ],
+      "contract": "component_pipeline",
+      "status": "planned",
+      "source_dependencies": [
+        {
+          "source": "e2e-labels",
+          "line": 154
+        }
+      ],
+      "supported_profiles": [],
+      "unit_evidence": [],
+      "live_evidence": [],
+      "known_gaps": [
+        "Наличие в E2E labels не подтверждает доступность в текущей лицензии/UI",
+        "Нет принятого сквозного контракта"
+      ],
+      "next_step": "Проверить доступность в live UI; source review мастера и отдельная цепочка с данными"
+    },
+    {
+      "id": "component.preprocessing.Elimoutlier",
+      "family": "preprocessing",
+      "component_label": "Редактирование выбросов",
+      "goal": "Настроить «Редактирование выбросов», выполнить, проверить данные и воспроизвести после открытия пакета",
+      "modes": [
+        "configure",
+        "execute",
+        "inspect_result",
+        "save_reopen"
+      ],
+      "contract": "component_pipeline",
+      "status": "planned",
+      "source_dependencies": [
+        {
+          "source": "e2e-labels",
+          "line": 156
+        }
+      ],
+      "supported_profiles": [],
+      "unit_evidence": [],
+      "live_evidence": [],
+      "known_gaps": [
+        "Наличие в E2E labels не подтверждает доступность в текущей лицензии/UI",
+        "Нет принятого сквозного контракта"
+      ],
+      "next_step": "Проверить доступность в live UI; source review мастера и отдельная цепочка с данными"
+    },
+    {
+      "id": "component.preprocessing.Smoothing",
+      "family": "preprocessing",
+      "component_label": "Сглаживание",
+      "goal": "Настроить «Сглаживание», выполнить, проверить данные и воспроизвести после открытия пакета",
+      "modes": [
+        "configure",
+        "execute",
+        "inspect_result",
+        "save_reopen"
+      ],
+      "contract": "component_pipeline",
+      "status": "planned",
+      "source_dependencies": [
+        {
+          "source": "e2e-labels",
+          "line": 158
+        }
+      ],
+      "supported_profiles": [],
+      "unit_evidence": [],
+      "live_evidence": [],
+      "known_gaps": [
+        "Наличие в E2E labels не подтверждает доступность в текущей лицензии/UI",
+        "Нет принятого сквозного контракта"
+      ],
+      "next_step": "Проверить доступность в live UI; source review мастера и отдельная цепочка с данными"
+    },
+    {
+      "id": "component.preprocessing.Sampling",
+      "family": "preprocessing",
+      "component_label": "Сэмплинг",
+      "goal": "Настроить «Сэмплинг», выполнить, проверить данные и воспроизвести после открытия пакета",
+      "modes": [
+        "configure",
+        "execute",
+        "inspect_result",
+        "save_reopen"
+      ],
+      "contract": "component_pipeline",
+      "status": "planned",
+      "source_dependencies": [
+        {
+          "source": "e2e-labels",
+          "line": 160
+        }
+      ],
+      "supported_profiles": [],
+      "unit_evidence": [],
+      "live_evidence": [],
+      "known_gaps": [
+        "Наличие в E2E labels не подтверждает доступность в текущей лицензии/UI",
+        "Нет принятого сквозного контракта"
+      ],
+      "next_step": "Проверить доступность в live UI; source review мастера и отдельная цепочка с данными"
+    },
+    {
+      "id": "component.dataMining.AssnRules",
+      "family": "dataMining",
+      "component_label": "Ассоциативные правила",
+      "goal": "Настроить «Ассоциативные правила», выполнить, проверить данные и воспроизвести после открытия пакета",
+      "modes": [
+        "configure",
+        "execute",
+        "inspect_result",
+        "save_reopen"
+      ],
+      "contract": "component_pipeline",
+      "status": "planned",
+      "source_dependencies": [
+        {
+          "source": "e2e-labels",
+          "line": 165
+        }
+      ],
+      "supported_profiles": [],
+      "unit_evidence": [],
+      "live_evidence": [],
+      "known_gaps": [
+        "Наличие в E2E labels не подтверждает доступность в текущей лицензии/UI",
+        "Нет принятого сквозного контракта"
+      ],
+      "next_step": "Проверить доступность в live UI; source review мастера и отдельная цепочка с данными"
+    },
+    {
+      "id": "component.dataMining.Clustering",
+      "family": "dataMining",
+      "component_label": "Кластеризация",
+      "goal": "Настроить «Кластеризация», выполнить, проверить данные и воспроизвести после открытия пакета",
+      "modes": [
+        "configure",
+        "execute",
+        "inspect_result",
+        "save_reopen"
+      ],
+      "contract": "component_pipeline",
+      "status": "planned",
+      "source_dependencies": [
+        {
+          "source": "e2e-labels",
+          "line": 167
+        }
+      ],
+      "supported_profiles": [],
+      "unit_evidence": [],
+      "live_evidence": [],
+      "known_gaps": [
+        "Наличие в E2E labels не подтверждает доступность в текущей лицензии/UI",
+        "Нет принятого сквозного контракта"
+      ],
+      "next_step": "Проверить доступность в live UI; source review мастера и отдельная цепочка с данными"
+    },
+    {
+      "id": "component.dataMining.Clope",
+      "family": "dataMining",
+      "component_label": "Кластеризация транзакций",
+      "goal": "Настроить «Кластеризация транзакций», выполнить, проверить данные и воспроизвести после открытия пакета",
+      "modes": [
+        "configure",
+        "execute",
+        "inspect_result",
+        "save_reopen"
+      ],
+      "contract": "component_pipeline",
+      "status": "planned",
+      "source_dependencies": [
+        {
+          "source": "e2e-labels",
+          "line": 169
+        }
+      ],
+      "supported_profiles": [],
+      "unit_evidence": [],
+      "live_evidence": [],
+      "known_gaps": [
+        "Наличие в E2E labels не подтверждает доступность в текущей лицензии/UI",
+        "Нет принятого сквозного контракта"
+      ],
+      "next_step": "Проверить доступность в live UI; source review мастера и отдельная цепочка с данными"
+    },
+    {
+      "id": "component.dataMining.LinRegression",
+      "family": "dataMining",
+      "component_label": "Линейная регрессия",
+      "goal": "Настроить «Линейная регрессия», выполнить, проверить данные и воспроизвести после открытия пакета",
+      "modes": [
+        "configure",
+        "execute",
+        "inspect_result",
+        "save_reopen"
+      ],
+      "contract": "component_pipeline",
+      "status": "planned",
+      "source_dependencies": [
+        {
+          "source": "e2e-labels",
+          "line": 171
+        }
+      ],
+      "supported_profiles": [],
+      "unit_evidence": [],
+      "live_evidence": [],
+      "known_gaps": [
+        "Наличие в E2E labels не подтверждает доступность в текущей лицензии/UI",
+        "Нет принятого сквозного контракта"
+      ],
+      "next_step": "Проверить доступность в live UI; source review мастера и отдельная цепочка с данными"
+    },
+    {
+      "id": "component.dataMining.LogRegression",
+      "family": "dataMining",
+      "component_label": "Логистическая регрессия",
+      "goal": "Настроить «Логистическая регрессия», выполнить, проверить данные и воспроизвести после открытия пакета",
+      "modes": [
+        "configure",
+        "execute",
+        "inspect_result",
+        "save_reopen"
+      ],
+      "contract": "component_pipeline",
+      "status": "planned",
+      "source_dependencies": [
+        {
+          "source": "e2e-labels",
+          "line": 173
+        }
+      ],
+      "supported_profiles": [],
+      "unit_evidence": [],
+      "live_evidence": [],
+      "known_gaps": [
+        "Наличие в E2E labels не подтверждает доступность в текущей лицензии/UI",
+        "Нет принятого сквозного контракта"
+      ],
+      "next_step": "Проверить доступность в live UI; source review мастера и отдельная цепочка с данными"
+    },
+    {
+      "id": "component.dataMining.NeuralnetClass",
+      "family": "dataMining",
+      "component_label": "Нейросеть (классификация)",
+      "goal": "Настроить «Нейросеть (классификация)», выполнить, проверить данные и воспроизвести после открытия пакета",
+      "modes": [
+        "configure",
+        "execute",
+        "inspect_result",
+        "save_reopen"
+      ],
+      "contract": "component_pipeline",
+      "status": "planned",
+      "source_dependencies": [
+        {
+          "source": "e2e-labels",
+          "line": 175
+        }
+      ],
+      "supported_profiles": [],
+      "unit_evidence": [],
+      "live_evidence": [],
+      "known_gaps": [
+        "Наличие в E2E labels не подтверждает доступность в текущей лицензии/UI",
+        "Нет принятого сквозного контракта"
+      ],
+      "next_step": "Проверить доступность в live UI; source review мастера и отдельная цепочка с данными"
+    },
+    {
+      "id": "component.dataMining.NeuralnetReg",
+      "family": "dataMining",
+      "component_label": "Нейросеть (регрессия)",
+      "goal": "Настроить «Нейросеть (регрессия)», выполнить, проверить данные и воспроизвести после открытия пакета",
+      "modes": [
+        "configure",
+        "execute",
+        "inspect_result",
+        "save_reopen"
+      ],
+      "contract": "component_pipeline",
+      "status": "planned",
+      "source_dependencies": [
+        {
+          "source": "e2e-labels",
+          "line": 177
+        }
+      ],
+      "supported_profiles": [],
+      "unit_evidence": [],
+      "live_evidence": [],
+      "known_gaps": [
+        "Наличие в E2E labels не подтверждает доступность в текущей лицензии/UI",
+        "Нет принятого сквозного контракта"
+      ],
+      "next_step": "Проверить доступность в live UI; source review мастера и отдельная цепочка с данными"
+    },
+    {
+      "id": "component.dataMining.Sonn",
+      "family": "dataMining",
+      "component_label": "Самоорганизующаяся сеть",
+      "goal": "Настроить «Самоорганизующаяся сеть», выполнить, проверить данные и воспроизвести после открытия пакета",
+      "modes": [
+        "configure",
+        "execute",
+        "inspect_result",
+        "save_reopen"
+      ],
+      "contract": "component_pipeline",
+      "status": "planned",
+      "source_dependencies": [
+        {
+          "source": "e2e-labels",
+          "line": 179
+        }
+      ],
+      "supported_profiles": [],
+      "unit_evidence": [],
+      "live_evidence": [],
+      "known_gaps": [
+        "Наличие в E2E labels не подтверждает доступность в текущей лицензии/UI",
+        "Нет принятого сквозного контракта"
+      ],
+      "next_step": "Проверить доступность в live UI; source review мастера и отдельная цепочка с данными"
+    },
+    {
+      "id": "component.dataMining.Arimax",
+      "family": "dataMining",
+      "component_label": "ARIMAX",
+      "goal": "Настроить «ARIMAX», выполнить, проверить данные и воспроизвести после открытия пакета",
+      "modes": [
+        "configure",
+        "execute",
+        "inspect_result",
+        "save_reopen"
+      ],
+      "contract": "component_pipeline",
+      "status": "planned",
+      "source_dependencies": [
+        {
+          "source": "e2e-labels",
+          "line": 181
+        }
+      ],
+      "supported_profiles": [],
+      "unit_evidence": [],
+      "live_evidence": [],
+      "known_gaps": [
+        "Наличие в E2E labels не подтверждает доступность в текущей лицензии/UI",
+        "Нет принятого сквозного контракта"
+      ],
+      "next_step": "Проверить доступность в live UI; source review мастера и отдельная цепочка с данными"
+    },
+    {
+      "id": "component.dataMining.EmClust",
+      "family": "dataMining",
+      "component_label": "EM Кластеризация",
+      "goal": "Настроить «EM Кластеризация», выполнить, проверить данные и воспроизвести после открытия пакета",
+      "modes": [
+        "configure",
+        "execute",
+        "inspect_result",
+        "save_reopen"
+      ],
+      "contract": "component_pipeline",
+      "status": "planned",
+      "source_dependencies": [
+        {
+          "source": "e2e-labels",
+          "line": 183
+        }
+      ],
+      "supported_profiles": [],
+      "unit_evidence": [],
+      "live_evidence": [],
+      "known_gaps": [
+        "Наличие в E2E labels не подтверждает доступность в текущей лицензии/UI",
+        "Нет принятого сквозного контракта"
+      ],
+      "next_step": "Проверить доступность в live UI; source review мастера и отдельная цепочка с данными"
+    },
+    {
+      "id": "component.programming.JavaScript",
+      "family": "programming",
+      "component_label": "JavaScript",
+      "goal": "Настроить «JavaScript», выполнить, проверить данные и воспроизвести после открытия пакета",
+      "modes": [
+        "configure",
+        "execute",
+        "inspect_result",
+        "save_reopen"
+      ],
+      "contract": "component_pipeline",
+      "status": "planned",
+      "source_dependencies": [
+        {
+          "source": "e2e-labels",
+          "line": 188
+        }
+      ],
+      "supported_profiles": [],
+      "unit_evidence": [],
+      "live_evidence": [],
+      "known_gaps": [
+        "Наличие в E2E labels не подтверждает доступность в текущей лицензии/UI",
+        "Нет принятого сквозного контракта"
+      ],
+      "next_step": "Проверить доступность в live UI; source review мастера и отдельная цепочка с данными"
+    },
+    {
+      "id": "component.programming.Python",
+      "family": "programming",
+      "component_label": "Python",
+      "goal": "Настроить «Python», выполнить, проверить данные и воспроизвести после открытия пакета",
+      "modes": [
+        "configure",
+        "execute",
+        "inspect_result",
+        "save_reopen"
+      ],
+      "contract": "component_pipeline",
+      "status": "planned",
+      "source_dependencies": [
+        {
+          "source": "e2e-labels",
+          "line": 190
+        }
+      ],
+      "supported_profiles": [],
+      "unit_evidence": [],
+      "live_evidence": [],
+      "known_gaps": [
+        "Наличие в E2E labels не подтверждает доступность в текущей лицензии/UI",
+        "Нет принятого сквозного контракта"
+      ],
+      "next_step": "Проверить доступность в live UI; source review мастера и отдельная цепочка с данными"
+    },
+    {
+      "id": "component.variables.Replace",
+      "family": "variables",
+      "component_label": "Замена (переменные)",
+      "goal": "Настроить «Замена (переменные)», выполнить, проверить данные и воспроизвести после открытия пакета",
+      "modes": [
+        "configure",
+        "execute",
+        "inspect_result",
+        "save_reopen"
+      ],
+      "contract": "component_pipeline",
+      "status": "planned",
+      "source_dependencies": [
+        {
+          "source": "e2e-labels",
+          "line": 195
+        }
+      ],
+      "supported_profiles": [],
+      "unit_evidence": [],
+      "live_evidence": [],
+      "known_gaps": [
+        "Наличие в E2E labels не подтверждает доступность в текущей лицензии/UI",
+        "Нет принятого сквозного контракта"
+      ],
+      "next_step": "Проверить доступность в live UI; source review мастера и отдельная цепочка с данными"
+    },
+    {
+      "id": "component.variables.Calculator",
+      "family": "variables",
+      "component_label": "Калькулятор (переменные)",
+      "goal": "Настроить «Калькулятор (переменные)», выполнить, проверить данные и воспроизвести после открытия пакета",
+      "modes": [
+        "configure",
+        "execute",
+        "inspect_result",
+        "save_reopen"
+      ],
+      "contract": "component_pipeline",
+      "status": "planned",
+      "source_dependencies": [
+        {
+          "source": "e2e-labels",
+          "line": 197
+        }
+      ],
+      "supported_profiles": [],
+      "unit_evidence": [],
+      "live_evidence": [],
+      "known_gaps": [
+        "Наличие в E2E labels не подтверждает доступность в текущей лицензии/UI",
+        "Нет принятого сквозного контракта"
+      ],
+      "next_step": "Проверить доступность в live UI; source review мастера и отдельная цепочка с данными"
+    },
+    {
+      "id": "component.variables.VarToData",
+      "family": "variables",
+      "component_label": "Переменные в таблицу",
+      "goal": "Настроить «Переменные в таблицу», выполнить, проверить данные и воспроизвести после открытия пакета",
+      "modes": [
+        "configure",
+        "execute",
+        "inspect_result",
+        "save_reopen"
+      ],
+      "contract": "component_pipeline",
+      "status": "planned",
+      "source_dependencies": [
+        {
+          "source": "e2e-labels",
+          "line": 199
+        }
+      ],
+      "supported_profiles": [],
+      "unit_evidence": [],
+      "live_evidence": [],
+      "known_gaps": [
+        "Наличие в E2E labels не подтверждает доступность в текущей лицензии/UI",
+        "Нет принятого сквозного контракта"
+      ],
+      "next_step": "Проверить доступность в live UI; source review мастера и отдельная цепочка с данными"
+    },
+    {
+      "id": "component.variables.ColunionDataVar",
+      "family": "variables",
+      "component_label": "Соединение (переменные)",
+      "goal": "Настроить «Соединение (переменные)», выполнить, проверить данные и воспроизвести после открытия пакета",
+      "modes": [
+        "configure",
+        "execute",
+        "inspect_result",
+        "save_reopen"
+      ],
+      "contract": "component_pipeline",
+      "status": "planned",
+      "source_dependencies": [
+        {
+          "source": "e2e-labels",
+          "line": 201
+        }
+      ],
+      "supported_profiles": [],
+      "unit_evidence": [],
+      "live_evidence": [],
+      "known_gaps": [
+        "Наличие в E2E labels не подтверждает доступность в текущей лицензии/UI",
+        "Нет принятого сквозного контракта"
+      ],
+      "next_step": "Проверить доступность в live UI; source review мастера и отдельная цепочка с данными"
+    },
+    {
+      "id": "component.variables.DataToVar",
+      "family": "variables",
+      "component_label": "Таблица в переменные",
+      "goal": "Настроить «Таблица в переменные», выполнить, проверить данные и воспроизвести после открытия пакета",
+      "modes": [
+        "configure",
+        "execute",
+        "inspect_result",
+        "save_reopen"
+      ],
+      "contract": "component_pipeline",
+      "status": "planned",
+      "source_dependencies": [
+        {
+          "source": "e2e-labels",
+          "line": 203
+        }
+      ],
+      "supported_profiles": [],
+      "unit_evidence": [],
+      "live_evidence": [],
+      "known_gaps": [
+        "Наличие в E2E labels не подтверждает доступность в текущей лицензии/UI",
+        "Нет принятого сквозного контракта"
+      ],
+      "next_step": "Проверить доступность в live UI; source review мастера и отдельная цепочка с данными"
+    },
+    {
+      "id": "component.trees.JSONToTree",
+      "family": "trees",
+      "component_label": "JSON в дерево",
+      "goal": "Настроить «JSON в дерево», выполнить, проверить данные и воспроизвести после открытия пакета",
+      "modes": [
+        "configure",
+        "execute",
+        "inspect_result",
+        "save_reopen"
+      ],
+      "contract": "component_pipeline",
+      "status": "planned",
+      "source_dependencies": [
+        {
+          "source": "e2e-labels",
+          "line": 208
+        }
+      ],
+      "supported_profiles": [],
+      "unit_evidence": [],
+      "live_evidence": [],
+      "known_gaps": [
+        "Наличие в E2E labels не подтверждает доступность в текущей лицензии/UI",
+        "Нет принятого сквозного контракта"
+      ],
+      "next_step": "Проверить доступность в live UI; source review мастера и отдельная цепочка с данными"
+    },
+    {
+      "id": "component.trees.TreeToData",
+      "family": "trees",
+      "component_label": "Дерево в таблицу",
+      "goal": "Настроить «Дерево в таблицу», выполнить, проверить данные и воспроизвести после открытия пакета",
+      "modes": [
+        "configure",
+        "execute",
+        "inspect_result",
+        "save_reopen"
+      ],
+      "contract": "component_pipeline",
+      "status": "planned",
+      "source_dependencies": [
+        {
+          "source": "e2e-labels",
+          "line": 210
+        }
+      ],
+      "supported_profiles": [],
+      "unit_evidence": [],
+      "live_evidence": [],
+      "known_gaps": [
+        "Наличие в E2E labels не подтверждает доступность в текущей лицензии/UI",
+        "Нет принятого сквозного контракта"
+      ],
+      "next_step": "Проверить доступность в live UI; source review мастера и отдельная цепочка с данными"
+    },
+    {
+      "id": "component.trees.CalculatorTree",
+      "family": "trees",
+      "component_label": "Калькулятор (дерево)",
+      "goal": "Настроить «Калькулятор (дерево)», выполнить, проверить данные и воспроизвести после открытия пакета",
+      "modes": [
+        "configure",
+        "execute",
+        "inspect_result",
+        "save_reopen"
+      ],
+      "contract": "component_pipeline",
+      "status": "planned",
+      "source_dependencies": [
+        {
+          "source": "e2e-labels",
+          "line": 212
+        }
+      ],
+      "supported_profiles": [],
+      "unit_evidence": [],
+      "live_evidence": [],
+      "known_gaps": [
+        "Наличие в E2E labels не подтверждает доступность в текущей лицензии/UI",
+        "Нет принятого сквозного контракта"
+      ],
+      "next_step": "Проверить доступность в live UI; source review мастера и отдельная цепочка с данными"
+    },
+    {
+      "id": "component.trees.UnionTree",
+      "family": "trees",
+      "component_label": "Объединение (дерево)",
+      "goal": "Настроить «Объединение (дерево)», выполнить, проверить данные и воспроизвести после открытия пакета",
+      "modes": [
+        "configure",
+        "execute",
+        "inspect_result",
+        "save_reopen"
+      ],
+      "contract": "component_pipeline",
+      "status": "planned",
+      "source_dependencies": [
+        {
+          "source": "e2e-labels",
+          "line": 214
+        }
+      ],
+      "supported_profiles": [],
+      "unit_evidence": [],
+      "live_evidence": [],
+      "known_gaps": [
+        "Наличие в E2E labels не подтверждает доступность в текущей лицензии/UI",
+        "Нет принятого сквозного контракта"
+      ],
+      "next_step": "Проверить доступность в live UI; source review мастера и отдельная цепочка с данными"
+    },
+    {
+      "id": "component.trees.JoindataTree",
+      "family": "trees",
+      "component_label": "Слияние (дерево)",
+      "goal": "Настроить «Слияние (дерево)», выполнить, проверить данные и воспроизвести после открытия пакета",
+      "modes": [
+        "configure",
+        "execute",
+        "inspect_result",
+        "save_reopen"
+      ],
+      "contract": "component_pipeline",
+      "status": "planned",
+      "source_dependencies": [
+        {
+          "source": "e2e-labels",
+          "line": 216
+        }
+      ],
+      "supported_profiles": [],
+      "unit_evidence": [],
+      "live_evidence": [],
+      "known_gaps": [
+        "Наличие в E2E labels не подтверждает доступность в текущей лицензии/UI",
+        "Нет принятого сквозного контракта"
+      ],
+      "next_step": "Проверить доступность в live UI; source review мастера и отдельная цепочка с данными"
+    },
+    {
+      "id": "component.trees.DataToTree",
+      "family": "trees",
+      "component_label": "Таблица в дерево",
+      "goal": "Настроить «Таблица в дерево», выполнить, проверить данные и воспроизвести после открытия пакета",
+      "modes": [
+        "configure",
+        "execute",
+        "inspect_result",
+        "save_reopen"
+      ],
+      "contract": "component_pipeline",
+      "status": "planned",
+      "source_dependencies": [
+        {
+          "source": "e2e-labels",
+          "line": 218
+        }
+      ],
+      "supported_profiles": [],
+      "unit_evidence": [],
+      "live_evidence": [],
+      "known_gaps": [
+        "Наличие в E2E labels не подтверждает доступность в текущей лицензии/UI",
+        "Нет принятого сквозного контракта"
+      ],
+      "next_step": "Проверить доступность в live UI; source review мастера и отдельная цепочка с данными"
+    },
+    {
+      "id": "component.trees.TreeToJSON",
+      "family": "trees",
+      "component_label": "Дерево в JSON",
+      "goal": "Настроить «Дерево в JSON», выполнить, проверить данные и воспроизвести после открытия пакета",
+      "modes": [
+        "configure",
+        "execute",
+        "inspect_result",
+        "save_reopen"
+      ],
+      "contract": "component_pipeline",
+      "status": "planned",
+      "source_dependencies": [
+        {
+          "source": "e2e-labels",
+          "line": 220
+        }
+      ],
+      "supported_profiles": [],
+      "unit_evidence": [],
+      "live_evidence": [],
+      "known_gaps": [
+        "Наличие в E2E labels не подтверждает доступность в текущей лицензии/UI",
+        "Нет принятого сквозного контракта"
+      ],
+      "next_step": "Проверить доступность в live UI; source review мастера и отдельная цепочка с данными"
+    },
+    {
+      "id": "component.integration.ExecCmd",
+      "family": "integration",
+      "component_label": "Выполнение программы",
+      "goal": "Настроить «Выполнение программы», выполнить, проверить данные и воспроизвести после открытия пакета",
+      "modes": [
+        "configure",
+        "execute",
+        "inspect_result",
+        "save_reopen"
+      ],
+      "contract": "component_pipeline",
+      "status": "planned",
+      "source_dependencies": [
+        {
+          "source": "e2e-labels",
+          "line": 225
+        }
+      ],
+      "supported_profiles": [],
+      "unit_evidence": [],
+      "live_evidence": [],
+      "known_gaps": [
+        "Наличие в E2E labels не подтверждает доступность в текущей лицензии/UI",
+        "Нет принятого сквозного контракта"
+      ],
+      "next_step": "Проверить доступность в live UI; source review мастера и отдельная цепочка с данными"
+    },
+    {
+      "id": "component.integration.ExtractXml",
+      "family": "integration",
+      "component_label": "Разбор XML",
+      "goal": "Настроить «Разбор XML», выполнить, проверить данные и воспроизвести после открытия пакета",
+      "modes": [
+        "configure",
+        "execute",
+        "inspect_result",
+        "save_reopen"
+      ],
+      "contract": "component_pipeline",
+      "status": "planned",
+      "source_dependencies": [
+        {
+          "source": "e2e-labels",
+          "line": 227
+        }
+      ],
+      "supported_profiles": [],
+      "unit_evidence": [],
+      "live_evidence": [],
+      "known_gaps": [
+        "Наличие в E2E labels не подтверждает доступность в текущей лицензии/UI",
+        "Нет принятого сквозного контракта"
+      ],
+      "next_step": "Проверить доступность в live UI; source review мастера и отдельная цепочка с данными"
+    },
+    {
+      "id": "component.integration.DataToXml",
+      "family": "integration",
+      "component_label": "Формирование XML",
+      "goal": "Настроить «Формирование XML», выполнить, проверить данные и воспроизвести после открытия пакета",
+      "modes": [
+        "configure",
+        "execute",
+        "inspect_result",
+        "save_reopen"
+      ],
+      "contract": "component_pipeline",
+      "status": "planned",
+      "source_dependencies": [
+        {
+          "source": "e2e-labels",
+          "line": 229
+        }
+      ],
+      "supported_profiles": [],
+      "unit_evidence": [],
+      "live_evidence": [],
+      "known_gaps": [
+        "Наличие в E2E labels не подтверждает доступность в текущей лицензии/UI",
+        "Нет принятого сквозного контракта"
+      ],
+      "next_step": "Проверить доступность в live UI; source review мастера и отдельная цепочка с данными"
+    },
+    {
+      "id": "component.integration.RestRequest",
+      "family": "integration",
+      "component_label": "REST-запрос",
+      "goal": "Настроить «REST-запрос», выполнить, проверить данные и воспроизвести после открытия пакета",
+      "modes": [
+        "configure",
+        "execute",
+        "inspect_result",
+        "save_reopen"
+      ],
+      "contract": "component_pipeline",
+      "status": "planned",
+      "source_dependencies": [
+        {
+          "source": "e2e-labels",
+          "line": 231
+        }
+      ],
+      "supported_profiles": [],
+      "unit_evidence": [],
+      "live_evidence": [],
+      "known_gaps": [
+        "Наличие в E2E labels не подтверждает доступность в текущей лицензии/UI",
+        "Нет принятого сквозного контракта"
+      ],
+      "next_step": "Проверить доступность в live UI; source review мастера и отдельная цепочка с данными"
+    },
+    {
+      "id": "component.integration.SoapRequest",
+      "family": "integration",
+      "component_label": "SOAP-запрос",
+      "goal": "Настроить «SOAP-запрос», выполнить, проверить данные и воспроизвести после открытия пакета",
+      "modes": [
+        "configure",
+        "execute",
+        "inspect_result",
+        "save_reopen"
+      ],
+      "contract": "component_pipeline",
+      "status": "planned",
+      "source_dependencies": [
+        {
+          "source": "e2e-labels",
+          "line": 233
+        }
+      ],
+      "supported_profiles": [],
+      "unit_evidence": [],
+      "live_evidence": [],
+      "known_gaps": [
+        "Наличие в E2E labels не подтверждает доступность в текущей лицензии/UI",
+        "Нет принятого сквозного контракта"
+      ],
+      "next_step": "Проверить доступность в live UI; source review мастера и отдельная цепочка с данными"
+    },
+    {
+      "id": "component.integration.SqlScript",
+      "family": "integration",
+      "component_label": "SQL-скрипт",
+      "goal": "Настроить «SQL-скрипт», выполнить, проверить данные и воспроизвести после открытия пакета",
+      "modes": [
+        "configure",
+        "execute",
+        "inspect_result",
+        "save_reopen"
+      ],
+      "contract": "component_pipeline",
+      "status": "planned",
+      "source_dependencies": [
+        {
+          "source": "e2e-labels",
+          "line": 235
+        }
+      ],
+      "supported_profiles": [],
+      "unit_evidence": [],
+      "live_evidence": [],
+      "known_gaps": [
+        "Наличие в E2E labels не подтверждает доступность в текущей лицензии/UI",
+        "Нет принятого сквозного контракта"
+      ],
+      "next_step": "Проверить доступность в live UI; source review мастера и отдельная цепочка с данными"
+    },
+    {
+      "id": "component.exports.DataBase",
+      "family": "exports",
+      "component_label": "База данных",
+      "goal": "Настроить «База данных», выполнить, проверить данные и воспроизвести после открытия пакета",
+      "modes": [
+        "configure",
+        "execute",
+        "inspect_result",
+        "save_reopen"
+      ],
+      "contract": "component_pipeline",
+      "status": "planned",
+      "source_dependencies": [
+        {
+          "source": "e2e-labels",
+          "line": 240
+        }
+      ],
+      "supported_profiles": [],
+      "unit_evidence": [],
+      "live_evidence": [],
+      "known_gaps": [
+        "Наличие в E2E labels не подтверждает доступность в текущей лицензии/UI",
+        "Нет принятого сквозного контракта"
+      ],
+      "next_step": "Проверить доступность в live UI; source review мастера и отдельная цепочка с данными"
+    },
+    {
+      "id": "component.exports.Text",
+      "family": "exports",
+      "component_label": "Текстовый файл",
+      "goal": "Настроить «Текстовый файл», выполнить, проверить данные и воспроизвести после открытия пакета",
+      "modes": [
+        "configure",
+        "execute",
+        "inspect_result",
+        "save_reopen"
+      ],
+      "contract": "component_pipeline",
+      "status": "planned",
+      "source_dependencies": [
+        {
+          "source": "e2e-labels",
+          "line": 242
+        }
+      ],
+      "supported_profiles": [],
+      "unit_evidence": [],
+      "live_evidence": [],
+      "known_gaps": [
+        "Наличие в E2E labels не подтверждает доступность в текущей лицензии/UI",
+        "Нет принятого сквозного контракта"
+      ],
+      "next_step": "Проверить доступность в live UI; source review мастера и отдельная цепочка с данными"
+    },
+    {
+      "id": "component.exports.Warehouse",
+      "family": "exports",
+      "component_label": "Deductor Warehouse",
+      "goal": "Настроить «Deductor Warehouse», выполнить, проверить данные и воспроизвести после открытия пакета",
+      "modes": [
+        "configure",
+        "execute",
+        "inspect_result",
+        "save_reopen"
+      ],
+      "contract": "component_pipeline",
+      "status": "planned",
+      "source_dependencies": [
+        {
+          "source": "e2e-labels",
+          "line": 244
+        }
+      ],
+      "supported_profiles": [],
+      "unit_evidence": [],
+      "live_evidence": [],
+      "known_gaps": [
+        "Наличие в E2E labels не подтверждает доступность в текущей лицензии/UI",
+        "Нет принятого сквозного контракта"
+      ],
+      "next_step": "Проверить доступность в live UI; source review мастера и отдельная цепочка с данными"
+    },
+    {
+      "id": "component.exports.Excel",
+      "family": "exports",
+      "component_label": "Excel файл",
+      "goal": "Настроить «Excel файл», выполнить, проверить данные и воспроизвести после открытия пакета",
+      "modes": [
+        "configure",
+        "execute",
+        "inspect_result",
+        "save_reopen"
+      ],
+      "contract": "component_pipeline",
+      "status": "planned",
+      "source_dependencies": [
+        {
+          "source": "e2e-labels",
+          "line": 246
+        }
+      ],
+      "supported_profiles": [],
+      "unit_evidence": [],
+      "live_evidence": [],
+      "known_gaps": [
+        "Наличие в E2E labels не подтверждает доступность в текущей лицензии/UI",
+        "Нет принятого сквозного контракта"
+      ],
+      "next_step": "Проверить доступность в live UI; source review мастера и отдельная цепочка с данными"
+    },
+    {
+      "id": "component.exports.Kafka",
+      "family": "exports",
+      "component_label": "Kafka",
+      "goal": "Настроить «Kafka», выполнить, проверить данные и воспроизвести после открытия пакета",
+      "modes": [
+        "configure",
+        "execute",
+        "inspect_result",
+        "save_reopen"
+      ],
+      "contract": "component_pipeline",
+      "status": "planned",
+      "source_dependencies": [
+        {
+          "source": "e2e-labels",
+          "line": 248
+        }
+      ],
+      "supported_profiles": [],
+      "unit_evidence": [],
+      "live_evidence": [],
+      "known_gaps": [
+        "Наличие в E2E labels не подтверждает доступность в текущей лицензии/UI",
+        "Нет принятого сквозного контракта"
+      ],
+      "next_step": "Проверить доступность в live UI; source review мастера и отдельная цепочка с данными"
+    },
+    {
+      "id": "component.exports.Lgd",
+      "family": "exports",
+      "component_label": "Loginom Data файл",
+      "goal": "Настроить «Loginom Data файл», выполнить, проверить данные и воспроизвести после открытия пакета",
+      "modes": [
+        "configure",
+        "execute",
+        "inspect_result",
+        "save_reopen"
+      ],
+      "contract": "component_pipeline",
+      "status": "planned",
+      "source_dependencies": [
+        {
+          "source": "e2e-labels",
+          "line": 250
+        }
+      ],
+      "supported_profiles": [],
+      "unit_evidence": [],
+      "live_evidence": [],
+      "known_gaps": [
+        "Наличие в E2E labels не подтверждает доступность в текущей лицензии/UI",
+        "Нет принятого сквозного контракта"
+      ],
+      "next_step": "Проверить доступность в live UI; source review мастера и отдельная цепочка с данными"
+    },
+    {
+      "id": "component.exports.Tableau",
+      "family": "exports",
+      "component_label": "Tableau файл",
+      "goal": "Настроить «Tableau файл», выполнить, проверить данные и воспроизвести после открытия пакета",
+      "modes": [
+        "configure",
+        "execute",
+        "inspect_result",
+        "save_reopen"
+      ],
+      "contract": "component_pipeline",
+      "status": "planned",
+      "source_dependencies": [
+        {
+          "source": "e2e-labels",
+          "line": 252
+        }
+      ],
+      "supported_profiles": [],
+      "unit_evidence": [],
+      "live_evidence": [],
+      "known_gaps": [
+        "Наличие в E2E labels не подтверждает доступность в текущей лицензии/UI",
+        "Нет принятого сквозного контракта"
+      ],
+      "next_step": "Проверить доступность в live UI; source review мастера и отдельная цепочка с данными"
+    },
+    {
+      "id": "component.exports.Xml",
+      "family": "exports",
+      "component_label": "XML файл",
+      "goal": "Настроить «XML файл», выполнить, проверить данные и воспроизвести после открытия пакета",
+      "modes": [
+        "configure",
+        "execute",
+        "inspect_result",
+        "save_reopen"
+      ],
+      "contract": "component_pipeline",
+      "status": "planned",
+      "source_dependencies": [
+        {
+          "source": "e2e-labels",
+          "line": 254
+        }
+      ],
+      "supported_profiles": [],
+      "unit_evidence": [],
+      "live_evidence": [],
+      "known_gaps": [
+        "Наличие в E2E labels не подтверждает доступность в текущей лицензии/UI",
+        "Нет принятого сквозного контракта"
+      ],
+      "next_step": "Проверить доступность в live UI; source review мастера и отдельная цепочка с данными"
+    },
+    {
+      "id": "workspace.bootstrap_observe",
+      "family": "workspace",
+      "goal": "workspace: bootstrap_observe",
+      "modes": [
+        "bootstrap_observe"
+      ],
+      "contract": "domain_operation",
+      "status": "planned",
+      "source_dependencies": [
+        {
+          "source": "scope-plan",
+          "section": "13.1 / P1–P9"
+        }
+      ],
+      "supported_profiles": [],
+      "unit_evidence": [],
+      "live_evidence": [],
+      "known_gaps": [
+        "Требуется отдельный контракт и приёмка на выбранном runtime"
+      ],
+      "next_step": "Привязать handler, источники, эффекты и независимое доказательство результата"
+    },
+    {
+      "id": "workspace.prepare",
+      "family": "workspace",
+      "goal": "workspace: prepare",
+      "modes": [
+        "prepare"
+      ],
+      "contract": "domain_operation",
+      "status": "planned",
+      "source_dependencies": [
+        {
+          "source": "scope-plan",
+          "section": "13.1 / P1–P9"
+        }
+      ],
+      "supported_profiles": [],
+      "unit_evidence": [],
+      "live_evidence": [],
+      "known_gaps": [
+        "Требуется отдельный контракт и приёмка на выбранном runtime"
+      ],
+      "next_step": "Привязать handler, источники, эффекты и независимое доказательство результата"
+    },
+    {
+      "id": "workspace.tabs",
+      "family": "workspace",
+      "goal": "workspace: tabs",
+      "modes": [
+        "tabs"
+      ],
+      "contract": "domain_operation",
+      "status": "planned",
+      "source_dependencies": [
+        {
+          "source": "scope-plan",
+          "section": "13.1 / P1–P9"
+        }
+      ],
+      "supported_profiles": [],
+      "unit_evidence": [],
+      "live_evidence": [],
+      "known_gaps": [
+        "Требуется отдельный контракт и приёмка на выбранном runtime"
+      ],
+      "next_step": "Привязать handler, источники, эффекты и независимое доказательство результата"
+    },
+    {
+      "id": "package.create",
+      "family": "package",
+      "goal": "package: create",
+      "modes": [
+        "create"
+      ],
+      "contract": "domain_operation",
+      "status": "planned",
+      "source_dependencies": [
+        {
+          "source": "scope-plan",
+          "section": "13.1 / P1–P9"
+        }
+      ],
+      "supported_profiles": [],
+      "unit_evidence": [],
+      "live_evidence": [],
+      "known_gaps": [
+        "Требуется отдельный контракт и приёмка на выбранном runtime"
+      ],
+      "next_step": "Привязать handler, источники, эффекты и независимое доказательство результата"
+    },
+    {
+      "id": "package.open",
+      "family": "package",
+      "goal": "package: open",
+      "modes": [
+        "open"
+      ],
+      "contract": "domain_operation",
+      "status": "planned",
+      "source_dependencies": [
+        {
+          "source": "scope-plan",
+          "section": "13.1 / P1–P9"
+        }
+      ],
+      "supported_profiles": [],
+      "unit_evidence": [],
+      "live_evidence": [],
+      "known_gaps": [
+        "Требуется отдельный контракт и приёмка на выбранном runtime"
+      ],
+      "next_step": "Привязать handler, источники, эффекты и независимое доказательство результата"
+    },
+    {
+      "id": "package.close",
+      "family": "package",
+      "goal": "package: close",
+      "modes": [
+        "close"
+      ],
+      "contract": "domain_operation",
+      "status": "planned",
+      "source_dependencies": [
+        {
+          "source": "scope-plan",
+          "section": "13.1 / P1–P9"
+        }
+      ],
+      "supported_profiles": [],
+      "unit_evidence": [],
+      "live_evidence": [],
+      "known_gaps": [
+        "Требуется отдельный контракт и приёмка на выбранном runtime"
+      ],
+      "next_step": "Привязать handler, источники, эффекты и независимое доказательство результата"
+    },
+    {
+      "id": "package.save",
+      "family": "package",
+      "goal": "package: save",
+      "modes": [
+        "save"
+      ],
+      "contract": "domain_operation",
+      "status": "planned",
+      "source_dependencies": [
+        {
+          "source": "scope-plan",
+          "section": "13.1 / P1–P9"
+        }
+      ],
+      "supported_profiles": [],
+      "unit_evidence": [],
+      "live_evidence": [],
+      "known_gaps": [
+        "Требуется отдельный контракт и приёмка на выбранном runtime"
+      ],
+      "next_step": "Привязать handler, источники, эффекты и независимое доказательство результата"
+    },
+    {
+      "id": "package.save_as",
+      "family": "package",
+      "goal": "package: save_as",
+      "modes": [
+        "save_as"
+      ],
+      "contract": "domain_operation",
+      "status": "planned",
+      "source_dependencies": [
+        {
+          "source": "scope-plan",
+          "section": "13.1 / P1–P9"
+        }
+      ],
+      "supported_profiles": [],
+      "unit_evidence": [],
+      "live_evidence": [],
+      "known_gaps": [
+        "Требуется отдельный контракт и приёмка на выбранном runtime"
+      ],
+      "next_step": "Привязать handler, источники, эффекты и независимое доказательство результата"
+    },
+    {
+      "id": "package.read_only",
+      "family": "package",
+      "goal": "package: read_only",
+      "modes": [
+        "read_only"
+      ],
+      "contract": "domain_operation",
+      "status": "planned",
+      "source_dependencies": [
+        {
+          "source": "scope-plan",
+          "section": "13.1 / P1–P9"
+        }
+      ],
+      "supported_profiles": [],
+      "unit_evidence": [],
+      "live_evidence": [],
+      "known_gaps": [
+        "Требуется отдельный контракт и приёмка на выбранном runtime"
+      ],
+      "next_step": "Привязать handler, источники, эффекты и независимое доказательство результата"
+    },
+    {
+      "id": "package.conflict",
+      "family": "package",
+      "goal": "package: conflict",
+      "modes": [
+        "conflict"
+      ],
+      "contract": "domain_operation",
+      "status": "planned",
+      "source_dependencies": [
+        {
+          "source": "scope-plan",
+          "section": "13.1 / P1–P9"
+        }
+      ],
+      "supported_profiles": [],
+      "unit_evidence": [],
+      "live_evidence": [],
+      "known_gaps": [
+        "Требуется отдельный контракт и приёмка на выбранном runtime"
+      ],
+      "next_step": "Привязать handler, источники, эффекты и независимое доказательство результата"
+    },
+    {
+      "id": "graph.node_add",
+      "family": "graph",
+      "goal": "graph: node_add",
+      "modes": [
+        "node_add"
+      ],
+      "contract": "domain_operation",
+      "status": "planned",
+      "source_dependencies": [
+        {
+          "source": "scope-plan",
+          "section": "13.1 / P1–P9"
+        }
+      ],
+      "supported_profiles": [],
+      "unit_evidence": [],
+      "live_evidence": [],
+      "known_gaps": [
+        "Требуется отдельный контракт и приёмка на выбранном runtime"
+      ],
+      "next_step": "Привязать handler, источники, эффекты и независимое доказательство результата"
+    },
+    {
+      "id": "graph.node_rename",
+      "family": "graph",
+      "goal": "graph: node_rename",
+      "modes": [
+        "node_rename"
+      ],
+      "contract": "domain_operation",
+      "status": "planned",
+      "source_dependencies": [
+        {
+          "source": "scope-plan",
+          "section": "13.1 / P1–P9"
+        }
+      ],
+      "supported_profiles": [],
+      "unit_evidence": [],
+      "live_evidence": [],
+      "known_gaps": [
+        "Требуется отдельный контракт и приёмка на выбранном runtime"
+      ],
+      "next_step": "Привязать handler, источники, эффекты и независимое доказательство результата"
+    },
+    {
+      "id": "graph.node_move",
+      "family": "graph",
+      "goal": "graph: node_move",
+      "modes": [
+        "node_move"
+      ],
+      "contract": "domain_operation",
+      "status": "planned",
+      "source_dependencies": [
+        {
+          "source": "scope-plan",
+          "section": "13.1 / P1–P9"
+        }
+      ],
+      "supported_profiles": [],
+      "unit_evidence": [],
+      "live_evidence": [],
+      "known_gaps": [
+        "Требуется отдельный контракт и приёмка на выбранном runtime"
+      ],
+      "next_step": "Привязать handler, источники, эффекты и независимое доказательство результата"
+    },
+    {
+      "id": "graph.node_delete",
+      "family": "graph",
+      "goal": "graph: node_delete",
+      "modes": [
+        "node_delete"
+      ],
+      "contract": "domain_operation",
+      "status": "planned",
+      "source_dependencies": [
+        {
+          "source": "scope-plan",
+          "section": "13.1 / P1–P9"
+        }
+      ],
+      "supported_profiles": [],
+      "unit_evidence": [],
+      "live_evidence": [],
+      "known_gaps": [
+        "Требуется отдельный контракт и приёмка на выбранном runtime"
+      ],
+      "next_step": "Привязать handler, источники, эффекты и независимое доказательство результата"
+    },
+    {
+      "id": "graph.node_clone",
+      "family": "graph",
+      "goal": "graph: node_clone",
+      "modes": [
+        "node_clone"
+      ],
+      "contract": "domain_operation",
+      "status": "planned",
+      "source_dependencies": [
+        {
+          "source": "scope-plan",
+          "section": "13.1 / P1–P9"
+        }
+      ],
+      "supported_profiles": [],
+      "unit_evidence": [],
+      "live_evidence": [],
+      "known_gaps": [
+        "Требуется отдельный контракт и приёмка на выбранном runtime"
+      ],
+      "next_step": "Привязать handler, источники, эффекты и независимое доказательство результата"
+    },
+    {
+      "id": "graph.clipboard_copy_cut_paste",
+      "family": "graph",
+      "goal": "graph: clipboard_copy_cut_paste",
+      "modes": [
+        "clipboard_copy_cut_paste"
+      ],
+      "contract": "domain_operation",
+      "status": "planned",
+      "source_dependencies": [
+        {
+          "source": "scope-plan",
+          "section": "13.1 / P1–P9"
+        }
+      ],
+      "supported_profiles": [],
+      "unit_evidence": [],
+      "live_evidence": [],
+      "known_gaps": [
+        "Требуется отдельный контракт и приёмка на выбранном runtime"
+      ],
+      "next_step": "Привязать handler, источники, эффекты и независимое доказательство результата"
+    },
+    {
+      "id": "graph.link_create",
+      "family": "graph",
+      "goal": "graph: link_create",
+      "modes": [
+        "link_create"
+      ],
+      "contract": "domain_operation",
+      "status": "planned",
+      "source_dependencies": [
+        {
+          "source": "scope-plan",
+          "section": "13.1 / P1–P9"
+        }
+      ],
+      "supported_profiles": [],
+      "unit_evidence": [],
+      "live_evidence": [],
+      "known_gaps": [
+        "Требуется отдельный контракт и приёмка на выбранном runtime"
+      ],
+      "next_step": "Привязать handler, источники, эффекты и независимое доказательство результата"
+    },
+    {
+      "id": "graph.link_delete",
+      "family": "graph",
+      "goal": "graph: link_delete",
+      "modes": [
+        "link_delete"
+      ],
+      "contract": "domain_operation",
+      "status": "planned",
+      "source_dependencies": [
+        {
+          "source": "scope-plan",
+          "section": "13.1 / P1–P9"
+        }
+      ],
+      "supported_profiles": [],
+      "unit_evidence": [],
+      "live_evidence": [],
+      "known_gaps": [
+        "Требуется отдельный контракт и приёмка на выбранном runtime"
+      ],
+      "next_step": "Привязать handler, источники, эффекты и независимое доказательство результата"
+    },
+    {
+      "id": "graph.link_reconnect",
+      "family": "graph",
+      "goal": "graph: link_reconnect",
+      "modes": [
+        "link_reconnect"
+      ],
+      "contract": "domain_operation",
+      "status": "planned",
+      "source_dependencies": [
+        {
+          "source": "scope-plan",
+          "section": "13.1 / P1–P9"
+        }
+      ],
+      "supported_profiles": [],
+      "unit_evidence": [],
+      "live_evidence": [],
+      "known_gaps": [
+        "Требуется отдельный контракт и приёмка на выбранном runtime"
+      ],
+      "next_step": "Привязать handler, источники, эффекты и независимое доказательство результата"
+    },
+    {
+      "id": "graph.port_settings",
+      "family": "graph",
+      "goal": "graph: port_settings",
+      "modes": [
+        "port_settings"
+      ],
+      "contract": "domain_operation",
+      "status": "planned",
+      "source_dependencies": [
+        {
+          "source": "scope-plan",
+          "section": "13.1 / P1–P9"
+        }
+      ],
+      "supported_profiles": [],
+      "unit_evidence": [],
+      "live_evidence": [],
+      "known_gaps": [
+        "Требуется отдельный контракт и приёмка на выбранном runtime"
+      ],
+      "next_step": "Привязать handler, источники, эффекты и независимое доказательство результата"
+    },
+    {
+      "id": "graph.auto_link_retain_remove",
+      "family": "graph",
+      "goal": "graph: auto_link_retain_remove",
+      "modes": [
+        "auto_link_retain_remove"
+      ],
+      "contract": "domain_operation",
+      "status": "planned",
+      "source_dependencies": [
+        {
+          "source": "scope-plan",
+          "section": "13.1 / P1–P9"
+        }
+      ],
+      "supported_profiles": [],
+      "unit_evidence": [],
+      "live_evidence": [],
+      "known_gaps": [
+        "Требуется отдельный контракт и приёмка на выбранном runtime"
+      ],
+      "next_step": "Привязать handler, источники, эффекты и независимое доказательство результата"
+    },
+    {
+      "id": "files.upload",
+      "family": "files",
+      "goal": "files: upload",
+      "modes": [
+        "upload"
+      ],
+      "contract": "domain_operation",
+      "status": "planned",
+      "source_dependencies": [
+        {
+          "source": "scope-plan",
+          "section": "13.1 / P1–P9"
+        }
+      ],
+      "supported_profiles": [],
+      "unit_evidence": [],
+      "live_evidence": [],
+      "known_gaps": [
+        "Требуется отдельный контракт и приёмка на выбранном runtime"
+      ],
+      "next_step": "Привязать handler, источники, эффекты и независимое доказательство результата"
+    },
+    {
+      "id": "files.download",
+      "family": "files",
+      "goal": "files: download",
+      "modes": [
+        "download"
+      ],
+      "contract": "domain_operation",
+      "status": "planned",
+      "source_dependencies": [
+        {
+          "source": "scope-plan",
+          "section": "13.1 / P1–P9"
+        }
+      ],
+      "supported_profiles": [],
+      "unit_evidence": [],
+      "live_evidence": [],
+      "known_gaps": [
+        "Требуется отдельный контракт и приёмка на выбранном runtime"
+      ],
+      "next_step": "Привязать handler, источники, эффекты и независимое доказательство результата"
+    },
+    {
+      "id": "files.overwrite",
+      "family": "files",
+      "goal": "files: overwrite",
+      "modes": [
+        "overwrite"
+      ],
+      "contract": "domain_operation",
+      "status": "planned",
+      "source_dependencies": [
+        {
+          "source": "scope-plan",
+          "section": "13.1 / P1–P9"
+        }
+      ],
+      "supported_profiles": [],
+      "unit_evidence": [],
+      "live_evidence": [],
+      "known_gaps": [
+        "Требуется отдельный контракт и приёмка на выбранном runtime"
+      ],
+      "next_step": "Привязать handler, источники, эффекты и независимое доказательство результата"
+    },
+    {
+      "id": "files.partial_transfer",
+      "family": "files",
+      "goal": "files: partial_transfer",
+      "modes": [
+        "partial_transfer"
+      ],
+      "contract": "domain_operation",
+      "status": "planned",
+      "source_dependencies": [
+        {
+          "source": "scope-plan",
+          "section": "13.1 / P1–P9"
+        }
+      ],
+      "supported_profiles": [],
+      "unit_evidence": [],
+      "live_evidence": [],
+      "known_gaps": [
+        "Требуется отдельный контракт и приёмка на выбранном runtime"
+      ],
+      "next_step": "Привязать handler, источники, эффекты и независимое доказательство результата"
+    },
+    {
+      "id": "connections.create",
+      "family": "connections",
+      "goal": "connections: create",
+      "modes": [
+        "create"
+      ],
+      "contract": "domain_operation",
+      "status": "planned",
+      "source_dependencies": [
+        {
+          "source": "scope-plan",
+          "section": "13.1 / P1–P9"
+        }
+      ],
+      "supported_profiles": [],
+      "unit_evidence": [],
+      "live_evidence": [],
+      "known_gaps": [
+        "Требуется отдельный контракт и приёмка на выбранном runtime"
+      ],
+      "next_step": "Привязать handler, источники, эффекты и независимое доказательство результата"
+    },
+    {
+      "id": "connections.configure",
+      "family": "connections",
+      "goal": "connections: configure",
+      "modes": [
+        "configure"
+      ],
+      "contract": "domain_operation",
+      "status": "planned",
+      "source_dependencies": [
+        {
+          "source": "scope-plan",
+          "section": "13.1 / P1–P9"
+        }
+      ],
+      "supported_profiles": [],
+      "unit_evidence": [],
+      "live_evidence": [],
+      "known_gaps": [
+        "Требуется отдельный контракт и приёмка на выбранном runtime"
+      ],
+      "next_step": "Привязать handler, источники, эффекты и независимое доказательство результата"
+    },
+    {
+      "id": "connections.test",
+      "family": "connections",
+      "goal": "connections: test",
+      "modes": [
+        "test"
+      ],
+      "contract": "domain_operation",
+      "status": "planned",
+      "source_dependencies": [
+        {
+          "source": "scope-plan",
+          "section": "13.1 / P1–P9"
+        }
+      ],
+      "supported_profiles": [],
+      "unit_evidence": [],
+      "live_evidence": [],
+      "known_gaps": [
+        "Требуется отдельный контракт и приёмка на выбранном runtime"
+      ],
+      "next_step": "Привязать handler, источники, эффекты и независимое доказательство результата"
+    },
+    {
+      "id": "connections.connect",
+      "family": "connections",
+      "goal": "connections: connect",
+      "modes": [
+        "connect"
+      ],
+      "contract": "domain_operation",
+      "status": "planned",
+      "source_dependencies": [
+        {
+          "source": "scope-plan",
+          "section": "13.1 / P1–P9"
+        }
+      ],
+      "supported_profiles": [],
+      "unit_evidence": [],
+      "live_evidence": [],
+      "known_gaps": [
+        "Требуется отдельный контракт и приёмка на выбранном runtime"
+      ],
+      "next_step": "Привязать handler, источники, эффекты и независимое доказательство результата"
+    },
+    {
+      "id": "connections.disconnect",
+      "family": "connections",
+      "goal": "connections: disconnect",
+      "modes": [
+        "disconnect"
+      ],
+      "contract": "domain_operation",
+      "status": "planned",
+      "source_dependencies": [
+        {
+          "source": "scope-plan",
+          "section": "13.1 / P1–P9"
+        }
+      ],
+      "supported_profiles": [],
+      "unit_evidence": [],
+      "live_evidence": [],
+      "known_gaps": [
+        "Требуется отдельный контракт и приёмка на выбранном runtime"
+      ],
+      "next_step": "Привязать handler, источники, эффекты и независимое доказательство результата"
+    },
+    {
+      "id": "connections.delete",
+      "family": "connections",
+      "goal": "connections: delete",
+      "modes": [
+        "delete"
+      ],
+      "contract": "domain_operation",
+      "status": "planned",
+      "source_dependencies": [
+        {
+          "source": "scope-plan",
+          "section": "13.1 / P1–P9"
+        }
+      ],
+      "supported_profiles": [],
+      "unit_evidence": [],
+      "live_evidence": [],
+      "known_gaps": [
+        "Требуется отдельный контракт и приёмка на выбранном runtime"
+      ],
+      "next_step": "Привязать handler, источники, эффекты и независимое доказательство результата"
+    },
+    {
+      "id": "variables.package",
+      "family": "variables",
+      "goal": "variables: package",
+      "modes": [
+        "package"
+      ],
+      "contract": "domain_operation",
+      "status": "planned",
+      "source_dependencies": [
+        {
+          "source": "scope-plan",
+          "section": "13.1 / P1–P9"
+        }
+      ],
+      "supported_profiles": [],
+      "unit_evidence": [],
+      "live_evidence": [],
+      "known_gaps": [
+        "Требуется отдельный контракт и приёмка на выбранном runtime"
+      ],
+      "next_step": "Привязать handler, источники, эффекты и независимое доказательство результата"
+    },
+    {
+      "id": "variables.workflow",
+      "family": "variables",
+      "goal": "variables: workflow",
+      "modes": [
+        "workflow"
+      ],
+      "contract": "domain_operation",
+      "status": "planned",
+      "source_dependencies": [
+        {
+          "source": "scope-plan",
+          "section": "13.1 / P1–P9"
+        }
+      ],
+      "supported_profiles": [],
+      "unit_evidence": [],
+      "live_evidence": [],
+      "known_gaps": [
+        "Требуется отдельный контракт и приёмка на выбранном runtime"
+      ],
+      "next_step": "Привязать handler, источники, эффекты и независимое доказательство результата"
+    },
+    {
+      "id": "variables.node",
+      "family": "variables",
+      "goal": "variables: node",
+      "modes": [
+        "node"
+      ],
+      "contract": "domain_operation",
+      "status": "planned",
+      "source_dependencies": [
+        {
+          "source": "scope-plan",
+          "section": "13.1 / P1–P9"
+        }
+      ],
+      "supported_profiles": [],
+      "unit_evidence": [],
+      "live_evidence": [],
+      "known_gaps": [
+        "Требуется отдельный контракт и приёмка на выбранном runtime"
+      ],
+      "next_step": "Привязать handler, источники, эффекты и независимое доказательство результата"
+    },
+    {
+      "id": "variables.mapping",
+      "family": "variables",
+      "goal": "variables: mapping",
+      "modes": [
+        "mapping"
+      ],
+      "contract": "domain_operation",
+      "status": "planned",
+      "source_dependencies": [
+        {
+          "source": "scope-plan",
+          "section": "13.1 / P1–P9"
+        }
+      ],
+      "supported_profiles": [],
+      "unit_evidence": [],
+      "live_evidence": [],
+      "known_gaps": [
+        "Требуется отдельный контракт и приёмка на выбранном runtime"
+      ],
+      "next_step": "Привязать handler, источники, эффекты и независимое доказательство результата"
+    },
+    {
+      "id": "variables.control_ports",
+      "family": "variables",
+      "goal": "variables: control_ports",
+      "modes": [
+        "control_ports"
+      ],
+      "contract": "domain_operation",
+      "status": "planned",
+      "source_dependencies": [
+        {
+          "source": "scope-plan",
+          "section": "13.1 / P1–P9"
+        }
+      ],
+      "supported_profiles": [],
+      "unit_evidence": [],
+      "live_evidence": [],
+      "known_gaps": [
+        "Требуется отдельный контракт и приёмка на выбранном runtime"
+      ],
+      "next_step": "Привязать handler, источники, эффекты и независимое доказательство результата"
+    },
+    {
+      "id": "submodel.enter_leave",
+      "family": "submodel",
+      "goal": "submodel: enter_leave",
+      "modes": [
+        "enter_leave"
+      ],
+      "contract": "domain_operation",
+      "status": "planned",
+      "source_dependencies": [
+        {
+          "source": "scope-plan",
+          "section": "13.1 / P1–P9"
+        }
+      ],
+      "supported_profiles": [],
+      "unit_evidence": [],
+      "live_evidence": [],
+      "known_gaps": [
+        "Требуется отдельный контракт и приёмка на выбранном runtime"
+      ],
+      "next_step": "Привязать handler, источники, эффекты и независимое доказательство результата"
+    },
+    {
+      "id": "submodel.compose",
+      "family": "submodel",
+      "goal": "submodel: compose",
+      "modes": [
+        "compose"
+      ],
+      "contract": "domain_operation",
+      "status": "planned",
+      "source_dependencies": [
+        {
+          "source": "scope-plan",
+          "section": "13.1 / P1–P9"
+        }
+      ],
+      "supported_profiles": [],
+      "unit_evidence": [],
+      "live_evidence": [],
+      "known_gaps": [
+        "Требуется отдельный контракт и приёмка на выбранном runtime"
+      ],
+      "next_step": "Привязать handler, источники, эффекты и независимое доказательство результата"
+    },
+    {
+      "id": "submodel.expand",
+      "family": "submodel",
+      "goal": "submodel: expand",
+      "modes": [
+        "expand"
+      ],
+      "contract": "domain_operation",
+      "status": "planned",
+      "source_dependencies": [
+        {
+          "source": "scope-plan",
+          "section": "13.1 / P1–P9"
+        }
+      ],
+      "supported_profiles": [],
+      "unit_evidence": [],
+      "live_evidence": [],
+      "known_gaps": [
+        "Требуется отдельный контракт и приёмка на выбранном runtime"
+      ],
+      "next_step": "Привязать handler, источники, эффекты и независимое доказательство результата"
+    },
+    {
+      "id": "submodel.boundary_mapping",
+      "family": "submodel",
+      "goal": "submodel: boundary_mapping",
+      "modes": [
+        "boundary_mapping"
+      ],
+      "contract": "domain_operation",
+      "status": "planned",
+      "source_dependencies": [
+        {
+          "source": "scope-plan",
+          "section": "13.1 / P1–P9"
+        }
+      ],
+      "supported_profiles": [],
+      "unit_evidence": [],
+      "live_evidence": [],
+      "known_gaps": [
+        "Требуется отдельный контракт и приёмка на выбранном runtime"
+      ],
+      "next_step": "Привязать handler, источники, эффекты и независимое доказательство результата"
+    },
+    {
+      "id": "execution.start",
+      "family": "execution",
+      "goal": "execution: start",
+      "modes": [
+        "start"
+      ],
+      "contract": "domain_operation",
+      "status": "planned",
+      "source_dependencies": [
+        {
+          "source": "scope-plan",
+          "section": "13.1 / P1–P9"
+        }
+      ],
+      "supported_profiles": [],
+      "unit_evidence": [],
+      "live_evidence": [],
+      "known_gaps": [
+        "Требуется отдельный контракт и приёмка на выбранном runtime"
+      ],
+      "next_step": "Привязать handler, источники, эффекты и независимое доказательство результата"
+    },
+    {
+      "id": "execution.status",
+      "family": "execution",
+      "goal": "execution: status",
+      "modes": [
+        "status"
+      ],
+      "contract": "domain_operation",
+      "status": "planned",
+      "source_dependencies": [
+        {
+          "source": "scope-plan",
+          "section": "13.1 / P1–P9"
+        }
+      ],
+      "supported_profiles": [],
+      "unit_evidence": [],
+      "live_evidence": [],
+      "known_gaps": [
+        "Требуется отдельный контракт и приёмка на выбранном runtime"
+      ],
+      "next_step": "Привязать handler, источники, эффекты и независимое доказательство результата"
+    },
+    {
+      "id": "execution.wait",
+      "family": "execution",
+      "goal": "execution: wait",
+      "modes": [
+        "wait"
+      ],
+      "contract": "domain_operation",
+      "status": "planned",
+      "source_dependencies": [
+        {
+          "source": "scope-plan",
+          "section": "13.1 / P1–P9"
+        }
+      ],
+      "supported_profiles": [],
+      "unit_evidence": [],
+      "live_evidence": [],
+      "known_gaps": [
+        "Требуется отдельный контракт и приёмка на выбранном runtime"
+      ],
+      "next_step": "Привязать handler, источники, эффекты и независимое доказательство результата"
+    },
+    {
+      "id": "execution.stop",
+      "family": "execution",
+      "goal": "execution: stop",
+      "modes": [
+        "stop"
+      ],
+      "contract": "domain_operation",
+      "status": "planned",
+      "source_dependencies": [
+        {
+          "source": "scope-plan",
+          "section": "13.1 / P1–P9"
+        }
+      ],
+      "supported_profiles": [],
+      "unit_evidence": [],
+      "live_evidence": [],
+      "known_gaps": [
+        "Требуется отдельный контракт и приёмка на выбранном runtime"
+      ],
+      "next_step": "Привязать handler, источники, эффекты и независимое доказательство результата"
+    },
+    {
+      "id": "execution.error_repair",
+      "family": "execution",
+      "goal": "execution: error_repair",
+      "modes": [
+        "error_repair"
+      ],
+      "contract": "domain_operation",
+      "status": "planned",
+      "source_dependencies": [
+        {
+          "source": "scope-plan",
+          "section": "13.1 / P1–P9"
+        }
+      ],
+      "supported_profiles": [],
+      "unit_evidence": [],
+      "live_evidence": [],
+      "known_gaps": [
+        "Требуется отдельный контракт и приёмка на выбранном runtime"
+      ],
+      "next_step": "Привязать handler, источники, эффекты и независимое доказательство результата"
+    },
+    {
+      "id": "results.schema",
+      "family": "results",
+      "goal": "results: schema",
+      "modes": [
+        "schema"
+      ],
+      "contract": "domain_operation",
+      "status": "planned",
+      "source_dependencies": [
+        {
+          "source": "scope-plan",
+          "section": "13.1 / P1–P9"
+        }
+      ],
+      "supported_profiles": [],
+      "unit_evidence": [],
+      "live_evidence": [],
+      "known_gaps": [
+        "Требуется отдельный контракт и приёмка на выбранном runtime"
+      ],
+      "next_step": "Привязать handler, источники, эффекты и независимое доказательство результата"
+    },
+    {
+      "id": "results.count",
+      "family": "results",
+      "goal": "results: count",
+      "modes": [
+        "count"
+      ],
+      "contract": "domain_operation",
+      "status": "planned",
+      "source_dependencies": [
+        {
+          "source": "scope-plan",
+          "section": "13.1 / P1–P9"
+        }
+      ],
+      "supported_profiles": [],
+      "unit_evidence": [],
+      "live_evidence": [],
+      "known_gaps": [
+        "Требуется отдельный контракт и приёмка на выбранном runtime"
+      ],
+      "next_step": "Привязать handler, источники, эффекты и независимое доказательство результата"
+    },
+    {
+      "id": "results.sample",
+      "family": "results",
+      "goal": "results: sample",
+      "modes": [
+        "sample"
+      ],
+      "contract": "domain_operation",
+      "status": "planned",
+      "source_dependencies": [
+        {
+          "source": "scope-plan",
+          "section": "13.1 / P1–P9"
+        }
+      ],
+      "supported_profiles": [],
+      "unit_evidence": [],
+      "live_evidence": [],
+      "known_gaps": [
+        "Требуется отдельный контракт и приёмка на выбранном runtime"
+      ],
+      "next_step": "Привязать handler, источники, эффекты и независимое доказательство результата"
+    },
+    {
+      "id": "results.full_small_dataset",
+      "family": "results",
+      "goal": "results: full_small_dataset",
+      "modes": [
+        "full_small_dataset"
+      ],
+      "contract": "domain_operation",
+      "status": "planned",
+      "source_dependencies": [
+        {
+          "source": "scope-plan",
+          "section": "13.1 / P1–P9"
+        }
+      ],
+      "supported_profiles": [],
+      "unit_evidence": [],
+      "live_evidence": [],
+      "known_gaps": [
+        "Требуется отдельный контракт и приёмка на выбранном runtime"
+      ],
+      "next_step": "Привязать handler, источники, эффекты и независимое доказательство результата"
+    },
+    {
+      "id": "results.empty",
+      "family": "results",
+      "goal": "results: empty",
+      "modes": [
+        "empty"
+      ],
+      "contract": "domain_operation",
+      "status": "planned",
+      "source_dependencies": [
+        {
+          "source": "scope-plan",
+          "section": "13.1 / P1–P9"
+        }
+      ],
+      "supported_profiles": [],
+      "unit_evidence": [],
+      "live_evidence": [],
+      "known_gaps": [
+        "Требуется отдельный контракт и приёмка на выбранном runtime"
+      ],
+      "next_step": "Привязать handler, источники, эффекты и независимое доказательство результата"
+    },
+    {
+      "id": "results.visualizer",
+      "family": "results",
+      "goal": "results: visualizer",
+      "modes": [
+        "visualizer"
+      ],
+      "contract": "domain_operation",
+      "status": "planned",
+      "source_dependencies": [
+        {
+          "source": "scope-plan",
+          "section": "13.1 / P1–P9"
+        }
+      ],
+      "supported_profiles": [],
+      "unit_evidence": [],
+      "live_evidence": [],
+      "known_gaps": [
+        "Требуется отдельный контракт и приёмка на выбранном runtime"
+      ],
+      "next_step": "Привязать handler, источники, эффекты и независимое доказательство результата"
+    },
+    {
+      "id": "results.export",
+      "family": "results",
+      "goal": "results: export",
+      "modes": [
+        "export"
+      ],
+      "contract": "domain_operation",
+      "status": "planned",
+      "source_dependencies": [
+        {
+          "source": "scope-plan",
+          "section": "13.1 / P1–P9"
+        }
+      ],
+      "supported_profiles": [],
+      "unit_evidence": [],
+      "live_evidence": [],
+      "known_gaps": [
+        "Требуется отдельный контракт и приёмка на выбранном runtime"
+      ],
+      "next_step": "Привязать handler, источники, эффекты и независимое доказательство результата"
+    },
+    {
+      "id": "agent.observe",
+      "family": "agent",
+      "goal": "agent: observe",
+      "modes": [
+        "observe"
+      ],
+      "contract": "domain_operation",
+      "status": "planned",
+      "source_dependencies": [
+        {
+          "source": "scope-plan",
+          "section": "13.1 / P1–P9"
+        }
+      ],
+      "supported_profiles": [],
+      "unit_evidence": [],
+      "live_evidence": [],
+      "known_gaps": [
+        "Требуется отдельный контракт и приёмка на выбранном runtime"
+      ],
+      "next_step": "Привязать handler, источники, эффекты и независимое доказательство результата"
+    },
+    {
+      "id": "agent.ui_gesture",
+      "family": "agent",
+      "goal": "agent: ui_gesture",
+      "modes": [
+        "ui_gesture"
+      ],
+      "contract": "domain_operation",
+      "status": "planned",
+      "source_dependencies": [
+        {
+          "source": "scope-plan",
+          "section": "13.1 / P1–P9"
+        }
+      ],
+      "supported_profiles": [],
+      "unit_evidence": [],
+      "live_evidence": [],
+      "known_gaps": [
+        "Требуется отдельный контракт и приёмка на выбранном runtime"
+      ],
+      "next_step": "Привязать handler, источники, эффекты и независимое доказательство результата"
+    },
+    {
+      "id": "agent.reconcile",
+      "family": "agent",
+      "goal": "agent: reconcile",
+      "modes": [
+        "reconcile"
+      ],
+      "contract": "domain_operation",
+      "status": "planned",
+      "source_dependencies": [
+        {
+          "source": "scope-plan",
+          "section": "13.1 / P1–P9"
+        }
+      ],
+      "supported_profiles": [],
+      "unit_evidence": [],
+      "live_evidence": [],
+      "known_gaps": [
+        "Требуется отдельный контракт и приёмка на выбранном runtime"
+      ],
+      "next_step": "Привязать handler, источники, эффекты и независимое доказательство результата"
+    },
+    {
+      "id": "agent.repair",
+      "family": "agent",
+      "goal": "agent: repair",
+      "modes": [
+        "repair"
+      ],
+      "contract": "domain_operation",
+      "status": "planned",
+      "source_dependencies": [
+        {
+          "source": "scope-plan",
+          "section": "13.1 / P1–P9"
+        }
+      ],
+      "supported_profiles": [],
+      "unit_evidence": [],
+      "live_evidence": [],
+      "known_gaps": [
+        "Требуется отдельный контракт и приёмка на выбранном runtime"
+      ],
+      "next_step": "Привязать handler, источники, эффекты и независимое доказательство результата"
+    },
+    {
+      "id": "agent.abandon",
+      "family": "agent",
+      "goal": "agent: abandon",
+      "modes": [
+        "abandon"
+      ],
+      "contract": "domain_operation",
+      "status": "planned",
+      "source_dependencies": [
+        {
+          "source": "scope-plan",
+          "section": "13.1 / P1–P9"
+        }
+      ],
+      "supported_profiles": [],
+      "unit_evidence": [],
+      "live_evidence": [],
+      "known_gaps": [
+        "Требуется отдельный контракт и приёмка на выбранном runtime"
+      ],
+      "next_step": "Привязать handler, источники, эффекты и независимое доказательство результата"
+    },
+    {
+      "id": "agent.goal_obligations",
+      "family": "agent",
+      "goal": "agent: goal_obligations",
+      "modes": [
+        "goal_obligations"
+      ],
+      "contract": "domain_operation",
+      "status": "planned",
+      "source_dependencies": [
+        {
+          "source": "scope-plan",
+          "section": "13.1 / P1–P9"
+        }
+      ],
+      "supported_profiles": [],
+      "unit_evidence": [],
+      "live_evidence": [],
+      "known_gaps": [
+        "Требуется отдельный контракт и приёмка на выбранном runtime"
+      ],
+      "next_step": "Привязать handler, источники, эффекты и независимое доказательство результата"
+    },
+    {
+      "id": "agent.restart_checkpoint",
+      "family": "agent",
+      "goal": "agent: restart_checkpoint",
+      "modes": [
+        "restart_checkpoint"
+      ],
+      "contract": "domain_operation",
+      "status": "planned",
+      "source_dependencies": [
+        {
+          "source": "scope-plan",
+          "section": "13.1 / P1–P9"
+        }
+      ],
+      "supported_profiles": [],
+      "unit_evidence": [],
+      "live_evidence": [],
+      "known_gaps": [
+        "Требуется отдельный контракт и приёмка на выбранном runtime"
+      ],
+      "next_step": "Привязать handler, источники, эффекты и независимое доказательство результата"
+    },
+    {
+      "id": "delivery.source_provenance",
+      "family": "delivery",
+      "goal": "delivery: source_provenance",
+      "modes": [
+        "source_provenance"
+      ],
+      "contract": "domain_operation",
+      "status": "planned",
+      "source_dependencies": [
+        {
+          "source": "scope-plan",
+          "section": "13.1 / P1–P9"
+        }
+      ],
+      "supported_profiles": [],
+      "unit_evidence": [],
+      "live_evidence": [],
+      "known_gaps": [
+        "Требуется отдельный контракт и приёмка на выбранном runtime"
+      ],
+      "next_step": "Привязать handler, источники, эффекты и независимое доказательство результата"
+    },
+    {
+      "id": "delivery.catalog_compatibility",
+      "family": "delivery",
+      "goal": "delivery: catalog_compatibility",
+      "modes": [
+        "catalog_compatibility"
+      ],
+      "contract": "domain_operation",
+      "status": "planned",
+      "source_dependencies": [
+        {
+          "source": "scope-plan",
+          "section": "13.1 / P1–P9"
+        }
+      ],
+      "supported_profiles": [],
+      "unit_evidence": [],
+      "live_evidence": [],
+      "known_gaps": [
+        "Требуется отдельный контракт и приёмка на выбранном runtime"
+      ],
+      "next_step": "Привязать handler, источники, эффекты и независимое доказательство результата"
+    },
+    {
+      "id": "delivery.skill_compatibility",
+      "family": "delivery",
+      "goal": "delivery: skill_compatibility",
+      "modes": [
+        "skill_compatibility"
+      ],
+      "contract": "domain_operation",
+      "status": "planned",
+      "source_dependencies": [
+        {
+          "source": "scope-plan",
+          "section": "13.1 / P1–P9"
+        }
+      ],
+      "supported_profiles": [],
+      "unit_evidence": [],
+      "live_evidence": [],
+      "known_gaps": [
+        "Требуется отдельный контракт и приёмка на выбранном runtime"
+      ],
+      "next_step": "Привязать handler, источники, эффекты и независимое доказательство результата"
+    },
+    {
+      "id": "delivery.native_codex",
+      "family": "delivery",
+      "goal": "delivery: native_codex",
+      "modes": [
+        "native_codex"
+      ],
+      "contract": "domain_operation",
+      "status": "planned",
+      "source_dependencies": [
+        {
+          "source": "scope-plan",
+          "section": "13.1 / P1–P9"
+        }
+      ],
+      "supported_profiles": [],
+      "unit_evidence": [],
+      "live_evidence": [],
+      "known_gaps": [
+        "Требуется отдельный контракт и приёмка на выбранном runtime"
+      ],
+      "next_step": "Привязать handler, источники, эффекты и независимое доказательство результата"
+    },
+    {
+      "id": "delivery.native_hermes",
+      "family": "delivery",
+      "goal": "delivery: native_hermes",
+      "modes": [
+        "native_hermes"
+      ],
+      "contract": "domain_operation",
+      "status": "planned",
+      "source_dependencies": [
+        {
+          "source": "scope-plan",
+          "section": "13.1 / P1–P9"
+        }
+      ],
+      "supported_profiles": [],
+      "unit_evidence": [],
+      "live_evidence": [],
+      "known_gaps": [
+        "Требуется отдельный контракт и приёмка на выбранном runtime"
+      ],
+      "next_step": "Привязать handler, источники, эффекты и независимое доказательство результата"
+    },
+    {
+      "id": "delivery.macos",
+      "family": "delivery",
+      "goal": "delivery: macos",
+      "modes": [
+        "macos"
+      ],
+      "contract": "domain_operation",
+      "status": "planned",
+      "source_dependencies": [
+        {
+          "source": "scope-plan",
+          "section": "13.1 / P1–P9"
+        }
+      ],
+      "supported_profiles": [],
+      "unit_evidence": [],
+      "live_evidence": [],
+      "known_gaps": [
+        "Требуется отдельный контракт и приёмка на выбранном runtime"
+      ],
+      "next_step": "Привязать handler, источники, эффекты и независимое доказательство результата"
+    },
+    {
+      "id": "delivery.linux",
+      "family": "delivery",
+      "goal": "delivery: linux",
+      "modes": [
+        "linux"
+      ],
+      "contract": "domain_operation",
+      "status": "planned",
+      "source_dependencies": [
+        {
+          "source": "scope-plan",
+          "section": "13.1 / P1–P9"
+        }
+      ],
+      "supported_profiles": [],
+      "unit_evidence": [],
+      "live_evidence": [],
+      "known_gaps": [
+        "Требуется отдельный контракт и приёмка на выбранном runtime"
+      ],
+      "next_step": "Привязать handler, источники, эффекты и независимое доказательство результата"
+    },
+    {
+      "id": "delivery.windows",
+      "family": "delivery",
+      "goal": "delivery: windows",
+      "modes": [
+        "windows"
+      ],
+      "contract": "domain_operation",
+      "status": "planned",
+      "source_dependencies": [
+        {
+          "source": "scope-plan",
+          "section": "13.1 / P1–P9"
+        }
+      ],
+      "supported_profiles": [],
+      "unit_evidence": [],
+      "live_evidence": [],
+      "known_gaps": [
+        "Требуется отдельный контракт и приёмка на выбранном runtime"
+      ],
+      "next_step": "Привязать handler, источники, эффекты и независимое доказательство результата"
+    },
+    {
+      "id": "delivery.rollback",
+      "family": "delivery",
+      "goal": "delivery: rollback",
+      "modes": [
+        "rollback"
+      ],
+      "contract": "domain_operation",
+      "status": "planned",
+      "source_dependencies": [
+        {
+          "source": "scope-plan",
+          "section": "13.1 / P1–P9"
+        }
+      ],
+      "supported_profiles": [],
+      "unit_evidence": [],
+      "live_evidence": [],
+      "known_gaps": [
+        "Требуется отдельный контракт и приёмка на выбранном runtime"
+      ],
+      "next_step": "Привязать handler, источники, эффекты и независимое доказательство результата"
+    }
+  ]
+}

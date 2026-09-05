@@ -1,12 +1,11 @@
 import { createHash } from 'node:crypto';
+import { ACTION_KEYS, CAPABILITIES, requireCapability } from './capability-registry.mjs';
 
 export const ACTION_CATALOG_ROOT = 'viking://resources/loginom-dock/catalogs/executor-preview';
 export const CAPABILITY_ABI = 1;
 export const EXECUTOR_REVISION = '1.1.0';
 
 const SHA256 = /^[a-f0-9]{64}$/;
-const ACTION_KEYS = new Set(['node.add', 'link.create', 'package.save_as']);
-const CAPABILITIES = new Set(['node.add.v1', 'link.create.v1', 'package.save_as.v1']);
 const OUTCOMES = new Set(['SUCCEEDED', 'NOT_APPLIED', 'FAILED', 'AMBIGUOUS']);
 const FILE_NAMES = ['actions.json', 'selectors.json', 'source-index.json'];
 export const ACCEPTANCE_CHECKS = ['node_add', 'link_create_standard', 'link_create_input_add',
@@ -18,7 +17,7 @@ export const actionDescribeTool = {
   description: 'List available actions when called with {} or describe one exact action: node.add, link.create, package.save_as. Other operations use dock_workspace_observe and dock_ui_action. Does not change Loginom.',
   inputSchema: {
     type: 'object',
-    properties: { action_key: { type: 'string', enum: ['node.add', 'link.create', 'package.save_as'] } },
+    properties: { action_key: { type: 'string', enum: [...ACTION_KEYS] } },
     additionalProperties: false,
   },
   annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: false },
@@ -30,7 +29,7 @@ export const actionRunTool = {
   inputSchema: {
     type: 'object',
     properties: {
-      action_key: { type: 'string', enum: ['node.add', 'link.create', 'package.save_as'] },
+      action_key: { type: 'string', enum: [...ACTION_KEYS] },
       parameters: { type: 'object' },
       operation_id: { type: 'string', minLength: 1, maxLength: 128, pattern: '^[A-Za-z0-9._:-]+$' },
     },
@@ -95,13 +94,29 @@ function scanForbiddenDefinition(value, where = 'action') {
   }
 }
 
-function validateJsonSchema(schema, where) {
+export function validateJsonSchema(schema, where = 'schema') {
   if (!isObject(schema)) fail(`${where} must be an object schema`);
   const allowed = new Set(['type', 'properties', 'required', 'additionalProperties', 'enum', 'minimum', 'maximum', 'minLength', 'maxLength', 'pattern', 'items', 'description']);
   exactKeys(schema, allowed, where);
   if (!['object', 'array', 'string', 'integer', 'number', 'boolean'].includes(schema.type)) fail(`${where}.type is unsupported`);
-  if (schema.enum && (!Array.isArray(schema.enum) || schema.enum.length === 0)) fail(`${where}.enum is invalid`);
-  if (schema.pattern) {
+  const keywords = { object: ['properties', 'required', 'additionalProperties'], array: ['items'],
+    string: ['minLength', 'maxLength', 'pattern'], integer: ['minimum', 'maximum'], number: ['minimum', 'maximum'], boolean: [] };
+  exactKeys(schema, new Set(['type', 'enum', 'description', ...keywords[schema.type]]), where);
+  if (schema.description !== undefined && typeof schema.description !== 'string') fail(`${where}.description must be a string`);
+  if (schema.enum !== undefined) {
+    if (!Array.isArray(schema.enum) || !schema.enum.length || ['object', 'array'].includes(schema.type)) fail(`${where}.enum is unsupported`);
+    for (const item of schema.enum) {
+      try { validateActionParameters({ type: schema.type }, item); } catch { fail(`${where}.enum member has the wrong type`); }
+    }
+    if (new Set(schema.enum).size !== schema.enum.length) fail(`${where}.enum contains duplicates`);
+  }
+  for (const key of ['minimum', 'maximum', 'minLength', 'maxLength']) {
+    if (schema[key] === undefined) continue;
+    if (typeof schema[key] !== 'number' || !Number.isFinite(schema[key])
+        || (key.endsWith('Length') && (!Number.isSafeInteger(schema[key]) || schema[key] < 0))) fail(`${where}.${key} is invalid`);
+  }
+  if (schema.minimum > schema.maximum || schema.minLength > schema.maxLength) fail(`${where} bounds are reversed`);
+  if (schema.pattern !== undefined) {
     nonEmpty(schema.pattern, `${where}.pattern`);
     try { new RegExp(schema.pattern); } catch { fail(`${where}.pattern is invalid`); }
   }
@@ -110,7 +125,7 @@ function validateJsonSchema(schema, where) {
     if (schema.additionalProperties !== false) fail(`${where} must reject additional properties`);
     const required = schema.required ?? [];
     stringArray(required, `${where}.required`, { nonempty: false });
-    for (const key of required) if (!(key in schema.properties)) fail(`${where}.required names unknown property ${key}`);
+    for (const key of required) if (!Object.hasOwn(schema.properties, key)) fail(`${where}.required names unknown property ${key}`);
     for (const [key, child] of Object.entries(schema.properties)) validateJsonSchema(child, `${where}.properties.${key}`);
   }
   if (schema.type === 'array') validateJsonSchema(schema.items, `${where}.items`);
@@ -131,15 +146,15 @@ function validateActions(catalog, manifest, allowedStatuses) {
       'selector_symbols', 'evidence', 'preconditions', 'postconditions', 'effect', 'idempotency', 'timeout_ms',
       'retry_budget', 'required_capabilities', 'min_executor_revision', 'cleanup']), `action ${action.action_key ?? '?'}`);
     nonEmpty(action.action_key, 'action.action_key');
-    if (!ACTION_KEYS.has(action.action_key)) fail(`unsupported MVP action ${action.action_key}`);
+    if (!ACTION_KEYS.includes(action.action_key)) fail(`unsupported MVP action ${action.action_key}`);
     if (seen.has(action.action_key)) fail(`duplicate action ${action.action_key}`);
     seen.add(action.action_key);
     nonEmpty(action.revision, `${action.action_key}.revision`);
     if (!allowedStatuses.has(action.status)) fail(`${action.action_key} has invalid lifecycle status ${action.status}`);
-    if (!CAPABILITIES.has(action.capability)) fail(`${action.action_key} requires unknown capability`);
+    try { requireCapability(action); } catch { fail(`${action.action_key} does not match a local capability handler and effect contract`); }
     stringArray(action.required_capabilities, `${action.action_key}.required_capabilities`);
     if (!action.required_capabilities.includes(action.capability)
-        || action.required_capabilities.some(item => !CAPABILITIES.has(item))) fail(`${action.action_key} capability set is invalid`);
+        || action.required_capabilities.some(item => !CAPABILITIES.includes(item))) fail(`${action.action_key} capability set is invalid`);
     validRevision(action.min_executor_revision, `${action.action_key}.min_executor_revision`);
     if (!semverAtLeast(EXECUTOR_REVISION, action.min_executor_revision)) fail(`${action.action_key} requires a newer executor`);
     if (!Number.isInteger(action.timeout_ms) || action.timeout_ms < 1000 || action.timeout_ms > 300000) fail(`${action.action_key}.timeout_ms is invalid`);
@@ -358,7 +373,7 @@ export async function pinActionCatalog(remote, {
   const selectorsJson = parseJson(texts['selectors.json'], 'selectors.json');
   const sourceIndex = parseJson(texts['source-index.json'], 'source-index.json');
   const actions = validateActions(actionsJson, manifest, actionStatuses);
-  if (current.status === 'production' && actions.size !== ACTION_KEYS.size) fail('production admission requires all three MVP actions');
+  if (current.status === 'production' && actions.size !== ACTION_KEYS.length) fail('production admission requires all three MVP actions');
   const selectors = validateSelectors(selectorsJson, manifest);
   for (const action of actions.values()) {
     if (action.selector_symbols.some(symbol => !selectors.has(symbol))) fail(`${action.action_key} names an unknown selector`);
@@ -399,9 +414,9 @@ export function validateActionParameters(schema, value, where = 'parameters') {
   if (schema.enum && !schema.enum.some(item => Object.is(item, value))) error('value is not in the allowed enum');
   if (schema.type === 'object') {
     if (!isObject(value)) error('expected object');
-    for (const key of schema.required ?? []) if (!(key in value)) error(`missing ${key}`);
+    for (const key of schema.required ?? []) if (!Object.hasOwn(value, key)) error(`missing ${key}`);
     for (const key of Object.keys(value)) {
-      if (!schema.properties[key]) error(`unknown field ${key}`);
+      if (!Object.hasOwn(schema.properties, key)) error(`unknown field ${key}`);
       validateActionParameters(schema.properties[key], value[key], `${where}.${key}`);
     }
   } else if (schema.type === 'array') {
@@ -427,7 +442,15 @@ export function validateActionParameters(schema, value, where = 'parameters') {
 }
 
 export function assertActionOutcome(value) {
-  if (!isObject(value) || !OUTCOMES.has(value.status) || !Array.isArray(value.trace)) {
+  if (!isObject(value) || !OUTCOMES.has(value.status) || !Array.isArray(value.trace)
+      || typeof value.action_key !== 'string' || !value.action_key
+      || typeof value.action_revision !== 'string' || !value.action_revision
+      || typeof value.phase !== 'string' || !value.phase
+      || typeof value.effect_possible !== 'boolean' || !isObject(value.output)
+      || (value.error !== null && (!isObject(value.error) || typeof value.error.code !== 'string'
+        || typeof value.error.message !== 'string'))
+      || (value.status === 'SUCCEEDED' && value.error !== null)
+      || value.goal_verified === true || value.output.goal_verified === true) {
     throw new Error('Dock capability returned an invalid typed outcome');
   }
   return value;

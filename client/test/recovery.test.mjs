@@ -34,6 +34,24 @@ test('a partial Input_Add can be completed without another Add drop or a fourth 
   assert.equal(inspected.output.state, 'pending');
   assert.equal(inspected.output.cleanup_confirmed, true);
   assert.ok(inspected.output.recovery_options.includes('complete_link'));
+  const toolSchemas = new Map(engine.tools.map(tool => [tool.name, tool.inputSchema]));
+  for (const step of inspected.output.next_steps) {
+    const schema = toolSchemas.get(step.tool) ?? (step.tool === 'dock_workspace_observe' ? { properties: {}, required: [] } : null);
+    assert.ok(schema, `Advice names an available tool: ${step.tool}`);
+    const provided = [...Object.keys(step.arguments), ...step.required_fields];
+    assert.ok(provided.every(field => field in schema.properties));
+    assert.ok((schema.required ?? []).every(field => provided.includes(field)));
+    if (step.arguments.strategy) assert.ok(schema.properties.strategy.enum.includes(step.arguments.strategy));
+  }
+  const repairAdvice = inspected.output.next_steps.find(step => step.tool === 'dock_ui_action');
+  assert.equal(repairAdvice.arguments.recovery_operation_id, 'union-link');
+  assert.equal(repairAdvice.id_roles.operation_id, 'new_unique_request');
+  const completeAdvice = inspected.output.next_steps.find(step => step.arguments.strategy === 'complete_link');
+  assert.equal(completeAdvice.arguments.operation_id, 'union-link');
+  assert.equal(completeAdvice.id_roles.recovery_operation_id, 'new_unique_request');
+  assert.ok(!inspected.output.recovery_options.includes('inspect_ui'));
+  assert.ok(!inspected.output.recovery_options.includes('ui_repair'));
+
 
   const recovered = await engine.recover('union-link', { strategy: 'complete_link', recoveryOperationId: 'connect-existing-input' });
   assert.equal(recovered.status, 'SUCCEEDED');
