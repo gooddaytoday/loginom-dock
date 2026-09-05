@@ -13,15 +13,19 @@ class FileStorageInspectTest(unittest.TestCase):
                 'result':{'status':'SUCCEEDED','operation_id':'click-op','output':{}}}
         observe={'session_id':'s','tool_call_id':'read','tool':PREFIX+'dock_workspace_observe','row':5,
                  'result':{'status':'SUCCEEDED','operation_id':'read-op','output':{'file_storage':{
-                     'status':'observed','directory':'/user/data','source':'visible_breadcrumbs',
+                     'status':'observed','directory':'/analyst/data','source':'visible_breadcrumbs',
                      'navigation_identity':{'anchor_tid':'nav'},'listing_complete':False}}}}
         data={'calls':[call,{'session_id':'s','tool_call_id':'read','tool':PREFIX+'dock_workspace_observe','row':4,'arguments':{'scope':'all'}}],'tools':[initial,action,observe],'events':[
             {'phase':'completed','operation_id':t['result']['operation_id'],'outcome':copy.deepcopy(t['result'])}
             for t in (action,observe)]}
+        data['events'][-1]['phase']='observation_completed'
+        observe['result']['output']['operation']={'operation_id':None,'state':'idle','cleanup_confirmed':True,'effect_state':'none',
+            'recovery_options':[],'next_steps':[{'tool':'dock_workspace_observe','arguments':{},'required_fields':[],
+            'requires':[],'provides':['observation_id','fresh_ui_refs']}],'outcome_summary':None}
         return data
 
     def test_bound_navigation_and_directory(self):
-        self.assertTrue(file_storage_inspect(self.fixture(),[])['all_assertions_passed'])
+        self.assertTrue(file_storage_inspect(self.fixture(),[],'/analyst/data')['all_assertions_passed'])
 
     def test_rejects_wrong_directory_unbound_results_and_file_mutations(self):
         mutations=[
@@ -35,15 +39,15 @@ class FileStorageInspectTest(unittest.TestCase):
         ]
         for mutate in mutations:
             data=self.fixture();mutate(data)
-            self.assertFalse(file_storage_inspect(data,[])['all_assertions_passed'])
+            self.assertFalse(file_storage_inspect(data,[],'/analyst/data')['all_assertions_passed'])
 
     def test_epoch_refusal_requires_bound_no_effect_receipt(self):
         data=self.fixture();r=data['tools'][1]['result']
         r.update(status='NOT_APPLIED',phase='preconditions',effect_possible=False,cleanup_complete=True,
                  error={'code':'UI_EPOCH_CHANGED'},trace=[{'event':'ui_action_failed','code':'UI_EPOCH_CHANGED'}])
         data['events'][0]['outcome']=copy.deepcopy(r)
-        self.assertTrue(file_storage_inspect(data,[])['all_assertions_passed'])
+        self.assertTrue(file_storage_inspect(data,[],'/analyst/data')['all_assertions_passed'])
         for key,value in [('effect_possible',True),('cleanup_complete',False),('phase','gesture')]:
             changed=copy.deepcopy(data);changed['tools'][1]['result'][key]=value
             changed['events'][0]['outcome']=copy.deepcopy(changed['tools'][1]['result'])
-            self.assertFalse(file_storage_inspect(changed,[])['all_assertions_passed'])
+            self.assertFalse(file_storage_inspect(changed,[],'/analyst/data')['all_assertions_passed'])

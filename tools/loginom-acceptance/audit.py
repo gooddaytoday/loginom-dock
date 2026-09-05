@@ -9,6 +9,7 @@ import auto_link_delete
 import manual_reopen
 import rename_effect
 import checked_state
+from destinations import storage_segments, render_goal
 from pathlib import Path
 
 GOAL = Path(__file__).parent / "goals/basic-graph.txt"
@@ -637,10 +638,12 @@ def palette_inventory(evidence, checks, require_scroll=False):
                            'This proves constrained collection, not complete component/mode coverage or licensing.']}
 
 
-def file_storage_inspect(evidence, checks):
+def file_storage_inspect(evidence, checks, destination):
     """Narrow live destination evidence, never upload/no-overwrite acceptance."""
     def check(name, passed):
         checks.append({'name':name,'passed':bool(passed)})
+    path_names=storage_segments(destination)
+    path_tids={re.sub(r'\s','_',name).replace(',','') for name in path_names}
     calls=evidence['calls'];tools=evidence['tools'];events=evidence['events']
     def reply_for(call):
         found=[t for t in tools if t['session_id']==call['session_id'] and t['tool_call_id']==call['tool_call_id']
@@ -650,8 +653,17 @@ def file_storage_inspect(evidence, checks):
         matching=[c for c in calls if c['session_id']==reply['session_id'] and c['tool_call_id']==reply['tool_call_id'] and c['tool']==reply['tool'] and c['row']<reply['row']]
         if len(matching)!=1:return False
         result=reply['result']
-        records=[e for e in events if e.get('phase')=='completed' and e.get('operation_id')==result.get('operation_id')]
-        return bool(result.get('operation_id')) and len(records)==1 and rename_effect.journal_equal(records[0].get('outcome',{}),result)
+        is_read=reply['tool']==PREFIX+'dock_workspace_observe'
+        phase='observation_completed' if is_read else 'completed'
+        records=[e for e in events if e.get('phase')==phase and e.get('operation_id')==result.get('operation_id')]
+        comparable=copy.deepcopy(result)
+        if is_read:
+            operation=comparable.get('output',{}).pop('operation',None)
+            idle={'operation_id':None,'state':'idle','cleanup_confirmed':True,'effect_state':'none','recovery_options':[],
+                  'next_steps':[{'tool':'dock_workspace_observe','arguments':{},'required_fields':[],
+                                 'requires':[],'provides':['observation_id','fresh_ui_refs']}],'outcome_summary':None}
+            if operation!=idle:return False
+        return bool(result.get('operation_id')) and len(records)==1 and rename_effect.journal_equal(records[0].get('outcome',{}),comparable)
     navigation=[]
     for call in calls:
         if call['tool'] not in MUTATIONS:continue
@@ -665,7 +677,9 @@ def file_storage_inspect(evidence, checks):
         tids={item.get('tid') for item in targets}
         tid=next(iter(tids)) if len(tids)==1 else ''
         allowed=(action.get('verb')=='click' and tid=='MF;cntMain;tlbMainToolbar;btnFilestorage'
-                 or action.get('verb')=='double_click' and bool(re.fullmatch(r'MF;TF(?:-\d+)?;FileStorageForm;colName_(?:user|data)',tid or '')))
+                 or action.get('verb')=='double_click' and bool(re.fullmatch(r'MF;TF(?:-\d+)?;FileStorageForm;colName_.+',tid or ''))
+                 and tid.split(';FileStorageForm;colName_',1)[1] in path_tids
+                 and any(item.get('label') in path_names for item in targets))
         result=reply['result'] if reply else {}
         trace=result.get('trace',[])
         epoch_refusal=(result.get('status')=='NOT_APPLIED' and result.get('phase')=='preconditions'
@@ -680,7 +694,7 @@ def file_storage_inspect(evidence, checks):
            and t['result'].get('output',{}).get('file_storage',{}).get('status')=='observed']
     last=max(reads,key=lambda t:t['row']) if reads else None
     directory=last['result']['output']['file_storage'] if last else {}
-    check('delivered_directory_is_user_data',directory.get('directory')=='/user/data'
+    check('delivered_directory_matches_destination',directory.get('directory')==destination
           and directory.get('source')=='visible_breadcrumbs' and bool(directory.get('navigation_identity'))
           and directory.get('listing_complete') is False)
     check('directory_has_immutable_browser_receipt',last is not None and bound(last))
@@ -696,7 +710,11 @@ def audit(request, evidence, prompt):
         checks.append({"name": name, "passed": bool(passed)})
     try:
         run_id = request["run_id"]
-        path = "/user/data/packages/Dock-acceptance-" + run_id + ".lgp"
+        # Schema 1 is the historical fixed fixture; new schema 2 runs require
+        # an explicit destination and never infer it from Loginom/OS usernames.
+        destination=request.get('storage_directory') if request.get('schema_version')==2 else '/user/data'
+        storage_segments(destination)
+        path = destination + "/packages/Dock-acceptance-" + run_id + ".lgp"
         check("run_identity_and_owned_package", bool(re.fullmatch(r"\d{8}-\d{6}-[a-f0-9]{8}", run_id))
               and evidence["run_id"] == run_id and request["package_path"] == path)
         goal_id=request.get('goal_id','basic-graph')
@@ -707,7 +725,7 @@ def audit(request, evidence, prompt):
         if goal_id=='auto-link-retain':
             expected['ports']['Объединение'].remove('Input_Data[2]')
             expected['links']=['Источник|Output_Data[0]|Объединение|Input_Data[0]']
-        check("original_goal_only_prompt", prompt == goal.read_text().replace("__PACKAGE_PATH__", path)
+        check("original_goal_only_prompt", prompt == render_goal(goal.read_text(),path,destination)
               and request["goal_sha256"] == sha(goal.read_bytes()))
         check("approved_model_completed", evidence["process"]["returncode"] == 0
               and evidence["process"]["timed_out"] is False
@@ -767,7 +785,7 @@ def audit(request, evidence, prompt):
             e["runtime_revision"] == revision and e["manifest_sha256"] == request["manifest_sha256"]
             and e["session_id"] == prepared["sessionId"] for e in events))
         if goal_id=='file-storage-inspect':
-            return file_storage_inspect(evidence, checks)
+            return file_storage_inspect(evidence, checks, destination)
         if goal_id=='palette-inventory':
             bootstrap_proof(evidence, check)
             return palette_inventory(evidence, checks, require_scroll=True)
@@ -900,6 +918,9 @@ def audit_directory(run):
         frozen = frozen and all(request.get('harness_inputs', {}).get(name) == sha(Path(__file__).with_name(name).read_bytes())
                                 for name in ('checked_state.py', 'rename_effect.py'))
         report['assertions'].append({'name': 'checkbox_auditor_dependencies_frozen', 'passed': frozen})
+    if request.get('schema_version')==2:
+        frozen = frozen and request.get('harness_inputs',{}).get('destinations.py') == sha(Path(__file__).with_name('destinations.py').read_bytes())
+        report['assertions'].append({'name':'destination_contract_frozen','passed':frozen})
     report["all_assertions_passed"] = report["all_assertions_passed"] and frozen
     return report
 

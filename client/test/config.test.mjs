@@ -26,9 +26,12 @@ test('restricts credential files, endpoint and identity before connecting', asyn
   await assert.rejects(loadConfig({ ...options, mode: 'executor-replay' }), /exact Dock catalog manifest/);
   const replay = await loadConfig({ ...options, mode: 'executor-replay',
     actionManifestUri: 'viking://resources/loginom-dock/catalogs/executor-preview/releases/2026.09.04-mvp.1-candidate/manifest.json',
-    actionManifestSha256: 'a'.repeat(64), replayBootstrap: true });
+    actionManifestSha256: 'a'.repeat(64), replayBootstrap: true, replayLoginUser: 'test-account' });
   assert.equal(replay.mode, 'executor-replay');
   assert.equal(replay.replayBootstrap, true);
+  assert.equal(replay.replayLoginUser,'test-account');
+  await assert.rejects(loadConfig({...options,mode:'executor-replay',actionManifestUri:replay.actionManifestUri,
+    actionManifestSha256:replay.actionManifestSha256,replayBootstrap:true}),/explicit Loginom account/);
   await assert.rejects(loadConfig({ ...options, mode: 'classic', actionManifestUri: replay.actionManifestUri,
     actionManifestSha256: replay.actionManifestSha256 }), /only allowed/);
   await assert.rejects(loadConfig({ ...options, replayBootstrap: true }), /only allowed/);

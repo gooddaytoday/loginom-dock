@@ -15,6 +15,7 @@ import uuid
 
 from evidence import export_history, clean
 from preflight import preflight, runtime_pin
+from destinations import storage_segments, render_goal
 
 WORK = Path(__file__).resolve().parent
 REPO = WORK.parents[1]
@@ -87,6 +88,11 @@ def validate_inputs(args):
         raise ValueError("Invalid candidate manifest URI")
     if args.manifest_sha256 is not None and not re.fullmatch(r"[a-f0-9]{64}", args.manifest_sha256):
         raise ValueError("Invalid candidate digest")
+    if args.run:
+        storage_segments(getattr(args,'storage_directory',None))
+        login=getattr(args,'loginom_user',None)
+        if not isinstance(login,str) or not login.strip() or len(login)>200 or re.search(r'[\x00-\x1f\x7f]',login):
+            raise ValueError('Run requires an explicit Loginom account; no username default is assumed')
     if args.run and (not args.manifest_uri or not args.manifest_sha256):
         raise ValueError("Run requires exact candidate URI and SHA")
 
@@ -118,7 +124,7 @@ def execute(args):
     harness_inputs = {p.relative_to(WORK).as_posix(): sha(p) for p in sorted(WORK.glob("*.py"))}
     harness_inputs.update({p.name: sha(p) for p in sorted(WORK.glob("*.mjs"))})
     harness_inputs["goals/" + goal_id + ".txt"] = sha(goal)
-    info = {"schema_version": 1, "scope": "source_runtime", "model_started": False,
+    info = {"schema_version": 2, "storage_directory":getattr(args,"storage_directory",None), "scope": "source_runtime", "model_started": False,
             "provider": "openai-codex", "model": "gpt-5.6-luna", "reasoning_effort": "medium", "hermes_version": "0.21.0",
             "provider_selection": "explicit CLI; effective usage identity checked after the run",
             "fallback_allowed": False, "dependencies": dependencies,
@@ -150,9 +156,9 @@ def execute(args):
     native_skill_copy = hermes_home / "skills/loginom/SKILL.md"
     native_skill_copy.parent.mkdir(parents=True, mode=0o700)
     write(native_skill_copy, NATIVE_SKILL.read_text())
-    package = "/user/data/packages/Dock-acceptance-" + run_id + ".lgp"
+    package = args.storage_directory + "/packages/Dock-acceptance-" + run_id + ".lgp"
     info.update(run_id=run_id, package_path=package)
-    prompt = goal.read_text().replace("__PACKAGE_PATH__", package)
+    prompt = render_goal(goal.read_text(),package,args.storage_directory)
     write(run / "scenario.txt", prompt)
     write(run / "request.json", info)
     # No key is persisted in the child config. Dock reads its own explicit config.
@@ -160,7 +166,7 @@ def execute(args):
     command = [str(entry), "--config", str(args.dock_config.resolve()),
                "--state-dir", str(dock_home), "--agent", "hermes", "--adapter-revision", "0.1.0-rc.4-acceptance",
                "--mode", "executor-replay", "--action-manifest-uri", args.manifest_uri,
-               "--action-manifest-sha256", args.manifest_sha256, "--replay-bootstrap"]
+               "--action-manifest-sha256", args.manifest_sha256, "--replay-bootstrap", "--replay-login-user", args.loginom_user]
     config = {"mcp_servers": {"loginom-dock": {"command": str(args.node), "args": command,
               "connect_timeout": 180, "timeout": 360, "enabled": True,
               "env": {"DOCK_ACCEPTANCE_RUN_DIR": str(run),
@@ -235,6 +241,8 @@ def main():
     parser.add_argument("--node", type=Path, default=Path.home() / ".loginom-dock/current/runtime/node")
     parser.add_argument("--browsers", type=Path, default=Path.home() / ".loginom-dock/runtime/browsers")
     parser.add_argument("--dock-config", type=Path, default=Path.home() / ".loginom-dock/config.json")
+    parser.add_argument("--loginom-user", help="Explicit operator-approved passwordless Loginom account for replay")
+    parser.add_argument("--storage-directory", help="Explicit Loginom storage directory observed or selected for this run")
     parser.add_argument("--manifest-uri")
     parser.add_argument("--manifest-sha256")
     parser.add_argument("--timeout", type=int, default=1200)

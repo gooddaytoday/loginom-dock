@@ -134,7 +134,7 @@ export async function createBridge(config, session) {
                 if (!config.loginomUrl) throw new Error('Workspace preparation requires the configured Loginom URL');
                 const code = makeWorkspacePrepareCode({ loginomUrl: config.loginomUrl,
                   compatibility: pinnedActions.compatibility,
-                  allowTestLogin: config.mode === 'executor-replay' && config.replayBootstrap });
+                  allowTestLogin: config.mode === 'executor-replay' && config.replayBootstrap, testLoginUser: config.replayLoginUser });
                 const response = await browser.callTool({ name: 'browser_run_code_unsafe', arguments: { code } }, undefined, { timeout: 125000 });
                 return parseWorkspacePreparation(response);
               },

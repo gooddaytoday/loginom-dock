@@ -94,7 +94,7 @@ test('normal preparation opens Loginom and asks for login without assuming test 
 test('operator test login and authenticated normal preparation reach the same workspace contract', async () => {
   const replay = pageFixture();
   const normal = pageFixture({ authenticated: true });
-  const replayState = await execute(replay, { allowTestLogin: true });
+  const replayState = await execute(replay, { allowTestLogin: true, testLoginUser: 'test-account' });
   const normalState = await execute(normal);
   assert.equal(replayState.status, 'READY');
   assert.equal(normalState.status, 'READY');
@@ -102,12 +102,14 @@ test('operator test login and authenticated normal preparation reach the same wo
   assert.equal(replayState.workflow_ref.prefix, 'MF;TF-2');
   assert.equal(normalState.target.loginom_build, build);
   assert.ok(replay.events.includes('login'));
+  assert.ok(replay.events.some(event=>event.fill==='test-account'));
+  assert.ok(!replay.events.some(event=>event.fill==='user'));
   assert.ok(!normal.events.includes('login'));
 });
 
 test('an incompatible UI is rejected before login or draft creation', async () => {
   const fixture = pageFixture({ actualBuild: '8.0.0' });
-  const state = await execute(fixture, { allowTestLogin: true });
+  const state = await execute(fixture, { allowTestLogin: true, testLoginUser: 'test-account' });
   assert.equal(state.status, 'INCOMPATIBLE');
   assert.deepEqual(fixture.events, ['navigate']);
 });
@@ -161,4 +163,10 @@ test('pending-operation guard prevents preparation from mutating a workspace', a
   }), /pending operation/);
   assert.equal(calls, 0);
   assert.equal(metadata.workspaceReady, true);
+});
+
+test('automatic test login requires an explicit account', async () => {
+  const fixture=pageFixture();
+  await assert.rejects(()=>execute(fixture,{allowTestLogin:true}),/explicit Loginom account/);
+  assert.deepEqual(fixture.events,[]);
 });

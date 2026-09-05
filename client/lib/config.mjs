@@ -8,7 +8,7 @@ import { ACTION_CATALOG_ROOT } from './action-catalog.mjs';
 const SHA256 = /^[a-f0-9]{64}$/;
 
 export async function loadConfig({ configPath, stateDir, agent, adapterRevision, mode = 'classic',
-  actionManifestUri = null, actionManifestSha256 = null, replayBootstrap = false }) {
+  actionManifestUri = null, actionManifestSha256 = null, replayBootstrap = false, replayLoginUser = null }) {
   if (!configPath) throw new Error('An explicit Dock config path is required');
   if (!['codex', 'hermes'].includes(agent) || !adapterRevision?.trim()) {
     throw new Error('Explicit agent and adapter revision are required');
@@ -27,6 +27,8 @@ export async function loadConfig({ configPath, stateDir, agent, adapterRevision,
     throw new Error('An explicit action manifest is only allowed in executor-replay');
   }
   if (replayBootstrap && mode !== 'executor-replay') throw new Error('Replay bootstrap is only allowed in executor-replay');
+  if (replayBootstrap && (typeof replayLoginUser !== 'string' || !replayLoginUser.trim() || replayLoginUser.length>200 || /[\x00-\x1f\x7f]/.test(replayLoginUser))) throw new Error('Replay bootstrap requires an explicit Loginom account');
+  if (!replayBootstrap && replayLoginUser !== null) throw new Error('Replay login account requires replay bootstrap');
   const path = normalizeConfigPath(configPath);
   const info = await lstat(path);
   if (!info.isFile() || !privatePath(info)) {
@@ -54,7 +56,7 @@ export async function loadConfig({ configPath, stateDir, agent, adapterRevision,
   return Object.freeze({
     endpoint: endpoint.href, apiKey: data.api_key, loginomUrl,
     account: data.account, user: data.user, agent, adapterRevision, mode,
-    actionManifestUri, actionManifestSha256, replayBootstrap,
+    actionManifestUri, actionManifestSha256, replayBootstrap, replayLoginUser,
     stateDir: normalizeConfigPath(stateDir || join(homedir(), '.loginom-dock')),
   });
 }

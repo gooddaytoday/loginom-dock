@@ -730,7 +730,7 @@ test('file storage directory uses active complete breadcrumbs and never proves f
   page.add('div','MF;TF-1;FileStorageForm;pnlFileStorage;tbl');
   const bar=page.add('div','MF;TF-1;NavigationBar;NavigationPanel');
   const labels=[];
-  for (const [index,text] of ['user','data','Приёмка 1'].entries()) {
+  for (const [index,text] of ['Файлы','user','data','Приёмка 1'].entries()) {
     const button=page.add('div',`MF;TF-1;cnrNaviMode;b.s-${index}`,'',undefined,bar);
     const label=page.add('span',null,text,undefined,button);
     label.attrs.class='x-btn-inner-default-toolbar-small';labels.push(label);
@@ -778,7 +778,7 @@ test('navigation root reads the directory without traversing a large storage tab
   const page=new Page(),table=page.add('div','MF;TF-1;FileStorageForm;pnlFileStorage;tbl');
   for(let i=0;i<6500;i++) page.add('div',null,'row',undefined,table);
   const bar=page.add('div','MF;TF-1;NavigationBar;NavigationPanel');
-  for(const [i,text] of ['user','data'].entries()) {
+  for(const [i,text] of ['Файлы','user','data'].entries()) {
     const button=page.add('div',`MF;TF-1;cnrNaviMode;b.s-${i}`,'',undefined,bar);
     page.add('span',null,text,undefined,button).attrs.class='x-btn-inner-default-toolbar-small';
   }
@@ -821,17 +821,20 @@ test('nested breadcrumb button parts are one segment and incomplete paths explai
   const outer=page.add('div','MF;TF-1;cnrNaviMode;b.s-1','',undefined,bar);
   const inner=page.add('span','MF;TF-1;cnrNaviMode;b.s-1;inner','',undefined,outer);
   const label=page.add('span',null,'user',undefined,inner);label.attrs.class='x-btn-inner-default-toolbar-small';
+  const root=page.add('div','MF;TF-1;cnrNaviMode;b.s-0','',undefined,bar);
+  const rootLabel=page.add('span',null,'Файлы',undefined,root);rootLabel.attrs.class='x-btn-inner-default-toolbar-small';
+  bar.children=[root,outer];
   assert.equal((await page.observe()).file_storage.directory,'/user');
   label.remove();const failed=(await page.observe()).file_storage;
   assert.equal(failed.reason,'navigation_segments_incomplete');
-  assert.deepEqual(failed.segment_counts,{buttons:1,labels:0});
+  assert.deepEqual(failed.segment_counts,{buttons:2,labels:1});
 });
 
 test('empty navigation decorations are skipped without accepting an empty directory', async () => {
   const page=new Page();page.add('div','MF;TF-1;FileStorageForm;pnlFileStorage;tbl');
   const bar=page.add('div','MF;TF-1;NavigationBar;NavigationPanel');
   const labels=[];
-  for(const [i,text] of ['', 'user', 'data', ''].entries()) {
+  for(const [i,text] of ['', 'Файлы', 'user', 'data', ''].entries()) {
     const button=page.add('div',`MF;TF-1;cnrNaviMode;b.s-${i}`,'',undefined,bar);
     const label=page.add('span',null,text,undefined,button);label.attrs.class='x-btn-inner-default-toolbar-small';
     if(!text) label.style.display='none';labels.push(label);

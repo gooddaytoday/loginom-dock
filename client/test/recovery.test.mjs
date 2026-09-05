@@ -841,3 +841,14 @@ test('abandonment releases the mutation guard only after its resolution is durab
   assert.doesNotThrow(() => engine.assertPreparationAllowed());
   assert.equal(page.drops, 1);
 });
+
+test('each observation records its own immutable browser result before paging', async () => {
+  const events=[],engine=runtime(linkPage(),{onRecord:async event=>events.push(event)});
+  const first=await engine.observe(),second=await engine.observe();
+  const reads=events.filter(e=>e.phase==='observation_completed');
+  assert.equal(reads.length,2);assert.notEqual(reads[0].operation_id,reads[1].operation_id);
+  assert.equal(first.operation_id,reads[0].operation_id);assert.equal(second.operation_id,reads[1].operation_id);
+  assert.equal(reads[0].outcome.output.page,undefined);
+  assert.equal(reads[0].outcome.output.operation,undefined);
+  first.output.origin='changed';assert.notEqual(reads[0].outcome.output.origin,'changed');
+});

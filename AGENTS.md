@@ -53,6 +53,12 @@
   Verify effective identifiers without printing credentials. Do not fall back to
   another provider/model on failure, timeout or limits. Dock server models remain
   unchanged; Hermes remains the executor.
+- Never assume the Loginom account or personal storage root is named `user`.
+  Use an explicit operator-selected account for passwordless replay login and an
+  explicit storage destination, then verify the latter in Loginom. Do not derive
+  Loginom identity or storage paths from SSH/OS usernames. The user authorized a
+  dedicated Loginom `test` account for testing/debugging on 2026-09-05; this is
+  an available test account, not a production default.
 - Codex/Hermes run the task and local browser. The Dock server supplies knowledge;
   it does not become the Loginom task executor.
 - Activate archive capture only after successful `dock_prepare`, from its triggering

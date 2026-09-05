@@ -394,8 +394,14 @@ function workspaceUiCapability(page, task) {
           if (value.length>200 || value!==value.trim() || /[\\/\x00-\x1f\x7f]/.test(value) || value==='.' || value==='..') {fileStorage.reason='navigation_segment_invalid';valid=false;break;}
           segments.push(value);
         }
-        if (valid && segments.length && segments.join('/').length<=2000) fileStorage={status:'observed',directory:'/'+segments.join('/'),
-          navigation_identity:identityOf(bar),source:'visible_breadcrumbs',listing_complete:false};
+        if (valid && segments.length && segments.join('/').length<=2000) {
+          // E2E utils/files.GetRelativePath removes the virtual Files root.
+          // Remove only the first known root, never a same-named real directory.
+          if (segments[0]==='Файлы') fileStorage={status:'observed',directory:'/'+segments.slice(1).join('/'),
+            display_path:'/'+segments.join('/'),navigation_root:segments[0],
+            navigation_identity:identityOf(bar),source:'visible_breadcrumbs',listing_complete:false};
+          else fileStorage.reason='navigation_root_unrecognized';
+        }
       }
     }
     return { origin: location.origin, authenticated: !!tids.get('MF;cntMain;tlbMainToolbar;btnAvatar')?.some(visible), loginom_build: globalThis.bg?.app?.Version ?? null,

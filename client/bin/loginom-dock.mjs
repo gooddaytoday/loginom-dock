@@ -14,6 +14,7 @@ try {
     agent: { type: 'string' }, 'adapter-revision': { type: 'string' },
     mode: { type: 'string' },
     'action-manifest-uri': { type: 'string' }, 'action-manifest-sha256': { type: 'string' },
+    'replay-login-user': { type: 'string' },
     'replay-bootstrap': { type: 'boolean', default: false },
     'input-artifact': { type: 'string', multiple: true },
     headless: { type: 'boolean', default: false },
@@ -23,7 +24,7 @@ try {
     stateDir: values['state-dir'], agent: values.agent, adapterRevision: values['adapter-revision'],
     mode: values.mode || process.env.LOGINOM_DOCK_MODE || 'classic',
     actionManifestUri: values['action-manifest-uri'], actionManifestSha256: values['action-manifest-sha256'],
-    replayBootstrap: values['replay-bootstrap'],
+    replayBootstrap: values['replay-bootstrap'], replayLoginUser: values['replay-login-user'] ?? null,
   });
   const session = await createSession(config, { headless: values.headless });
   if (values['input-artifact']?.length && !['executor-preview','executor-replay'].includes(config.mode)) {

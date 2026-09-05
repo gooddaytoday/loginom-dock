@@ -35,7 +35,7 @@ async function prepareWorkspace(page, options) {
     if (await login.count() !== 1 || await password.count() !== 1 || await submit.count() !== 1) {
       throw new Error('The verified test login form is unavailable');
     }
-    await login.locator('input').fill('user', { timeout: remaining() });
+    await login.locator('input').fill(options.testLoginUser, { timeout: remaining() });
     await password.locator('input').fill('', { timeout: remaining() });
     await submit.click({ timeout: remaining() });
     await wait(() => avatar.isVisible());
@@ -65,16 +65,17 @@ async function prepareWorkspace(page, options) {
   return { status: 'READY', target, authenticated: true, created_draft: createdDraft, workflow_ref: workflow };
 }
 
-export function makeWorkspacePrepareCode({ loginomUrl, compatibility, allowTestLogin = false, platform = process.platform }) {
+export function makeWorkspacePrepareCode({ loginomUrl, compatibility, allowTestLogin = false, testLoginUser = null, platform = process.platform }) {
   const url = new URL(loginomUrl);
   if (!['http:', 'https:'].includes(url.protocol) || url.username || url.password || url.hash
       || [...url.searchParams.keys()].some(key => /token|password|secret|auth|api.?key/i.test(key))) {
     throw new Error('Workspace preparation requires a credential-free Loginom URL');
   }
+  if (allowTestLogin && (typeof testLoginUser !== 'string' || !testLoginUser.trim() || testLoginUser.length>200 || /[\x00-\x1f\x7f]/.test(testLoginUser))) throw new Error('Test login requires an explicit Loginom account');
   const options = { url: url.href, applicationBase: url.origin + url.pathname,
     expectedBuild: compatibility?.loginom_build ?? null, profileId: compatibility?.profile_id,
     platform: ({ darwin: 'macos', linux: 'linux', win32: 'windows' })[platform] ?? platform,
-    allowTestLogin: allowTestLogin === true };
+    allowTestLogin: allowTestLogin === true, testLoginUser: allowTestLogin ? testLoginUser : null };
   if (compatibility?.platform !== options.platform || compatibility?.browser !== 'chromium') {
     throw new Error('The pinned Loginom compatibility profile does not support this platform/browser');
   }

@@ -1014,7 +1014,9 @@ export function createActionRuntime({ pinned, execute, allowCandidate = false, o
       const selectedStorageName=cursor===undefined ? storageName : observations.filterForCursor(cursor)?.storage_name;
       const selectedRoot = cursor===undefined ? rootRef : observations.rootForCursor(cursor);
       if (scope === 'bootstrap') return execute(makeWorkspaceBootstrapCode({ origin: targetOrigin, build: targetBuild }), { signal, timeout: 5000 });
-      const outcome = await execute(makeWorkspaceUiCode({ mode: 'observe', root_ref:selectedRoot, storage_name:selectedStorageName, discover_roots:scope==='roots' || (cursor!==undefined && observations.kindForCursor(cursor)==='roots'), expected_build: targetBuild, expected_origin: targetOrigin }), { signal, timeout: 35000 });
+      const observationOperationId=randomUUID();
+      const outcome = await execute(makeWorkspaceUiCode({ mode: 'observe', operation_id:observationOperationId, root_ref:selectedRoot, storage_name:selectedStorageName, discover_roots:scope==='roots' || (cursor!==undefined && observations.kindForCursor(cursor)==='roots'), expected_build: targetBuild, expected_origin: targetOrigin }), { signal, timeout: 35000 });
+      await onRecord({operation_id:observationOperationId,phase:'observation_completed',outcome:structuredClone(outcome)});
       outcome.output.operation = view(pending).output;
       return cursor === undefined ? observations.retain(outcome, { scope }) : observations.next(cursor, outcome);
     },
