@@ -792,7 +792,7 @@ def audit(request, evidence, prompt):
             e["runtime_revision"] == revision and e["manifest_sha256"] == request["manifest_sha256"]
             and e["session_id"] == prepared["sessionId"] for e in events))
         if goal_id=='data-pipeline':
-            return data_pipeline.audit(evidence,checks,request,PREFIX,MUTATIONS,file_storage_inspect)
+            return data_pipeline.audit(evidence,checks,request,PREFIX,MUTATIONS,file_storage_inspect,rejected_before_browser)
         if goal_id=='file-upload-verify':
             return upload_verify.audit(evidence,checks,request,PREFIX,MUTATIONS,file_storage_inspect)
         if goal_id=='file-upload-probe':

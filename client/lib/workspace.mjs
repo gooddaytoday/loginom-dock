@@ -108,6 +108,9 @@ export function requirePreparedWorkspace(metadata) {
 // another action until evidence and the session manifest have both been saved.
 export async function prepareWorkspaceSession({ metadata, assertAllowed, prepare, assertTarget, record, save }) {
   assertAllowed();
+  if (metadata.workspaceReady === true) {
+    throw new Error('Workspace is already prepared. Use dock_workspace_observe for the current UI and dock_action_describe to reread input_artifacts. Preparation has not changed the workspace.');
+  }
   metadata.workspaceReady = false;
   try {
     const state = await prepare();

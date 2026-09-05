@@ -1131,7 +1131,7 @@ export function createActionRuntime({ pinned, execute, artifactStore, allowCandi
     },
     describe(actionKey) {
       if (actionKey === undefined) return { available_actions: [...pinned.actions.keys()],
-        ...(allowCandidate && artifactStore ? {artifact_upload_tool:'dock_artifact_upload',artifact_verify_tool:'dock_artifact_verify'} : {}),
+        ...(allowCandidate && artifactStore ? {artifact_upload_tool:'dock_artifact_upload',artifact_verify_tool:'dock_artifact_verify',input_artifacts:artifactStore.list()} : {}),
         ui_action_tool: 'dock_ui_action', observation_tool: 'dock_workspace_observe', session_manifest: structuredClone(pinned.pins) };
       const action = find(actionKey);
       return { action: structuredClone(action), session_manifest: structuredClone(pinned.pins) };
@@ -1140,7 +1140,8 @@ export function createActionRuntime({ pinned, execute, artifactStore, allowCandi
       return { status: pending ? 'AMBIGUOUS' : 'FAILED', action_key: pending?.action.action_key ?? 'request.validate',
         action_revision: pending?.action.revision ?? '1', operation_id: pending?.id ?? null,
         phase: 'request_rejected', effect_possible: !!pending, request_rejected: true,
-        output: { available_actions: [...pinned.actions.keys()], ui_action_tool: 'dock_ui_action', operation: view(pending).output },
+        output: { available_actions: [...pinned.actions.keys()], ui_action_tool: 'dock_ui_action', operation: view(pending).output,
+          ...(error?.code==='ARTIFACT_GRANT_NOT_FOUND' && allowCandidate && artifactStore ? {input_artifacts:artifactStore.list()} : {}) },
         error: { code: 'REQUEST_REJECTED', message: String(error?.message ?? error).slice(0, 1000) }, trace: [] };
     },
     inspect,

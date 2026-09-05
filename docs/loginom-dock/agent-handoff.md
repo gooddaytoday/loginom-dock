@@ -1,3 +1,11 @@
+**Текущий P3:** runnable diagnostic goal data-pipeline запрашивает полный сценарий,
+но семь независимых domain verifiers ещё открыты, P3 PASS пока невозможен.
+Первый run 230333-1c9cfc15 (24/32 FAIL) не отправил CSV: typo grant → повторный
+prepare сбросил readiness. Исправлены public artifact re-read через describe /
+отказ и запрет повторного prepare до побочных эффектов. Client 225 /Python 98
+PASS. Следующий запуск — data-pipeline, затем реальные wizard/result gaps.
+Точные pins/ограничения сверху status. Предыдущий transfer-only PASS ниже.
+
 **Последний checkpoint P3:** 20260905-225713-f00430f8 file-upload-verify,
 48/48 frozen PASS. Runtime 333d7059…; harness ec826a24; audit 3a5bfbea….
 Hermes ChatGPT/Luna/medium, test,/test. Один upload/download, host SHA/size,

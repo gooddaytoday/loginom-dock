@@ -1419,6 +1419,13 @@ bytes_verified=true пока оставляет upload pending до transfer com
 proof. Следующее — завершение original transfer по browser receipt и этому
 postcondition для продолжения pipeline; reject/budget и весь пункт ещё открыты.
 
+Живое завершение transfer 20260905-225713-f00430f8 прошло 48/48: после matching
+server bytes, cleanup и durable receipts исходный upload стал SUCCEEDED/resolved.
+Это explicit replace fixture; reject/conflict и download budget остаются открыты.
+Подключён полный diagnostic goal data-pipeline с pinned CSV/expected/task.
+Он запрашивает весь сценарий, но domain verifiers ещё не готовы и намеренно
+не дают P3 PASS. Текущие live итерации и исправления фиксируются в status.
+
 **Зависит от:** P1/P2. Сначала одна цель от файла до проверенного результата;
 по ней выделить устойчивые lifecycle мастера и исполнения.
 

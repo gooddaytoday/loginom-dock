@@ -19,8 +19,17 @@ def prompt(template, package, directory, run_id):
     return upload_probe.prompt(template,package,directory,run_id).replace('__PIPELINE_TASK__',task.strip())
 
 
-def audit(evidence, checks, request, prefix, mutations, storage_audit):
+def audit(evidence, checks, request, prefix, mutations, storage_audit, rejected_before_browser):
     def check(name,value):checks.append({'name':name,'passed':bool(value)})
+    calls,tools=evidence['calls'],evidence['tools']
+    rejected=[]
+    for call in calls:
+        if call['tool'] in (prefix+'dock_artifact_upload',prefix+'dock_artifact_verify') and rejected_before_browser(call,evidence):
+            rejected.append((call['session_id'],call['tool_call_id']))
+    # Only proven pre-dispatch refusals are removed from the transfer attempt
+    # count. Failed browser effects and ambiguous replies remain in the audit.
+    evidence={**evidence,'calls':[c for c in calls if (c['session_id'],c['tool_call_id']) not in rejected],
+              'tools':[t for t in tools if (t['session_id'],t['tool_call_id']) not in rejected]}
     calls,tools=evidence['calls'],evidence['tools']
     verifies=[c for c in calls if c['tool']==prefix+'dock_artifact_verify']
     uploads=[c for c in calls if c['tool']==prefix+'dock_artifact_upload']
@@ -47,5 +56,5 @@ def audit(evidence, checks, request, prefix, mutations, storage_audit):
     for gate in DOMAIN_GATES:check('unimplemented_verifier_'+gate,False)
     return {'all_assertions_passed':False,'assertions':checks,'goal':'data-pipeline',
             'acceptance_status':'diagnostic_only_domain_verifiers_incomplete',
-            'transfer_verified':transfer_passed,'missing_domain_verifiers':list(DOMAIN_GATES),
+            'transfer_verified':transfer_passed,'pre_action_rejections':len(rejected),'missing_domain_verifiers':list(DOMAIN_GATES),
             'limitations':['Full P3 task requested; typed domain evidence audit is not implemented. No P3 acceptance claim is possible.']}

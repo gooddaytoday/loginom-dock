@@ -170,3 +170,13 @@ test('automatic test login requires an explicit account', async () => {
   await assert.rejects(()=>execute(fixture,{allowTestLogin:true}),/explicit Loginom account/);
   assert.deepEqual(fixture.events,[]);
 });
+
+
+test('repeat preparation preserves an existing workspace and never navigates or clears readiness', async () => {
+  const metadata={skillRevision:'skill',workspaceReady:true,targetIdentity:{loginom_build:build},workflowRef:{prefix:'MF;TF-1'}};
+  const before=structuredClone(metadata);let effects=0;
+  await assert.rejects(prepareWorkspaceSession({metadata,assertAllowed(){},
+    prepare(){effects++;},assertTarget(){effects++;},record(){effects++;},save(){effects++;}}),/already prepared/);
+  assert.equal(effects,0);assert.deepEqual(metadata,before);
+  requirePreparedWorkspace(metadata);
+});

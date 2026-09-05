@@ -14,7 +14,7 @@ function fixture() {
     setInputFiles:async path=>{assert.equal(path,'/private/staged/data.csv');submitted++;if(page.failSubmission)throw new Error('private error');}};
   page.locator=selector=>selector.includes('FileStorageForm;tbrActions')
     ? {count:async()=>1,isVisible:async()=>!page.blocked,isEnabled:async()=>true,locator:()=>input} : baseLocator(selector);
-  const store={getUploadGrant(id,grant){if(id!==artifact.artifact_id || grant!==artifact.upload.grant_id)throw new Error('not authorized');return structuredClone(artifact);},
+  const store={list:()=>[structuredClone(artifact)],getUploadGrant(id,grant){if(id!==artifact.artifact_id || grant!==artifact.upload.grant_id)throw new Error('not authorized');return structuredClone(artifact);},
     stageUpload:async()=>{staged++;return {path:'/private/staged/data.csv',verify:async()=>artifact,release:async()=>{released++;}};}};
   const events=[];
   const rt=runtime(page,{artifactStore:store,onRecord:async event=>events.push(event)});
@@ -135,4 +135,22 @@ test('recovery of a lost not-applied receipt releases its lease only after brows
   assert.deepEqual(f.counts(),{submitted:0,released:0,staged:1});
   assert.equal((await rt.inspect({operationId:'not-applied'})).output.state,'resolved');
   assert.deepEqual(f.counts(),{submitted:0,released:1,staged:1});
+});
+
+
+test('grant rejection returns only current public pairs without staging or relaxing authorization',async()=>{
+  const f=fixture();
+  const error=Object.assign(new Error('not authorized'),{code:'ARTIFACT_GRANT_NOT_FOUND'});
+  const result=f.rt.requestFailure(error);
+  assert.equal(result.effect_possible,false);assert.equal(result.request_rejected,true);
+  assert.deepEqual(result.output.input_artifacts,[f.artifact]);
+  result.output.input_artifacts[0].upload.directory='/changed';
+  const description=f.rt.describe();assert.deepEqual(description.input_artifacts,[f.artifact]);
+  description.input_artifacts[0].artifact_id='changed';
+  assert.deepEqual(f.rt.describe().input_artifacts,[f.artifact]);
+  assert.deepEqual(f.counts(),{submitted:0,released:0,staged:0});
+  const request=await f.request();
+  await assert.rejects(()=>f.rt.upload({...request,grantId:'wrong'}),/not authorized/);
+  assert.deepEqual(f.counts(),{submitted:0,released:0,staged:0});
+  assert.ok(!JSON.stringify(result).includes('/private/'));
 });

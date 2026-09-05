@@ -1,3 +1,30 @@
+## 2026-09-05 — P3: полная задача и исправление восстановления после отказа
+
+Подключён diagnostic goal data-pipeline (3bbaa3bd): полная цепочка CSV → импорт →
+Калькулятор → Группировка → typed results → save/reopen/reexecute. Harness пинит
+CSV, expected.json, task.txt и goal до запуска. Transfer prefix проверяется
+независимо до первой следующей мутации. Семь domain verifiers ещё отсутствуют;
+аудитор явно возвращает diagnostic_only_domain_verifiers_incomplete / FAIL,
+не принимает утверждения модели или синтетический domain_proof как успех P3.
+
+Первый live 20260905-230333-1c9cfc15, harness 3bbaa3bd, runtime 333d705948a9e3adeb9473bdf0019a333cd1034f09927515ef74676baa792bd4:
+24/32 frozen FAIL, audit SHA d0893174c44edb19ddcf17e870ab02babba397c37d1edacbe6502b4be63016fe.
+Hermes ChatGPT/Luna/medium, test,/test. Не дошёл до upload: агент скопировал grant
+с опечаткой, получил REQUEST_REJECTED без эффекта. Затем повторный dock_prepare
+из файлового хранилища завершился ошибкой и сбросил workspaceReady. Это client
+recovery issue, не блокер учётной записи. Прежний frozen report не переоценён.
+
+Исправлено: dock_action_describe возвращает public input_artifacts текущей
+сессии; ошибочная пара grant/artifact даёт ту же информацию прямо в отказе.
+Это только повторная выдача уже допущенных descriptors, без sourcePath/bytes и
+без ослабления точного сравнения ID. Повторный prepare готового workspace
+отвергается до браузера и сброса readiness, с указанием observe/describe.
+Pipeline audit исключает из счётчика отправок только доказанные pre-action
+отказы без эффекта и native records; реальные failed/ambiguous попытки остаются.
+Проверки: полный client 225 PASS, Python 98 PASS. Следующий шаг — новый полный
+live run, затем наблюдаемые ограничения мастеров/типов/результатов и весь P3–P9.
+Production/public rc2 не менялись.
+
 ## 2026-09-05 — P3: live transfer завершён после server byte proof
 
 **20260905-225713-f00430f8, file-upload-verify: 48/48 frozen PASS.**
