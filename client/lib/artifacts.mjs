@@ -9,6 +9,21 @@ const validName = name => typeof name==='string' && name.length>0 && name.length
   && !/[\\/:<>"|?*\x00-\x1f\x7f]/.test(name) && !/[. ]$/.test(name)
   && !/^(?:con|prn|aux|nul|com[1-9]|lpt[1-9])(?:\.|$)/i.test(name);
 
+// Loginom virtual paths, not local filesystem paths or URLs. Match the explicit
+// directory contract used by the acceptance harness; never infer a user root.
+function validateUploadAuthorization(upload) {
+  if (!upload || typeof upload!=='object' || Array.isArray(upload)
+      || Object.keys(upload).sort().join(',')!=='directory,overwrite'
+      || !['reject','replace'].includes(upload.overwrite)
+      || typeof upload.directory!=='string' || !upload.directory.startsWith('/')
+      || upload.directory.length>2000 || /[\\\x00-\x1f\x7f]/.test(upload.directory))
+    throw new Error('Invalid artifact upload authorization');
+  const parts=upload.directory.slice(1).split('/');
+  if(parts.length>32 || parts.some(part=>!part || part.length>200 || part!==part.trim() || ['.','..'].includes(part)))
+    throw new Error('Invalid Loginom upload directory');
+  return {directory:upload.directory,overwrite:upload.overwrite};
+}
+
 // Explicit host startup arguments, never accepted from an MCP/model request.
 // Validate the complete batch before copying any file. A failed copy aborts
 // startup, so partially admitted batches are never exposed to an agent.
@@ -17,11 +32,12 @@ export async function admitStartupArtifacts(store, requests) {
   const names=new Set();let total=0;
   for (const request of requests) {
     if (!request || typeof request!=='object' || Array.isArray(request)
-        || Object.keys(request).sort().join(',')!=='bytes,name,sha256,sourcePath'
+        || !['bytes,name,sha256,sourcePath','bytes,name,sha256,sourcePath,upload'].includes(Object.keys(request).sort().join(','))
         || typeof request.sourcePath!=='string' || !isAbsolute(request.sourcePath)
         || !validName(request.name) || !Number.isSafeInteger(request.bytes)
         || request.bytes<0 || request.bytes>16*1024*1024
         || typeof request.sha256!=='string' || !/^[a-f0-9]{64}$/.test(request.sha256)) throw new Error('Invalid input artifact request');
+    if(Object.hasOwn(request,'upload'))validateUploadAuthorization(request.upload);
     const name=request.name.normalize('NFC').toLowerCase();
     if (names.has(name)) throw new Error('Input artifact names must be distinct');
     names.add(name);total+=request.bytes;
@@ -86,8 +102,10 @@ export async function createArtifactStore({directory,maxBytes=16*1024*1024}) {
         if (!current.isDirectory() || current.isSymbolicLink() || current.dev!==owner.dev || current.ino!==owner.ino)
           throw new Error('Artifact transfer directory was replaced');
       };
+      const leaseDescriptor=structuredClone(descriptor);
+      if(leaseDescriptor.upload)Object.freeze(leaseDescriptor.upload);
       const lease=Object.freeze({
-        path,descriptor:Object.freeze(structuredClone(descriptor)),
+        path,descriptor:Object.freeze(leaseDescriptor),
         async verify(suggestedName) {
           if (download && suggestedName!==descriptor.name) throw new Error('Downloaded filename does not match the admitted identity');
           await assertOwner();await readVerified(path,descriptor,maxBytes);return structuredClone(descriptor);
@@ -121,19 +139,31 @@ export async function createArtifactStore({directory,maxBytes=16*1024*1024}) {
     return pending;
   };
   return {
-    async admit({sourcePath,name,bytes,sha256}) {
+    async admit({sourcePath,name,bytes,sha256,upload}) {
       if (!validName(name)) throw new Error('Invalid artifact display name');
+      const authorization=upload===undefined ? null : validateUploadAuthorization(upload);
       const payload=await readVerified(sourcePath,{bytes,sha256},maxBytes);
       const artifactId=randomUUID(),path=join(root,artifactId);
       const file=await open(path,'wx',0o600);
       try {await file.writeFile(payload);await file.sync();}
       catch(error) {await file.close();await unlink(path);throw error;}
       await file.close();
-      const descriptor={artifact_id:artifactId,name,bytes,sha256};
+      const descriptor={artifact_id:artifactId,name,bytes,sha256,
+        ...(authorization ? {upload:{grant_id:randomUUID(),...authorization,destination:authorization.directory+'/'+name}} : {})};
       entries.set(artifactId,descriptor);
       return structuredClone(descriptor);
     },
     list() {return [...entries.values()].map(value=>structuredClone(value));},
+    // Trusted dispatcher resolves BOTH identifiers. A model cannot supply a
+    // different directory, filename or overwrite policy through this lookup.
+    // This is authorization only; it does not prove absence/ownership, perform
+    // an upload, or make the reject policy enforceable by a browser adapter.
+    getUploadGrant(artifactId,grantId) {
+      const descriptor=entries.get(artifactId);
+      if (!descriptor?.upload || typeof grantId!=='string' || descriptor.upload.grant_id!==grantId)
+        throw new Error('Artifact upload was not authorized for this session and grant');
+      return structuredClone(descriptor);
+    },
     async resolve(artifactId) {
       const descriptor=entries.get(artifactId);
       if (!descriptor) throw new Error('Artifact was not admitted in this session');

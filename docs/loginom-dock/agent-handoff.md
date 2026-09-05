@@ -1,4 +1,15 @@
-**Последняя P3 работа:** stageDownload добавлен к stageUpload: отдельный private
+**Текущий следующий шаг P3:** host upload grants готовы. В --input-artifact
+optional upload={directory,overwrite:reject|replace}; нет default. Descriptor
+содержит grant_id/exact destination; getUploadGrant связывает artifact_id и
+grant_id, не принимает подмену пути/политики. Session-local, lease metadata
+frozen, весь batch валидируется до source reads. 201 client /10 packaging PASS.
+Browser dispatcher ещё НЕ подключён. Подключать его к существующему pending /
+browserReceipt механизму executor, не создавать второй журнал повторов. Grant
+не доказывает server ownership/no-overwrite; неподдержанную политику нельзя
+молча заменить другой. Нужны source/live conflict proof и download-event binding,
+transport budget, reconciliation, затем полный P3–P9. Active Hermes/browser нет.
+
+**Предыдущая P3 работа:** stageDownload добавлен к stageUpload: отдельный private
 Download.saveAs path без заранее созданной копии, verify имени/размера/SHA,
 общий лимит 8 leases и cleanup после browser close. Удаление symlink не меняет
 его target. Native MCP/Chromium synthetic input → download → host byte proof

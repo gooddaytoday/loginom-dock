@@ -1,3 +1,27 @@
+## 2026-09-05 — P3: явное разрешение на точный upload destination
+
+Trusted startup --input-artifact теперь допускает optional upload с точными
+полями directory/overwrite. Политика reject или replace обязательна, default
+нет. Проверяется весь batch до admission/file reads; path — виртуальный каталог
+Loginom с явными сегментами, не OS user/root. После admission descriptor
+содержит upload.grant_id, directory, destination=directory+'/'+display name,
+overwrite. Без upload назначения нет. getUploadGrant требует одновременно
+artifact_id и grant_id этой сессии, не принимает новый путь/имя/политику.
+Возвращаемые descriptors копируются; nested upload metadata в lease frozen.
+
+201 client /10 packaging PASS; тесты покрывают разные Loginom accounts/Unicode,
+cross-session/cross-artifact/unknown grant, отсутствие policy, malformed paths,
+extra fields, отсутствие частичного admission при невалидном втором элементе,
+подмену возвращённых метаданных. Python и live не запускались: Python не менялся,
+browser upload driver ещё не подключён. Native roundtrip из предыдущего пункта
+остаётся доказательством того зафиксированного runtime, не новой live приёмкой.
+
+Далее связать grant со stageUpload и существующим executor pending/browserReceipt;
+нельзя открывать raw file input через generic UI или молча заменять reject на
+replace. Grant — только разрешение: server ownership/absence/conflict safety
+и привязка download event всё ещё требуют отдельной реализации и live proof.
+P3 и весь P4–P9 остаются открыты; production/public rc2 не изменены.
+
 ## 2026-09-05 — P3: проверка байтов скачанного файла на клиенте
 
 Добавлен host-only artifactStore.stageDownload(artifact_id): private directory

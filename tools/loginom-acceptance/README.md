@@ -12,6 +12,21 @@ suggestedFilename, размер и SHA скачанных байтов; соде
 Нужен новый report path; повторное использование отвергается до browser connect.
 Закреплённые зависимости проверяются runtime-check.mjs перед браузером.
 
+## Разрешение на доставку входного файла
+
+Trusted CLI `--input-artifact` принимает `sourcePath`, `name`, `bytes`, `sha256`
+и необязательный объект `upload` с ровно двумя полями: `directory` (например,
+`/test/данные`, явно выбранный путь Loginom) и `overwrite` (`reject` или
+`replace`, без default). Остальные поля запрещены. Весь batch проверяется до
+чтения файлов. Локальный sourcePath и серверный directory имеют разный смысл;
+путь пользователя ОС не определяет каталог Loginom.
+
+Admission выдаёт artifact_id, а для upload — отдельный session-local grant_id
+и точный destination с исходным display name. Без upload входной файл не имеет
+разрешённого назначения. Grant — разрешение, не выполненная загрузка и не
+доказательство отсутствия конфликта. Model upload tool пока не подключён;
+его будущий adapter обязан обеспечить политику, прежде чем менять сервер.
+
 ## Имена Loginom и destination (schema 2, 2026-09-05)
 
 Каждый новый `--run` требует `--loginom-user ACCOUNT --storage-directory /PATH`.

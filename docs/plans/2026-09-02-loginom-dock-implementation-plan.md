@@ -1398,6 +1398,9 @@ CSV (6 строк), полный expected import/calculator/group (6/6/3 стр�
 Native MCP/Chromium synthetic file input → download → host verification пройден.
 Это транспортная проверка, не Loginom acceptance: ещё нужны привязка события
 к server destination, конфликт/overwrite, лимит скачивания и reconciliation.
+Host admission теперь может явно закрепить upload grant для пары artifact_id /
+grant_id, точного directory + display name и политики reject/replace без default.
+Grant не является выполнением загрузки или подтверждением enforceable reject.
 
 **Зависит от:** P1/P2. Сначала одна цель от файла до проверенного результата;
 по ней выделить устойчивые lifecycle мастера и исполнения.

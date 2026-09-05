@@ -59,6 +59,54 @@ test('startup admission validates the whole batch before file access and exposes
   } finally {await rm(directory,{recursive:true,force:true});}
 });
 
+test('host startup upload grant binds artifact, exact Loginom destination and explicit overwrite policy',async()=>{
+  const directory=await mkdtemp(join(tmpdir(),'dock-upload-grant-'));
+  try {
+    const sourcePath=join(directory,'private-source');await writeFile(sourcePath,'abc');
+    const store=await createArtifactStore({directory:join(directory,'store')});
+    const request={sourcePath,name:'Продажи.csv',bytes:3,sha256:createHash('sha256').update('abc').digest('hex')};
+    const [descriptor]=await admitStartupArtifacts(store,[{...request,upload:{directory:'/test/данные',overwrite:'reject'}}]);
+    assert.equal(descriptor.upload.destination,'/test/данные/Продажи.csv');
+    assert.equal(descriptor.upload.overwrite,'reject');
+    assert.notEqual(descriptor.upload.grant_id,descriptor.artifact_id);
+    const grant=store.getUploadGrant(descriptor.artifact_id,descriptor.upload.grant_id);
+    assert.deepEqual(grant,descriptor);
+    grant.upload.directory='/other';grant.upload.overwrite='replace';
+    const exposed=store.list();exposed[0].upload.destination='/other/file';
+    assert.deepEqual(store.getUploadGrant(descriptor.artifact_id,descriptor.upload.grant_id),descriptor);
+    assert.ok(!JSON.stringify(descriptor).includes(sourcePath));
+    const ungranted=await store.admit(request);
+    for(const [artifactId,grantId] of [[descriptor.artifact_id,'made-up'],[descriptor.artifact_id,undefined],
+      [ungranted.artifact_id,descriptor.upload.grant_id],[descriptor.upload.grant_id,descriptor.artifact_id]])
+      assert.throws(()=>store.getUploadGrant(artifactId,grantId),/not authorized/);
+    const other=await createArtifactStore({directory:join(directory,'other')});
+    assert.throws(()=>other.getUploadGrant(descriptor.artifact_id,descriptor.upload.grant_id),/not authorized/);
+    const replace=await store.admit({...request,upload:{directory:'/analyst',overwrite:'replace'}});
+    assert.equal(replace.upload.destination,'/analyst/Продажи.csv');
+    assert.equal(replace.upload.overwrite,'replace');
+    for(const method of ['stageUpload','stageDownload']) {
+      const lease=await store[method](descriptor.artifact_id);
+      assert.throws(()=>{lease.descriptor.upload.overwrite='replace';},TypeError);
+      await lease.release();
+    }
+  } finally {await rm(directory,{recursive:true,force:true});}
+});
+
+test('malformed upload grants reject the entire startup batch before admission',async()=>{
+  const request={sourcePath:'/not-read/source',name:'file.csv',bytes:3,sha256:'0'.repeat(64)};
+  let admitted=0;const store={admit:async()=>{admitted++;}};
+  const valid={directory:'/test',overwrite:'reject'};
+  for(const upload of [null,undefined,[],{}, {directory:'/test'}, {...valid,overwrite:true},
+    {...valid,overwrite:'skip'}, {...valid,extra:'field'}, {...valid,destination:'/test/other.csv'},
+    ...['test','/','/test/','//test','/test//data','/test/../other','/test/./data','/ test','/test ',
+      '/test\\other','/test\nother','/test\u007fother','/'+('x'.repeat(201)),
+      '/'+Array(33).fill('a').join('/'),'/'+Array(20).fill('a'.repeat(100)).join('/')]
+      .map(directory=>({...valid,directory}))]) {
+    await assert.rejects(()=>admitStartupArtifacts(store,[request,{...request,name:'other.csv',upload}]));
+    assert.equal(admitted,0);
+  }
+});
+
 test('browser upload staging preserves basename and verified bytes until explicit release',async()=>{
   const directory=await mkdtemp(join(tmpdir(),'dock-upload-stage-'));
   try {

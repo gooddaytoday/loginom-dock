@@ -62,8 +62,13 @@ listing_complete remains false. No upload/no-overwrite or remote SHA claim.
 ### Host startup input admission (2026-09-05)
 
 Executor preview/replay CLI accepts repeated `--input-artifact` arguments, each
-an explicit JSON object with exactly `sourcePath` (absolute host path), `name`,
-`bytes`, `sha256`. This is a trusted launcher interface, not an MCP tool. The
+an explicit JSON object with `sourcePath` (absolute host path), `name`,
+`bytes`, `sha256` and an optional `upload` authorization; other keys are rejected.
+`upload` has exactly `directory` (absolute Loginom virtual directory) and
+`overwrite` (`reject` or `replace`, required, no default). Directory segments
+cannot be empty/dot/dotdot, padded with whitespace, contain backslashes/control
+characters, or exceed the harness's depth/length bounds. No username is inferred.
+This is a trusted launcher interface, not an MCP tool. The
 whole batch is validated before file reads: at most 8 files, 16 MiB per file,
 64 MiB total, distinct NFC/case-folded display names. Each argument is bounded
 at 8192 characters. Admission failure aborts startup before bridge connection;
@@ -72,6 +77,15 @@ The existing store verifies and snapshots bytes before browser connection.
 `dock_prepare` returns public `input_artifacts` descriptors in executor modes;
 source paths and byte buffers are not included. Classic/research reject input
 arguments. Admission is session-local; reconnect creates new artifact IDs.
+
+An authorized descriptor additionally exposes `upload` with a fresh opaque
+grant_id, directory, exact destination (directory + admitted display name), and
+overwrite policy. `getUploadGrant(artifact_id, grant_id)` resolves both IDs in
+this store; it accepts no replacement path or policy. Returned descriptors are
+copies and transfer lease authorization metadata is frozen. File admission
+without `upload` never implicitly grants an upload destination. An authorization
+does not prove ownership, absence of an existing file, or an enforceable reject
+policy; the future dispatcher must establish those effects separately.
 
 This does not upload anything to Loginom. No remote destination ownership,
 overwrite handling, upload receipt or server byte verification is claimed.
