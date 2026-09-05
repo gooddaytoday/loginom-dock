@@ -86,3 +86,17 @@ test('scoped omissions cannot masquerade as empty dialogs, masks or controls', (
   assert.equal(dialog.output.ui.truncated.nodes,true);
   assert.deepEqual(dialog.output.ui.masks,source.output.ui.masks);
 });
+
+test('palette starts with reachable rows after scrolling without discarding offscreen inventory',()=>{
+  const source=fixture(80),pages=createObservationPages();
+  source.output.ui.elements[75].interaction={state:'point_observed'};
+  const first=pages.retain(structuredClone(source),{scope:'palette'});
+  assert.equal(first.output.ui.elements[0].ref,'ref-75');
+  const refs=[];let current=first;
+  while (true) {
+    refs.push(...current.output.ui.elements.map(e=>e.ref));
+    if (!current.output.page.next_cursor) break;
+    current=pages.next(current.output.page.next_cursor,source);
+  }
+  assert.equal(refs.length,80);assert.equal(new Set(refs).size,80);
+});

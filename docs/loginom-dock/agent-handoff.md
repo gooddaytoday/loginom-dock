@@ -1,5 +1,11 @@
 # Следующему агенту: с чего начать
 
+**Актуально:** `20260905-155916-07e8ef2e` снова 25/27 FAIL: после scroll
+первая palette page 0/16 reachable, агент не дочитал next_cursor.
+Исправлены порядок palette (reachable first, без потери inventory) и admission
+scroll только при point_observed. 164 client / 74 Python; live нового ещё нет.
+Active Hermes нет. Далее повтор scroll, root/filter/epoch и P2/P3–P9.
+
 **Текущая точка:** scroll run `20260905-155228-ebda6a6b` — 25/27 FAIL:
 реальный scroll 0→800, возврата вверх нет, targets obscured. Добавлена подсказка
 interaction (sampled hit points/viewport) без ослабления action guard.

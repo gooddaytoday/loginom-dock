@@ -40,7 +40,11 @@ export function createObservationPages({ maxBytes = 12000, maxRecords = 32, capa
       }
       for (const link of snapshot.links ?? []) rows.push(['links', link]);
     }
-    for (const item of snapshot.ui.elements ?? []) {
+    const uiElements = [...(snapshot.ui.elements ?? [])];
+    // Palette paging must lead with the currently reachable rows after scroll,
+    // while retaining offscreen entries on subsequent pages for inventory.
+    if (scope === 'palette') uiElements.sort((a,b) => Number(b.interaction?.state === 'point_observed') - Number(a.interaction?.state === 'point_observed'));
+    for (const item of uiElements) {
       const palette = /;ModelForm;colVendors_Компоненты>/.test(item.tid ?? '');
       if (scope === 'palette' && !palette || scope === 'graph' && !['graph', 'graph_editor'].includes(item.scope)
           || scope === 'dialogs' && item.scope !== 'dialog') continue;

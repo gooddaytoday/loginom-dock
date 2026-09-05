@@ -484,6 +484,7 @@ test('oversized DOM stops observation and rejects a gesture before input without
 
 test('scroll clamps to its observed owner, rejects old state and does not scroll its parent', async () => {
   const page=new Page();page.waitForTimeout=async()=>{};
+  page.context.innerWidth=1000;page.context.innerHeight=800;
   const outer=page.add('div','Outer','',{x:10,y:60,width:500,height:500});
   const inner=page.add('div','Inner','',{x:20,y:80,width:300,height:300},outer);
   for (const [el,height] of [[outer,2000],[inner,1000]]) Object.assign(el,{scrollTop:0,scrollHeight:height,clientHeight:300,style:{overflowY:'auto'}});
@@ -502,6 +503,7 @@ test('scroll clamps to its observed owner, rejects old state and does not scroll
 
 test('virtualized row replacement after scrolling issues a new incarnation', async () => {
   const page=new Page(),owner=page.add('div','Rows','',{x:20,y:80,width:300,height:300});
+  page.context.innerWidth=1000;page.context.innerHeight=800;
   Object.assign(owner,{scrollTop:0,scrollHeight:1000,clientHeight:300,style:{overflowY:'auto'}});
   const row=page.add('button','Rows;btnItem','Old row',undefined,owner);
   const snapshot=await page.observe(),ref=snapshot.ui.elements.find(e=>e.tid==='Rows;btnItem').ref;
