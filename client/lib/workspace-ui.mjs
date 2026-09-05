@@ -381,16 +381,20 @@ function workspaceUiCapability(page, task) {
         const segments=[];let valid=labels.length>0 && labels.length<=32 && labels.length===buttons.length
           && buttons.every(button => labels.filter(label => {charge();return button.contains(label);}).length===1);
         for (const label of labels.slice(0,32)) {
-          if (!visible(label) || sensitive(label)) {valid=false;break;}
+          if (sensitive(label)) {fileStorage.reason='navigation_segment_sensitive';valid=false;break;}
           const reader=document.createTreeWalker(label,4);let node,value='';
           while ((node=reader.nextNode())) {
             charge();if(sensitive(node.parentElement)) {valid=false;break;}
             value+=String(node.textContent ?? '').slice(0,201);if(value.length>200) break;
           }
-          if (!value || value.length>200 || value!==value.trim() || /[\\/\x00-\x1f\x7f]/.test(value) || value==='.' || value==='..') {valid=false;break;}
+          // GetCurrentPath skips empty breadcrumb labels (navigation controls
+          // without a directory name). An empty path itself is never accepted.
+          if (!value.trim()) continue;
+          if (!visible(label)) {fileStorage.reason='navigation_segment_hidden';valid=false;break;}
+          if (value.length>200 || value!==value.trim() || /[\\/\x00-\x1f\x7f]/.test(value) || value==='.' || value==='..') {fileStorage.reason='navigation_segment_invalid';valid=false;break;}
           segments.push(value);
         }
-        if (valid && segments.join('/').length<=2000) fileStorage={status:'observed',directory:'/'+segments.join('/'),
+        if (valid && segments.length && segments.join('/').length<=2000) fileStorage={status:'observed',directory:'/'+segments.join('/'),
           navigation_identity:identityOf(bar),source:'visible_breadcrumbs',listing_complete:false};
       }
     }

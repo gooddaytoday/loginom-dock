@@ -826,3 +826,17 @@ test('nested breadcrumb button parts are one segment and incomplete paths explai
   assert.equal(failed.reason,'navigation_segments_incomplete');
   assert.deepEqual(failed.segment_counts,{buttons:1,labels:0});
 });
+
+test('empty navigation decorations are skipped without accepting an empty directory', async () => {
+  const page=new Page();page.add('div','MF;TF-1;FileStorageForm;pnlFileStorage;tbl');
+  const bar=page.add('div','MF;TF-1;NavigationBar;NavigationPanel');
+  const labels=[];
+  for(const [i,text] of ['', 'user', 'data', ''].entries()) {
+    const button=page.add('div',`MF;TF-1;cnrNaviMode;b.s-${i}`,'',undefined,bar);
+    const label=page.add('span',null,text,undefined,button);label.attrs.class='x-btn-inner-default-toolbar-small';
+    if(!text) label.style.display='none';labels.push(label);
+  }
+  assert.equal((await page.observe()).file_storage.directory,'/user/data');
+  for(const label of labels)label.ownText='';
+  assert.equal((await page.observe()).file_storage.status,'unobserved');
+});
