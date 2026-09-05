@@ -1,0 +1,15 @@
+Выполни полную задачу P3 в одной сессии Loginom Dock: доставь предоставленный CSV, создай и проверь сценарий, сохрани его как __PACKAGE_PATH__, закрой, открой заново и повтори выполнение. Начни с dock_prepare; используй artifact_id и upload.grant_id единственного CSV __UPLOAD_NAME__.
+
+Сначала передача файла. Через scope=roots найди главную панель MF;cntMain;tlbMainToolbar, прочитай её root_ref и observation_id без scope, затем нажми «Файлы» по element.ref подробного чтения. Перейди в __STORAGE_DIRECTORY__ по наблюдаемым сегментам __STORAGE_SEGMENTS__. Для большого списка используй scope=roots со storage_name очередного сегмента, затем подробное чтение root_ref. Отдельно прочитай NavigationBar;NavigationPanel и проверь file_storage.directory. Один dock_artifact_upload с artifact_id, upload_grant_id, observation_id и новым operation_id отправляет файл. Launcher явно разрешил replace ТОЛЬКО для этого run-specific CSV, не других файлов или пакетов. После AMBIGUOUS проверь dock_operation_inspect исходного ID, найди точную строку CSV через storage_name и подробное чтение и выполни dock_artifact_verify с исходным operation_id, новым verification_id, file_ref и observation_id. Убедись через inspect, что bytes_verified=true, upload_completion_verified=true и original state=resolved. Не повторяй upload и не обходи pending.
+
+Далее вернись в созданный dock_prepare черновик. __PIPELINE_TASK__
+
+Серверный CSV расположен строго в __STORAGE_DIRECTORY__/__UPLOAD_NAME__, а не в локальном каталоге. Назови узлы «Источник», «Расчёт», «Итог» соответственно. Используй только заданный путь пакета __PACKAGE_PATH__. Если промежуточный каталог packages отсутствует, его создание внутри __STORAGE_DIRECTORY__ разрешено через штатный UI; существующие объекты не заменяй.
+
+Справка и E2E доступны через scoped search/read:
+- viking://resources/loginom-dock/sources/loginom-help/data/integration/import/txt/README.md
+- viking://resources/loginom-dock/sources/e2e-tests/bg/sels/import/sImportTxt.ts
+- viking://resources/loginom-dock/sources/e2e-tests/tests/acceptance/wizards/imports/txt/format_settings.ts
+Для Калькулятора, Группировки и просмотра результатов найди соответствующие источники в тех же двух roots. Путь к источнику объясняет интерфейс, но действия выполняются только по свежим выданным refs. Не угадывай action keys: сначала describe. Scope=roots выдаёт области для чтения, а не для действий; action.ref берётся из подробного чтения, никогда из tid. Для продолжения страницы передавай только cursor. REQUEST_REJECTED без effect разрешает исправить запрос; UI_EPOCH_CHANGED требует свежего наблюдения. Исправляй наблюдаемые устранимые ошибки и продолжай. Если необходимая возможность отсутствует, сохрани фактические tool evidence и сообщи точную границу; не подменяй типы/данные/формулу и не заявляй успех по жестам или значкам.
+
+Без терминала, другого браузера, дочерних агентов или смены модели. В финале укажи фактический путь, результаты проверок и оставшиеся ограничения.

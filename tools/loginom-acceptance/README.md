@@ -1,3 +1,17 @@
+## Полная диагностика P3
+
+`--goal data-pipeline --loginom-user test --storage-directory /test` ставит
+полную задачу CSV → импорт → Калькулятор → Группировка → save/reopen/reexecute.
+До запуска закреплены CSV, expected.json, task.txt и goal. Передача использует
+явный replace grant только для run-specific CSV; пакет перезаписывать запрещено.
+
+Сейчас это диагностический запуск, **не готовый допуск P3**: data_pipeline.py
+проверяет transfer prefix до первой следующей мутации, но всегда оставляет FAIL
+для ещё не реализованных независимых проверок настроек, execution identity,
+полного typed output и повторного выполнения. Model prose не является evidence.
+Следующие итерации должны заменить каждый missing verifier реальным proof,
+а не ослабить критерии. Цель запуска при этом запрашивает весь сценарий.
+
 ## Сверка серверной копии через Hermes
 
 `--goal file-upload-verify --loginom-user test --storage-directory /test` добавляет

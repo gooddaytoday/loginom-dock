@@ -1,9 +1,10 @@
 # Первая цепочка P3: контролируемые данные
 
 Статус: fixture подготовлен, **Loginom live acceptance не выполнен**.
-Этот каталог пока не является разрешённой runnable goal в run.py. Перед её
-подключением harness должен зафиксировать SHA всех трёх файлов fixture и задания,
-загрузку, настройки, execution identity, полный output и save/reopen proof.
+Каталог подключён к diagnostic goal data-pipeline в run.py. Harness фиксирует
+SHA CSV, expected.json, task.txt и задания. Transfer prefix проверяется;
+настройки, execution identity, полный output и save/reopen proof пока не имеют
+независимого verifier, поэтому аудит не может выдать P3 PASS.
 
 `sales.csv` — UTF-8 без BOM, LF, разделитель `;`, заголовок, десятичная точка,
 ограничитель строк `"`, явный null marker `\N`. Пустой Comment первой строки

@@ -17,6 +17,7 @@ from evidence import export_history, clean
 from preflight import preflight, runtime_pin
 from destinations import storage_segments, render_goal
 import upload_probe
+import data_pipeline
 
 WORK = Path(__file__).resolve().parent
 REPO = WORK.parents[1]
@@ -125,11 +126,13 @@ def execute(args):
     harness_inputs = {p.relative_to(WORK).as_posix(): sha(p) for p in sorted(WORK.glob("*.py"))}
     harness_inputs.update({p.name: sha(p) for p in sorted(WORK.glob("*.mjs"))})
     harness_inputs["goals/" + goal_id + ".txt"] = sha(goal)
-    if goal_id in ('file-upload-probe','file-upload-verify'):
+    if goal_id in ('file-upload-probe','file-upload-verify','data-pipeline'):
         fixture=WORK / upload_probe.FIXTURE
         if sha(fixture)!=upload_probe.FIXTURE_SHA or fixture.stat().st_size!=230:
             raise ValueError('Upload probe fixture changed')
         harness_inputs[upload_probe.FIXTURE]=sha(fixture)
+    if goal_id == 'data-pipeline':
+        harness_inputs.update({name:sha(WORK / name) for name in data_pipeline.FIXTURES})
     info = {"schema_version": 2, "storage_directory":getattr(args,"storage_directory",None), "scope": "source_runtime", "model_started": False,
             "provider": "openai-codex", "model": "gpt-5.6-luna", "reasoning_effort": "medium", "hermes_version": "0.21.0",
             "provider_selection": "explicit CLI; effective usage identity checked after the run",
@@ -165,9 +168,11 @@ def execute(args):
     package = args.storage_directory + "/packages/Dock-acceptance-" + run_id + ".lgp"
     info.update(run_id=run_id, package_path=package)
     prompt = render_goal(goal.read_text(),package,args.storage_directory)
-    if goal_id in ('file-upload-probe','file-upload-verify'):
+    if goal_id in ('file-upload-probe','file-upload-verify','data-pipeline'):
         info['input_artifact']=upload_probe.descriptor(run_id,args.storage_directory)
         prompt=upload_probe.prompt(goal.read_text(),package,args.storage_directory,run_id)
+    if goal_id == 'data-pipeline':
+        prompt=data_pipeline.prompt(goal.read_text(),package,args.storage_directory,run_id)
     write(run / "scenario.txt", prompt)
     write(run / "request.json", info)
     # No key is persisted in the child config. Dock reads its own explicit config.
@@ -176,7 +181,7 @@ def execute(args):
                "--state-dir", str(dock_home), "--agent", "hermes", "--adapter-revision", "0.1.0-rc.4-acceptance",
                "--mode", "executor-replay", "--action-manifest-uri", args.manifest_uri,
                "--action-manifest-sha256", args.manifest_sha256, "--replay-bootstrap", "--replay-login-user", args.loginom_user]
-    if goal_id in ('file-upload-probe','file-upload-verify'):
+    if goal_id in ('file-upload-probe','file-upload-verify','data-pipeline'):
         command.extend(['--input-artifact',json.dumps({**info['input_artifact'],'sourcePath':str(WORK / upload_probe.FIXTURE)},ensure_ascii=False)])
     config = {"mcp_servers": {"loginom-dock": {"command": str(args.node), "args": command,
               "connect_timeout": 180, "timeout": 360, "enabled": True,
@@ -265,7 +270,7 @@ def main():
     parser.add_argument("--require-verification", action="store_true")
     parser.add_argument("--require-delivered-context", action="store_true",
                         help="Require automatic E2E/Help delivery bound to a failure and journal before successful continuation")
-    parser.add_argument("--goal", choices=["basic-graph", "auto-link-retain", "auto-link-remove", "palette-inventory", "checkbox-roundtrip", "context-menu-checkbox", "root-checkbox", "file-storage-inspect", "file-upload-probe", "file-upload-verify"], default="basic-graph")
+    parser.add_argument("--goal", choices=["basic-graph", "auto-link-retain", "auto-link-remove", "palette-inventory", "checkbox-roundtrip", "context-menu-checkbox", "root-checkbox", "file-storage-inspect", "file-upload-probe", "file-upload-verify", "data-pipeline"], default="basic-graph")
     parser.add_argument("--allow-manual-reopen", action="store_true")
     args = parser.parse_args()
     if args.fault=="save_reopen" and not args.allow_manual_reopen:
