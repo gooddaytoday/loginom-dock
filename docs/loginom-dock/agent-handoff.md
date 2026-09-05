@@ -1,5 +1,14 @@
 # Следующему агенту: с чего начать
 
+**Текущая точка:** `20260905-171049-7c6c84e4` — 24/25 frozen FAIL:
+SetupNode и checkbox выполнены, но UI отрисовался после click receipt. Исправлен
+аудитор: после bound click допускается причинно последующий observe той же
+сессии, без mutations до checkbox. 80 Python PASS. Предыдущий 170517 run
+тоже frozen FAIL, детали/SHA сверху status. Runtime `65c1e28a…` не менялся,
+170 client/10 packaging. Active Hermes нет. Следующее — новый run
+context-menu-checkbox --require-verification на Luna/medium/ChatGPT, затем
+root/filter/epoch и P3–P9. Старые FAIL не пересчитывать.
+
 **Последний run:** context-menu-checkbox `20260905-165713-56812027` — 21/25
 frozen FAIL, right_click работал, мастер не открыт. После run observer получил
 `mn;mni*` wrappers и menu-first порядок; 170 client / 80 Python. Active Hermes

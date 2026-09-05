@@ -1,5 +1,27 @@
 # Выполнение плана Loginom Dock
 
+## Меню и checkbox выполнены; уточнена асинхронная приёмка — 5 сентября
+
+`20260905-170517-60098bf7` — **24/25 frozen FAIL**, SHA
+`8c7b7c4690aaf957366594f64c6977a017a68f54a1022b031aa79cfa56ef8445`:
+мастер открыт и checkbox cycle подтверждён; аудитор требовал один right_click,
+хотя label/node открывают разные меню, и считал pre-browser отказ действием.
+После этого добавлены bound повторные right_click и strict исключение отказов
+через shared rejected_before_browser; ambiguity/журнальные эффекты не исключаются.
+
+Новый `20260905-171049-7c6c84e4` — **24/25 frozen FAIL**, SHA
+`095aa91d8369b16cb81abf0045d13e3a112c2fe40c2064bfd7702dbbce22eb4a`.
+Runtime обоих `65c1e28ab47fb0bf2d443beff1cbbfecd779f2b56b41f166bd1a8abdea7c34ea`.
+Hermes Luna/medium/ChatGPT снова открыл SetupNode и выполнил checkbox cycle.
+Причина оставшегося отказа: click receipt до отрисовки мастера ещё не содержал
+checkbox, который появился в последующем workspace.observe. Теперь аудитор
+допускает отдельный успешный read, вызванный после click reply в той же сессии
+до первого set_checked, без промежуточных mutations. Добавлены negative/positive
+тесты порядка, повторов и отказов; 80 Python PASS. Runtime не менялся,
+170 client / 10 packaging актуальны. Оба FAIL сохранены, не пересчитывались.
+Active Hermes нет. Далее новый context-menu-checkbox для frozen PASS, затем
+root/filter/epoch и P3 с данными; остальные P0–P9 остаются полным объёмом цели.
+
 ## Context menu: live FAIL и распознавание menu wrappers — 5 сентября
 
 Run `20260905-165713-56812027` — **21/25 frozen FAIL**, SHA

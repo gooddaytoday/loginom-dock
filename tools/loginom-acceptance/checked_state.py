@@ -85,10 +85,26 @@ def menu_proof(evidence, prefix, mutations, first_checked_row, rejected_before_b
     later = [c for c in effective if right['row'] < c['row'] < first_checked_row]
     if len(later) != 1 or later[0]['tool'] != prefix+'dock_ui_action': return False
     selected = bound(later[0])
+    # Rendering may finish after the click receipt. A subsequent read-only
+    # observation in the same session can prove the wizard before the first
+    # checked action; `later` above forbids intervening mutations.
+    selected_replies = [t for t in evidence['tools'] if t.get('tool_call_id') == later[0].get('tool_call_id')
+                        and t.get('session_id') == later[0].get('session_id')]
+    rendered = [selected[1]] if selected else []
+    if len(selected_replies) == 1:
+        for t in evidence['tools']:
+            if (t.get('tool') == prefix+'dock_workspace_observe'
+                    and t.get('session_id') == later[0].get('session_id')
+                    and selected_replies[0]['row'] < t['row'] < first_checked_row
+                    and isinstance(t.get('result'), dict) and t['result'].get('status') == 'SUCCEEDED'
+                    and any(c.get('tool_call_id') == t.get('tool_call_id')
+                            and c.get('session_id') == t.get('session_id') and c['tool'] == t['tool']
+                            and selected_replies[0]['row'] < c['row'] < t['row'] for c in calls)):
+                rendered.append(t['result'].get('output', {}))
     return bool(selected and later[0]['arguments']['action']['verb'] == 'click'
                 and selected[0].get('tid') == 'mn;mniSetupNode'
                 and any((e.get('tid') or '').endswith(TARGET_SUFFIX)
-                        for e in selected[1].get('ui', {}).get('elements', [])))
+                        for output in rendered for e in output.get('ui', {}).get('elements', [])))
 
 
 def prove(call, target, evidence):

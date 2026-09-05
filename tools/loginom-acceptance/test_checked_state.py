@@ -87,6 +87,15 @@ class CheckedStateProofTest(unittest.TestCase):
                 {**call,'row':i*4+3,'result':copy.deepcopy(raw)}])
             data['events'].append({'phase':'completed','operation_id':f'op{i}','outcome':raw})
         self.assertTrue(menu_proof(data, '', {'dock_ui_action'}, 10))
+        delayed = copy.deepcopy(data)
+        for r in (delayed['tools'][3]['result'], delayed['events'][1]['outcome']):
+            r['output']['ui']['elements']=[]
+        delayed['calls'].append({'tool':'dock_workspace_observe','row':8,'session_id':'s','tool_call_id':'read'})
+        delayed['tools'].append({'tool':'dock_workspace_observe','row':9,'session_id':'s','tool_call_id':'read',
+                                'result':{'status':'SUCCEEDED','output':{'ui':{'elements':[targets[2]]}}}})
+        self.assertTrue(menu_proof(delayed, '', {'dock_ui_action'}, 10))
+        delayed['calls'][-1]['row']=6
+        self.assertFalse(menu_proof(delayed, '', {'dock_ui_action'}, 10))
         # A pre-browser rejection does not mutate the observed menu. It is
         # excluded only by the shared strict receipt + absent-journal proof.
         from audit import rejected_before_browser
