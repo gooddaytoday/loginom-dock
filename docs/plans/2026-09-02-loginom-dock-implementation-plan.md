@@ -1266,6 +1266,11 @@ Subset схем проверяет типы/место keywords и не игно
 68 общих операций; live/Help inventory остаются незавершёнными.
 См. `docs/loginom-dock/executor-contracts.md` и `coverage.md`.
 
+Registry/schema/recovery подтверждены реальным rename run
+`20260905-142903-f1cc2e29` — 34/34 PASS с E2E/Help и save/reopen,
+commit `78b0a103`, runtime `96043954…`, 145 client / 10 packaging tests.
+P1 остаётся незавершённым по inventory, новым effects и раздельному proof.
+
 ### P2. Общие UI-драйверы и доступное наблюдение
 
 **Менять:** `workspace-ui.mjs`, `workspace.mjs`, browser/host части `executor.mjs`,

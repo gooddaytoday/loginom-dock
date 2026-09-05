@@ -1,5 +1,41 @@
 # Выполнение плана Loginom Dock
 
+## P1: registry/schema/recovery — реальная приёмка 5 сентября 2026
+
+Commit `78b0a103` добавил локальный registry action/capability/handler/effect,
+согласованные tool enums и admission, явную таблицу handlers в serialized body.
+Перепутанные известные capabilities и неизвестный JSON action отклоняются до
+browser call. Publisher сверяется с ABI, а contract suite проверяет его
+согласованность с registry. Обновлён session pin: 42 runtime inputs.
+
+Next steps дают реальные tools, обязательные поля и роли IDs. Recovery options
+содержат только действительные strategies. Schema subset проверяет keyword
+placement, типы и границы, enum и собственные поля объектов. Outcome envelope
+проверяет identity/phase/effect/output/error и запрещает ошибку при SUCCEEDED
+либо неподтверждённый goal_verified=true. NOT_APPLIED не означает отсутствие
+UI-жеста (например, диалог мог быть открыт и отменён).
+
+145 client / 10 packaging checks прошли. Run `20260905-142903-f1cc2e29`:
+**34/34 frozen PASS**, rename fault, доставлены E2E/Help, исправление и точный
+save/reopen. Hermes 0.21.0 / ChatGPT subscription / openai-codex /
+gpt-5.6-luna / medium; runtime
+`96043954375ceceb21669fe01682a340b20ba8d24b0a76851c05f93b2b3ee410`.
+Audit `.dock/post-mvp-p0/runs/20260905-142903-f1cc2e29/audit.json`, SHA
+`d80639df64ce113b89a0efcc718f3b927137fdeff2b9dc006fd5215ba50f2e5b`.
+Индекс `.dock/post-mvp-p0/evidence-index-p1-registry.json` — 26 attempts /
+11 PASS, SHA `bc037bfc9187194d7e471703a23fef4343c3e0111fa5c0d4b169c4613d71c5d0`.
+P1 runtime ещё не собран/не опубликован: серверные комплекты P0 имеют предыдущий
+pin `7160fdac…`. Production и пользовательская установка не менялись.
+
+Coverage содержит 78 именованных компонентов E2E + 68 общих операций.
+Дополнительно собран приватный title-only индекс 190 Help документов на commit
+`353e506ba04b77a2926d8ddf8472b36c684b67fd` — не проверка всех режимов.
+P1 **не завершён**: дополнить live/Help inventory, реализовать versioned
+раздельный proof gesture/domain/settings/data/completeness/goal, закрепить
+новые effect contracts в расширяемом ABI. Затем P2–P9 в порядке плана.
+Последний run завершён и проаудирован; запущенных нами Hermes процессов нет.
+
+
 ## P0 завершён — чистые исходники и серверная сборка, 5 сентября 2026
 
 MVP runtime зафиксирован в `cb2bc041`, поддерживаемая приёмка/packaging/docs —

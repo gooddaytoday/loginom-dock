@@ -1,5 +1,14 @@
 # Следующему агенту: с чего начать
 
+**Последняя точка:** P0 завершён. P1 registry/schema/recovery зафиксированы
+в `78b0a103`, 145 client / 10 packaging; real rename
+`20260905-142903-f1cc2e29` — 34/34 PASS с E2E/Help и save/reopen.
+Текущий runtime `96043954…`, 42 inputs. Run завершён, активных Hermes нет.
+**Продолжение:** P1 раздельный versioned proof + live/Help inventory и effect
+contracts, затем P2–P9. Не считать усиленную оболочку outcome завершением
+всего proof. Серверная source-clean сборка P0 `28657479`/`7160fdac…` не
+содержит P1. Подробности в самом верхнем разделе implementation-status.
+
 **Актуально:** P0 завершён: `28657479`, source-clean VPS macOS/Linux,
 реальный baseline `20260905-141558-dad96a91` — 29/29. Подробные hashes
 и границы — верх implementation-status. **Текущий этап P1:** основной checkout
