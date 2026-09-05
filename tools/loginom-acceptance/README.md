@@ -1,3 +1,16 @@
+## Имена Loginom и destination (schema 2, 2026-09-05)
+
+Каждый новый `--run` требует `--loginom-user ACCOUNT --storage-directory /PATH`.
+Это независимо выбранные Loginom account и destination, не имя ОС/SSH и не
+неявный user. Учётная запись должна быть разрешена оператором для входа без
+пароля. Пользователь разрешил test для отладки; /test проверен в живом Loginom.
+Для текущей file-storage-inspect проверки можно явно выбрать
+`--loginom-user test --storage-directory /test`. Не переносить эти значения
+в другие окружения без проверки. Goal template и directory фиксируются до run;
+новые package paths строятся внутри выбранного destination/packages. Существование
+этого подкаталога нужно установить перед save/upload, проверка навигации его
+не создаёт. Старые request schema1 и их immutable audits остаются историческими.
+
 # Приёмка выхода из MVP
 
 Поддерживаемый операторский инструментарий этапа P0. Он не входит в клиентский

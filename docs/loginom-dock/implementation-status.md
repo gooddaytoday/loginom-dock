@@ -1,3 +1,50 @@
+## 2026-09-05 — P3: storage navigation принята на отдельном аккаунте
+
+**20260905-211038-3cd006d8: 24/24 frozen PASS.** Audit SHA
+fdf4685e1a028dee4787a13bf74dbaa1caf61430e9bdb2cbaa747078f1b9b84a,
+runtime f6146b4729e1defa7b864112cecf36f911dabf81c7b22de7669d649b1e3473a2,
+harness 901aa23f. Current Mac, existing ChatGPT subscription,
+openai-codex / gpt-5.6-luna / medium. Новый изолированный профиль, явно выбранный
+Loginom account test, destination /test. Read-only file-storage-inspect:
+prepare → Files → lookup test → root details → double_click → navigation root.
+Browser-derived directory /test, display_path /Файлы/test, navigation_root Файлы,
+listing_complete=false. Account/path не предполагаются равными user.
+
+Реализовано:
+- roots storage_name: fixed native suffix lookup по E2E Format, CSS hex escaping,
+  без TreeWalker всей таблицы. Только candidates: virtualized absence и коллизии
+  форматированных tids не являются proof; подробное чтение обязательно.
+- Filter доставляется в metadata и сохраняется cursor; mismatch инвалидирует page.
+- Вложенные button parts считаются одним сегментом; пустые служебные подписи
+  пропускаются как в GetCurrentPath. Первый виртуальный корень Файлы отделяется
+  от directory (utils/files.GetRelativePath); вложенные одноимённые папки не
+  удаляются. Нераспознанный root/неполные segments дают явный reason.
+- Каждый observe получает UUID и сохраняет raw outcome в observation_completed
+  до context/page projection. Аудитор проверяет точный idle context и связывает
+  delivered read с raw journal. До этого у observe был null ID и raw receipt
+  отсутствовал: прежнее требование аудита не могло пройти.
+- Replay login требует --replay-login-user; нет hardcoded user. Harness schema2
+  требует --loginom-user и --storage-directory для каждого --run. Имя/путь
+  задаются независимо, не выводятся из OS/SSH. Audit schema1 поддерживает только
+  исторический фиксированный fixture; новые runs всегда schema2. User decision
+  о доступном test account закреплён в AGENTS/каноническом плане.
+
+Промежуточные неизменяемые FAIL (не переоценены):
+204747-e2b95167 20/23, SHA f0bd2bb2d000663c29d7a8b86a24696e9385147f9cac5d7af5949f9d7e1c131b;
+205302-88ea894a 20/23, SHA cad6d6cbecf948fc9f2719156989b9bce004e716c64bb53878ad13d674b20d3b;
+205738-14fff9eb 21/23, SHA 90a3034c6f22c21b30a600138d9d099a5ff73482b8f4465a58cd40ca295df64e.
+Они последовательно выявили непрочитанный адрес, пустые подписи, виртуальный
+корень /Файлы и отсутствие raw observe receipts. Все run IDs имеют префикс
+20260905-. Последний PASS не меняет их результат.
+
+Локально: 193 full client PASS + 35 recovery PASS после нового journal test;
+10 packaging PASS включает полный suite из 194 client tests; 86 Python PASS.
+Active Hermes нет. Production/public rc2 не изменены.
+Далее typed upload artifact_id → выбранный /test destination, no-overwrite,
+reconciliation и remote byte/SHA proof; затем CSV→Import→Calculator→Group,
+execution/results/save/reopen и остальные P3–P9. Навигация не является приёмкой
+загрузки, полной таблицы, иных аккаунтов/локалей или выхода из MVP.
+
 ## 2026-09-05 — P3 live storage: подтверждён большой DOM после перехода
 
 Добавлен predeclared goal file-storage-inspect (read/navigation only /user/data),

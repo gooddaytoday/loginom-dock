@@ -1,3 +1,15 @@
+**Последняя приёмка P3:** 20260905-211038-3cd006d8 file-storage-inspect,
+24/24 frozen PASS на Loginom test и destination /test. Runtime f6146b47…,
+harness 901aa23f. ChatGPT/Luna/medium. Directory /test отделён от display_path
+/Файлы/test. Теперь новые harness --run ОБЯЗАТЕЛЬНО --loginom-user test
+--storage-directory /test (значения явно выбираются для конкретного аккаунта).
+Продукт не предполагает user/test; пользователь разрешил test для отладки.
+Filter roots storage_name + cursor; own UUID/raw journal для observe; 194 client
+через packaging, 86 Python, 10 packaging PASS. Active Hermes нет. Далее настоящий
+upload/no-overwrite/reconcile/remote bytes, затем весь P3 и P4–P9. Точные SHA,
+ограничения и промежуточные FAIL сверху implementation-status; не повторять
+чтение каталога без новой причины и не считать его приёмкой загрузки.
+
 **Текущая точка P3:** три file-storage-inspect live FAIL сохранены; последний
 203745-2c218e8b доказал UI_SCAN_LIMIT после открытия user. Исправлены row refs
 FileStorageForm;colName_* и передача Error.code через page.evaluate envelope.

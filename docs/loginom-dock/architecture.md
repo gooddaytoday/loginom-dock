@@ -1,3 +1,21 @@
+### Explicit accounts and bounded storage reads (2026-09-05)
+
+Replay bootstrap requires an explicit replayLoginUser; no Loginom/OS/SSH
+username is inferred. New acceptance schema 2 requires independently selected
+loginom-user and storage-directory; schema 1 audit support is historical only.
+User-authorized test account was exercised with destination /test in live run
+20260905-211038-3cd006d8 (24/24 PASS).
+
+Roots storage_name uses a fixed CSS-escaped query over formatted name tids,
+not a full table walk. Candidates require detailed root reads; formatted IDs
+can collide and missing rendered rows never prove absence. Filter metadata is
+cursor-bound. Navigation reads distinguish display_path and directory by removing
+only the first recognized virtual Files root. Empty navigation decorations are
+skipped; hidden nonempty/ambiguous segments fail explicitly. Every observe has
+a fresh operation UUID and an immutable raw observation_completed journal event
+before context and page projection. File storage acceptance binds these receipts.
+Upload, no-overwrite and server byte verification are still separate pending work.
+
 ### Live storage scan limits and navigation roots (2026-09-05)
 
 FileStorageForm;colName_* cells now issue guarded refs using the E2E navigation
