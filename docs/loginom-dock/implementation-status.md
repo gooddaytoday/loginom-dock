@@ -1,3 +1,29 @@
+## 2026-09-05 — P3: live transfer завершён после server byte proof
+
+**20260905-225713-f00430f8, file-upload-verify: 48/48 frozen PASS.**
+Audit SHA 3a5bfbea5cc42cbab08727642fdc7e384916b97d7735695a4b15b300a94a333f.
+Runtime 333d705948a9e3adeb9473bdf0019a333cd1034f09927515ef74676baa792bd4;
+harness ec826a24. Текущий Mac / Hermes / existing ChatGPT subscription /
+openai-codex / gpt-5.6-luna / medium. Explicit Loginom test, storage /test.
+
+Bounded toolbar discovery → подробное чтение кнопки → переход в /test →
+один native upload → inspect pending → exact CSV row → download → host SHA/size →
+cleanup leases → durable transfer_completed/verification_completed → inspect
+resolved с original upload SUCCEEDED и upload_completion_verified=true.
+Destination /test/Dock-upload-20260905-225713-f00430f8.csv, 230 bytes,
+SHA f628434c20873f7dd9a8ee142c17af7c0b99f447114fcf60e983f6ed6b357eb3.
+Новых mutations после verify не было. Runtime/harness не менялись в ходе
+model run, audit выполнен один раз. Полный client suite 223 PASS, Python 91 PASS.
+
+Это закрывает узкую live проверку transfer completion для explicit replace
+fixture; не означает полную готовность P3 или выхода из MVP. Следующий шаг —
+импорт CSV, Калькулятор, Группировка, typed results и save/reopen/reexecute.
+Для text import прочитаны Help data/integration/import/txt/README.md и E2E
+wizards/imports/txt/format_settings.ts, bg/sels/import/sImportTxt.ts. E2E
+подтверждает ввод произвольного маркера Null; это source evidence, не live
+доказательство результата fixture. Reject/conflict и download budget открыты.
+Active Hermes/browser нет; production/public rc2 не менялись.
+
 ## 2026-09-05 — P3: завершение transfer и доступ к главной панели
 
 В a3a687d2 реализовано завершение original upload по postcondition

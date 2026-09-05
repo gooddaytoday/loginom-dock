@@ -30,7 +30,8 @@ Verified byte proof is cached before lease cleanup so journal recovery does not
 rehash a released copy. NOT_APPLIED releases its empty lease after browser
 completion; shutdown drains retained files. Network/disk download limits and
 reject remain unfinished. A live download-and-hash run passed on the earlier
-pending-only implementation; completion on the current runtime awaits live proof.
+pending-only implementation. Current completion passed the frozen live run
+20260905-225713-f00430f8 (48/48); exact pins and limitations are in implementation-status.md.
 
 ### Private CSV download primitive (2026-09-05)
 
