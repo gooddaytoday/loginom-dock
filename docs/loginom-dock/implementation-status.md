@@ -1,5 +1,38 @@
 # Выполнение плана Loginom Dock
 
+## P0 завершён — чистые исходники и серверная сборка, 5 сентября 2026
+
+MVP runtime зафиксирован в `cb2bc041`, поддерживаемая приёмка/packaging/docs —
+в `28657479e7b2286b362e5574d6b3fc8358f2cc7e`. Чистый detached checkout прошёл
+139 client, 64 Python acceptance и 10 packaging tests. Источники не зависят
+от private evidence; зависимости закреплены lock и установлены отдельно.
+
+161 build input совпал с commit побайтно и по режимам. Source archive SHA:
+`ee9d3e4b9847fabe3e29a154f13bfd2f54b41220cf5d6ab62d345ad027deb2e7`;
+inventory `1185ef105aac39904918b7f6a99cb5c4dc4cdaaac46c80e61a3d93834cac208b`.
+На VPS в `/opt/loginom-dock/client-build/p0-clean-28657479/` собраны два
+внутренних комплекта с `sourceDirty=false`; builder проверил Git objects из
+переданного bundle и повторно staged inputs. Linux bundle SHA
+`78d04faa11c8ec6fbf1426b00be0b1c78718763c328a7a82b45a0def5bfc561c`,
+macOS bundle SHA `8b64cb03cc864f919e6b0278decea2b17eaa54fcfae7ec194f868399954acf9c`.
+Linux-комплект прошёл 139 tests. macOS `0.1.0-rc.4-1827e732e026`
+скачан, проверены все 3975 файлов; Node/dependencies из него использованы
+для 139 client tests и реального прогона из чистого checkout. Это проверка
+чистого source runtime с серверными dependencies, не native install/cutover.
+
+Run `20260905-141558-dad96a91`: **29/29 frozen PASS**, Hermes 0.21.0,
+подписка ChatGPT / `openai-codex` / `gpt-5.6-luna` / medium; goal basic-graph,
+без инъекции сбоя. Runtime `7160fdac190c2279b8e23d2be4908c5fa3ebef02d144b9220576dbeacccdce9f`.
+Audit SHA `216e3a570676437c1ac949308c197c437e1d3cdcae7672d2368a4c7431ecf8d2`;
+место хранения `.dock/post-mvp-p0/runs/20260905-141558-dad96a91/audit.json`.
+Цель и сохранённый/повторно открытый точный граф подтверждены независимо.
+Production/current/catalog и публичный rc.2 не изменялись.
+
+Следующий этап P1 начат в основной рабочей копии отдельно от замороженного
+checkout P0: единый registry action/capability/handler/effect и проверка допуска.
+Изменения P1 ещё не приняты live и не входят в указанные hashes P0.
+
+
 ## Фиксация исходников P0 — 5 сентября 2026
 
 Клиентский MVP зафиксирован отдельно в `cb2bc041`: runtime, каталоги/schema,

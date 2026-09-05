@@ -1128,7 +1128,7 @@ P6 вводится только после подтверждения повт�
 - [x] Сверить `AGENTS.md`, handoff, этот план, architecture/status, текущий
   `git status` и состав tracked/untracked. Сохранить чужие изменения. Не сбрасывать
   checkout и не коммитить автоматически все файлы рабочей области одним набором.
-- [ ] Просмотреть и зафиксировать относящиеся к MVP исходники, schemas, catalog,
+- [x] Просмотреть и зафиксировать относящиеся к MVP исходники, schemas, catalog,
   tests и документацию как самостоятельный проверяемый набор. Проверить новый
   чистый checkout: ни один необходимый import/fixture не должен зависеть от `.dock/`.
 - [x] Вынести очищенные harness, goal-only задания, fault wrappers, независимые
@@ -1209,6 +1209,14 @@ run `20260905-135148-6fa2b372`; его общий 33/34 FAIL сохранён. 6
 и чистая поставка на VPS; перенос инструментария/команд/индекса завершён.
 Фиксация MVP и проверка окончательной чистой поставки ещё не завершены. Подробности и команды —
 в [README инструментария](../../tools/loginom-acceptance/README.md).
+
+P0 завершён 5 сентября: commits `cb2bc041` / `28657479`, чистый checkout
+139 client / 64 Python / 10 packaging checks; source-clean сборки на VPS
+для macOS/Linux с проверкой Git objects. Новый basic-graph run
+`20260905-141558-dad96a91` — 29/29 frozen PASS, runtime `7160fdac…`,
+Hermes/ChatGPT/Luna/medium. Реальная задача запускалась из чистого checkout
+с Node/dependencies серверного комплекта; native cutover остаётся этапом P9.
+Полные hashes и границы доказательств — в начале implementation-status.
 
 ### P1. Зафиксировать объём и расширяемые контракты
 

@@ -1,5 +1,12 @@
 # Следующему агенту: с чего начать
 
+**Актуально:** P0 завершён: `28657479`, source-clean VPS macOS/Linux,
+реальный baseline `20260905-141558-dad96a91` — 29/29. Подробные hashes
+и границы — верх implementation-status. **Текущий этап P1:** основной checkout
+содержит незавершённый registry; чистый P0 checkout и evidence не менять.
+Продолжать весь P1–P9 до цели или реального блокера, не останавливаться на
+малой итерации. Исторические очереди ниже не являются текущими.
+
 **Текущий шаг P0:** runtime зафиксирован в `cb2bc041`; admission приведён к
 Luna/medium, runtime `7160fdac…`. После фиксации tooling/docs выполнить чистый
 checkout, source-clean VPS build и новую baseline-приёмку. Старые pins ниже
