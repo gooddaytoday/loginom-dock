@@ -1,3 +1,11 @@
+**Checkpoint:** пользователь вернул дальнейшую работу на ChatGPT subscription /
+openai-codex /gpt-5.6-luna /medium. Xiaomi subscription test завершён: run
+010130-5f13962b, 47/58 FAIL, 114 API calls, reached text_import_file; session38171
+terminal. Последний отказ был operation_id вместо observation_id — добавлена
+точная подсказка без alias/обхода issued refs; 245 client /110 Python /10 packaging
+PASS. Далее полный data-pipeline с --model-profile chatgpt-luna. Active Hermes/
+browser нет; P3–P9 остаются целью. Подробности и pins сверху status.
+
 **Checkpoint Xiaomi:** пользователь уточнил подписку. Первый run 005734-91a132d6
 terminal 18/23 FAIL до tools: ключ отправлен на metered endpoint, 401.
 Исправлен launcher: base_url из существующей Xiaomi credential_pool entry

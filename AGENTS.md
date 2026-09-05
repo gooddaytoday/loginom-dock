@@ -53,10 +53,11 @@
   Verify effective identifiers without printing credentials. Do not fall back to
   another provider/model on failure, timeout or limits. Dock server models remain
   unchanged; Hermes remains the executor.
-- For the user-requested full data-pipeline comparison on 2026-09-06, the
-  next Hermes run may explicitly use the existing Xiaomi subscription with
-  provider `xiaomi`, model `mimo-v2.5`, reasoning `medium`, without fallback.
-  This is an opt-in comparison profile; ChatGPT/Luna remains the default.
+- The user-requested Xiaomi MiMo 2.5 subscription comparison on 2026-09-06
+  is complete. The user then explicitly restored Hermes execution/testing to
+  the existing ChatGPT subscription: `openai-codex` / `gpt-5.6-luna` / `medium`.
+  Keep the Xiaomi comparison profile opt-in; do not use it again without a new
+  explicit instruction. No provider/model fallback is allowed.
 - Never assume the Loginom account or personal storage root is named `user`.
   Use an explicit operator-selected account for passwordless replay login and an
   explicit storage destination, then verify the latter in Loginom. Do not derive

@@ -1380,6 +1380,11 @@ timeout и лимита до «достаточно большого».
 
 ### P3. Первая полная цепочка с настоящими данными
 
+После сравнительного запуска Xiaomi 6 сентября пользователь явно вернул
+дальнейшую работу на подписку ChatGPT: openai-codex / gpt-5.6-luna / medium.
+Xiaomi остаётся профилем для отдельного явного запроса, без автоматического fallback.
+
+
 6 сентября пользователь разрешил повторить ту же полную проверку через
 Hermes Xiaomi MiMo 2.5: provider xiaomi, model mimo-v2.5, reasoning medium,
 существующая подписка Xiaomi в Hermes (subscription endpoint из credential pool), без fallback. Профиль xiaomi-mimo выбирается

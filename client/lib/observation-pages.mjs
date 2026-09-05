@@ -116,7 +116,14 @@ export function createObservationPages({ maxBytes = 12000, maxRecords = 32, capa
       if (!entry) throw new Error('Observation cursor is stale or belongs to another session');
       return entry.snapshot.observation_root?.ref;
     },
-    get(id) { return entries.get(id)?.snapshot; },
+    get(id) {
+      const entry=entries.get(id);
+      if(entry)return entry.snapshot;
+      const matches=typeof id==='string' && id ? [...entries.values()].filter(value=>value.receiptOperationId===id) : [];
+      if(matches.length===1)throw new Error('The supplied observation_id is a browser receipt operation_id. Copy output.observation_id instead: '+matches[0].id+'. Use only refs delivered in that observation; the receipt ID is not an alias.');
+      if(matches.length>1)throw new Error('The supplied ID identifies multiple browser receipts, not a unique observation. Obtain a fresh observation and copy output.observation_id.');
+      return undefined;
+    },
     assertIssued(id, action) {
       const entry = entries.get(id);
       if (!entry || [action.ref, action.source_ref, action.target_ref].filter(Boolean).some(ref => !entry.issued.has(ref))) {
@@ -127,7 +134,7 @@ export function createObservationPages({ maxBytes = 12000, maxRecords = 32, capa
       if (!scopes.has(scope)) throw new Error('Unknown observation scope');
       if (!outcome?.output?.ui) return outcome;
       const snapshot = structuredClone(outcome.output), id = randomUUID();
-      const entry = { id, snapshot, revision: revision(snapshot), scope, rows: records(snapshot, scope), issued: new Set(), next: new Map() };
+      const entry = { id, snapshot, receiptOperationId:outcome.operation_id, revision: revision(snapshot), scope, rows: records(snapshot, scope), issued: new Set(), next: new Map() };
       const output = render(entry, 0);
       entries.set(id, entry);
       while (entries.size > capacity) remove(entries.keys().next().value);
@@ -141,6 +148,7 @@ export function createObservationPages({ maxBytes = 12000, maxRecords = 32, capa
         remove(entry.id);
         throw new Error('Workspace changed between observation pages; begin a new observation. If this repeats in a wizard, use scope roots, then read its freshly delivered WizrdMCF root_ref and observation_id. Do not reuse refs from the invalidated observation');
       }
+      entry.receiptOperationId=fresh.operation_id;
       return { ...fresh, output: render(entry, page.offset) };
     },
   };

@@ -161,3 +161,20 @@ test('wizard state is carried across pages and a step change invalidates continu
   source.output.wizard.stage='calculator';
   assert.throws(()=>pages.next(next.output.page.next_cursor,source),/Workspace changed/);
 });
+
+test('receipt operation ID reports the observation ID but never resolves as its alias',()=>{
+  const pages=createObservationPages(),source={...fixture(),operation_id:'receipt-1'};
+  const first=pages.retain(structuredClone(source)),id=first.output.observation_id;
+  assert.throws(()=>pages.get('receipt-1'),error=>error.message.includes(id) && error.message.includes('not an alias'));
+  assert.ok(pages.get(id));assert.throws(()=>pages.assertIssued(id,{ref:'ref-89'}),/not been delivered/);
+  const fresh={...structuredClone(source),operation_id:'receipt-2'};
+  pages.next(first.output.page.next_cursor,fresh);
+  assert.throws(()=>pages.get('receipt-2'),error=>error.message.includes(id));
+  pages.clear();assert.equal(pages.get('receipt-2'),undefined);
+});
+
+test('ambiguous receipt IDs never suggest an arbitrary observation',()=>{
+  const pages=createObservationPages();
+  pages.retain({...fixture(1),operation_id:'same'});pages.retain({...fixture(1),operation_id:'same'});
+  assert.throws(()=>pages.get('same'),/not a unique observation/);
+});

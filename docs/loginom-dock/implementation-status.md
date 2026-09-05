@@ -1,3 +1,31 @@
+## 2026-09-06 — сравнение Xiaomi завершено; продолжение на Luna по запросу
+
+Xiaomi subscription run 20260906-010130-5f13962b terminal, session 38171 закрыт.
+Actual usage xiaomi/mimo-v2.5, 114 API calls, completed=true, failed=false,
+returncode=0, timeout=false. Подписочное подключение работает. Harness 30fc656f,
+runtime e5f0bd6201ab83cbd8915ed3001b29266bc2cb4a5116cbdf0e9068334f9bdf48.
+Frozen audit 47/58 FAIL, SHA
+846096026ca704856af6e8354208f9493f9f495cd24c11d8fa22e9b341bc00e2.
+Дополнительные FAIL: knowledge scope, navigation path, delivered CSV/raw receipt;
+семь domain verifiers остаются открыты. Единственный наблюдавшийся wizard stage
+text_import_file; полный pipeline не выполнен. Последняя ошибка: call row 226
+передал operation_id из reply 225 вместо его output.observation_id.
+
+Сравнение с последней Luna попыткой 004205-b5f4f1d3: 50/58 и 107 API calls,
+также без полной P3 приёмки. Это единичные диагностические runs, не оценка общего
+качества моделей. Пользователь явно попросил продолжать на ChatGPT/Luna/medium;
+Xiaomi больше не используется без нового запроса.
+
+Исправлена обратная связь клиента при смешении IDs: существующий store хранит
+последний receipt operation_id для каждой observation. get(wrong receipt ID)
+выдаёт правильный output.observation_id и требует только ранее выданные refs;
+не принимает alias и не выполняет действие автоматически. Неизвестный/удалённый
+ID остаётся stale, неоднозначный не выбирается произвольно. Continuation read
+обновляет receipt correlation. 245 client /110 Python /10 packaging PASS.
+Отчёты .dock/post-mvp-p0/observation-id-*-tests.txt. Следующий полный run — явно
+--model-profile chatgpt-luna. Active Hermes/browser нет до следующего запуска;
+цель весь P3–P9, domain gates не закрыты подсказкой.
+
 ## 2026-09-06 — уточнён именно подписочный профиль Xiaomi
 
 Пользователь уточнил: использовать подписку Xiaomi. Первый Xiaomi run
