@@ -481,3 +481,34 @@ test('oversized DOM stops observation and rejects a gesture before input without
   assert.equal(acted.status,'NOT_APPLIED');assert.equal(acted.effect_possible,false);
   assert.equal(acted.error.code,'UI_SCAN_LIMIT');assert.deepEqual(page.events,[]);
 });
+
+test('scroll clamps to its observed owner, rejects old state and does not scroll its parent', async () => {
+  const page=new Page();page.waitForTimeout=async()=>{};
+  const outer=page.add('div','Outer','',{x:10,y:60,width:500,height:500});
+  const inner=page.add('div','Inner','',{x:20,y:80,width:300,height:300},outer);
+  for (const [el,height] of [[outer,2000],[inner,1000]]) Object.assign(el,{scrollTop:0,scrollHeight:height,clientHeight:300,style:{overflowY:'auto'}});
+  page.add('button','Inner;btnRow','Row',undefined,inner);
+  const initial=await page.observe(),target=initial.ui.elements.find(e=>e.tid==='Inner;btnRow');
+  assert.ok(target.allowed_actions.includes('scroll'));
+  const result=await page.act({verb:'scroll',ref:target.ref,delta_y:1000},initial);
+  assert.equal(result.status,'SUCCEEDED');assert.equal(inner.scrollTop,700);assert.equal(outer.scrollTop,0);
+  assert.ok(result.trace.some(e=>e.event==='ui_scroll_applied' && e.from===0 && e.to===700));
+  const stale=await page.act({verb:'click',ref:target.ref},initial);
+  assert.equal(stale.status,'NOT_APPLIED');assert.equal(stale.error.code,'UI_REFERENCE_STALE');
+  const boundary=await page.act({verb:'scroll',ref:target.ref,delta_y:100},result.output);
+  assert.equal(boundary.status,'NOT_APPLIED');assert.equal(boundary.effect_possible,false);assert.equal(outer.scrollTop,0);
+  for (const delta of [0,1001,-1001,1.5,'100']) assert.throws(()=>validateUiAction({verb:'scroll',ref:target.ref,delta_y:delta}),/delta_y/);
+});
+
+test('virtualized row replacement after scrolling issues a new incarnation', async () => {
+  const page=new Page(),owner=page.add('div','Rows','',{x:20,y:80,width:300,height:300});
+  Object.assign(owner,{scrollTop:0,scrollHeight:1000,clientHeight:300,style:{overflowY:'auto'}});
+  const row=page.add('button','Rows;btnItem','Old row',undefined,owner);
+  const snapshot=await page.observe(),ref=snapshot.ui.elements.find(e=>e.tid==='Rows;btnItem').ref;
+  page.waitForTimeout=async()=>{row.remove();page.add('button','Rows;btnItem','New row',undefined,owner);};
+  const result=await page.act({verb:'scroll',ref,delta_y:200},snapshot);
+  assert.equal(result.status,'SUCCEEDED');
+  const next=result.output.ui.elements.find(e=>e.tid==='Rows;btnItem');
+  assert.notEqual(next.ref,ref);assert.equal(next.label,'New row');
+  assert.equal((await page.act({verb:'click',ref},snapshot)).status,'NOT_APPLIED');
+});

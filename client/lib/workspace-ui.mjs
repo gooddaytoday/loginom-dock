@@ -3,7 +3,8 @@
 export const uiActionSchema = {
   type: 'object', additionalProperties: false, required: ['verb'],
   properties: {
-    verb: { type: 'string', enum: ['click', 'double_click', 'fill', 'press', 'drag'] },
+    verb: { type: 'string', enum: ['click', 'double_click', 'fill', 'press', 'drag', 'scroll'] },
+    delta_y: { type: 'integer', minimum: -1000, maximum: 1000 },
     ref: { type: 'string', maxLength: 128 }, text: { type: 'string', maxLength: 2048 },
     key: { type: 'string', enum: ['Enter', 'Escape', 'Tab', 'Shift+Tab', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Home', 'End', 'PageUp', 'PageDown', 'Backspace', 'Delete', 'Space', 'F2'] },
     source_ref: { type: 'string', maxLength: 128 }, target_ref: { type: 'string', maxLength: 128 },
@@ -13,13 +14,14 @@ export const uiActionSchema = {
 export function validateUiAction(action, snapshot) {
   if (!action || typeof action !== 'object' || Array.isArray(action) || !uiActionSchema.properties.verb.enum.includes(action.verb)) throw new Error('Unsupported observed UI action');
   const fields = action.verb === 'drag' ? ['verb', 'source_ref', 'target_ref']
-    : action.verb === 'fill' ? ['verb', 'ref', 'text'] : action.verb === 'press' ? ['verb', 'ref', 'key'] : ['verb', 'ref'];
+    : action.verb === 'fill' ? ['verb', 'ref', 'text'] : action.verb === 'press' ? ['verb', 'ref', 'key'] : action.verb === 'scroll' ? ['verb', 'ref', 'delta_y'] : ['verb', 'ref'];
   if (Object.keys(action).some(key => !fields.includes(key)) || fields.some(key => !(key in action))) throw new Error('UI action fields do not match its verb');
   const refs = action.verb === 'drag' ? [action.source_ref, action.target_ref] : [action.ref];
   if (refs.some(ref => typeof ref !== 'string' || !/^ui-[a-zA-Z0-9-]{1,124}$/.test(ref))) throw new Error('UI action requires opaque observed references');
   if (action.verb === 'drag' && action.source_ref === action.target_ref) throw new Error('Drag requires different source and target references');
   if (action.verb === 'fill' && (typeof action.text !== 'string' || action.text.length > 2048 || /\0/.test(action.text))) throw new Error('UI text must be at most 2048 characters without NUL');
   if (action.verb === 'press' && !uiActionSchema.properties.key.enum.includes(action.key)) throw new Error('Unsupported UI key; clipboard and navigation shortcuts are not allowed');
+  if (action.verb === 'scroll' && (!Number.isInteger(action.delta_y) || !action.delta_y || Math.abs(action.delta_y)>1000)) throw new Error('Scroll requires a nonzero integer delta_y within -1000..1000');
   if (snapshot) {
     if (!Array.isArray(snapshot.ui?.elements)) throw new Error('UI action requires an observation snapshot');
     for (const ref of refs) {
@@ -165,17 +167,28 @@ function workspaceUiCapability(page, task) {
       || ((getTid(element) ?? '').startsWith('msgbox') && /;tlb;(?:yes|no|ok|cancel)$/.test(getTid(element)) && !!dialogRef(element));
     const priority = { graph_editor: 0, dialog: 1, graph: 2, workflow: 3, global: 4 };
     const controls = candidates.filter(interesting).sort((left, right) => priority[scopeOf(left)] - priority[scopeOf(right)]);
+    const scrollOf = element => {
+      for (let parent=element; parent && parent!==document.body; parent=parent.parentElement) {
+        charge();
+        if (parent.scrollHeight>parent.clientHeight && ['auto','scroll'].includes(getComputedStyle(parent).overflowY)) {
+          return { ref: refOf(parent), top: parent.scrollTop, max_top: parent.scrollHeight-parent.clientHeight };
+        }
+      }
+      return null;
+    };
     const elements = controls.slice(0, 240).map(element => {
       const identity = identityOf(element), tag = element.tagName.toLowerCase(), tid = getTid(element);
       const editable = element.matches('textarea,input:not([type="button"]):not([type="submit"]):not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="color"]),[contenteditable="true"]') && !element.readOnly;
       const label = short(element.getAttribute('aria-label') || element.getAttribute('placeholder') || element.getAttribute('title') || textOf(element));
       const role = element.getAttribute('role'), kind = /;(?:Input|Output)_/.test(tid ?? '') ? 'port' : editable ? 'field' : /;Graph;/.test(tid ?? '') ? 'graph' : 'control';
       const isEnabled = enabled(element), allowed = identity && isEnabled && !dangerous(element);
+      const scroll = scrollOf(element);
       const value = editable && !sensitive(element) ? String(element.value ?? (element.isContentEditable ? element.textContent : '') ?? '').slice(0, 2048) : undefined;
       return { ref: refOf(element), tid, identity, kind, role, label, scope: scopeOf(element), ...(value === undefined ? {} : { value }),
-        signature: { tag, tid, role, type: element.getAttribute('type'), name: element.getAttribute('name'), label, ...(value === undefined ? {} : { value }), dialog_ref: dialogRef(element) },
+        ...(scroll ? { scroll } : {}),
+        signature: { tag, tid, role, type: element.getAttribute('type'), name: element.getAttribute('name'), label, ...(value === undefined ? {} : { value }), dialog_ref: dialogRef(element), scroll },
         enabled: isEnabled, visible: true, bounding_box: boxOf(element),
-        allowed_actions: allowed ? ['click', 'double_click', 'press', 'drag', ...(editable ? ['fill'] : [])] : [] };
+        allowed_actions: allowed ? ['click', 'double_click', 'press', 'drag', ...(editable ? ['fill'] : []), ...(scroll ? ['scroll'] : [])] : [] };
     });
     const graphPrefix = workflow ? workflow.prefix + ';Graph;' : null;
     const graphElements = graphPrefix ? all.filter(element => (getTid(element) ?? '').startsWith(graphPrefix)) : [];
@@ -354,6 +367,24 @@ function workspaceUiCapability(page, task) {
         if (task.action.verb === 'click') await clickTarget(1);
         else if (task.action.verb === 'double_click') await clickTarget(2);
         else if (task.action.verb === 'press') await first.press(task.action.key, { timeout: timeout() });
+        else if (task.action.verb === 'scroll') {
+          const expected=current.ui.elements.find(item=>item.ref===task.action.ref).scroll;
+          const moved=await first.evaluate((element,{expected,delta})=>{
+            const state=globalThis[Symbol.for('loginom-dock.workspace-ui.identity.v1')];
+            for (let parent=element,depth=0;parent && parent!==document.body && depth<64;parent=parent.parentElement,depth++) {
+              if (!(parent.scrollHeight>parent.clientHeight) || !['auto','scroll'].includes(getComputedStyle(parent).overflowY)) continue;
+              if (state?.ids.get(parent)!==expected.ref || parent.scrollTop!==expected.top || parent.scrollHeight-parent.clientHeight!==expected.max_top) return null;
+              const target=Math.max(0,Math.min(expected.max_top,expected.top+delta));
+              if (target===expected.top) return null;
+              parent.scrollTop=target;
+              return {from:expected.top,to:parent.scrollTop,owner_ref:expected.ref};
+            }
+            return null;
+          },{expected,delta:task.action.delta_y});
+          if (!moved) { effectPossible=false; fail('UI_SCROLL_UNAVAILABLE','Scroll owner changed or its boundary was reached; observe again'); }
+          record('ui_scroll_applied',moved);
+          await page.waitForTimeout(50);
+        }
         else if (task.action.verb === 'fill') {
           await clickTarget(1);
           await first.press('ControlOrMeta+A', { timeout: timeout() });

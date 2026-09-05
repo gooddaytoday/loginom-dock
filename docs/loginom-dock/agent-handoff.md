@@ -1,5 +1,11 @@
 # Следующему агенту: с чего начать
 
+**Последняя реализация:** вертикальный ui.act scroll по наблюдаемому ref/
+scroll owner, clamped delta_y, guards/signature и новые refs после рендера.
+162 client tests. Live scroll ещё не было; active Hermes нет. Далее bounded
+scroll acceptance, root/filter и epoch/ABA, оставшиеся P2/P3–P9. Подробности
+и ограничения DOM-scroll — верх implementation-status.
+
 **Последняя приёмка:** `20260905-154306-0e121bd2` — 26/26 frozen PASS,
 runtime `e579941f…`, 45 inputs. Bootstrap not_open до prepare, diagnostics
 подтвердила неактивный архив/неподготовленный workspace; затем bounded scan
