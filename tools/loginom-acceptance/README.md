@@ -1,10 +1,14 @@
-## Локальная проверка file-input транспорта
+## Локальная проверка передачи и скачивания файла
 
 `artifact-transport-check.mjs BROWSER_RUNTIME_DIR NEW_REPORT_PATH` запускается
 закреплённым Node и проверяет private staging через настоящий MCP/Chromium на
 синтетическом HTML input[type=file]. Не использует Loginom, модель или исходные
 файлы пользователя и не является Loginom upload acceptance. Успех подтверждает
-только basename/size/bytes SHA и передачу path вместо встроенного payload.
+basename/size/bytes SHA и передачу path вместо встроенного payload. Затем
+браузер скачивает Blob из выбранного синтетического файла через настоящее
+download event и Download.saveAs в отдельный private lease. Клиент проверяет
+suggestedFilename, размер и SHA скачанных байтов; содержимое не возвращается
+через browser result. Это не доказывает серверное происхождение файла.
 Нужен новый report path; повторное использование отвергается до browser connect.
 Закреплённые зависимости проверяются runtime-check.mjs перед браузером.
 

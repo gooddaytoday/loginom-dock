@@ -17,7 +17,15 @@ const output=resolve(process.argv[3]);
 const require=createRequire(join(root,'client/package.json'));
 const sha=bytes=>createHash('sha256').update(bytes).digest('hex');
 let client,store,scratch,reportFile,closed=false,stage='runtime_preflight';
-const report={scope:'local_browser_file_input_only',loginom_accessed:false,model_started:false,passed:false};
+const report={scope:'local_browser_file_input_and_download_only',loginom_accessed:false,model_started:false,passed:false};
+const parseResult=response=>{
+  if(response.isError)throw new Error('Browser operation failed');
+  for(const block of response.content??[])if(block.type==='text') {
+    const match=block.text.match(/^### Result\n([\s\S]*?)(?:\n### |$)/);
+    if(match)return JSON.parse(match[1]);
+  }
+  throw new Error('Browser result missing');
+};
 try {
   report.dependencies=JSON.parse(execFileSync(process.execPath,[join(root,'tools/loginom-acceptance/runtime-check.mjs'),root,browsers],{encoding:'utf8'}));
   report.source_sha256={};
@@ -53,18 +61,36 @@ try {
     });
   }`;
   const response=await client.callTool({name:'browser_run_code_unsafe',arguments:{code}},undefined,{timeout:60000});
-  if(response.isError)throw new Error('Browser file input failed');
-  let selected;
-  for(const block of response.content??[]) if(block.type==='text') {
-    const match=block.text.match(/^### Result\n([\s\S]*?)(?:\n### |$)/);
-    if(match)selected=JSON.parse(match[1]);
-  }
+  const selected=parseResult(response);
   if(!selected || selected.name!==descriptor.name || selected.size!==descriptor.bytes || sha(Buffer.from(selected.bytes))!==descriptor.sha256)
     throw new Error('Selected file differs from admitted artifact');
   await lease.verify();
   report.file={name:descriptor.name,bytes:descriptor.bytes,sha256:descriptor.sha256};
   report.payload_embedded_in_code=code.includes(payload.toString('base64'))||code.includes(payload.toString());
   if(report.payload_embedded_in_code)throw new Error('Payload leaked into code');
+  stage='download';
+  const downloadLease=await store.stageDownload(descriptor.artifact_id);
+  // The browser creates a Blob from its selected synthetic File. Return only
+  // event metadata; the host reads Download.saveAs output for the byte proof.
+  const downloadCode=`async page => {
+    await page.locator('#file').evaluate(input => {
+      const file=input.files[0],link=document.createElement('a');
+      link.id='download';link.download=file.name;link.href=URL.createObjectURL(file);
+      link.textContent='Download';document.body.appendChild(link);
+    });
+    const event=page.waitForEvent('download',{timeout:15000});
+    const [download]=await Promise.all([event,page.locator('#download').click()]);
+    await download.saveAs(${JSON.stringify(downloadLease.path)});
+    const failure=await download.failure();
+    if(failure!==null)throw new Error('Synthetic download failed');
+    return {suggested_name:download.suggestedFilename(),completed:true};
+  }`;
+  const downloaded=parseResult(await client.callTool({name:'browser_run_code_unsafe',arguments:{code:downloadCode}},undefined,{timeout:60000}));
+  if(downloaded.completed!==true)throw new Error('Download completion missing');
+  await downloadLease.verify(downloaded.suggested_name);
+  report.download={suggested_name:downloaded.suggested_name,bytes:descriptor.bytes,sha256:descriptor.sha256,host_bytes_verified:true};
+  report.download_payload_embedded_in_code=downloadCode.includes(payload.toString('base64'))||downloadCode.includes(payload.toString());
+  if(report.download_payload_embedded_in_code)throw new Error('Download payload leaked into code');
   stage='browser_close';await client.close();closed=true;
   const released=await store.releaseUploads();
   if(released.some(result=>result.status!=='fulfilled'))throw new Error('Transfer cleanup failed');

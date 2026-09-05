@@ -1393,6 +1393,12 @@ CSV (6 строк), полный expected import/calculator/group (6/6/3 стр�
 и ограничения приёмки. Типы, quoted delimiter, empty/null и суммы зафиксированы
 до model run. Статус fixture-only: upload, выполнение и сохранение ещё не приняты.
 
+Подготовлены host-only stageUpload/stageDownload: отдельные private leases,
+проверка скачанных bytes/SHA/имени, cleanup после подтверждения завершения.
+Native MCP/Chromium synthetic file input → download → host verification пройден.
+Это транспортная проверка, не Loginom acceptance: ещё нужны привязка события
+к server destination, конфликт/overwrite, лимит скачивания и reconciliation.
+
 **Зависит от:** P1/P2. Сначала одна цель от файла до проверенного результата;
 по ней выделить устойчивые lifecycle мастера и исполнения.
 

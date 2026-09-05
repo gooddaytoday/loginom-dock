@@ -1,12 +1,14 @@
-**Последняя P3 работа:** artifactStore.stageUpload → private named readonly
-copy/immutable lease/verify/release; bridge cleanup только после browser close.
-Проверен native MCP/Chromium local synthetic file input без Loginom/model: report
-artifact-transport-20260905-3.json PASS, SHA 893556da…; 196/86/10 +5 targeted PASS.
-Это механизм доставки локальному input, НЕ Loginom upload acceptance. Active
-browser/Hermes нет. Далее typed upload dispatcher, destination/ownership/conflict,
-no-overwrite/reconciliation/server bytes, затем весь P3–P9. Для live использовать
+**Последняя P3 работа:** stageDownload добавлен к stageUpload: отдельный private
+Download.saveAs path без заранее созданной копии, verify имени/размера/SHA,
+общий лимит 8 leases и cleanup после browser close. Удаление symlink не меняет
+его target. Native MCP/Chromium synthetic input → download → host byte proof
+PASS: artifact-roundtrip-20260905-1.json, SHA 3abc6ce0…; 199 client /10 packaging
+PASS. Это НЕ Loginom upload acceptance; maxBytes ограничивает проверку, пока
+не network/disk download. Active browser/Hermes нет. Далее typed upload
+dispatcher: точный destination/ownership/conflict/no-overwrite, привязка download
+event, transport budget/reconciliation; затем весь P3–P9. Для live использовать
 явные --loginom-user test --storage-directory /test; имя user не предполагать.
-Точные ограничения и SHA сверху implementation-status.
+Точные SHA/ограничения сверху implementation-status.
 
 **Последняя приёмка P3:** 20260905-211038-3cd006d8 file-storage-inspect,
 24/24 frozen PASS на Loginom test и destination /test. Runtime f6146b47…,

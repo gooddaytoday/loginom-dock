@@ -10,8 +10,21 @@ Shutdown drains pending staging and attempts cleanup only after browser closure.
 The original admitted snapshot is retained. Concurrent/pending transfer count is
 bounded to eight; model callers have no file path or staging API.
 
+stageDownload reserves a separate private directory for Download.saveAs. Its
+target file initially does not exist; it never reuses the admitted/upload copy.
+verify requires the event's exact suggested filename, then checks size/SHA of
+the new regular file against the admission descriptor. Upload and download
+leases share the eight-transfer limit and shutdown drain. Cleanup removes a
+symlink itself without following/chmodding its target. Missing download files
+can be cleaned after browser shutdown. The trusted adapter must still bind the
+download event to the exact observed Loginom destination and operation. Byte
+verification alone proves neither origin nor overwrite policy. maxBytes bounds
+host verification reads, not the browser's network/disk download; that transport
+budget remains to be enforced by the future adapter.
+
 The pinned MCP/Chromium transport was tested on a synthetic local file input,
-including filename/size/SHA. No payload is embedded in browser code. No Loginom
+including filename/size/SHA and Download.saveAs roundtrip checked on the host.
+No payload is embedded in browser code. No Loginom
 upload dispatcher, no-overwrite contract or server postcondition is established
 by this local transport test. These remain the next P3 integration requirements.
 

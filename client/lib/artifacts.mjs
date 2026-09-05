@@ -61,37 +61,50 @@ export async function createArtifactStore({directory,maxBytes=16*1024*1024}) {
   if (!info.isDirectory() || info.isSymbolicLink()) throw new Error('Artifact directory must be a real directory');
   const root=await realpath(resolve(directory)),entries=new Map(),transfers=new Set();
   const pendingStages=new Set();let closing=false;
-  const stageUpload=async artifactId => {
+  const stageTransfer=async (artifactId,download=false) => {
       const descriptor=entries.get(artifactId);
       if (!descriptor) throw new Error('Artifact was not admitted in this session');
-      const buffer=await readVerified(join(root,artifactId),descriptor,maxBytes);
-      const directory=join(root,'transfer-'+randomUUID()),path=join(directory,descriptor.name);
+      const buffer=download ? null : await readVerified(join(root,artifactId),descriptor,maxBytes);
+      const directory=join(root,(download?'download-':'transfer-')+randomUUID()),path=join(directory,descriptor.name);
       await mkdir(directory,{mode:0o700});
       const owner=await lstat(directory);
       let file;
       try {
+        if (!download) {
         file=await open(path,'wx',0o600);
         await file.writeFile(buffer);await file.sync();await file.close();file=null;
         await chmod(path,0o400);await chmod(directory,0o500);
+        }
       } catch(error) {
         await file?.close();await chmod(directory,0o700);
         await unlink(path).catch(()=>{});await rmdir(directory);throw error;
       }
       let released=false,releasing;
       const assertOwner=async()=>{
-        if (released) throw new Error('Upload transfer was released');
+        if (released) throw new Error('Artifact transfer was released');
         const current=await lstat(directory);
         if (!current.isDirectory() || current.isSymbolicLink() || current.dev!==owner.dev || current.ino!==owner.ino)
-          throw new Error('Upload transfer directory was replaced');
+          throw new Error('Artifact transfer directory was replaced');
       };
       const lease=Object.freeze({
         path,descriptor:Object.freeze(structuredClone(descriptor)),
-        async verify() {await assertOwner();await readVerified(path,descriptor,maxBytes);return structuredClone(descriptor);},
+        async verify(suggestedName) {
+          if (download && suggestedName!==descriptor.name) throw new Error('Downloaded filename does not match the admitted identity');
+          await assertOwner();await readVerified(path,descriptor,maxBytes);return structuredClone(descriptor);
+        },
         async release() {
           if (released) return;
           releasing ??= (async()=>{
             await assertOwner();await chmod(directory,0o700);
-            await chmod(path,0o600);await unlink(path);await rmdir(directory);
+            // Unlink a replaced symlink itself; never chmod/follow its target.
+            // Downloads may not have created their file yet when the browser closes.
+            const target=await lstat(path).catch(error=>{if(error.code!=='ENOENT')throw error;return null;});
+            if(target) {
+              if(!target.isFile() && !target.isSymbolicLink()) throw new Error('Artifact transfer target is not a file');
+              if(process.platform==='win32' && !target.isSymbolicLink()) await chmod(path,0o600);
+              await unlink(path);
+            }
+            await rmdir(directory);
             released=true;transfers.delete(lease);
           })();
           return releasing;
@@ -99,6 +112,13 @@ export async function createArtifactStore({directory,maxBytes=16*1024*1024}) {
       });
       transfers.add(lease);
       return lease;
+  };
+  const startTransfer=async (artifactId,download) => {
+    if (closing) throw new Error('Artifact staging is closed');
+    if (transfers.size+pendingStages.size>=8) throw new Error('Too many unresolved artifact transfers');
+    const pending=stageTransfer(artifactId,download);pendingStages.add(pending);
+    pending.then(()=>pendingStages.delete(pending),()=>pendingStages.delete(pending));
+    return pending;
   };
   return {
     async admit({sourcePath,name,bytes,sha256}) {
@@ -126,13 +146,19 @@ export async function createArtifactStore({directory,maxBytes=16*1024*1024}) {
     // A transport timeout does NOT release this lease. The adapter must confirm
     // completion (or close the browser) before releasing it.
     async stageUpload(artifactId) {
-      if (closing) throw new Error('Upload staging is closed');
-      if (transfers.size+pendingStages.size>=8) throw new Error('Too many unresolved upload transfers');
-      const pending=stageUpload(artifactId);pendingStages.add(pending);
-      pending.then(()=>pendingStages.delete(pending),()=>pendingStages.delete(pending));
-      return pending;
+      return startTransfer(artifactId,false);
     },
-    // Call only after the browser transport has confirmed shutdown.
+    // Private download.saveAs destination. No file exists until the browser
+    // writes it, so a missing download cannot validate against a local copy.
+    // verify requires the browser event's suggested filename and compares the
+    // downloaded bytes with the original admission identity. The caller must
+    // separately bind that event to the exact Loginom file/destination/action.
+    // This method alone makes no claim about remote origin or overwrite safety.
+    async stageDownload(artifactId) {
+      return startTransfer(artifactId,true);
+    },
+    // Call only after the browser transport has confirmed shutdown. Historical
+    // name retained: drains upload AND download leases, including pending stages.
     async releaseUploads() {
       closing=true;
       await Promise.allSettled([...pendingStages]);

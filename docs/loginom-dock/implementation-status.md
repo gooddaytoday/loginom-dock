@@ -1,3 +1,35 @@
+## 2026-09-05 — P3: проверка байтов скачанного файла на клиенте
+
+Добавлен host-only artifactStore.stageDownload(artifact_id): private directory
+и заранее отсутствующий файл для Download.saveAs. Нет копирования исходных
+admitted bytes в download destination, поэтому отсутствующий download не может
+ложно пройти сверку. verify требует точного suggestedFilename браузерного
+события, regular file, размера и SHA исходного admission; возвращает descriptor
+без path/bytes. Download/upload делят лимит 8 leases и pending stages; shutdown
+дожидается обоих видов. Cleanup допускает отсутствующий файл и удаляет symlink
+без chmod/follow target (исправлено также для upload lease).
+
+Native MCP/Chromium synthetic input → Blob download event → Download.saveAs →
+host name/size/SHA verification: PASS. Report
+.dock/post-mvp-p0/artifact-roundtrip-20260905-1.json, SHA
+3abc6ce0aa6944e2256793ce996e59d4a276049874be4c7079266f706ce343a9.
+artifacts.mjs SHA 77125b7c98d83bb29d35db3c6ad17d06986cad81c6de60b7ecc3fad5b7765574;
+check SHA bbbb1fb4abbe7ff2b3c463f9bf51a9811455c9856ceefa929e2e7f9e803f296d.
+Синтетический Продажи.csv, 14 bytes, SHA a752aa59… (полный SHA в report).
+Node 24.19.0 / MCP 0.0.80 / Chromium 1243; Loginom/model не запускались.
+199 client /10 packaging PASS. Новые проверки: missing/zero-byte download,
+wrong filename/size/same-size wrong digest, symlink, immutable descriptor,
+mixed pending shutdown/limit. Python suite не повторялась: Python не менялся.
+
+Это только транспорт и локальная сверка. Ещё нет model upload dispatcher,
+Loginom origin/destination binding для download, overwrite/conflict semantics
+и uncertain-upload reconciliation. maxBytes ограничивает verification read,
+не browser download network/disk; adapter должен ограничить этот этап отдельно.
+E2E UploadFiles подтверждает имя, Help — текущую папку. Повторно проверенные
+filestorage tests содержат конфликты create/rename/paste, но не устанавливают
+upload overwrite semantics. Далее эти интеграционные шаги и полный P3–P9.
+Active browser/Hermes нет; production/public rc2 не менялись.
+
 ## 2026-09-05 — P3: передача admitted bytes через локальный browser input
 
 artifactStore.stageUpload(artifact_id) создаёт private transfer-UUID/<name> из

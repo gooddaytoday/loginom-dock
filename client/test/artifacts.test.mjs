@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {mkdtemp,writeFile,readFile,symlink,rm,chmod,stat} from 'node:fs/promises';
+import {mkdtemp,writeFile,readFile,symlink,rm,chmod,stat,unlink} from 'node:fs/promises';
 import {tmpdir} from 'node:os';
 import {join,basename} from 'node:path';
 import {createHash} from 'node:crypto';
@@ -98,4 +98,69 @@ test('upload staging detects tampering and shutdown drains in-progress staging',
     for(const item of leases)await assert.rejects(()=>readFile(item.path),/ENOENT/);
     await assert.rejects(()=>store.stageUpload(descriptor.artifact_id),/closed/);
   } finally {await rm(directory,{recursive:true,force:true});}
+});
+
+test('download verification requires new bytes, exact filename, size and digest',async()=>{
+  const directory=await mkdtemp(join(tmpdir(),'dock-download-'));
+  try {
+    const sourcePath=join(directory,'source');await writeFile(sourcePath,'abc');
+    const store=await createArtifactStore({directory:join(directory,'store')});
+    const descriptor=await store.admit({sourcePath,name:'Продажи.csv',bytes:3,sha256:createHash('sha256').update('abc').digest('hex')});
+    const lease=await store.stageDownload(descriptor.artifact_id);
+    assert.throws(()=>{lease.path=sourcePath;},TypeError);
+    await assert.rejects(()=>lease.verify(descriptor.name),/ENOENT/);
+    await writeFile(lease.path,'abc');
+    for (const name of [undefined,'Продажи.zip','../Продажи.csv'])
+      await assert.rejects(()=>lease.verify(name),/filename/);
+    for (const bytes of ['ab','abcd','bad']) {
+      await writeFile(lease.path,bytes);
+      await assert.rejects(()=>lease.verify(descriptor.name),/changed|match/);
+    }
+    await writeFile(lease.path,'abc');
+    const verified=await lease.verify(descriptor.name);
+    assert.deepEqual(verified,descriptor);
+    assert.ok(!JSON.stringify(verified).includes(lease.path));
+    verified.sha256='0'.repeat(64);assert.deepEqual(await lease.verify(descriptor.name),descriptor);
+    await lease.release();await assert.rejects(()=>lease.verify(descriptor.name),/released/);
+    assert.equal((await store.resolve(descriptor.artifact_id)).buffer.toString(),'abc');
+  } finally {await rm(directory,{recursive:true,force:true});}
+});
+
+test('download cleanup drains missing and pending files and shares the upload limit',async()=>{
+  const directory=await mkdtemp(join(tmpdir(),'dock-download-close-'));
+  try {
+    const sourcePath=join(directory,'source');await writeFile(sourcePath,'');
+    const store=await createArtifactStore({directory:join(directory,'store')});
+    const descriptor=await store.admit({sourcePath,name:'empty.csv',bytes:0,sha256:createHash('sha256').update('').digest('hex')});
+    const empty=await store.stageDownload(descriptor.artifact_id);
+    await assert.rejects(()=>empty.verify(descriptor.name),/ENOENT/);
+    await writeFile(empty.path,'');assert.deepEqual(await empty.verify(descriptor.name),descriptor);
+    await empty.release();
+    const pending=Array.from({length:8},(_,i)=>i%2 ? store.stageDownload(descriptor.artifact_id) : store.stageUpload(descriptor.artifact_id));
+    await assert.rejects(()=>store.stageDownload(descriptor.artifact_id),/Too many/);
+    await assert.rejects(()=>store.stageUpload(descriptor.artifact_id),/Too many/);
+    const shutdown=store.releaseUploads();const leases=await Promise.all(pending);
+    assert.ok((await shutdown).every(r=>r.status==='fulfilled'));
+    for(const lease of leases)await assert.rejects(()=>readFile(lease.path),/ENOENT/);
+    await assert.rejects(()=>store.stageDownload(descriptor.artifact_id),/closed/);
+    await assert.rejects(()=>store.stageUpload(descriptor.artifact_id),/closed/);
+  } finally {await rm(directory,{recursive:true,force:true});}
+});
+
+test('download rejects symlink bytes and transfer cleanup leaves the target untouched',async()=>{
+  const directory=await mkdtemp(join(tmpdir(),'dock-download-link-'));
+  try {
+    const sourcePath=join(directory,'source');await writeFile(sourcePath,'abc');
+    const store=await createArtifactStore({directory:join(directory,'store')});
+    const descriptor=await store.admit({sourcePath,name:'data.csv',bytes:3,sha256:createHash('sha256').update('abc').digest('hex')});
+    await chmod(sourcePath,0o400);
+    for(const download of [false,true]) {
+      const lease=await (download ? store.stageDownload(descriptor.artifact_id) : store.stageUpload(descriptor.artifact_id));
+      if(!download) {await chmod(join(lease.path,'..'),0o700);await unlink(lease.path);}
+      await symlink(sourcePath,lease.path);
+      await assert.rejects(()=>lease.verify(descriptor.name),/regular file/);
+      await lease.release();assert.equal((await readFile(sourcePath)).toString(),'abc');
+      if(process.platform!=='win32')assert.equal((await stat(sourcePath)).mode&0o777,0o400);
+    }
+  } finally {await chmod(join(directory,'source'),0o600);await rm(directory,{recursive:true,force:true});}
 });
