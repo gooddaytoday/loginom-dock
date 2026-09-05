@@ -1,3 +1,21 @@
+## 2026-09-06 — сравнение той же P3 проверки на Xiaomi по запросу пользователя
+
+Luna run 20260906-004205-b5f4f1d3 завершён (session 1629 terminal): exit 0,
+107 API calls, timeout=false; frozen audit 50/58 FAIL, SHA
+1e469c082c0c47a223b1959de19d88a217a09d1e240fe91ee7285783a234bca0.
+Открыты navigation path gate и семь domain verifiers. Полная приёмка не достигнута.
+
+Пользователь попросил ту же проверку с Xiaomi MiMo 2.5. Добавлен opt-in
+--model-profile xiaomi-mimo только для data-pipeline: xiaomi/mimo-v2.5/medium.
+Default ChatGPT/Luna сохранён. Ключ берётся только из существующего Hermes .env,
+не выводится и не сохраняется в child config/auth. Остальные provider keys и
+личная MCP-конфигурация не копируются. CLI provider/model явные, fallback_providers
+пусты; auditor сверяет request profile и actual usage. 109 Python PASS, включая
+изоляцию Xiaomi key, отсутствие interpolation, duplicate/missing/malformed key,
+отказ подменённому provider/model и неразрешённой цели.
+Runtime Loginom client после 0b7e385d не меняется. Goal/fixture/лимиты прежние.
+Новый Xiaomi run ещё должен быть запущен и проверен; см. следующий checkpoint.
+
 ## 2026-09-06 — P3: живой ввод формулы подтверждён; основные элементы мастера подняты
 
 Run 20260906-002935-fc60ced5 terminal exit 0, timeout=false, 67 API calls,

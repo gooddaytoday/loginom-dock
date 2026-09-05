@@ -444,3 +444,12 @@ rename-after-abandon. Это заменяет прежние ограничен�
 Для нового раздельного блока проверки используется `--require-verification`.
 Контракт проверяет доставку каждого outcome proof и связь с журналом, отдельно
 от обычной приёмки цели. Старые runs без этого флага не подтверждают новый блок.
+
+### Explicit Xiaomi comparison (2026-09-06)
+
+For the user-authorized full `--goal data-pipeline` comparison, pass
+`--model-profile xiaomi-mimo`. The default remains `chatgpt-luna`. The isolated
+run uses only the existing Hermes XIAOMI_API_KEY from its .env; it does not copy
+other providers, personal MCP config, or subscription auth. Exact provider/model
+identity must match `xiaomi` / `mimo-v2.5` in usage evidence. Fallback providers
+are explicitly empty. All fixture, runtime pinning and domain gates still apply.

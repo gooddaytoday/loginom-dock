@@ -7,6 +7,7 @@ import json
 import os
 from pathlib import Path
 import re
+import shlex
 import signal
 import subprocess
 import sys
@@ -61,6 +62,23 @@ def connection(home):
         "auth_mode": "chatgpt", "tokens": tokens, "last_refresh": state.get("last_refresh")}}}
 
 
+def xiaomi_connection(home):
+    # Read only the explicitly selected existing Hermes key. Do not load the
+    # whole .env, interpolate variables, or inherit backup provider credentials.
+    values=[]
+    for line in (home / '.env').read_text().splitlines():
+        stripped=line.strip()
+        if stripped.startswith('export '):stripped=stripped[7:].lstrip()
+        name,sep,value=stripped.partition('=')
+        if sep and name.strip()=='XIAOMI_API_KEY':
+            parts=shlex.split(value,comments=True,posix=True)
+            if len(parts)!=1 or not parts[0] or any(c.isspace() for c in parts[0]):
+                raise ValueError('Existing Hermes Xiaomi key is malformed')
+            values.append(parts[0])
+    if len(values)!=1:raise ValueError('Exactly one existing Hermes Xiaomi key is required')
+    return {'XIAOMI_API_KEY':values[0]}
+
+
 def environment(connection_values, home, run):
     # Only OS/runtime variables and the existing approved connection are inherited.
     allowed = ("PATH", "HOME", "USER", "LOGNAME", "SHELL", "TMPDIR", "LANG", "LC_ALL", "TERM",
@@ -84,6 +102,9 @@ def exported_events(dock_home, secrets):
 def validate_inputs(args):
     if sys.platform != "darwin":
         raise ValueError("This active acceptance iteration is approved only on the current Mac")
+    profile=getattr(args,'model_profile','chatgpt-luna')
+    if profile not in ('chatgpt-luna','xiaomi-mimo') or profile=='xiaomi-mimo' and getattr(args,'goal',None)!='data-pipeline':
+        raise ValueError('Xiaomi comparison is authorized only for the full data-pipeline goal')
     max_turns_limit=300 if getattr(args,'goal','basic-graph')=='data-pipeline' else 100
     if not 30 <= args.timeout <= 3600 or not 1 <= args.max_turns <= max_turns_limit:
         raise ValueError("Invalid acceptance budget")
@@ -103,9 +124,12 @@ def validate_inputs(args):
 def execute(args):
     os.umask(0o077)
     validate_inputs(args)
-    connection_values = connection(args.hermes_home)
+    profile=getattr(args,'model_profile','chatgpt-luna')
+    provider,model=('xiaomi','mimo-v2.5') if profile=='xiaomi-mimo' else ('openai-codex','gpt-5.6-luna')
+    model_env=xiaomi_connection(args.hermes_home) if profile=='xiaomi-mimo' else {}
+    connection_values = connection(args.hermes_home) if profile=='chatgpt-luna' else {'version':1,'providers':{}}
     dock = json.loads(args.dock_config.read_text())
-    secrets = [*connection_values["providers"]["openai-codex"]["tokens"].values(), dock.get("api_key")]
+    secrets = [*connection_values.get("providers",{}).get("openai-codex",{}).get("tokens",{}).values(), *model_env.values(), dock.get("api_key")]
     goal_id = getattr(args, "goal", "basic-graph")
     goal = WORK / "goals" / (goal_id + ".txt")
     if goal_id != "basic-graph" and getattr(args, "fault", "none") != "none":
@@ -135,8 +159,8 @@ def execute(args):
     if goal_id == 'data-pipeline':
         harness_inputs.update({name:sha(WORK / name) for name in data_pipeline.FIXTURES})
     info = {"schema_version": 2, "storage_directory":getattr(args,"storage_directory",None), "scope": "source_runtime", "model_started": False,
-            "provider": "openai-codex", "model": "gpt-5.6-luna", "reasoning_effort": "medium", "hermes_version": "0.21.0",
-            "provider_selection": "explicit CLI; effective usage identity checked after the run",
+            "provider": provider, "model": model, "reasoning_effort": "medium", "hermes_version": "0.21.0",
+            "model_profile": profile, "provider_selection": "explicit CLI; effective usage identity checked after the run",
             "fallback_allowed": False, "dependencies": dependencies,
             "runtime_source_pin": frozen, "source_inventory": source["source"],
             "harness_inputs": harness_inputs, "goal_id": goal_id, "goal_sha256": sha(goal),
@@ -153,7 +177,7 @@ def execute(args):
     if not args.run:
         write(args.output, info)
         print(json.dumps({"preflight": "passed", "model_started": False, "hermes_version": "0.21.0",
-                          "provider": "openai-codex", "model": "gpt-5.6-luna", "reasoning_effort": "medium", "client_revision": frozen["client_revision"]}))
+                          "provider": provider, "model": model, "reasoning_effort": "medium", "client_revision": frozen["client_revision"]}))
         return 0
     run_id = time.strftime("%Y%m%d-%H%M%S") + "-" + uuid.uuid4().hex[:8]
     run = args.runs_root.resolve() / run_id
@@ -184,7 +208,7 @@ def execute(args):
                "--action-manifest-sha256", args.manifest_sha256, "--replay-bootstrap", "--replay-login-user", args.loginom_user]
     if goal_id in ('file-upload-probe','file-upload-verify','data-pipeline'):
         command.extend(['--input-artifact',json.dumps({**info['input_artifact'],'sourcePath':str(WORK / upload_probe.FIXTURE)},ensure_ascii=False)])
-    config = {"mcp_servers": {"loginom-dock": {"command": str(args.node), "args": command,
+    config = {"fallback_providers": [], "mcp_servers": {"loginom-dock": {"command": str(args.node), "args": command,
               "connect_timeout": 180, "timeout": 360, "enabled": True,
               "env": {"DOCK_ACCEPTANCE_RUN_DIR": str(run),
                       "DOCK_ACCEPTANCE_EXECUTOR_SHA256": frozen["inputs"]["client/lib/executor.mjs"]}}},
@@ -206,13 +230,13 @@ def execute(args):
         if runtime_pin(REPO) != frozen or not harness_unchanged(harness_inputs):
             raise ValueError("Source changed before model launch")
         write(hermes_home / "auth.json", connection_values)
-        env = environment({}, hermes_home, run)
-        argv = [str(args.hermes), "--provider", "openai-codex", "--model", "gpt-5.6-luna", "--reasoning", "medium",
+        env = environment(model_env, hermes_home, run)
+        argv = [str(args.hermes), "--provider", provider, "--model", model, "--reasoning", "medium",
                 "--toolsets", "loginom-dock", "--skills", "loginom", "--usage-file", str(run / "private/usage.json"), "-z", prompt]
         child = subprocess.Popen(argv, cwd=run, env=env, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, start_new_session=True)
         started = True
         status = "FAILED_MODEL_OR_EXPORT"
-        print(json.dumps({"run_id": run_id, "stage": "model_started", "provider": "openai-codex", "model": "gpt-5.6-luna", "reasoning_effort": "medium"}), flush=True)
+        print(json.dumps({"run_id": run_id, "stage": "model_started", "provider": provider, "model": model, "reasoning_effort": "medium"}), flush=True)
         timed_out = False
         try:
             child.wait(timeout=args.timeout)
@@ -271,6 +295,7 @@ def main():
     parser.add_argument("--require-verification", action="store_true")
     parser.add_argument("--require-delivered-context", action="store_true",
                         help="Require automatic E2E/Help delivery bound to a failure and journal before successful continuation")
+    parser.add_argument("--model-profile",choices=["chatgpt-luna","xiaomi-mimo"],default="chatgpt-luna")
     parser.add_argument("--goal", choices=["basic-graph", "auto-link-retain", "auto-link-remove", "palette-inventory", "checkbox-roundtrip", "context-menu-checkbox", "root-checkbox", "file-storage-inspect", "file-upload-probe", "file-upload-verify", "data-pipeline"], default="basic-graph")
     parser.add_argument("--allow-manual-reopen", action="store_true")
     args = parser.parse_args()

@@ -27,6 +27,17 @@ EXPECTED = {
 }
 
 
+def approved_model(request,evidence):
+    profile=request.get('model_profile','chatgpt-luna')
+    if profile=='chatgpt-luna':expected=('openai-codex','gpt-5.6-luna')
+    elif profile=='xiaomi-mimo' and request.get('goal_id')=='data-pipeline':expected=('xiaomi','mimo-v2.5')
+    else:return False
+    process=evidence.get('process',{});usage=process.get('usage',{})
+    return (process.get('returncode')==0 and process.get('timed_out') is False and (request.get('provider'),request.get('model'))==expected
+            and (usage.get('provider'),usage.get('model'))==expected
+            and request.get('reasoning_effort')==evidence.get('reasoning_effort')=='medium')
+
+
 def sha(data):
     return hashlib.sha256(data).hexdigest()
 
@@ -733,13 +744,7 @@ def audit(request, evidence, prompt):
             expected_prompt=data_pipeline.prompt(goal.read_text(),path,destination,run_id)
         check("original_goal_only_prompt", prompt == expected_prompt
               and request["goal_sha256"] == sha(goal.read_bytes()))
-        check("approved_model_completed", evidence["process"]["returncode"] == 0
-              and evidence["process"]["timed_out"] is False
-              and evidence["process"]["usage"].get("provider") == "openai-codex"
-              and evidence["process"]["usage"].get("model") == "gpt-5.6-luna"
-              and request.get("provider") == "openai-codex"
-              and request.get("model") == "gpt-5.6-luna"
-              and request.get("reasoning_effort") == evidence.get("reasoning_effort") == "medium")
+        check("approved_model_completed", approved_model(request,evidence))
         check("source_unchanged", evidence["runtime_source_unchanged"] is True)
         check("harness_unchanged", evidence["harness_unchanged"] is True)
         variant = request["fault_injection"]

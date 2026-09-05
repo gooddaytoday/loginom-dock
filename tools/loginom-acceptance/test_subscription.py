@@ -34,3 +34,26 @@ class SubscriptionTest(unittest.TestCase):
         self.assertFalse(audit.audit(request,evidence,prompt)['all_assertions_passed'])
 
 if __name__=='__main__':unittest.main()
+
+class XiaomiProfileTest(unittest.TestCase):
+    def test_only_xiaomi_key_is_selected_without_interpolation(self):
+        with tempfile.TemporaryDirectory() as root:
+            home=Path(root)
+            (home/'.env').write_text('OPENAI_API_KEY=excluded\nexport XIAOMI_API_KEY="fixture-$LITERAL"\nOTHER_KEY=excluded\n')
+            self.assertEqual(run.xiaomi_connection(home),{'XIAOMI_API_KEY':'fixture-$LITERAL'})
+            for content in ('OTHER_KEY=x','XIAOMI_API_KEY=','XIAOMI_API_KEY=a\nXIAOMI_API_KEY=b','XIAOMI_API_KEY="a b"'):
+                (home/'.env').write_text(content)
+                with self.assertRaises(ValueError):run.xiaomi_connection(home)
+    def test_exact_profile_and_effective_usage_are_required(self):
+        request,evidence,_=fixture()
+        request.update(model_profile='xiaomi-mimo',goal_id='data-pipeline',provider='xiaomi',model='mimo-v2.5')
+        evidence['process']['usage'].update(provider='xiaomi',model='mimo-v2.5')
+        self.assertTrue(audit.approved_model(request,evidence))
+        for field,value in [('provider','openai-codex'),('model','mimo-v2.5-pro')]:
+            original=evidence['process']['usage'][field];evidence['process']['usage'][field]=value
+            self.assertFalse(audit.approved_model(request,evidence));evidence['process']['usage'][field]=original
+        evidence['process']['timed_out']=True;self.assertFalse(audit.approved_model(request,evidence))
+        evidence['process']['timed_out']=False
+        request['model_profile']='chatgpt-luna';self.assertFalse(audit.approved_model(request,evidence))
+        request['model_profile']='xiaomi-mimo';request['goal_id']='basic-graph'
+        self.assertFalse(audit.approved_model(request,evidence))

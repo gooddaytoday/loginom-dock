@@ -1,3 +1,11 @@
+**Checkpoint:** по явному запросу пользователя 6 сентября следующая полная
+P3 проверка выполняется с --model-profile xiaomi-mimo (xiaomi/mimo-v2.5/medium),
+существующий Hermes key, no fallback. Default Luna сохранён. Launcher/auditor
+профиля готовы, 109 Python PASS. Luna run 004205-b5f4f1d3 terminal 50/58 FAIL,
+107 API calls; session 1629 закрыт. Далее запустить тот же data-pipeline goal на
+Xiaomi и проверить terminal evidence. Клиент не менялся после 0b7e385d; P3–P9
+остаются полной целью. Детали/границы сверху status.
+
 **Checkpoint P3:** run 20260906-002935-fc60ced5 terminal, 50/58 frozen FAIL.
 Live replace_expression → exact Quantity * UnitPrice в Expr1 подтверждён,
 но import/settings/syntax/Amount/results ещё нет. Wizard root read сам по себе
