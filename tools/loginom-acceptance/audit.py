@@ -637,6 +637,52 @@ def palette_inventory(evidence, checks, require_scroll=False):
                            'This proves constrained collection, not complete component/mode coverage or licensing.']}
 
 
+def file_storage_inspect(evidence, checks):
+    """Narrow live destination evidence, never upload/no-overwrite acceptance."""
+    def check(name, passed):
+        checks.append({'name':name,'passed':bool(passed)})
+    calls=evidence['calls'];tools=evidence['tools'];events=evidence['events']
+    def reply_for(call):
+        found=[t for t in tools if t['session_id']==call['session_id'] and t['tool_call_id']==call['tool_call_id']
+               and t['tool']==call['tool'] and t['row']>call['row']]
+        return found[0] if len(found)==1 else None
+    def bound(reply):
+        matching=[c for c in calls if c['session_id']==reply['session_id'] and c['tool_call_id']==reply['tool_call_id'] and c['tool']==reply['tool'] and c['row']<reply['row']]
+        if len(matching)!=1:return False
+        result=reply['result']
+        records=[e for e in events if e.get('phase')=='completed' and e.get('operation_id')==result.get('operation_id')]
+        return bool(result.get('operation_id')) and len(records)==1 and rename_effect.journal_equal(records[0].get('outcome',{}),result)
+    navigation=[]
+    for call in calls:
+        if call['tool'] not in MUTATIONS:continue
+        reply=reply_for(call)
+        if reply and rejected_before_browser(call,evidence):continue
+        args=call.get('arguments',{});action=args.get('action',{})
+        observations=[t for t in tools if t['session_id']==call['session_id'] and t['row']<call['row']
+                      and t['result'].get('output',{}).get('observation_id')==args.get('observation_id')]
+        targets=[item for t in observations for item in t['result'].get('output',{}).get('ui',{}).get('elements',[])
+                 if item.get('ref')==action.get('ref')]
+        tids={item.get('tid') for item in targets}
+        tid=next(iter(tids)) if len(tids)==1 else ''
+        allowed=(action.get('verb')=='click' and tid=='MF;cntMain;tlbMainToolbar;btnFilestorage'
+                 or action.get('verb')=='double_click' and bool(re.fullmatch(r'MF;TF(?:-\d+)?;FileStorageForm;colName_(?:user|data)',tid or '')))
+        navigation.append(call['tool']==PREFIX+'dock_ui_action' and allowed and reply is not None
+                          and reply['result'].get('status')=='SUCCEEDED' and bound(reply))
+    check('only_observed_file_storage_navigation',bool(navigation) and all(navigation))
+    reads=[t for t in tools if t['tool']==PREFIX+'dock_workspace_observe' and t['result'].get('status')=='SUCCEEDED'
+           and t['result'].get('output',{}).get('file_storage',{}).get('status')=='observed']
+    last=max(reads,key=lambda t:t['row']) if reads else None
+    directory=last['result']['output']['file_storage'] if last else {}
+    check('delivered_directory_is_user_data',directory.get('directory')=='/user/data'
+          and directory.get('source')=='visible_breadcrumbs' and bool(directory.get('navigation_identity'))
+          and directory.get('listing_complete') is False)
+    check('directory_has_immutable_browser_receipt',last is not None and bound(last))
+    check('no_actions_after_directory_read',last is not None and not any(c['tool'] in MUTATIONS and c['row']>last['row'] for c in calls))
+    return {'all_assertions_passed':all(c['passed'] for c in checks),'assertions':checks,
+            'goal':'file-storage-inspect','directory':directory,
+            'limitations':['Destination UI observation only; no upload, server byte proof or filename absence proof.']}
+
+
 def audit(request, evidence, prompt):
     checks = []
     def check(name, passed):
@@ -647,7 +693,7 @@ def audit(request, evidence, prompt):
         check("run_identity_and_owned_package", bool(re.fullmatch(r"\d{8}-\d{6}-[a-f0-9]{8}", run_id))
               and evidence["run_id"] == run_id and request["package_path"] == path)
         goal_id=request.get('goal_id','basic-graph')
-        if goal_id not in ('basic-graph','auto-link-retain','auto-link-remove','palette-inventory','checkbox-roundtrip','context-menu-checkbox','root-checkbox'):
+        if goal_id not in ('basic-graph','auto-link-retain','auto-link-remove','palette-inventory','checkbox-roundtrip','context-menu-checkbox','root-checkbox','file-storage-inspect'):
             raise ValueError('Unsupported goal')
         goal=GOAL.with_name(goal_id+'.txt')
         expected=copy.deepcopy(EXPECTED)
@@ -713,6 +759,8 @@ def audit(request, evidence, prompt):
         check("actual_journal_pins", bool(re.fullmatch(r"[a-f0-9]{64}", revision)) and all(
             e["runtime_revision"] == revision and e["manifest_sha256"] == request["manifest_sha256"]
             and e["session_id"] == prepared["sessionId"] for e in events))
+        if goal_id=='file-storage-inspect':
+            return file_storage_inspect(evidence, checks)
         if goal_id=='palette-inventory':
             bootstrap_proof(evidence, check)
             return palette_inventory(evidence, checks, require_scroll=True)
@@ -841,7 +889,7 @@ def audit_directory(run):
               and (not request.get("allow_manual_reopen") or request.get("harness_inputs",{}).get("manual_reopen.py")==sha(Path(manual_reopen.__file__).read_bytes()))
               and (request.get("goal_id", "basic-graph") in ("basic-graph","palette-inventory") or request.get("harness_inputs", {}).get("auto_link_delete.py")==sha(Path(auto_link_delete.__file__).read_bytes())))
     report["assertions"].append({"name": "auditor_matches_predeclared_contract", "passed": frozen})
-    if request.get('goal_id') in ('checkbox-roundtrip','context-menu-checkbox','root-checkbox'):
+    if request.get('goal_id') in ('checkbox-roundtrip','context-menu-checkbox','root-checkbox','file-storage-inspect'):
         frozen = frozen and all(request.get('harness_inputs', {}).get(name) == sha(Path(__file__).with_name(name).read_bytes())
                                 for name in ('checked_state.py', 'rename_effect.py'))
         report['assertions'].append({'name': 'checkbox_auditor_dependencies_frozen', 'passed': frozen})
