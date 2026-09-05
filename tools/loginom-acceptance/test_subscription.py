@@ -40,7 +40,9 @@ class XiaomiProfileTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as root:
             home=Path(root)
             (home/'.env').write_text('OPENAI_API_KEY=excluded\nexport XIAOMI_API_KEY="fixture-$LITERAL"\nOTHER_KEY=excluded\n')
-            self.assertEqual(run.xiaomi_connection(home),{'XIAOMI_API_KEY':'fixture-$LITERAL'})
+            endpoint='https://token-plan-sgp.xiaomimimo.com/v1'
+            (home/'auth.json').write_text(json.dumps({'credential_pool':{'xiaomi':[{'source':'env:XIAOMI_API_KEY','base_url':endpoint}]}}))
+            self.assertEqual(run.xiaomi_connection(home),{'XIAOMI_API_KEY':'fixture-$LITERAL','XIAOMI_BASE_URL':endpoint})
             for content in ('OTHER_KEY=x','XIAOMI_API_KEY=','XIAOMI_API_KEY=a\nXIAOMI_API_KEY=b','XIAOMI_API_KEY="a b"'):
                 (home/'.env').write_text(content)
                 with self.assertRaises(ValueError):run.xiaomi_connection(home)
@@ -57,3 +59,18 @@ class XiaomiProfileTest(unittest.TestCase):
         request['model_profile']='chatgpt-luna';self.assertFalse(audit.approved_model(request,evidence))
         request['model_profile']='xiaomi-mimo';request['goal_id']='basic-graph'
         self.assertFalse(audit.approved_model(request,evidence))
+
+class XiaomiSubscriptionEndpointTest(unittest.TestCase):
+    def test_missing_ambiguous_or_non_subscription_endpoint_never_falls_back(self):
+        with tempfile.TemporaryDirectory() as root:
+            home=Path(root);(home/'.env').write_text('XIAOMI_API_KEY=fixture\n')
+            entry={'source':'env:XIAOMI_API_KEY','base_url':'https://token-plan-sgp.xiaomimimo.com/v1'}
+            invalid=[[],[entry,entry]]
+            for url in ['https://api.xiaomimimo.com/v1','http://token-plan-sgp.xiaomimimo.com/v1',
+                        'https://token-plan-sgp.xiaomimimo.com.evil.test/v1',
+                        'https://name:secret@token-plan-sgp.xiaomimimo.com/v1',
+                        'https://token-plan-sgp.xiaomimimo.com/v1?token=secret']:
+                invalid.append([{**entry,'base_url':url}])
+            for pool in invalid:
+                (home/'auth.json').write_text(json.dumps({'credential_pool':{'xiaomi':pool}}))
+                with self.assertRaises(ValueError):run.xiaomi_connection(home)

@@ -453,3 +453,7 @@ run uses only the existing Hermes XIAOMI_API_KEY from its .env; it does not copy
 other providers, personal MCP config, or subscription auth. Exact provider/model
 identity must match `xiaomi` / `mimo-v2.5` in usage evidence. Fallback providers
 are explicitly empty. All fixture, runtime pinning and domain gates still apply.
+
+Use the subscription base URL from the existing Hermes Xiaomi credential-pool
+entry associated with XIAOMI_API_KEY. Copy only that explicit XIAOMI_BASE_URL
+into the isolated process environment. Do not substitute the normal metered API.

@@ -1,3 +1,10 @@
+**Checkpoint Xiaomi:** пользователь уточнил подписку. Первый run 005734-91a132d6
+terminal 18/23 FAIL до tools: ключ отправлен на metered endpoint, 401.
+Исправлен launcher: base_url из существующей Xiaomi credential_pool entry
+source=env:XIAOMI_API_KEY + key из Hermes .env, no fallback. Следующий полный
+run с --model-profile xiaomi-mimo должен проверить именно подписку. Runtime
+клиента не менялся после 0b7e385d. 110 Python PASS; full P3–P9 не завершён.
+
 **Checkpoint:** по явному запросу пользователя 6 сентября следующая полная
 P3 проверка выполняется с --model-profile xiaomi-mimo (xiaomi/mimo-v2.5/medium),
 существующий Hermes key, no fallback. Default Luna сохранён. Launcher/auditor

@@ -1,3 +1,20 @@
+## 2026-09-06 — уточнён именно подписочный профиль Xiaomi
+
+Пользователь уточнил: использовать подписку Xiaomi. Первый Xiaomi run
+20260906-005734-91a132d6 terminal до tools (1 API call, failed=true), audit
+18/23 FAIL, SHA 177c3c9e88f9d88ec44bc021580f8dd8ac9a73682f1095608f268cba1942ffe6.
+Диагностика только error metadata: 401 Invalid API Key. Причина конфигурации:
+скопирован ключ из Hermes .env, но потерян подписочный base_url из Xiaomi
+credential_pool; запрос попал на стандартный metered API. Это не доказывает,
+что подписочный ключ не работает. Никаких Loginom actions этот run не выполнил.
+
+Исправлено: читается единственная Xiaomi pool entry source=env:XIAOMI_API_KEY,
+её token-plan endpoint и тот же ключ; передаются только XIAOMI_API_KEY и
+XIAOMI_BASE_URL. Не копируются чужие credentials/pool entries. Missing/duplicate,
+HTTP, URL credentials/query и non-subscription endpoints отклоняются без fallback.
+110 Python tests PASS. Следующий run должен подтвердить доступ к подписке.
+Клиент/полный goal/fixture/лимиты прежние. До запуска active Hermes нет.
+
 ## 2026-09-06 — сравнение той же P3 проверки на Xiaomi по запросу пользователя
 
 Luna run 20260906-004205-b5f4f1d3 завершён (session 1629 terminal): exit 0,

@@ -8,6 +8,7 @@ import os
 from pathlib import Path
 import re
 import shlex
+from urllib.parse import urlsplit
 import signal
 import subprocess
 import sys
@@ -76,7 +77,18 @@ def xiaomi_connection(home):
                 raise ValueError('Existing Hermes Xiaomi key is malformed')
             values.append(parts[0])
     if len(values)!=1:raise ValueError('Exactly one existing Hermes Xiaomi key is required')
-    return {'XIAOMI_API_KEY':values[0]}
+    # Subscription keys use the endpoint attached to the existing Hermes pool
+    # entry, not Xiaomi's pay-as-you-go API default.
+    auth=json.loads((home / 'auth.json').read_text())
+    pool=auth.get('credential_pool',{}).get('xiaomi',[])
+    matches=[entry for entry in pool if isinstance(entry,dict) and entry.get('source')=='env:XIAOMI_API_KEY'] if isinstance(pool,list) else []
+    if len(matches)!=1:raise ValueError('One existing Xiaomi subscription connection is required')
+    endpoint=matches[0].get('base_url','');url=urlsplit(endpoint)
+    if (url.scheme!='https' or not re.fullmatch(r'token-plan(?:-[a-z]+)?\.xiaomimimo\.com',url.hostname or '')
+        or url.username or url.password or url.port or url.query or url.fragment or url.path.rstrip('/')!='/v1'):
+        raise ValueError('Existing Xiaomi connection is not a supported subscription endpoint')
+    return {'XIAOMI_API_KEY':values[0],'XIAOMI_BASE_URL':endpoint}
+
 
 
 def environment(connection_values, home, run):
@@ -129,7 +141,7 @@ def execute(args):
     model_env=xiaomi_connection(args.hermes_home) if profile=='xiaomi-mimo' else {}
     connection_values = connection(args.hermes_home) if profile=='chatgpt-luna' else {'version':1,'providers':{}}
     dock = json.loads(args.dock_config.read_text())
-    secrets = [*connection_values.get("providers",{}).get("openai-codex",{}).get("tokens",{}).values(), *model_env.values(), dock.get("api_key")]
+    secrets = [*connection_values.get("providers",{}).get("openai-codex",{}).get("tokens",{}).values(), model_env.get("XIAOMI_API_KEY"), dock.get("api_key")]
     goal_id = getattr(args, "goal", "basic-graph")
     goal = WORK / "goals" / (goal_id + ".txt")
     if goal_id != "basic-graph" and getattr(args, "fault", "none") != "none":

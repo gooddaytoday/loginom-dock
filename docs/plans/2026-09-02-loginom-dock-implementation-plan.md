@@ -1382,7 +1382,7 @@ timeout и лимита до «достаточно большого».
 
 6 сентября пользователь разрешил повторить ту же полную проверку через
 Hermes Xiaomi MiMo 2.5: provider xiaomi, model mimo-v2.5, reasoning medium,
-существующее подключение Hermes, без fallback. Профиль xiaomi-mimo выбирается
+существующая подписка Xiaomi в Hermes (subscription endpoint из credential pool), без fallback. Профиль xiaomi-mimo выбирается
 явно; default ChatGPT/Luna не меняется. Цель, fixture, лимиты и требования
 приёмки сохраняются; смена модели не закрывает незавершённые domain gates.
 

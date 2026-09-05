@@ -54,7 +54,7 @@
   another provider/model on failure, timeout or limits. Dock server models remain
   unchanged; Hermes remains the executor.
 - For the user-requested full data-pipeline comparison on 2026-09-06, the
-  next Hermes run may explicitly use the existing Xiaomi connection with
+  next Hermes run may explicitly use the existing Xiaomi subscription with
   provider `xiaomi`, model `mimo-v2.5`, reasoning `medium`, without fallback.
   This is an opt-in comparison profile; ChatGPT/Luna remains the default.
 - Never assume the Loginom account or personal storage root is named `user`.
