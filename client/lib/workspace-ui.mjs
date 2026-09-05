@@ -98,7 +98,7 @@ function workspaceUiCapability(page, task) {
       if (dom.length >= maxElements) { const error=new Error('Selected region or global guards exceed the scan budget');error.code='UI_SCAN_LIMIT';throw error; }
       seenElements.add(element);dom.push(element);
     };
-    const regionSelector='[role="dialog"],.x-window,.bg-dialog,[role="grid"],table,[role="form"],[data-tid$=";WizrdMCF"],[data-tid$=";cmpDiagram"],[data-tid$=";pnlWorkarea"]';
+    const regionSelector='[role="dialog"],.x-window,.bg-dialog,[role="grid"],table,[role="form"],[data-tid$=";WizrdMCF"],[data-tid$=";cmpDiagram"],[data-tid$=";pnlWorkarea"],[data-tid$="NavigationBar;NavigationPanel"]';
     const regionElements=discoverRoots ? [...document.querySelectorAll(regionSelector)] : [];
     charge();
     if (discoverRoots) for (const element of regionElements) include(element);
@@ -113,7 +113,7 @@ function workspaceUiCapability(page, task) {
       // Native fixed queries discover global blockers/context without walking
       // every unrelated subtree in JavaScript. Their synchronous browser cost
       // cannot be preempted; charge immediately after each native operation.
-      const guards=document.querySelectorAll('[data-tid="MF;cntMain;tlbMainToolbar;btnAvatar"],.x-tab-active[data-tid],[role="dialog"],.x-window,.bg-dialog,.bg-mask-message,.x-mask-msg,[role="alert"],[role="status"],.bg-message,.x-message-box,.x-form-invalid-under');
+      const guards=document.querySelectorAll('[data-tid="MF;cntMain;tlbMainToolbar;btnAvatar"],.x-tab-active[data-tid],[role="dialog"],.x-window,.bg-dialog,.bg-mask-message,.x-mask-msg,[role="alert"],[role="status"],.bg-message,.x-message-box,.x-form-invalid-under,[data-tid$="FileStorageForm;pnlFileStorage;tbl"]');
       charge();for (const element of guards) include(element);
     }
     const select = selector => dom.filter(element => { charge(); return element.matches(selector); });

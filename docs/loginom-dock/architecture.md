@@ -1,3 +1,16 @@
+### Live storage scan limits and navigation roots (2026-09-05)
+
+FileStorageForm;colName_* cells now issue guarded refs using the E2E navigation
+identity. A live transition into user triggered UI_SCAN_LIMIT. Browser-origin
+observation errors cross page.evaluate as a fixed data envelope; exception
+messages are not exported, known codes survive Playwright Error serialization.
+NavigationBar;NavigationPanel joins root discovery; a fixed global query reads
+the storage table container marker only. Navigation-root details can therefore
+read destination breadcrumbs without walking a large table. This is locally
+verified with 6500 background elements; the new navigation-root path still needs
+live acceptance. Specific rows in large tables still need bounded lookup, and
+listing_complete remains false. No upload/no-overwrite or remote SHA claim.
+
 ### Host startup input admission (2026-09-05)
 
 Executor preview/replay CLI accepts repeated `--input-artifact` arguments, each

@@ -1,3 +1,14 @@
+**Текущая точка P3:** три file-storage-inspect live FAIL сохранены; последний
+203745-2c218e8b доказал UI_SCAN_LIMIT после открытия user. Исправлены row refs
+FileStorageForm;colName_* и передача Error.code через page.evaluate envelope.
+Последняя ещё НЕ live правка: roots включает NavigationBar, fixed global query
+включает storage table marker; local 6500-elements test читает directory без
+обхода таблицы. Active Hermes нет. Далее bounded lookup строки data в большом
+списке + goal final navigation-root read вместо запрещённого full read + auditor
+для доказанного NOT_APPLIED epoch, затем live и upload/P3 chain/P4–P9. Точные
+SHA/run/runtime и границы сверху implementation-status. Не повторять старый
+full-read goal без исправления этих причин, не переоценивать frozen FAIL.
+
 **Последняя P3 реализация:** CLI `--input-artifact` repeated JSON с exact
 sourcePath/name/bytes/sha256 → session store до bridge; executor dock_prepare
 возвращает input_artifacts descriptors без sourcePath. Batch ≤8/64MiB,

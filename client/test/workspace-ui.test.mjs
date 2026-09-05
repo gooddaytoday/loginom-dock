@@ -773,3 +773,22 @@ test('observation error codes cross a serialized browser boundary without except
     if (code) assert.equal(result.output.scan.complete,false);
   }
 });
+
+test('navigation root reads the directory without traversing a large storage table', async () => {
+  const page=new Page(),table=page.add('div','MF;TF-1;FileStorageForm;pnlFileStorage;tbl');
+  for(let i=0;i<6500;i++) page.add('div',null,'row',undefined,table);
+  const bar=page.add('div','MF;TF-1;NavigationBar;NavigationPanel');
+  for(const [i,text] of ['user','data'].entries()) {
+    const button=page.add('div',`MF;TF-1;cnrNaviMode;b.s-${i}`,'',undefined,bar);
+    page.add('span',null,text,undefined,button).attrs.class='x-btn-inner-default-toolbar-small';
+  }
+  // Emulate the fixed native queries; JavaScript detail walks remain real.
+  page.document.querySelectorAll=selector=>selector.includes('[role="grid"]')?[bar,table]:[page.avatar,page.tab,table];
+  let walkedTable=false;const walker=page.document.createTreeWalker.bind(page.document);
+  page.document.createTreeWalker=(element,kind)=>{if(element===table)walkedTable=true;return walker(element,kind);};
+  const roots=await page.execute({mode:'observe',discover_roots:true});
+  const ref=roots.output.ui.elements.find(e=>e.tid===bar.getAttribute('data-tid')).ref;
+  const detail=await page.execute({mode:'observe',root_ref:ref});
+  assert.equal(detail.status,'SUCCEEDED');assert.equal(detail.output.file_storage.directory,'/user/data');
+  assert.equal(detail.output.file_storage.listing_complete,false);assert.equal(walkedTable,false);
+});

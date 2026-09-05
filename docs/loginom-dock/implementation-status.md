@@ -1,3 +1,44 @@
+## 2026-09-05 — P3 live storage: подтверждён большой DOM после перехода
+
+Добавлен predeclared goal file-storage-inspect (read/navigation only /user/data),
+аудитор проверяет delivered target, whitelist navigation, bound raw receipt,
+конечный directory и отсутствие дальнейших actions. 83 Python PASS.
+Три реальных прогона Hermes, current Mac ChatGPT/openai-codex/Luna/medium:
+
+- 20260905-202721-86b8d02b: 20/23 frozen FAIL, audit SHA
+  2402c4160080a1d6f1d4a5aad806b30351fbd753a66bc28db8f6577abf5c16c6,
+  runtime 6acdd5c580e35b2a951163925d8bd6f65396d7f8f157ada9021337237466f93c.
+  Файловое хранилище открыто, user/common видны как cells без actionable refs.
+- После исправления interesting для E2E FileStorageForm;colName_*:
+  20260905-203227-42445ff6: 19/23 FAIL, audit SHA
+  9dbcffc5851bc97adaae7d14fbf915df7c0c6bbda121c7b1464d4fa12f3e2252,
+  runtime a12fe6e0ba3fb41c6f7ea56022fdf9a955a347c63891dc4cdc9cc0e2c3feefe8.
+  После перехода чтение даёт UI_BROWSER_CALL_FAILED. Custom Error.code
+  теряется на границе page.evaluate; не было подтверждения конкретной причины.
+- Добавлен data envelope для UI_SCAN_LIMIT/UI_ROOT_STALE/UI_EPOCH_UNAVAILABLE,
+  unknown → UI_OBSERVATION_FAILED без исключений/значений страницы в сообщении.
+  20260905-203745-2c218e8b: 19/23 FAIL, audit SHA
+  2c415eb0a6e663bda0a97d6a6e6ecd26d0ca7e59870bad056f3af22e7404eb5c,
+  runtime b488a620c7d0c1b9b9d3a94a754c421fadbc402add8ab900d5ba3e59bd973fbe.
+  Подтверждён UI_SCAN_LIMIT после double_click user; также штатный
+  UI_EPOCH_CHANGED до одного жеста. /user/data не доказан. Нет live upload.
+
+После третьего run (не переоценивая прежние FAIL) добавлена NavigationBar в
+roots discovery и storage table marker в fixed global queries. Узкое чтение
+navigation root теперь может установить directory без обхода строк таблицы.
+Local serialized test с 6500 фоновыми элементами: directory /user/data,
+listing_complete=false, ни одного обхода table. Эта последняя правка ещё НЕ live.
+Итог локальных проверок: 187 client / 83 Python / 10 packaging PASS.
+
+Следующее: доставить конкретную строку data в большом списке через bounded
+filter/observation (не повышать бюджет полного обхода); разрешить goal читать
+адрес через navigation root, поскольку текущий goal требует full read без root.
+Аудитор сейчас отвергает даже штатный NOT_APPLIED UI_EPOCH_CHANGED; новый
+контракт должен учитывать только доказанные no-effect отказы с bound journal,
+сохранить прежние FAIL. Затем новый frozen live run и typed upload с настоящими
+no-overwrite/reconciliation/server bytes proof. Native runtime не менять во время
+Hermes; сейчас все три процесса терминальны, active Hermes нет. P0–P9 открыт.
+
 ## 2026-09-05 — P3: разрешённые файлы подключены к запуску клиента
 
 CLI executor-preview/replay принимает повторяемый `--input-artifact` JSON
