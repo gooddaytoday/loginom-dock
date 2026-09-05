@@ -1,5 +1,12 @@
 # Следующему агенту: с чего начать
 
+**Актуально:** checkbox-roundtrip `20260905-164903-1372db2d` — 24/24 frozen
+PASS, false→true→true(no-op)→false в Text Import. Runtime `9f70441a…`,
+Hermes Luna/medium/ChatGPT. Active Hermes нет. После run реализован right_click
+со стандартными guards и cleanup правой кнопки, 169 client / 79 Python.
+Live right_click ещё нет. Далее bounded goal/auditor реального context menu,
+затем остальные P2 и P3–P9. Подробности/точные SHA — верх implementation-status.
+
 **Последний live:** checkbox-roundtrip `20260905-164028-032ecbdd` — 21/24
 frozen FAIL, мастер не открыт, set_checked не вызывался. Active Hermes нет.
 После run добавлен observed graph `;Setting` (E2E wizard.OpenNodeSettings и

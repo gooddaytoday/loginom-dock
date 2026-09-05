@@ -1286,6 +1286,11 @@ Effect contracts реализованы в `4743d427` (семь kinds и binding
 
 ### P2. Общие UI-драйверы и доступное наблюдение
 
+5 сентября checkbox Text Import принят в `20260905-164903-1372db2d`:
+24/24 frozen PASS, включая смену, idempotent no-op и возврат значения.
+Это не приёмка radio, apply или сохранённых настроек. Следом реализован
+right_click с guards/cleanup; его live ещё предстоит (169 client tests).
+
 Вертикальный scroll палитры 0→800→0 принят в новом run
 `20260905-161157-1fb1e122`: **27/27 frozen PASS**, runtime `1f654a57…`.
 164 client / 75 Python / 10 packaging. Остальные P2 пункты остаются открытыми;

@@ -97,14 +97,15 @@ class Page {
       element.value = this.selectedAll ? text : element.value + text; this.selectedAll = false;
     } };
     this.mouse = {
-      click: async (x, y, { clickCount }) => {
+      click: async (x, y, { clickCount, button }) => {
+        this.clickedButton = button;
         this.events.push(clickCount === 2 ? 'double_click' : 'click'); this.clickedPoints.push({ x, y, clickCount });
         this.document.activeElement = this.document.elementFromPoint(x, y);
         if (this.failClick) { this.mouseHeld = true; throw new Error('Click response lost'); }
       },
       move: async (x, y) => { this.events.push('mouse_move'); if (this.mouseHeld && this.failDrag) throw new Error('lost browser response with secret=thismustnotleak'); this.point = { x, y }; },
       down: async () => { this.events.push('mouse_down'); this.mouseHeld = true; },
-      up: async () => { this.events.push('mouse_up'); if (this.failRelease) throw new Error('mouse release interrupted'); this.mouseHeld = false; },
+      up: async options => { this.releasedButton = options?.button; this.events.push('mouse_up'); if (this.failRelease) throw new Error('mouse release interrupted'); this.mouseHeld = false; },
     };
   }
   add(tag, tid, text = '', box = { x: 30, y: 100, width: 100, height: 25 }, parent = this.document.body) { return parent.append(new Element(tag, tid ? { 'data-tid': tid } : {}, text, box)); }
@@ -193,8 +194,10 @@ test('a modal background never permits workspace controls or controls of a lower
   const snapshot = await page.observe();
   for (const tid of [button.getAttribute('data-tid'), lower.yes.getAttribute('data-tid')]) {
     const target = snapshot.ui.elements.find(element => element.tid === tid);
-    const result = await page.act({ verb: 'click', ref: target.ref }, snapshot);
-    assert.equal(result.status, 'NOT_APPLIED'); assert.equal(result.error.code, 'UI_MASKED');
+    for (const verb of ['click','right_click']) {
+      const result = await page.act({ verb, ref: target.ref }, snapshot);
+      assert.equal(result.status, 'NOT_APPLIED'); assert.equal(result.error.code, 'UI_MASKED');
+    }
   }
   assert.deepEqual(page.clickedPoints, []);
   const allowed = snapshot.ui.elements.find(element => element.tid === top.no.getAttribute('data-tid'));
@@ -463,6 +466,25 @@ test('palette spans provide observed references for enumeration without raw sele
   assert.equal((await page.act({ verb: 'click', ref: target.ref }, snapshot)).status, 'SUCCEEDED');
   expander.remove();
   assert.equal((await page.act({ verb: 'click', ref: target.ref }, snapshot)).status, 'NOT_APPLIED');
+});
+
+test('right click uses the checked ref and releases the right button after a lost reply', async () => {
+  for (const failure of [false, true]) {
+    const page = new Page();
+    page.add('button', 'Node;btnMenu', 'Menu');
+    const snapshot = await page.observe();
+    const target = snapshot.ui.elements.find(e => e.tid === 'Node;btnMenu');
+    validateUiAction({verb:'right_click',ref:target.ref},snapshot);
+    page.failClick = failure;
+    const outcome = await page.act({verb:'right_click',ref:target.ref},snapshot);
+    assert.equal(page.clickedButton,'right');
+    assert.equal(page.clickedPoints.length,1);
+    assert.equal(outcome.status,failure ? 'AMBIGUOUS' : 'SUCCEEDED');
+    assert.equal(outcome.cleanup_complete,true);
+    if (failure) assert.equal(page.releasedButton,'right');
+    else assert.ok(outcome.trace.some(e=>e.event==='ui_gesture_applied' && e.verb==='right_click'));
+  }
+  assert.throws(()=>validateUiAction({verb:'right_click',ref:'ui-one',x:100}), /fields/);
 });
 
 test('node settings affordance without button role is observable and guarded', async () => {

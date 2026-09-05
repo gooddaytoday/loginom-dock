@@ -3,7 +3,7 @@
 export const uiActionSchema = {
   type: 'object', additionalProperties: false, required: ['verb'],
   properties: {
-    verb: { type: 'string', enum: ['click', 'double_click', 'fill', 'press', 'drag', 'scroll', 'set_checked'] },
+    verb: { type: 'string', enum: ['click', 'double_click', 'right_click', 'fill', 'press', 'drag', 'scroll', 'set_checked'] },
     checked: { type: 'boolean' },
     delta_y: { type: 'integer', minimum: -1000, maximum: 1000 },
     ref: { type: 'string', maxLength: 128 }, text: { type: 'string', maxLength: 2048 },
@@ -38,7 +38,7 @@ export function validateUiAction(action, snapshot) {
 function workspaceUiCapability(page, task) {
   const started = Date.now(), deadline = started + 15000;
   const trace = [], handles = [];
-  let phase = 'observing', effectPossible = false, mouseHeld = false;
+  let phase = 'observing', effectPossible = false, mouseHeld = false, mouseButton = 'left';
   const record = (event, details = {}) => trace.push({ at_ms: Date.now() - started, event, ...details });
   const result = (status, output = {}, error = null) => ({ status, action_key: task.mode === 'observe' ? 'workspace.observe' : 'ui.act',
     action_revision: '1', operation_id: task.operation_id ?? null, phase, effect_possible: effectPossible, output, error, trace });
@@ -228,7 +228,7 @@ function workspaceUiCapability(page, task) {
         ...(checkState ? {check_state:checkState} : {}),
         signature: { tag, tid, role, type: element.getAttribute('type'), name: element.getAttribute('name'), label, ...(value === undefined ? {} : { value }), dialog_ref: dialogRef(element), scroll, check_state:checkState },
         enabled: isEnabled, visible: true, interaction, bounding_box: boxOf(element),
-        allowed_actions: allowed ? ['click', 'double_click', 'press', 'drag', ...(editable ? ['fill'] : []), ...(checkState ? ['set_checked'] : []), ...(scroll && interaction.state === 'point_observed' ? ['scroll'] : [])] : [] };
+        allowed_actions: allowed ? ['click', 'double_click', 'right_click', 'press', 'drag', ...(editable ? ['fill'] : []), ...(checkState ? ['set_checked'] : []), ...(scroll && interaction.state === 'point_observed' ? ['scroll'] : [])] : [] };
     });
     const graphPrefix = workflow ? workflow.prefix + ';Graph;' : null;
     const graphElements = graphPrefix ? all.filter(element => (getTid(element) ?? '').startsWith(graphPrefix)) : [];
@@ -399,13 +399,14 @@ function workspaceUiCapability(page, task) {
         record('ui_preconditions_verified', { verb: task.action.verb, refs });
         phase = 'applying'; effectPossible = true;
         const first = targets[0].handle;
-        const clickTarget = async clickCount => {
-          timeout(); mouseHeld = true;
-          await page.mouse.click(targets[0].point.x, targets[0].point.y, { clickCount });
+        const clickTarget = async (clickCount, button = 'left') => {
+          timeout(); mouseHeld = true; mouseButton = button;
+          await page.mouse.click(targets[0].point.x, targets[0].point.y, { clickCount, button });
           mouseHeld = false;
         };
         if (task.action.verb === 'click') await clickTarget(1);
         else if (task.action.verb === 'double_click') await clickTarget(2);
+        else if (task.action.verb === 'right_click') await clickTarget(1, 'right');
         else if (task.action.verb === 'press') await first.press(task.action.key, { timeout: timeout() });
         else if (task.action.verb === 'set_checked') {
           const before=current.ui.elements.find(item=>item.ref===task.action.ref).check_state;
@@ -470,7 +471,7 @@ function workspaceUiCapability(page, task) {
         { code: error?.code ?? 'UI_BROWSER_CALL_FAILED', message: error?.code ? error.message : 'The browser did not confirm the UI operation; inspect the workspace before recovery' });
     } finally {
       if (mouseHeld) {
-        try { await page.mouse.up(); record('cleanup_completed', { resource: 'mouse' }); refreshedAfterCleanup = true; }
+        try { await page.mouse.up({ button: mouseButton }); record('cleanup_completed', { resource: 'mouse', button: mouseButton }); refreshedAfterCleanup = true; }
         catch { cleanupComplete = false; outcome = result('AMBIGUOUS', outcome?.output, { code: 'UI_CLEANUP_FAILED', message: 'Mouse release could not be confirmed' }); record('cleanup_failed', { resource: 'mouse' }); }
       }
       for (const handle of handles) { try { await handle.dispose(); } catch { /* Disposal does not mutate Loginom. */ } }

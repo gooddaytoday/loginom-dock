@@ -1,5 +1,24 @@
 # Выполнение плана Loginom Dock
 
+## Checkbox принят; добавлен right_click — 5 сентября 2026
+
+Run `20260905-164903-1372db2d` — **24/24 frozen PASS**, audit SHA
+`bee237c5f86c221847aee0ca913538681ebafc55441104e323e4ceaecb2f0708`.
+Runtime `9f70441a5702744b158b30c4fc1684f6234a68c733f653c4adf2e4cbd4a6b8d7`,
+harness `3df3f1cc`, Hermes openai-codex/gpt-5.6-luna/medium. Кнопка Setting
+позволила открыть Text Import. Флажок «Параллельная обработка» прошёл цикл
+false→true, true→true без gesture/effect, true→false; все квитанции связаны
+с immutable journal. Мастер оставлен открытым, настройки не применялись;
+radio, сохранение/переоткрытие и импорт данных этим не приняты. Active Hermes нет.
+
+После run добавлен generic right_click по observed ref с теми же guards,
+одним page.mouse.click(button=right) и новым наблюдением. Cleanup после
+потери ответа освобождает именно правую кнопку; explicit recover освобождает
+левую и правую перед Escape. Тесты проверяют реальный serialized body, правую
+кнопку/no retry и запрет через modal mask. 169 client / 79 Python tests.
+Live right_click ещё не выполнялся. Далее реальное контекстное меню и остальные
+P2 drivers/root/filter/epoch, затем P3 с данными и P4–P9. Старые FAIL сохранены.
+
 ## Checkbox live: мастер не открыт, исправлена выдача Setting — 5 сентября
 
 Run `20260905-164028-032ecbdd` — **21/24 frozen FAIL**, audit SHA
