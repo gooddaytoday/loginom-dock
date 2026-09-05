@@ -1,5 +1,13 @@
 # Следующему агенту: с чего начать
 
+**Последняя приёмка:** `20260905-171627-dab12302` — 25/25 frozen PASS:
+контекстное меню → SetupNode → Text Import → checkbox cycle с no-op/возвратом.
+Runtime `65c1e28a…`, harness `1644468e`, Luna/medium/ChatGPT. 170 client /
+80 Python / 10 packaging. Active Hermes нет. Далее browser root/filter/epoch
+и прочие P2 widgets, затем P3–P9; меню больше не повторять без новых изменений.
+Root scan требует сохранения глобальных active tab/auth/mask guards и identity
+uniqueness; просто заменить document.documentElement недостаточно. См. верх status.
+
 **Текущая точка:** `20260905-171049-7c6c84e4` — 24/25 frozen FAIL:
 SetupNode и checkbox выполнены, но UI отрисовался после click receipt. Исправлен
 аудитор: после bound click допускается причинно последующий observe той же

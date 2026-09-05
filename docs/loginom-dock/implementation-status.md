@@ -1,5 +1,25 @@
 # Выполнение плана Loginom Dock
 
+## Context menu + checkbox: frozen PASS — 5 сентября 2026
+
+Run `20260905-171627-dab12302` — **25/25 frozen PASS**, audit SHA
+`c5c97984f25e9a627bfb2af153cb4d5a84e2b99f76cd68b3c4d14a3e990b3d8a`.
+Runtime `65c1e28ab47fb0bf2d443beff1cbbfecd779f2b56b41f166bd1a8abdea7c34ea`,
+harness `1644468e`, Hermes ChatGPT/openai-codex/gpt-5.6-luna/medium.
+Подтверждены right_click по узлу, observed `mn;mniSetupNode`, bound click,
+последующее появление Text Import и checkbox false→true→true(no-op)→false.
+Исходные browser receipts сопоставлены с доставленными ответами; новый отчёт
+не пересчитывает предыдущие FAIL. 170 client / 80 Python / 10 packaging актуальны.
+
+Мастер оставлен открытым без apply/save; выполнение данных, radio, другие
+меню/платформы этим не приняты. Active Hermes нет. Далее P2 root/filter/epoch
+и остальные widgets, P3 первая цепочка с данными, затем P4–P9. Чтение исходников
+подтвердило: scope сейчас фильтрует уже собранный полный DOM snapshot. Для
+root-scoped scan нужны отдельные глобальные guards (auth/build/active tab/masks),
+проверяемая identity выбранного root и курсоры, сохраняющие тот же root.
+Нельзя просто заменить корень TreeWalker: это потеряет активную вкладку и
+перекрытия, а узкая выборка не доказывает полноту графа/уникальность tid во всём DOM.
+
 ## Меню и checkbox выполнены; уточнена асинхронная приёмка — 5 сентября
 
 `20260905-170517-60098bf7` — **24/25 frozen FAIL**, SHA

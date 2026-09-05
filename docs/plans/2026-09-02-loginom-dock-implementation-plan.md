@@ -1286,6 +1286,12 @@ Effect contracts реализованы в `4743d427` (семь kinds и binding
 
 ### P2. Общие UI-драйверы и доступное наблюдение
 
+Context-menu opening + Text Import checkbox cycle приняты 5 сентября в
+`20260905-171627-dab12302`: **25/25 frozen PASS**, runtime `65c1e28a…`.
+Правый клик, выбор observed SetupNode и отложенное появление мастера доказаны.
+170 client / 80 Python / 10 packaging. Это не закрывает весь P2: root/filter,
+epoch/ABA, radio/options, большие поля и остальные профили ещё предстоят.
+
 5 сентября checkbox Text Import принят в `20260905-164903-1372db2d`:
 24/24 frozen PASS, включая смену, idempotent no-op и возврат значения.
 Это не приёмка radio, apply или сохранённых настроек. Следом реализован
