@@ -666,8 +666,15 @@ def file_storage_inspect(evidence, checks):
         tid=next(iter(tids)) if len(tids)==1 else ''
         allowed=(action.get('verb')=='click' and tid=='MF;cntMain;tlbMainToolbar;btnFilestorage'
                  or action.get('verb')=='double_click' and bool(re.fullmatch(r'MF;TF(?:-\d+)?;FileStorageForm;colName_(?:user|data)',tid or '')))
+        result=reply['result'] if reply else {}
+        trace=result.get('trace',[])
+        epoch_refusal=(result.get('status')=='NOT_APPLIED' and result.get('phase')=='preconditions'
+                       and result.get('effect_possible') is False and result.get('cleanup_complete') is True
+                       and (result.get('error') or {}).get('code')=='UI_EPOCH_CHANGED'
+                       and any(t.get('event')=='ui_action_failed' and t.get('code')=='UI_EPOCH_CHANGED' for t in trace)
+                       and all(t.get('event') in ('ui_observation_started','ui_preconditions_verified','ui_action_failed') for t in trace))
         navigation.append(call['tool']==PREFIX+'dock_ui_action' and allowed and reply is not None
-                          and reply['result'].get('status')=='SUCCEEDED' and bound(reply))
+                          and (result.get('status')=='SUCCEEDED' or epoch_refusal) and bound(reply))
     check('only_observed_file_storage_navigation',bool(navigation) and all(navigation))
     reads=[t for t in tools if t['tool']==PREFIX+'dock_workspace_observe' and t['result'].get('status')=='SUCCEEDED'
            and t['result'].get('output',{}).get('file_storage',{}).get('status')=='observed']

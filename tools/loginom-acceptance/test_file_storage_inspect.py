@@ -36,3 +36,14 @@ class FileStorageInspectTest(unittest.TestCase):
         for mutate in mutations:
             data=self.fixture();mutate(data)
             self.assertFalse(file_storage_inspect(data,[])['all_assertions_passed'])
+
+    def test_epoch_refusal_requires_bound_no_effect_receipt(self):
+        data=self.fixture();r=data['tools'][1]['result']
+        r.update(status='NOT_APPLIED',phase='preconditions',effect_possible=False,cleanup_complete=True,
+                 error={'code':'UI_EPOCH_CHANGED'},trace=[{'event':'ui_action_failed','code':'UI_EPOCH_CHANGED'}])
+        data['events'][0]['outcome']=copy.deepcopy(r)
+        self.assertTrue(file_storage_inspect(data,[])['all_assertions_passed'])
+        for key,value in [('effect_possible',True),('cleanup_complete',False),('phase','gesture')]:
+            changed=copy.deepcopy(data);changed['tools'][1]['result'][key]=value
+            changed['events'][0]['outcome']=copy.deepcopy(changed['tools'][1]['result'])
+            self.assertFalse(file_storage_inspect(changed,[])['all_assertions_passed'])

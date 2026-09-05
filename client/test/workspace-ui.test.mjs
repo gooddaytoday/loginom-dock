@@ -792,3 +792,25 @@ test('navigation root reads the directory without traversing a large storage tab
   assert.equal(detail.status,'SUCCEEDED');assert.equal(detail.output.file_storage.directory,'/user/data');
   assert.equal(detail.output.file_storage.listing_complete,false);assert.equal(walkedTable,false);
 });
+
+test('storage-name discovery uses escaped fixed lookup and no table traversal', async () => {
+  const page=new Page(),name='data, " ]';
+  const cell=page.add('td','MF;TF-1;FileStorageForm;colName_data_"_]','data, " ]');
+  for(let i=0;i<6500;i++) page.add('div',null,'background');
+  let lookup='',walks=0;const walker=page.document.createTreeWalker.bind(page.document);
+  page.document.createTreeWalker=(element,kind)=>{if(kind===1)walks++;return walker(element,kind);};
+  page.document.querySelectorAll=selector=>{
+    if(selector.startsWith('[data-tid$="\\')) {lookup=selector;return [cell];}
+    return [page.avatar,page.tab];
+  };
+  const result=await page.execute({mode:'observe',discover_roots:true,storage_name:name});
+  assert.equal(result.status,'SUCCEEDED');assert.equal(walks,0);
+  assert.equal(result.output.observation_filter.storage_name,name);
+  assert.deepEqual(result.output.ui.elements[0].allowed_actions,[]);
+  assert.equal(lookup.replace(/\\([a-f0-9]+) /g,(_,hex)=>String.fromCodePoint(parseInt(hex,16))),
+    '[data-tid$=";FileStorageForm;colName_data_"_]"]');
+  const ref=result.output.ui.elements[0].ref;
+  const detail=await page.execute({mode:'observe',root_ref:ref});
+  assert.equal(detail.status,'SUCCEEDED');assert.equal(walks,1);
+  assert.equal(detail.output.ui.elements[0].label,name);
+});

@@ -11,6 +11,14 @@ test('root observation requires a delivered reference and cannot override a curs
   await assert.rejects(()=>engine.observe({cursor:'cursor',rootRef:'ui-unknown',observationId:'unknown'}),/cursor alone/);
 });
 
+test('storage-name lookup rejects invalid combinations before browser work', async () => {
+  const engine=runtime(linkPage());
+  for (const args of [{storageName:'data'},{scope:'all',storageName:'data'},
+    {scope:'roots',storageName:'../data'},{scope:'roots',storageName:'x'.repeat(201)},
+    {scope:'roots',storageName:3},{scope:'roots',storageName:''},
+    {cursor:'cursor',storageName:'data'}]) await assert.rejects(()=>engine.observe(args),/storage_name/);
+});
+
 function partialInputAdd() {
   const page = linkPage();
   page.nodes[1].ports = ['Input_Add', 'Input_Data-0', 'Input_Data-1'];

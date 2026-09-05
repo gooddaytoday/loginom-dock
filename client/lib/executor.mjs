@@ -999,7 +999,7 @@ export function createActionRuntime({ pinned, execute, allowCandidate = false, o
         return returned;
       } finally { running = false; }
     },
-    async observe({ signal, scope, cursor, rootRef, observationId } = {}) {
+    async observe({ signal, scope, cursor, rootRef, observationId, storageName } = {}) {
       signal?.throwIfAborted();
       if (scope !== undefined && !['bootstrap', 'all', 'palette', 'graph', 'dialogs', 'roots'].includes(scope)) throw new Error('Unknown observation scope');
       if (cursor !== undefined && (typeof cursor !== 'string' || !cursor || scope !== undefined)) throw new Error('Use cursor alone to continue the original observation scope');
@@ -1009,9 +1009,12 @@ export function createActionRuntime({ pinned, execute, allowCandidate = false, o
         if (typeof rootRef!=='string' || !/^ui-[a-zA-Z0-9-]{1,124}$/.test(rootRef)) throw new Error('Root requires an observed opaque reference');
         observations.assertIssued(observationId,{ref:rootRef});
       }
+      if (storageName!==undefined && (scope!=='roots' || cursor!==undefined || typeof storageName!=='string'
+          || !storageName || storageName.length>200 || /[\\/\x00-\x1f\x7f]/.test(storageName))) throw new Error('storage_name requires roots scope and one filename');
+      const selectedStorageName=cursor===undefined ? storageName : observations.filterForCursor(cursor)?.storage_name;
       const selectedRoot = cursor===undefined ? rootRef : observations.rootForCursor(cursor);
       if (scope === 'bootstrap') return execute(makeWorkspaceBootstrapCode({ origin: targetOrigin, build: targetBuild }), { signal, timeout: 5000 });
-      const outcome = await execute(makeWorkspaceUiCode({ mode: 'observe', root_ref:selectedRoot, discover_roots:scope==='roots' || (cursor!==undefined && observations.kindForCursor(cursor)==='roots'), expected_build: targetBuild, expected_origin: targetOrigin }), { signal, timeout: 35000 });
+      const outcome = await execute(makeWorkspaceUiCode({ mode: 'observe', root_ref:selectedRoot, storage_name:selectedStorageName, discover_roots:scope==='roots' || (cursor!==undefined && observations.kindForCursor(cursor)==='roots'), expected_build: targetBuild, expected_origin: targetOrigin }), { signal, timeout: 35000 });
       outcome.output.operation = view(pending).output;
       return cursor === undefined ? observations.retain(outcome, { scope }) : observations.next(cursor, outcome);
     },

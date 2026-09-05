@@ -139,3 +139,13 @@ test('file storage destination is delivered and invalidates cursors when it chan
   const changed=structuredClone(source);changed.output.file_storage.directory='/user/other';
   assert.throws(()=>pages.next(first.output.page.next_cursor,changed),/Workspace changed/);
 });
+
+test('storage discovery filter is delivered and retained by its cursor', () => {
+  const pages=createObservationPages(),source=fixture();
+  source.output.observation_kind='roots';source.output.observation_filter={storage_name:'data'};
+  const first=pages.retain(structuredClone(source),{scope:'roots'});
+  assert.deepEqual(first.output.observation_filter,{storage_name:'data'});
+  assert.deepEqual(pages.filterForCursor(first.output.page.next_cursor),{storage_name:'data'});
+  const changed=structuredClone(source);changed.output.observation_filter.storage_name='other';
+  assert.throws(()=>pages.next(first.output.page.next_cursor,changed),/Workspace changed/);
+});

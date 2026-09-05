@@ -50,7 +50,7 @@ function workspaceUiCapability(page, task) {
   // Loginom. Re-rendering an identical-looking control invalidates its old ref.
   // The state is document-bound; navigation invalidates every previous reference.
   const readUi = async () => {
-    const observed = await page.evaluate(({rootRef,discoverRoots}) => {
+    const observed = await page.evaluate(({rootRef,discoverRoots,storageName}) => {
     try {
     const scanStarted = Date.now(), maxElements = 6000, maxWork = 250000, maxMs = 500;
     let work = 0;
@@ -99,7 +99,12 @@ function workspaceUiCapability(page, task) {
       seenElements.add(element);dom.push(element);
     };
     const regionSelector='[role="dialog"],.x-window,.bg-dialog,[role="grid"],table,[role="form"],[data-tid$=";WizrdMCF"],[data-tid$=";cmpDiagram"],[data-tid$=";pnlWorkarea"],[data-tid$="NavigationBar;NavigationPanel"]';
-    const regionElements=discoverRoots ? [...document.querySelectorAll(regionSelector)] : [];
+    // E2E utils/selectors.Format: whitespace -> underscore, comma removed.
+    // This finds candidates, not filesystem identity or absence. CSS hex escapes
+    // keep arbitrary filename characters data rather than selector syntax.
+    const storageSuffix=storageName===null ? null : ';FileStorageForm;colName_'+storageName.replace(/\s/g,'_').replace(/,/g,'');
+    const storageSelector=storageSuffix===null ? null : '[data-tid$="'+Array.from(storageSuffix,char=>'\\'+char.codePointAt(0).toString(16)+' ').join('')+'"]';
+    const regionElements=discoverRoots ? [...document.querySelectorAll(storageSelector ?? regionSelector)] : [];
     charge();
     if (discoverRoots) for (const element of regionElements) include(element);
     const walker=discoverRoots ? null : document.createTreeWalker(requestedRoot ?? document.documentElement,1);
@@ -210,6 +215,7 @@ function workspaceUiCapability(page, task) {
       return {origin:location.origin,authenticated:!!tids.get('MF;cntMain;tlbMainToolbar;btnAvatar')?.some(visible),
         loginom_build:globalThis.bg?.app?.Version ?? null,workflow_ref:workflow,active_identity:active ? textOf(active) : null,
         dom_epoch:{document:state.epoch,revision:state.revision},observation_kind:'roots',
+        ...(storageName===null?{}:{observation_filter:{storage_name:storageName}}),
         scan:{complete:true,visited_elements:dom.length,detail_elements:0,max_elements:maxElements,max_work:maxWork,max_ms:maxMs},
         nodes:[],links:[],ui:{elements,dialogs:[],messages:[],masks:[],table_cells:[],
           truncated:{elements:regions.length>240,nodes:true,links:true,ports:true,dialogs:true,messages:true,masks:true,table_cells:true}}};
@@ -401,7 +407,7 @@ function workspaceUiCapability(page, task) {
         ? error.code : 'UI_OBSERVATION_FAILED';
       return {ui_read_failure:{code}};
     }
-  },{rootRef:task.root_ref ?? task.snapshot?.observation_root?.ref ?? null,discoverRoots:task.discover_roots===true});
+  },{rootRef:task.root_ref ?? task.snapshot?.observation_root?.ref ?? null,discoverRoots:task.discover_roots===true,storageName:task.storage_name ?? null});
     if (observed?.ui_read_failure) {
       const code=observed.ui_read_failure.code;
       const messages={UI_SCAN_LIMIT:'Workspace scan budget exceeded; use root discovery and a narrower observation',
