@@ -1,3 +1,32 @@
+## 2026-09-06 — выбор наблюдаемого пункта списка импорта
+
+Добавлен select_wizard_option через существующий UI receipt/pending. Контракт
+применим к четырём известным ValueControl текстового импорта. Source:
+e2e-tests/bg/helpers/main.ts SelectDropDownItem — owner;trg_picker,
+owner;boundlist, owner;boundlist;Format(label), затем GetInputValue == label.
+Клиент не строит селектор из модельного текста: действие принимает только ref
+уже выданного пункта. Требуются точный owner, один видимый boundlist, принадлежность
+пункта его DOM, соответствие test-id отформатированной подписи и тот же input.
+После одного click читается точная подпись в исходном поле с тем же root/context;
+неподтверждённый результат остаётся AMBIGUOUS. settings_applied=false сохранён.
+
+Picker получает наблюдаемый ref для обычного одиночного click. Floating boundlist
+можно обнаружить как root; известный открытый список выдаётся сразу после wizard,
+перед фоновыми таблицами. Narrow list read получает только четыре фиксированных
+owner/input guard-запроса, без обхода остального мастера. Общие scan bounds остаются.
+
+Значения полей помечены value_kind=displayed_input_text: подпись выбранного пункта
+не является буквальным разделителем. Native maxlength читается в метаданные,
+set_wizard_field проверяет его до ввода. Не утверждаем, что именно maxlength
+объяснял live усечение в предыдущем run: там атрибут не был прочитан.
+
+261 client /110 Python /10 packaging PASS. Тесты проверяют selection/readback, floating root,
+замену/блокировку input, неверное значение, потерю list ownership, native limit
+и приоритет раскрытого списка. Live select_wizard_option ещё не принят.
+Далее новый полный data-pipeline через Hermes ChatGPT subscription/Luna/medium,
+затем node/settings binding, apply/cancel, сохранение/повторное выполнение и
+оставшийся P3–P9. Active Hermes/browser нет, production не менялся.
+
 ## 2026-09-06 — live переход мастера подтверждён, выявлен неверный ввод варианта списка
 
 Run 20260906-015813-875f450b завершён, session 5853 terminal. Hermes использовал

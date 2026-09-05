@@ -13,6 +13,8 @@ const clone = value => JSON.parse(JSON.stringify(value));
 function matches(element, selector) {
   if (selector.includes(',')) return selector.split(',').some(part => matches(element, part));
   selector = selector.trim();
+  const ownedInput=/^(\[data-tid\$="[^"]+"\]) (input|textarea)$/.exec(selector);
+  if(ownedInput)return matches(element,ownedInput[2]) && !!element.parentElement?.closest(ownedInput[1]);
   const not = [...selector.matchAll(/:not\(([^)]+)\)/g)];
   if (not.some(([, inner]) => matches(element, inner))) return false;
   selector = selector.replace(/:not\([^)]+\)/g, '');
@@ -1270,4 +1272,65 @@ test('wizard step rejects unsupported destinations and changed original form bef
   c.advance();
   const result=await page.act({verb:'wizard_step',ref:button.ref,expected_stage:'input_mapping'},snapshot);
   assert.equal(result.status,'NOT_APPLIED');assert.deepEqual(page.events,[]);
+});
+
+function importCombo(page) {
+  const c=importFormatField(page),ownerTid=c.owner.getAttribute('data-tid');
+  const picker=page.add('div',ownerTid+';trg_picker','▼',undefined,c.owner);
+  const list=page.add('div',ownerTid+';boundlist','',{x:200,y:200,width:160,height:60});
+  const option=page.add('div',ownerTid+';boundlist;NULL','NULL',{x:205,y:205,width:140,height:20},list);
+  return {...c,picker,list,option};
+}
+
+test('wizard combo option is bound to its field and confirms the displayed selection',async()=>{
+  const page=new Page(),c=importCombo(page),snapshot=await page.observe();
+  const option=snapshot.ui.elements.find(e=>e.wizard_combo?.kind==='option');
+  assert.equal(option.wizard_combo.field.name,'null_marker');
+  const click=page.mouse.click;page.mouse.click=async(...args)=>{await click(...args);c.input.value='NULL';c.list.remove();};
+  const result=await page.act({verb:'select_wizard_option',ref:option.ref},snapshot);
+  assert.equal(result.status,'SUCCEEDED',JSON.stringify(result.error));
+  assert.ok(result.trace.some(e=>e.event==='wizard_option_verified' && e.settings_applied===false));
+  assert.deepEqual(page.events,['click']);
+});
+
+test('wizard combo binding survives a narrow floating list read without scanning background',async()=>{
+  const page=new Page(),c=importCombo(page),snapshot=await page.observe();
+  const listRef=snapshot.ui.elements.find(e=>e.wizard_combo?.kind==='option').wizard_combo.list_ref;
+  const result=await page.execute({mode:'observe',root_ref:listRef});
+  assert.equal(result.status,'SUCCEEDED');
+  assert.ok(result.output.ui.elements.some(e=>e.allowed_actions.includes('select_wizard_option')));
+  assert.equal(result.output.wizard.settings.fields.null_marker.value,'old');
+});
+
+test('wizard option refuses a moved or disabled owner and does not confirm a different input',async()=>{
+  for(const mode of ['disabled','reparent','wrong-value','replaced-input']) {
+    const page=new Page(),c=importCombo(page),snapshot=await page.observe();
+    const option=snapshot.ui.elements.find(e=>e.wizard_combo?.kind==='option');
+    if(mode==='disabled')c.input.disabled=true;
+    if(mode==='reparent')page.document.body.append(c.option); // loses exact list containment
+    const click=page.mouse.click;page.mouse.click=async(...args)=>{await click(...args);
+      if(mode==='replaced-input'){c.input.remove();page.add('input',null,'',undefined,c.owner).value='NULL';}
+    };
+    const result=await page.act({verb:'select_wizard_option',ref:option.ref},snapshot);
+    assert.equal(result.status,['disabled','reparent'].includes(mode)?'NOT_APPLIED':'AMBIGUOUS',mode);
+    assert.ok(!result.trace.some(e=>e.event==='wizard_option_verified'));
+  }
+});
+
+test('wizard field enforces observed native maxlength before typing a dropdown label',async()=>{
+  const page=new Page(),c=importFormatField(page);c.input.attrs.maxlength='1';
+  const snapshot=await page.observe(),field=snapshot.ui.elements.find(e=>e.wizard_field);
+  assert.equal(field.wizard_field.max_length_utf16,1);
+  assert.throws(()=>validateUiAction({verb:'set_wizard_field',ref:field.ref,text:'Точка с запятой'},snapshot),/native input limit/);
+  assert.doesNotThrow(()=>validateUiAction({verb:'set_wizard_field',ref:field.ref,text:';'},snapshot));
+  assert.deepEqual(page.events,[]);
+});
+
+
+test('root discovery delivers the owned floating import list ahead of background tables',async()=>{
+  const page=new Page();for(let i=0;i<80;i++)page.add('table','Background;Table'+i);
+  const c=importCombo(page),out=await page.execute({mode:'observe',discover_roots:true});
+  assert.equal(out.status,'SUCCEEDED');
+  assert.equal(out.output.ui.elements[0].tid,c.form.getAttribute('data-tid'));
+  assert.equal(out.output.ui.elements[1].tid,c.list.getAttribute('data-tid'));
 });

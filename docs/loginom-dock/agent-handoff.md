@@ -1,3 +1,10 @@
+**Checkpoint:** select_wizard_option связывает наблюдаемый пункт exact E2E
+boundlist с исходным input и проверяет подпись после одного click; picker/root
+доступны для раскрытия и узкого чтения списка. Native maxlength проверяется
+перед set_wizard_field. 261 client /110 Python /10 packaging PASS, live ещё не запускался.
+Далее полный data-pipeline на ChatGPT subscription/Luna/medium; после combo
+остаются node binding/apply и полный P3–P9. Active Hermes/browser нет.
+
 **Checkpoint:** run 015813-875f450b terminal, 49/58 frozen FAIL, 80 API calls;
 session5853 закрыт. Live wizard_step file→format подтверждён (reply155).
 set_wizard_field получил название пункта 'Точка с запятой', UI оставил 'Т',

@@ -3,7 +3,7 @@
 export const uiActionSchema = {
   type: 'object', additionalProperties: false, required: ['verb'],
   properties: {
-    verb: { type: 'string', enum: ['click', 'double_click', 'right_click', 'fill', 'press', 'drag', 'scroll', 'set_checked', 'replace_expression', 'set_wizard_field', 'wizard_step'] },
+    verb: { type: 'string', enum: ['click', 'double_click', 'right_click', 'fill', 'press', 'drag', 'scroll', 'set_checked', 'replace_expression', 'set_wizard_field', 'wizard_step', 'select_wizard_option'] },
     expected_stage: { type: 'string', enum: ['text_import_file','text_import_format','input_mapping','output_mapping','calculator','grouping','done'] },
     checked: { type: 'boolean' },
     delta_y: { type: 'integer', minimum: -1000, maximum: 1000 },
@@ -34,6 +34,7 @@ export function validateUiAction(action, snapshot) {
     for (const ref of refs) {
       const elements = snapshot.ui.elements.filter(element => element.ref === ref);
       if (elements.length !== 1 || !elements[0].allowed_actions?.includes(action.verb)) throw new Error('UI reference is absent, ambiguous, or does not support this action');
+      if(action.verb==='set_wizard_field' && action.text.length>elements[0].wizard_field.max_length_utf16)throw new Error('Wizard text exceeds the observed native input limit; select an observed option instead of typing its label');
       if (action.verb==='set_checked' && elements[0].check_state?.kind==='radio' && !action.checked) throw new Error('Select the desired radio option; a radio cannot be independently unchecked');
     }
   }
@@ -103,7 +104,7 @@ function workspaceUiCapability(page, task) {
       if (dom.length >= maxElements) { const error=new Error('Selected region or global guards exceed the scan budget');error.code='UI_SCAN_LIMIT';throw error; }
       seenElements.add(element);dom.push(element);
     };
-    const regionSelector='[data-tid$=";PreviewForm;DataSetForm"],[data-tid$=";ViewsForm;BrowseView"],[data-tid="MF;cntMain;tlbMainToolbar"],[role="dialog"],.x-window,.bg-dialog,[role="grid"],table,[role="form"],[data-tid$=";WizrdMCF"],[data-tid$=";cmpDiagram"],[data-tid$=";pnlWorkarea"],[data-tid$="NavigationBar;NavigationPanel"]';
+    const regionSelector='[data-tid$=";PreviewForm;DataSetForm"],[data-tid$=";ViewsForm;BrowseView"],[data-tid="MF;cntMain;tlbMainToolbar"],[role="dialog"],.x-window,.bg-dialog,[role="grid"],table,[role="form"],[data-tid$=";WizrdMCF"],[data-tid$=";boundlist"],[data-tid$=";cmpDiagram"],[data-tid$=";pnlWorkarea"],[data-tid$="NavigationBar;NavigationPanel"]';
     // E2E utils/selectors.Format: whitespace -> underscore, comma removed.
     // This finds candidates, not filesystem identity or absence. CSS hex escapes
     // keep arbitrary filename characters data rather than selector syntax.
@@ -131,6 +132,7 @@ function workspaceUiCapability(page, task) {
     const wizardSelectors=['[data-tid$=";WizrdMCF"]','[data-tid$=";WizrdMCF;cardWizardPanel;p.h;p.t"]',
       ...Object.values(wizardMarkers).map(suffix=>'[data-tid$=";WizrdMCF'+suffix+'"]'),
       '[data-tid*=";WizrdMCF;CalcDataWizard;colExpressionName_"]','[data-tid$=";WizrdMCF;CalcDataWizard;cmpExpression"]','[data-tid$=";WizrdMCF;CalcDataWizard;btnCalcMode"]','span.bg-TBGCalcMode-cmExpression,span.bg-TBGCalcMode-cmJavaScript',
+      ...['edtDelimiterChar','edtTextQualifier','edtValueNull','edtDecimalSeparator'].flatMap(name=>{const owner='[data-tid$=";WizrdMCF;ImportTextFileParamsWizard;'+name+';ValueControl"]';return [owner,owner+' input',owner+' textarea'];}),
       ...wizardButtons.map(name=>'[data-tid$=";WizrdMCF;'+name+'"]')].join(',');
     if (requestedRoot || discoverRoots) {
       // Native fixed queries discover global blockers/context without walking
@@ -238,7 +240,7 @@ function workspaceUiCapability(page, task) {
         controls:Object.fromEntries(wizardButtons.map(name=>{const found=matching(';'+name);return [name,
           {status:found.length===1?'observed':found.length?'ambiguous':'unobserved',enabled:found.length===1?enabled(found[0]):null}];}))};
     }
-    const wizardFields=new Map();
+    const wizardFields=new Map(),wizardCombos=new Map();
     if(wizard.status==='observed' && wizard.stage==='text_import_format') {
       const base=wizard.root_tid+';ImportTextFileParamsWizard;';
       const fields={delimiter:'edtDelimiterChar',text_qualifier:'edtTextQualifier',null_marker:'edtValueNull',decimal_separator:'edtDecimalSeparator'};
@@ -247,17 +249,20 @@ function workspaceUiCapability(page, task) {
         const inputs=owners.length===1?dom.filter(item=>{charge();return owners[0].contains(item) && item.matches('input:not([type="hidden"]),textarea') && visible(item) && !sensitive(item);}):[];
         if(owners.length!==1 || inputs.length!==1)return [name,{status:owners.length>1 || inputs.length>1?'ambiguous':'unobserved'}];
         const input=inputs[0],value=String(input.value??'');
+        const ownerTid=base+key+';ValueControl';
+        if(enabled(input) && value.length<=256)wizardCombos.set(ownerTid,{name,owner_ref:refOf(owners[0]),input_ref:refOf(input),root_ref:wizard.root_ref,value});
+        const rawMax=input.getAttribute('maxlength'),nativeMax=rawMax!==null && /^\d+$/.test(rawMax) && Number.isSafeInteger(Number(rawMax))?Number(rawMax):null;
         if(value.length<=256 && !/[\0\r\n]/.test(value) && !input.readOnly && enabled(input))
-          wizardFields.set(input,{name,stage:wizard.stage,root_ref:refOf(wizardForms[0]),owner_ref:refOf(owners[0])});
+          wizardFields.set(input,{name,max_length_utf16:Math.min(256,nativeMax??256),stage:wizard.stage,root_ref:refOf(wizardForms[0]),owner_ref:refOf(owners[0])});
         return [name,{status:'observed',value:value.slice(0,256),value_length_utf16:value.length,truncated:value.length>256,
-          enabled:enabled(input),read_only:input.readOnly===true,source_tid:base+key+';ValueControl'}];
+          enabled:enabled(input),read_only:input.readOnly===true,source_tid:ownerTid,input_ref:refOf(input),owner_ref:refOf(owners[0]),value_kind:'displayed_input_text',native_max_length_utf16:nativeMax}];
       }))};
     }
     if (discoverRoots) {
       const regions=regionElements.filter(element=>visible(element) && !sensitive(element) && scopeOf(element)!=='inactive_workflow')
         // Deliver the current wizard root before its tables, so a changing form
         // can be read narrowly without paging through those tables first.
-        .sort((a,b)=>Number(getTid(b)===workflow?.prefix+';WizrdMCF')-Number(getTid(a)===workflow?.prefix+';WizrdMCF'));
+        .sort((a,b)=>{const rank=e=>getTid(e)===workflow?.prefix+';WizrdMCF'?0:wizardCombos.has((getTid(e)??'').replace(/;boundlist$/,'')) && (getTid(e)??'').endsWith(';boundlist')?1:2;return rank(a)-rank(b);});
       const elements=regions.slice(0,240).map(element=>({ref:refOf(element),tid:getTid(element),identity:identityOf(element),
         kind:'region',label:textOf(element),scope:scopeOf(element),visible:true,enabled:enabled(element),allowed_actions:[],
         signature:{tag:element.tagName.toLowerCase()},bounding_box:boxOf(element)}));
@@ -275,7 +280,21 @@ function workspaceUiCapability(page, task) {
     if (rootRef && (!selectedRoot || !visible(selectedRoot) || sensitive(selectedRoot) || scopeOf(selectedRoot)==='inactive_workflow')) {
       const error=new Error('Observed root is detached, hidden or belongs to another workspace');error.code='UI_ROOT_STALE';throw error;
     }
-    const interesting = element => element.matches('button,input,textarea,select,[contenteditable="true"],[role="button"],[role="checkbox"],[role="radio"],[role="combobox"],[role="menuitem"],[role="tab"],[role="treeitem"],[role="option"],[role="spinbutton"]')
+    const comboPart=element=>{
+      const tid=getTid(element)??'';
+      for(const [ownerTid,field] of wizardCombos) {
+        if(tid===ownerTid+';trg_picker')return {kind:'picker',field};
+        const prefix=ownerTid+';boundlist;';
+        if(!tid.startsWith(prefix) || !tid.slice(prefix.length) || tid.slice(prefix.length).includes(';'))continue;
+        const lists=(tids.get(ownerTid+';boundlist')??[]).filter(visible);
+        if(lists.length!==1 || !lists[0].contains(element) || sensitive(lists[0]))return null;
+        const label=textOf(element,true),formatted=label.replace(/\s/g,'_').replace(/,/g,'');
+        if(!label || label.length>=240 || tid!==prefix+formatted)return null;
+        return {kind:'option',field,list_ref:refOf(lists[0]),label};
+      }
+      return null;
+    };
+    const interesting = element => !!comboPart(element) || element.matches('button,input,textarea,select,[contenteditable="true"],[role="button"],[role="checkbox"],[role="radio"],[role="combobox"],[role="menuitem"],[role="tab"],[role="treeitem"],[role="option"],[role="spinbutton"]')
       || /;(?:Input|Output)_[^;]+$|;Label;Label$|;Graph;[^;]+$|;btn[^;]+$|;edt[^;]+$|;mi[^;]+$|;tb(?:-\d+)?$/.test(getTid(element) ?? '')
       // Pinned E2E bg/selectors.ts:272,279,286: palette tree labels and
       // expanders are spans without button/treeitem roles in some UI builds.
@@ -299,6 +318,7 @@ function workspaceUiCapability(page, task) {
     const controlPriority = element => {
       const tid=getTid(element)??'',base=workflow?.prefix+';WizrdMCF;';
       if(/^mn;mni[^;]+$/.test(tid) || element.getAttribute('role')==='menuitem')return -30;
+      if(comboPart(element)?.kind==='option')return -25;
       if(dialogRef(element))return -20;
       // Keep lifecycle and selected-expression controls on the first compact
       // page, ahead of Calculator operator palettes and rendered preview cells.
@@ -425,6 +445,7 @@ function workspaceUiCapability(page, task) {
       const interaction = interactionOf(element);
       const checkState=checkStateOf(element);
       const calculatorEditor=calculatorEditorOf(element);
+      const combo=comboPart(element);
       const wizardStep=wizard.status==='observed' && wizard.stage && ['btnNext','btnPrev'].some(name=>tid===wizard.root_tid+';'+name)
         && wizard.controls[tid.split(';').at(-1)]?.status==='observed'
         ? {direction:tid.endsWith(';btnNext')?'next':'previous',root_ref:wizard.root_ref,stage:wizard.stage}:null;
@@ -437,13 +458,14 @@ function workspaceUiCapability(page, task) {
         ...(scroll ? { scroll } : {}),
         ...(checkState ? {check_state:checkState} : {}),
         ...(calculatorEditor ? {calculator_editor:calculatorEditor} : {}),
+        ...(combo ? {wizard_combo:combo} : {}),
         ...(wizardStep ? {wizard_step:wizardStep} : {}),
         ...(wizardFields.has(element) ? {wizard_field:wizardFields.get(element)} : {}),
         signature: { tag, tid, role, type: element.getAttribute('type'), name: element.getAttribute('name'), label, ...fieldValue, dialog_ref: dialogRef(element), scroll, check_state:checkState },
         enabled: isEnabled, visible: true, interaction, bounding_box: boxOf(element),
         // A bounded prefix is not a sufficient value precondition. A dedicated
         // large-field driver must establish its own complete read/write contract.
-        allowed_actions: expressionWritable ? ['replace_expression'] : allowed && !valueTruncated ? ['click', 'double_click', 'right_click', 'press', 'drag', ...(editable ? ['fill',...(wizardFields.has(element)?['set_wizard_field']:[])] : []), ...(checkState ? ['set_checked'] : []), ...(wizardStep?['wizard_step']:[]), ...(scroll && interaction.state === 'point_observed' ? ['scroll'] : [])] : [] };
+        allowed_actions: expressionWritable ? ['replace_expression'] : allowed && !valueTruncated ? ['click', 'double_click', 'right_click', 'press', 'drag', ...(editable ? ['fill',...(wizardFields.has(element)?['set_wizard_field']:[])] : []), ...(checkState ? ['set_checked'] : []), ...(wizardStep?['wizard_step']:[]), ...(combo?.kind==='option'?['select_wizard_option']:[]), ...(scroll && interaction.state === 'point_observed' ? ['scroll'] : [])] : [] };
     });
     const graphPrefix = workflow ? workflow.prefix + ';Graph;' : null;
     const graphElements = graphPrefix ? all.filter(element => (getTid(element) ?? '').startsWith(graphPrefix)) : [];
@@ -623,7 +645,8 @@ function workspaceUiCapability(page, task) {
       || !current.allowed_actions.includes(task.action.verb)
       || task.action.verb==='replace_expression' && !same(before.calculator_editor,current.calculator_editor)
       || task.action.verb==='set_wizard_field' && !same(before.wizard_field,current.wizard_field)
-      || task.action.verb==='wizard_step' && !same(before.wizard_step,current.wizard_step)) fail('UI_REFERENCE_STALE', 'The observed control changed; observe the workspace again');
+      || task.action.verb==='wizard_step' && !same(before.wizard_step,current.wizard_step)
+      || task.action.verb==='select_wizard_option' && !same(before.wizard_combo,current.wizard_combo)) fail('UI_REFERENCE_STALE', 'The observed control changed; observe the workspace again');
     const locator = locatorFor(current.identity);
     if (await locator.count() !== 1) fail('UI_REFERENCE_STALE', 'Observed control is no longer unique');
     const handle = await locator.elementHandle({ timeout: timeout() });
@@ -706,7 +729,7 @@ function workspaceUiCapability(page, task) {
         if (!current.authenticated) fail('LOGIN_REQUIRED', 'Loginom authentication is required before changing the workspace');
         if (!same(task.snapshot.dom_epoch, current.dom_epoch)) fail('UI_EPOCH_CHANGED', 'The document changed since this observation; observe again even if its visible state looks unchanged');
         if (!same(current.ui.dialogs.map(item => item.ref), task.snapshot.ui.dialogs.map(item => item.ref))) fail('UI_CONTEXT_CHANGED', 'The visible dialog changed; observe the workspace again');
-        if(['set_wizard_field','wizard_step'].includes(task.action.verb) && (!same(task.snapshot.wizard,current.wizard)
+        if(['set_wizard_field','wizard_step','select_wizard_option'].includes(task.action.verb) && (!same(task.snapshot.wizard,current.wizard)
           || !same(task.snapshot.active_identity,current.active_identity) || !same(task.snapshot.package_identity,current.package_identity)))
           fail('WIZARD_CONTEXT_CHANGED','Wizard settings or package changed; observe again');
         const refs = task.action.verb === 'drag' ? [task.action.source_ref, task.action.target_ref] : [task.action.ref];
@@ -741,7 +764,7 @@ function workspaceUiCapability(page, task) {
           await page.mouse.click(targets[0].point.x, targets[0].point.y, { clickCount, button });
           mouseHeld = false;
         };
-        if (task.action.verb === 'click' || task.action.verb==='wizard_step') await clickTarget(1);
+        if (task.action.verb === 'click' || ['wizard_step','select_wizard_option'].includes(task.action.verb)) await clickTarget(1);
         else if (task.action.verb === 'double_click') await clickTarget(2);
         else if (task.action.verb === 'right_click') await clickTarget(1, 'right');
         else if (task.action.verb === 'press') await first.press(task.action.key, { timeout: timeout() });
@@ -837,6 +860,18 @@ function workspaceUiCapability(page, task) {
         if (effectPossible) record('ui_gesture_applied', { verb: task.action.verb });
         phase = 'observing'; timeout();
         let observed = await readUi();
+        if(task.action.verb==='select_wizard_option') {
+          const choice=current.ui.elements.find(item=>item.ref===task.action.ref).wizard_combo;
+          const field=observed.wizard.settings?.fields?.[choice.field.name];
+          if(!observed.authenticated || observed.origin!==current.origin || observed.loginom_build!==current.loginom_build
+            || !same(observed.workflow_ref,current.workflow_ref) || !same(observed.package_identity,current.package_identity)
+            || !same(observed.active_identity,current.active_identity) || observed.wizard.root_ref!==choice.field.root_ref
+            || observed.wizard.stage!==current.wizard.stage || !same(observed.ui.dialogs,current.ui.dialogs) || observed.ui.masks.length
+            || field?.status!=='observed' || field.truncated || field.value!==choice.label
+            || field.input_ref!==choice.field.input_ref || field.owner_ref!==choice.field.owner_ref)
+            fail('WIZARD_OPTION_NOT_CONFIRMED','The selected option label was not read back in its original wizard field; inspect before retry');
+          record('wizard_option_verified',{field:choice.field.name,label:choice.label,settings_applied:false});
+        }
         if(task.action.verb==='wizard_step') {
           const unchangedContext=fresh=>fresh.authenticated && fresh.origin===current.origin && fresh.loginom_build===current.loginom_build
             && same(fresh.workflow_ref,current.workflow_ref) && same(fresh.package_identity,current.package_identity)
