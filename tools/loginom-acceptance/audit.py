@@ -564,13 +564,26 @@ def scroll_receipt_bound(call, target, evidence):
                and rename_effect.journal_equal(e.get('outcome',{}),result) for e in evidence.get('events',[]))
 
 
+def rejected_before_browser(call, evidence):
+    operation_id=call.get('arguments',{}).get('operation_id')
+    if not isinstance(operation_id,str) or not operation_id:return False
+    replies=[t for t in evidence['tools'] if t.get('tool_call_id')==call.get('tool_call_id') and t['row']>call['row']]
+    if len(replies)!=1:return False
+    r=replies[0].get('result',{});operation=r.get('output',{}).get('operation',{})
+    return (r.get('request_rejected') is True and r.get('effect_possible') is False
+            and r.get('status')=='FAILED' and r.get('phase')=='request_rejected' and r.get('action_key')=='request.validate'
+            and r.get('operation_id') is None and r.get('trace')==[] and r.get('error',{}).get('code')=='REQUEST_REJECTED'
+            and operation.get('state')=='idle' and operation.get('cleanup_confirmed') is True and operation.get('effect_state')=='none'
+            and not any(e.get('operation_id')==operation_id for e in evidence.get('events',[])))
+
+
 def palette_inventory(evidence, checks, require_scroll=False):
     def check(name, passed):checks.append({'name':name,'passed':bool(passed)})
     snapshots=[(t['row'],t['result']['output']) for t in evidence['tools']
                if isinstance(t.get('result'),dict) and isinstance(t['result'].get('output'),dict)
                and isinstance(t['result']['output'].get('ui'),dict)]
     check('palette_has_observation',bool(snapshots))
-    mutations=[c for c in evidence['calls'] if c['tool'] in MUTATIONS]
+    mutations=[c for c in evidence['calls'] if c['tool'] in MUTATIONS and not rejected_before_browser(c,evidence)]
     graph_reads=[row for row,s in snapshots if s.get('nodes')==[] and s.get('links')==[]
                  and all(s.get('ui',{}).get('truncated',{}).get(k) is False for k in ('nodes','ports','links'))
                  and s.get('page',{}).get('scope','all') in ('all','graph')]
@@ -596,8 +609,7 @@ def palette_inventory(evidence, checks, require_scroll=False):
             if len(path)==1:groups[path[0]]=item.get('label') or path[0]
             elif match[2]=='TreeText':components[match[1]]={'group_id':path[0],'component_id':'>'.join(path[1:]),
                 'label':item.get('label'),'tid':item['tid'],'observed_at_row':row}
-    for call in evidence['calls']:
-        if call['tool'] not in MUTATIONS:continue
+    for call in mutations:
         args=call.get('arguments',{});action=args.get('action',{})
         previous_mutation=max((c['row'] for c in mutations if c['row']<call['row']),default=-1)
         targets=[e for row,s in snapshots if previous_mutation<row<call['row']

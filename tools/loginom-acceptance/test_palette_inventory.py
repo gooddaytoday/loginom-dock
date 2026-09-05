@@ -4,6 +4,19 @@ import audit
 
 
 class PaletteInventoryTest(unittest.TestCase):
+    def test_rejected_request_is_not_a_gesture_only_with_idle_receipt_and_no_operation_journal(self):
+        c={'row':1,'tool_call_id':'r','arguments':{'operation_id':'never-started'}}
+        r={'status':'FAILED','phase':'request_rejected','action_key':'request.validate','operation_id':None,
+           'request_rejected':True,'effect_possible':False,'trace':[],'error':{'code':'REQUEST_REJECTED'},
+           'output':{'operation':{'state':'idle','cleanup_confirmed':True,'effect_state':'none'}}}
+        evidence={'tools':[{'row':2,'tool_call_id':'r','result':r}],'events':[]}
+        self.assertTrue(audit.rejected_before_browser(c,evidence))
+        for mutate in [lambda e:e['events'].append({'phase':'prepared','operation_id':'never-started'}),
+                       lambda e:e['tools'][0]['result'].update(effect_possible=True),
+                       lambda e:e['tools'][0]['result']['output']['operation'].update(state='pending'),
+                       lambda e:e['tools'][0]['result'].update(status='AMBIGUOUS')]:
+            bad=copy.deepcopy(evidence);mutate(bad);self.assertFalse(audit.rejected_before_browser(c,bad))
+
     def test_scroll_proof_rejects_invented_movement_or_missing_journal(self):
         call={'row':1,'tool_call_id':'scroll','arguments':{'action':{'verb':'scroll','delta_y':300}}}
         target={'allowed_actions':['scroll'],'scroll':{'ref':'owner','top':0,'max_top':200}}

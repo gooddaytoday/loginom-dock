@@ -1,5 +1,12 @@
 # Следующему агенту: с чего начать
 
+**Текущий результат:** `20260905-160516-337e3009` — 26/27 frozen FAIL,
+но оба scroll 0→800→0 подтверждены. Аудитор ошибочно считал pre-browser отказ
+мутацией; теперь исключает его только при strict idle/no-effect receipt и
+отсутствии operation journal. 75 Python tests. Runtime `1f654a57…` неизменён,
+164 client/10 packaging. Старый FAIL сохранён, active Hermes нет.
+Далее новый scroll run для frozen PASS, затем root/filter/epoch и P2/P3–P9.
+
 **Актуально:** `20260905-155916-07e8ef2e` снова 25/27 FAIL: после scroll
 первая palette page 0/16 reachable, агент не дочитал next_cursor.
 Исправлены порядок palette (reachable first, без потери inventory) и admission

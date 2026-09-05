@@ -1,5 +1,25 @@
 # Выполнение плана Loginom Dock
 
+## P2 scroll: оба направления подтверждены, аудит отказов уточнён — 5 сентября
+
+Run `20260905-160516-337e3009`, runtime
+`1f654a57dd78f819236839b48a3e5c488b2c766e20d2ccde848f0f1507f2a924`:
+**26/27 frozen FAIL**, SHA
+`b90e97f1b227d3cbc8b29fa5e0ba56168b2165c087027d8964ed0f17cd2b01c5`.
+Оба scroll receipt прошли: один owner 0→800→0. Пустой граф и исходные квитанции
+приняты. Единственный failed check — only_observed_palette_groups_interacted_with:
+между двумя успешными scroll был REQUEST_REJECTED на уже недоступный ref.
+Этот запрос не запускал browser action; фаза request_rejected, effect_possible=false,
+state idle, trace пуст и operation ID отсутствует в журнале.
+
+Аудитор после run стал отличать такие отказы от мутаций строго по совокупности
+квитанции и отсутствию операции в журнале. Pending/AMBIGUOUS/возможный эффект
+или наличие journal record не исключаются. 75 Python tests, включая tampering
+отказа. Старый 26/27 **не пересчитывался**; нового frozen PASS ещё нет.
+Runtime после f9e4fe83 не менялся, 164 client/10 packaging актуальны.
+Active Hermes нет. Далее новый scroll run на исправленном аудиторе, затем
+root/filter/epoch и остальная реализация P2/P3–P9.
+
 ## P2: порядок доступных целей после scroll — 5 сентября 2026
 
 Run `20260905-155916-07e8ef2e` завершён: **25/27 frozen FAIL**, audit SHA
