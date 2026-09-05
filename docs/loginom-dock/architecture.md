@@ -1,6 +1,36 @@
+### Candidate server-copy verification (2026-09-05)
+
+dock_artifact_verify is available alongside upload in candidate sessions. Its
+strict request accepts original operation_id, new verification_id, observation_id
+and file_ref only. The runtime requires the pending upload's confirmed browser
+completion/cleanup, checks assertIssued and exact CSV identity, then allocates
+a private stageDownload lease. Upload checkpoints retain the storage root ref
+so scoped navigation can be rechecked without traversing a large file table.
+
+The download uses the existing browserReceipt ledger with its own verification
+ID and the original upload owner. The native artifact.download outcome is
+journaled as download_completed; host name/size/SHA validation produces a separate
+artifact.verify outcome in download_verified. Exact metadata must match the
+original artifact, grant, path, observation and ref. Private paths/bytes/native
+errors do not enter those records. A same-size wrong file produces FAILED /
+DOWNLOADED_ARTIFACT_MISMATCH. A successful byte proof sets bytes_verified=true
+and upload_completion_verified=false. The original upload remains AMBIGUOUS and
+pending, with a server_copy_verification summary, until transfer completion has
+its own proof; matching downloaded content alone does not release that gate.
+
+Repeated verification IDs return the stored result. After a lost response,
+inspect(original upload ID) reads the existing browser receipt and hashes the
+existing private downloaded copy without another download or upload. Different
+IDs are blocked while the request/transport/cleanup is uncertain. Host journal
+failures leave the raw receipt for reconciliation, rather than resubmission.
+Completed download copies stay leased for the session; NOT_APPLIED releases its
+empty lease after browser completion. Shutdown drains retained files. Network /
+disk download limits, full upload completion and reject remain unfinished, and
+this integration has not yet passed a live download-and-hash acceptance run.
+
 ### Private CSV download primitive (2026-09-05)
 
-makeArtifactDownloadCode is a host-only browser primitive, not yet a public tool.
+makeArtifactDownloadCode is a host-only browser primitive used by artifact.verify.
 It requires an exact CSV label and FileStorageForm;colName_<Format(name)> tid
 from the supplied detailed observation. Its future runtime caller must also
 assertIssued for the file_ref. Package files are rejected: double-clicking an

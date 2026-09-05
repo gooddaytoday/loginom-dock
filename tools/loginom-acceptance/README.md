@@ -47,6 +47,14 @@ Admission выдаёт artifact_id, а для upload — отдельный sess
 observe/inspect, но не abandon/UI repair/следующие мутации. Это ещё не runnable
 data-pipeline acceptance; diagnostic run должен учитывать незавершённый transfer.
 
+В candidate runtime добавлен dock_artifact_verify: operation_id исходной загрузки,
+новый verification_id, observation_id и file_ref подробного чтения строки CSV.
+Он сверяет скачанную копию с admitted SHA/size. При lost reply сначала inspect
+исходной операции; новый ID не обходит незавершённое скачивание. Успех byte proof
+не снимает upload pending: upload_completion_verified остаётся false. Для живой
+проверки этой цепочки ещё нужен отдельный goal/auditor; текущий file-upload-probe
+разрешает только submission + pending inspection и не должен вызываться для verify.
+
 ## Имена Loginom и destination (schema 2, 2026-09-05)
 
 Каждый новый `--run` требует `--loginom-user ACCOUNT --storage-directory /PATH`.

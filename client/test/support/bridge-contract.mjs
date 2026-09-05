@@ -68,6 +68,11 @@ test('MCP application refusals remain typed normal content and the same connecti
     const listed = await client.listTools();
     assert.ok(listed.tools.some(tool => tool.name === 'dock_operation_recover'));
     assert.ok(listed.tools.some(tool => tool.name === 'dock_artifact_upload'));
+    assert.ok(listed.tools.some(tool => tool.name === 'dock_artifact_verify'));
+    const rejectedVerify=await client.callTool({name:'dock_artifact_verify',arguments:{operation_id:'u',verification_id:'v',
+      observation_id:'o',file_ref:'r',download_path:'/private/replaced'}});
+    assert.equal(JSON.parse(rejectedVerify.content[0].text).error.code,'REQUEST_REJECTED');
+    assert.equal(browserCalls,0);
     const rejectedUpload=await client.callTool({name:'dock_artifact_upload',arguments:{artifact_id:'a',upload_grant_id:'g',
       observation_id:'o',operation_id:'u',destination:'/other'}});
     assert.equal(JSON.parse(rejectedUpload.content[0].text).error.code,'REQUEST_REJECTED');

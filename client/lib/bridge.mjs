@@ -88,7 +88,7 @@ export async function createBridge(config, session) {
       catalog.routes.set('dock_action_describe', 'action');
       catalog.routes.set('dock_action_run', 'action');
       catalog.routes.set('dock_workspace_observe', 'action');
-      for (const name of ['dock_operation_inspect', 'dock_operation_recover', 'dock_ui_action', 'dock_artifact_upload']) catalog.routes.set(name, 'action');
+      for (const name of ['dock_operation_inspect', 'dock_operation_recover', 'dock_ui_action', 'dock_artifact_upload', 'dock_artifact_verify']) catalog.routes.set(name, 'action');
     }
     await session.save(catalog);
     const server = new Server({ name: 'loginom-dock', version: session.metadata.client }, {
@@ -160,8 +160,8 @@ export async function createBridge(config, session) {
           return await browserGate(async () => {
             extra.signal.throwIfAborted();
             const args = request.params.arguments ?? {};
-            if(request.params.name==='dock_artifact_upload') {
-              const definition=actionRuntime.tools.find(tool=>tool.name==='dock_artifact_upload');
+            if(['dock_artifact_upload','dock_artifact_verify'].includes(request.params.name)) {
+              const definition=actionRuntime.tools.find(tool=>tool.name===request.params.name);
               if(!definition)throw new Error('Artifact upload is unavailable in this session');
               validateActionParameters(definition.inputSchema,args);
             }
@@ -170,6 +170,8 @@ export async function createBridge(config, session) {
               : request.params.name === 'dock_operation_inspect' ? await actionRuntime.inspect({ operationId: args.operation_id, signal: extra.signal })
                 : request.params.name === 'dock_operation_recover' ? await actionRuntime.recover(args.operation_id,
                   { strategy: args.strategy, recoveryOperationId: args.recovery_operation_id, observationId: args.observation_id, signal: extra.signal })
+                  : request.params.name === 'dock_artifact_verify' ? await actionRuntime.verifyArtifact({operationId:args.operation_id,verificationId:args.verification_id,
+                    observationId:args.observation_id,fileRef:args.file_ref,signal:extra.signal})
                   : request.params.name === 'dock_artifact_upload' ? await actionRuntime.upload({artifactId:args.artifact_id,grantId:args.upload_grant_id,
                     observationId:args.observation_id,operationId:args.operation_id,signal:extra.signal})
                   : request.params.name === 'dock_ui_action' ? await actionRuntime.uiAct(args.action,

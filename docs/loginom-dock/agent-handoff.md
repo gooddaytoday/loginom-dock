@@ -1,4 +1,16 @@
-**Последняя P3 реализация:** makeArtifactDownloadCode (executor.mjs), PRIVATE,
+**Последняя P3 реализация:** dock_artifact_verify подключён в candidate runtime.
+Original upload ID + new verification ID + delivered observation/file_ref →
+assertIssued/exact CSV → stageDownload → browserReceipt → host SHA/size. Native
+raw download_completed и host download_verified разделены. Repeat ID не скачивает
+заново; lost reply восстанавливается inspect(original upload) и hash уже сохранённой
+копии. Native copy proof добавляется в server_copy_verification; original upload
+остаётся AMBIGUOUS/pending, upload_completion_verified=false. 219 client /10
+packaging PASS. Live download+SHA ещё НЕ запускался. Далее новый harness goal /
+independent auditor для upload→verify в одной Hermes сессии; экспорт должен
+поддержать dock_artifact_verify (нынешний probe его не разрешает). Потом server
+completion/budget/reject и полный P3–P9. Active browser/Hermes нет.
+
+**Предыдущая P3 реализация:** makeArtifactDownloadCode (executor.mjs), PRIVATE,
 пока не подключён к runtime/model tool. Exact CSV label/tid → fresh storage
 root context/epoch → register Page download event → existing checked UI double
 click → expected suggestedFilename/same origin → private saveAs → reread directory.

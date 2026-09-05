@@ -26,6 +26,11 @@ const artifactUploadTool = {name:'dock_artifact_upload',
   inputSchema:{type:'object',additionalProperties:false,required:['artifact_id','upload_grant_id','observation_id','operation_id'],
     properties:{artifact_id:identifier,upload_grant_id:identifier,observation_id:identifier,operation_id:identifier}},
   annotations:{readOnlyHint:false,destructiveHint:true,openWorldHint:false}};
+const artifactVerifyTool={name:'dock_artifact_verify',
+  description:'Download and verify the exact authorized CSV for a pending upload. operation_id is the ORIGINAL upload; verification_id is a new unique verification request. Supply observation_id and file_ref from a fresh detailed file-row observation. This checks downloaded name, size and SHA, without resubmitting the upload. Repeat the same verification_id or inspect the original operation after a lost response; never bypass uncertainty with a new ID. A verified server copy does not yet prove upload transfer completion, so the original upload stays pending.',
+  inputSchema:{type:'object',additionalProperties:false,required:['operation_id','verification_id','observation_id','file_ref'],
+    properties:{operation_id:identifier,verification_id:identifier,observation_id:identifier,file_ref:identifier}},
+  annotations:{readOnlyHint:false,destructiveHint:false,openWorldHint:false}};
 export const executorTools = [actionDescribeTool, actionRunTool, operationInspectTool, operationRecoverTool, uiActionTool];
 
 async function browserArtifactUpload(page,task,observe) {
@@ -947,9 +952,54 @@ export function createActionRuntime({ pinned, execute, artifactStore, allowCandi
     }
     return state;
   };
+  const finishArtifactVerification=async (operation,attempt,raw) => {
+    assertActionOutcome(raw);
+    if(raw.action_key!=='artifact.download' || raw.action_revision!=='1' || raw.operation_id!==attempt.id)
+      throw new Error('Downloaded artifact receipt identity mismatch');
+    attempt.raw=structuredClone(raw);
+    if(!attempt.rawRecorded) {
+      await remember(attempt,'download_completed',raw);attempt.rawRecorded=true;
+    }
+    const artifact=operation.checkpoint.artifact;
+    let outcome={...structuredClone(raw),action_key:'artifact.verify'};
+    if(raw.status==='SUCCEEDED') {
+      const expected={artifact_id:artifact.artifact_id,upload_grant_id:artifact.upload.grant_id,
+        upload_operation_id:operation.id,destination:artifact.upload.destination,suggested_name:artifact.name,
+        download_completed:true,bytes_verification_required:true,file_ref:attempt.parameters.file_ref,
+        observation_id:attempt.parameters.observation_id};
+      if(fingerprint('download.output',raw.output)!==fingerprint('download.output',expected) || raw.cleanup_complete!==true
+        || raw.phase!=='downloaded' || raw.effect_possible!==true || raw.error!==null)
+        throw new Error('Downloaded artifact metadata differs from the original upload');
+      try {
+        await attempt.lease.verify(raw.output.suggested_name);
+        outcome={...outcome,phase:'verified',output:{...expected,bytes_verification_required:false,bytes_verified:true,
+          bytes:artifact.bytes,sha256:artifact.sha256,upload_completion_verified:false}};
+      } catch {
+        outcome={...outcome,status:'FAILED',phase:'verification_failed',output:{upload_operation_id:operation.id,
+          destination:artifact.upload.destination,bytes_verified:false,upload_completion_verified:false},
+          error:{code:'DOWNLOADED_ARTIFACT_MISMATCH',message:'Downloaded bytes do not match the admitted artifact'}};
+      }
+    }
+    await remember(attempt,'download_verified',outcome);
+    attempt.outcome=outcome;attempt.settled=true;
+    auxiliary.set(attempt.id,{signature:attempt.signature,outcome:structuredClone(outcome)});
+    operation.transportUncertain=false;operation.cleanupConfirmed=raw.cleanup_complete===true;
+    operation.outcome.output.server_copy_verification={verification_id:attempt.id,status:outcome.status,
+      bytes_verified:outcome.output.bytes_verified===true,upload_completion_verified:false,
+      ...(outcome.output.bytes_verified ? {destination:artifact.upload.destination,bytes:artifact.bytes,sha256:artifact.sha256} : {})};
+    if(raw.status==='NOT_APPLIED' && raw.cleanup_complete===true)await attempt.lease.release();
+    return outcome;
+  };
   const reconcilePending = async () => {
     const operation = pending;
     try {
+      const verification=operation.verification;
+      if(operation.action.capability==='artifact.upload' && verification && !verification.settled) {
+        if(running)return failed(operation,'OPERATION_STILL_PENDING','The verification request is still running');
+        const state=verification.raw ? {state:'completed',receipt:verification.raw} : await readReceipt(operation);
+        if(state.state!=='completed')return failed(operation,'OPERATION_STILL_PENDING','The download receipt has not confirmed browser completion');
+        await finishArtifactVerification(operation,verification,state.receipt);
+      }
       if (operation.transportUncertain) {
         const state = await readReceipt(operation);
         if (state?.state !== 'completed') return failed(operation, 'OPERATION_STILL_PENDING',
@@ -993,7 +1043,12 @@ export function createActionRuntime({ pinned, execute, artifactStore, allowCandi
     base.unshift({ tool: 'dock_operation_inspect', arguments: { operation_id: operation.id },
       required_fields: [], requires: [], provides: ['completion_receipt', 'cleanup_state'] });
     if (operation.transportUncertain) return { recovery_options: [], next_steps: base };
-    if(operation.action.capability==='artifact.upload')return {recovery_options:[],next_steps:base};
+    if(operation.action.capability==='artifact.upload') {
+      if(operation.cleanupConfirmed && (!operation.verification || operation.verification.settled))base.push({
+        tool:'dock_artifact_verify',arguments:{operation_id:operation.id},required_fields:['verification_id','observation_id','file_ref'],
+        requires:['fresh_observed_authorized_csv_ref','confirmed_browser_completion'],provides:['server_copy_byte_verification']});
+      return {recovery_options:[],next_steps:base};
+    }
     const strategies = operation.cleanupConfirmed === false ? ['restore_control']
       : ['abandon_operation', ...(operation.action.capability === 'ui.act' ? ['accept_observed_state'] : []),
         ...(operation.action.capability === 'link.create.v1' && operation.parameters.target_port.kind === 'add'
@@ -1040,13 +1095,13 @@ export function createActionRuntime({ pinned, execute, artifactStore, allowCandi
     return view(operation, await reconcilePending());
   };
   return Object.freeze({
-    tools: [...executorTools,...(allowCandidate && artifactStore ? [artifactUploadTool] : [])],
+    tools: [...executorTools,...(allowCandidate && artifactStore ? [artifactUploadTool,artifactVerifyTool] : [])],
     assertPreparationAllowed() {
       if (running || pending) throw new Error('Dock preparation cannot run while an action is running or its effect remains uncertain');
     },
     describe(actionKey) {
       if (actionKey === undefined) return { available_actions: [...pinned.actions.keys()],
-        ...(allowCandidate && artifactStore ? {artifact_upload_tool:'dock_artifact_upload'} : {}),
+        ...(allowCandidate && artifactStore ? {artifact_upload_tool:'dock_artifact_upload',artifact_verify_tool:'dock_artifact_verify'} : {}),
         ui_action_tool: 'dock_ui_action', observation_tool: 'dock_workspace_observe', session_manifest: structuredClone(pinned.pins) };
       const action = find(actionKey);
       return { action: structuredClone(action), session_manifest: structuredClone(pinned.pins) };
@@ -1255,7 +1310,7 @@ export function createActionRuntime({ pinned, execute, artifactStore, allowCandi
         const lease=await artifactStore.stageUpload(artifactId);
         const operation={id:operationId,signature,uploadLease:lease,action:{action_key:'artifact.upload',revision:'1',capability:'artifact.upload'},
           parameters:{artifact_id:artifactId,upload_grant_id:grantId,observation_id:observationId,destination:artifact.upload.destination,overwrite:artifact.upload.overwrite},
-          checkpoint:{workflow_ref:snapshot.workflow_ref,file_storage:snapshot.file_storage,artifact},deadline:now()+30000};
+          checkpoint:{workflow_ref:snapshot.workflow_ref,file_storage:snapshot.file_storage,storage_root_ref:snapshot.observation_root?.ref ?? null,artifact},deadline:now()+30000};
         try {await lease.verify();signal?.throwIfAborted();await remember(operation,'prepared');signal?.throwIfAborted();}
         catch(error){await lease.release();throw error;}
         operations.set(operationId,operation);pending=operation;observations.clear();
@@ -1275,6 +1330,54 @@ export function createActionRuntime({ pinned, execute, artifactStore, allowCandi
           await lease.release();pending=null;
         }
         return structuredClone(outcome);
+      } finally {running=false;}
+    },
+    async verifyArtifact({operationId,verificationId,observationId,fileRef,signal}={}) {
+      signal?.throwIfAborted();checkId(operationId);checkId(verificationId);
+      if(!allowCandidate || !artifactStore)throw new Error('Artifact verification is available only in a candidate session');
+      const signature=fingerprint('artifact.verify',[operationId,observationId,fileRef]);
+      const operation=operations.get(operationId);
+      if(operations.has(verificationId))throw new Error('Verification ID conflicts with an existing operation');
+      if(auxiliary.has(verificationId)) {
+        const previous=auxiliary.get(verificationId);
+        if(previous.signature!==signature)throw new Error('Verification ID was already used with different parameters');
+        return structuredClone(previous.outcome);
+      }
+      if(operation?.verification?.id===verificationId) {
+        if(operation.verification.signature!==signature)throw new Error('Verification ID was already used with different parameters');
+        return structuredClone(operation.verification.outcome ?? failed(operation.verification,'OPERATION_STILL_PENDING','Inspect the original upload to reconcile its download'));
+      }
+      if(running || !operation || pending!==operation || operation.action.capability!=='artifact.upload'
+        || operation.transportUncertain || !operation.cleanupConfirmed || (operation.verification && !operation.verification.settled))
+        throw new Error('Inspect and confirm the pending upload browser receipt before verifying its file');
+      const snapshot=observations.get(observationId);
+      if(!snapshot)throw new Error('Observe the authorized file row before verifying');
+      observations.assertIssued(observationId,{ref:fileRef});
+      const options={operation_id:verificationId,upload_operation_id:operationId,observation_id:observationId,file_ref:fileRef,
+        snapshot,artifact:operation.checkpoint.artifact,storage_root_ref:operation.checkpoint.storage_root_ref,
+        expected_build:targetBuild,expected_origin:targetOrigin};
+      // Validate exact file identity before allocating any download lease.
+      makeArtifactDownloadCode(options);
+      running=true;
+      try {
+        const lease=await artifactStore.stageDownload(operation.parameters.artifact_id);
+        const attempt={id:verificationId,signature,lease,action:{action_key:'artifact.verify',revision:'1',capability:'artifact.verify'},
+          parameters:{upload_operation_id:operationId,observation_id:observationId,file_ref:fileRef},checkpoint:{artifact:options.artifact},deadline:now()+60000};
+        try {signal?.throwIfAborted();await remember(attempt,'download_prepared');signal?.throwIfAborted();}
+        catch(error){await lease.release();throw error;}
+        operation.verification=attempt;observations.clear();
+        const receipt=receiptOptions(operation,verificationId,'artifact.download',signature);
+        let raw;
+        try {
+          const code=makeArtifactDownloadCode({...options,download_path:lease.path});
+          raw=await execute(withBrowserReceipt(`(${code})(page)`,receipt),{timeout:65000});
+        } catch {
+          operation.transportUncertain=true;operation.cleanupConfirmed=false;
+          attempt.outcome=failed(attempt,'BROWSER_CALL_UNCERTAIN','Inspect the original upload before any repeated download');
+          await remember(attempt,'download_transport_uncertain',attempt.outcome);
+          return structuredClone(attempt.outcome);
+        }
+        return structuredClone(await finishArtifactVerification(operation,attempt,raw));
       } finally {running=false;}
     },
     async run(actionKey, parameters, { signal, operationId } = {}) {

@@ -1,3 +1,38 @@
+## 2026-09-05 — P3: runtime связывает download receipt с host SHA
+
+Подключён candidate dock_artifact_verify: original operation_id, verification_id,
+observation_id, file_ref. Другие поля (включая download_path) отвергаются MCP
+handler до браузера. Требуются pending upload, confirmed browser completion и
+cleanup, assertIssued и exact CSV identity. Upload checkpoint хранит storage
+root ref для scoped reread. Host stageDownload lease передаётся private primitive;
+новый verification ID использует существующий browserReceipt, не второй журнал.
+
+Native artifact.download receipt записывается как download_completed; только
+после matching artifact/grant/destination/observation/ref и проверки lease SHA /
+size появляется отдельный artifact.verify/download_verified outcome. Ошибочные
+байты дают FAILED/DOWNLOADED_ARTIFACT_MISMATCH без вывода их содержимого. Успех
+ставит bytes_verified=true и upload_completion_verified=false. Original upload
+сохраняет AMBIGUOUS/pending; inspect показывает server_copy_verification summary.
+Server transfer completion по этому результату НЕ считается подтверждённым.
+
+Repeat verification ID возвращает cached outcome. Lost response оставляет lease
+и unresolved verification; новый ID блокируется. inspect original upload читает
+его download receipt и хэширует уже сохранённую копию, без повторных download /
+upload. Raw receipt удерживается также при сбое записи host evidence; concurrent
+inspection не запускает второй финализатор. NOT_APPLIED освобождает пустую
+lease после подтверждения browser completion; завершённые копии сохраняются
+до session shutdown для дальнейшей диагностики.
+
+219 client /10 packaging PASS. Четыре integration tests исполняют сериализованный
+browser/runtime с внешним Page/download double и настоящим artifactStore/FS:
+верные bytes, wrong bytes той же длины, lost response без повторных эффектов,
+unissued ref/wrong upload/ID collision. MCP contract проверяет публикацию verify
+и отказ на подмену download_path. Python/native/live не запускались: следующим
+шагом нужен новый harness goal и independent auditor upload→verify одной сессии;
+нынешний file-upload-probe не разрешает verify и не доказывает server SHA.
+Затем server completion, download budget/reject и полный P3–P9. Active
+Hermes/browser нет; production/public rc2 не менялись. Runtime inputs всё ещё 46.
+
 ## 2026-09-05 — P3: привязка CSV download к наблюдаемому файлу
 
 Добавлен private makeArtifactDownloadCode в executor.mjs. Только exact CSV

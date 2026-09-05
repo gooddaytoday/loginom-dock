@@ -1410,6 +1410,10 @@ epoch guards → native input. Только явный replace; reject пока 
 test, /test, отдельное имя CSV, один native input submit и inspect pending.
 Это подтверждает только submission/uncertainty contract; server bytes,
 transfer completion и reject всё ещё не приняты. Пункт доставки остаётся открыт.
+Candidate dock_artifact_verify теперь связывает exact observed CSV с private
+download и host SHA/size, включая lost-reply recovery без повторного скачивания.
+Проверены локальные runtime/FS tests; live upload→verify ещё требуется. Даже
+bytes_verified=true пока оставляет upload pending до transfer completion proof.
 
 **Зависит от:** P1/P2. Сначала одна цель от файла до проверенного результата;
 по ней выделить устойчивые lifecycle мастера и исполнения.
