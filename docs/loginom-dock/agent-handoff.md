@@ -1,3 +1,11 @@
+**Checkpoint:** Luna run 013610-e4e2d82e terminal, 50/58 frozen FAIL, 41 API
+calls; session 63819 закрыт. Последний отказ — неверная пара ref/observation_id.
+Добавлена подсказка только по действительно выданным refs, без alias/автодействия;
+246 client /110 Python /10 packaging PASS. Далее P3 typed wizard inspect/set/next/apply/cancel
+и applied readback через существующий executor, не очередной неизменённый
+generic replay. Модель ChatGPT subscription/Luna/medium. Active Hermes/browser
+нет; полный P3–P9 открыт. Точные evidence/ограничения сверху status.
+
 **Checkpoint:** пользователь вернул дальнейшую работу на ChatGPT subscription /
 openai-codex /gpt-5.6-luna /medium. Xiaomi subscription test завершён: run
 010130-5f13962b, 47/58 FAIL, 114 API calls, reached text_import_file; session38171

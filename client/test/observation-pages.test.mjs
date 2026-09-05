@@ -178,3 +178,13 @@ test('ambiguous receipt IDs never suggest an arbitrary observation',()=>{
   pages.retain({...fixture(1),operation_id:'same'});pages.retain({...fixture(1),operation_id:'same'});
   assert.throws(()=>pages.get('same'),/not a unique observation/);
 });
+
+test('wrong-observation ref hint names only an already delivered complete ref set',()=>{
+  const pages=createObservationPages(),one=pages.retain(fixture(1)),two=pages.retain(fixture());
+  // The target exists privately in both snapshots only when explicitly added;
+  // an undelivered later-page reference must never receive a usable hint.
+  assert.throws(()=>pages.assertIssued(one.output.observation_id,{ref:'ref-89'}),e=>!e.message.includes('output.observation_id='));
+  assert.throws(()=>pages.assertIssued(one.output.observation_id,{ref:'ref-5'}),e=>e.message.includes(two.output.observation_id));
+  assert.throws(()=>pages.assertIssued(one.output.observation_id,{source_ref:'ref-5',target_ref:'ref-89'}),e=>!e.message.includes('output.observation_id='));
+  pages.clear();assert.throws(()=>pages.assertIssued(one.output.observation_id,{ref:'ref-5'}),e=>!e.message.includes(two.output.observation_id));
+});

@@ -126,8 +126,13 @@ export function createObservationPages({ maxBytes = 12000, maxRecords = 32, capa
     },
     assertIssued(id, action) {
       const entry = entries.get(id);
-      if (!entry || [action.ref, action.source_ref, action.target_ref].filter(Boolean).some(ref => !entry.issued.has(ref))) {
-        throw new Error('UI reference has not been delivered in this observation; read its page first');
+      const refs=[action.ref, action.source_ref, action.target_ref].filter(Boolean);
+      if (!entry || refs.some(ref => !entry.issued.has(ref))) {
+        // Suggest only a retained observation which actually delivered ALL refs.
+        // Never resolve an alias or issue a reference from a private raw snapshot.
+        const candidate=refs.length ? [...entries.values()].reverse().find(value=>refs.every(ref=>value.issued.has(ref))) : null;
+        const hint=candidate ? ' These refs were delivered with output.observation_id='+candidate.id+'. Use that exact pair, or obtain a fresh observation if the interface changed.' : '';
+        throw new Error('UI reference has not been delivered in this observation; read its page first.'+hint);
       }
     },
     retain(outcome, { scope = 'all' } = {}) {

@@ -1,3 +1,27 @@
+## 2026-09-06 — завершён Luna run 013610, уточнена неверная пара ref/observation
+
+Run 20260906-013610-e4e2d82e terminal, session 63819 закрыт; ChatGPT/Luna/medium,
+41 API calls, exit 0, timeout=false. Frozen audit 50/58 FAIL, SHA
+961d453b76768ee7d7a021b6353f0768f0c5a45b3fdb12c7b577bcad17e8ccad.
+Не пройдены navigation gate и семь domain verifiers. Последний call row 92
+взял ref из roots, но указал другой observation_id; raw evidence подтверждает
+корректный отказ issued-ref guard. Нового полного результата P3 нет.
+
+В assertIssued добавлена конкретная подсказка: только retained observation,
+реально выдавшая ВСЕ refs запроса, может быть названа в ошибке. Ссылка из raw
+недоставленной страницы, смесь refs из несовместимых observations и удалённая
+сессия не дают подсказки. Alias/автовыполнение не добавлены; state/epoch guards
+сохранены. 246 client /110 Python /10 packaging PASS; отчёты ref-pair-*-tests.txt.
+
+Дальнейшее направление: перейти к предусмотренным P3 typed wizard
+inspect/set/next/apply/cancel с node/settings identity и applied readback,
+используя существующий executor receipt/pending и source-backed selectors.
+Не запускать ещё один неизменённый полный generic replay только ради новой
+попытки. Эти runs дали достаточно evidence о хрупкости ручной сборки refs и
+незавершённых domain contracts. Полный P3–P9 остаётся целью, без замены результата
+диагностическим PASS. Продолжать на ChatGPT subscription/Luna/medium.
+Active Hermes/browser нет.
+
 ## 2026-09-06 — сравнение Xiaomi завершено; продолжение на Luna по запросу
 
 Xiaomi subscription run 20260906-010130-5f13962b terminal, session 38171 закрыт.
