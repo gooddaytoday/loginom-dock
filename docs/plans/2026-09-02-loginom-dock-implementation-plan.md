@@ -1344,6 +1344,8 @@ bridge и session/build input lists. Новые driver modules сначала п
   изменении между страницами отвергать объединение и начинать новое чтение.
   Реализованы host paging/digest и cooperative browser scan budget с явным
   UI_SCAN_LIMIT; browser root/filter, epoch/ABA и live приёмка scan ещё открыты.
+  Добавлены value_truncated/value_length_utf16 для полей; generic gestures
+  запрещены для усечённых значений до отдельного large-field контракта.
 - [ ] Реализовать scroll и новое observe после него для виртуализированных
   списков/таблиц; устаревшие incarnations должны отклоняться даже при одинаковом
   data-tid. Нельзя строить proof полного графа из ограниченной viewport-выборки.

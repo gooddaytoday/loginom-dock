@@ -1,5 +1,12 @@
 # Следующему агенту: с чего начать
 
+**Последнее изменение:** value_truncated/value_length_utf16 у editable fields;
+усечённый value не допускает generic gestures (неполная precondition).
+173 client / 80 Python. Active Hermes нет, live этого изменения нет.
+Далее browser root/filter с глобальными guards и специализированный large-field
+контракт, затем остальные P2/P3–P9. Не считать запрет редактирования длинных
+полей реализацией large-field driver. Подробности — верх status.
+
 **Последняя приёмка:** `20260905-172843-f90ebea6` — 25/25 frozen PASS,
 runtime `f4db7d2a…` с DOM epoch. Menu → SetupNode → checkbox cycle прошёл,
 epoch растёт/стабилен по состоянию UI; live ABA fault этим не доказан.

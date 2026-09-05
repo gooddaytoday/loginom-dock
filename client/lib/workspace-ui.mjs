@@ -241,13 +241,17 @@ function workspaceUiCapability(page, task) {
       const scroll = scrollOf(element);
       const interaction = interactionOf(element);
       const checkState=checkStateOf(element);
-      const value = editable && !sensitive(element) ? String(element.value ?? (element.isContentEditable ? element.textContent : '') ?? '').slice(0, 2048) : undefined;
-      return { ref: refOf(element), tid, identity, kind, role, label, scope: scopeOf(element), ...(value === undefined ? {} : { value }),
+      const fullValue = editable && !sensitive(element) ? String(element.value ?? (element.isContentEditable ? element.textContent : '') ?? '') : undefined;
+      const value = fullValue?.slice(0, 2048), valueTruncated = fullValue !== undefined && fullValue.length > 2048;
+      const fieldValue = value === undefined ? {} : {value, value_truncated:valueTruncated, value_length_utf16:fullValue.length};
+      return { ref: refOf(element), tid, identity, kind, role, label, scope: scopeOf(element), ...fieldValue,
         ...(scroll ? { scroll } : {}),
         ...(checkState ? {check_state:checkState} : {}),
-        signature: { tag, tid, role, type: element.getAttribute('type'), name: element.getAttribute('name'), label, ...(value === undefined ? {} : { value }), dialog_ref: dialogRef(element), scroll, check_state:checkState },
+        signature: { tag, tid, role, type: element.getAttribute('type'), name: element.getAttribute('name'), label, ...fieldValue, dialog_ref: dialogRef(element), scroll, check_state:checkState },
         enabled: isEnabled, visible: true, interaction, bounding_box: boxOf(element),
-        allowed_actions: allowed ? ['click', 'double_click', 'right_click', 'press', 'drag', ...(editable ? ['fill'] : []), ...(checkState ? ['set_checked'] : []), ...(scroll && interaction.state === 'point_observed' ? ['scroll'] : [])] : [] };
+        // A bounded prefix is not a sufficient value precondition. A dedicated
+        // large-field driver must establish its own complete read/write contract.
+        allowed_actions: allowed && !valueTruncated ? ['click', 'double_click', 'right_click', 'press', 'drag', ...(editable ? ['fill'] : []), ...(checkState ? ['set_checked'] : []), ...(scroll && interaction.state === 'point_observed' ? ['scroll'] : [])] : [] };
     });
     const graphPrefix = workflow ? workflow.prefix + ';Graph;' : null;
     const graphElements = graphPrefix ? all.filter(element => (getTid(element) ?? '').startsWith(graphPrefix)) : [];

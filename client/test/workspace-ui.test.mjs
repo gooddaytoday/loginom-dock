@@ -494,6 +494,21 @@ test('right click uses the checked ref and releases the right button after a los
   assert.throws(()=>validateUiAction({verb:'right_click',ref:'ui-one',x:100}), /fields/);
 });
 
+test('field observation labels bounded prefixes and never admits a gesture against an unseen suffix', async () => {
+  const page=new Page();const field=page.add('textarea','Form;edtLong');
+  field.value='x'.repeat(2048);
+  const initial=await page.observe();const target=initial.ui.elements.find(e=>e.tid==='Form;edtLong');
+  assert.equal(target.value_truncated,false);assert.equal(target.value_length_utf16,2048);
+  assert.ok(target.allowed_actions.includes('fill'));
+  field.value+='hidden suffix';
+  const snapshot=await page.observe(),long=snapshot.ui.elements.find(e=>e.tid==='Form;edtLong');
+  assert.equal(long.value.length,2048);assert.equal(long.value_truncated,true);
+  assert.equal(long.value_length_utf16,2061);assert.deepEqual(long.allowed_actions,[]);
+  assert.ok(!JSON.stringify(snapshot).includes('hidden suffix'));
+  assert.equal((await page.act({verb:'fill',ref:target.ref,text:'replacement'},initial)).status,'NOT_APPLIED');
+  assert.deepEqual(page.clickedPoints,[]);assert.equal(field.value.length,2061);
+});
+
 test('DOM epoch rejects ABA before any gesture and consumes pending mutation records', async () => {
   const page = new Page(); page.add('button','Safe;btnAction','Action');
   const before = await page.observe();
