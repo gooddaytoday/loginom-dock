@@ -1,3 +1,12 @@
+**Checkpoint P3:** run 20260906-002935-fc60ced5 terminal, 50/58 frozen FAIL.
+Live replace_expression → exact Quantity * UnitPrice в Expr1 подтверждён,
+но import/settings/syntax/Amount/results ещё нет. Wizard root read сам по себе
+не помог: btnExprEdit/Next были за первой страницей. Поднят приоритет lifecycle,
+Calculator edit/add/mode/editor/name rows и полей; 243 client /107 Python /10 packaging PASS.
+Transfer audit правильно отклонил случайный click admin до test; не ослаблять.
+Далее новый полный run, начиная с импорта, и оставшиеся P3–P9. Active Hermes/
+browser нет, session 63618 terminal; точные pins/доказательства сверху status.
+
 **Checkpoint P3:** run 20260906-001652-2b44f209 terminal, 49/58 frozen FAIL,
 остановился на форматах импорта после stale pages/refs. Transfer tools success,
 но strict audit не поддержал directory page offset 86; исправлен для будущих

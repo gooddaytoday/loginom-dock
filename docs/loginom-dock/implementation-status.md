@@ -1,3 +1,39 @@
+## 2026-09-06 — P3: живой ввод формулы подтверждён; основные элементы мастера подняты
+
+Run 20260906-002935-fc60ced5 terminal exit 0, timeout=false, 67 API calls,
+Hermes openai-codex/gpt-5.6-luna/medium, test,/test; harness 826221b2.
+Runtime b735a27e890da8845946eb32591922c95bceb351510b3b05b53b0635ca9561d6.
+Frozen audit 50/58 FAIL, SHA
+72be60c84c140477db73de74393cb7a01636e2266ee92279ba47a1138f293041.
+
+Реально подтверждено: в Calculator expression mode selected Expr1, пустой
+CodeMirror document был прочитан полностью; dock_ui_action replace_expression
+(строка 141) ввёл Quantity * UnitPrice. Reply 142 SUCCEEDED содержит exact
+readback, тот же selected field/wrapper/input/document и expression_text_verified.
+Это live подтверждение native keyboard + public document reader, НЕ syntax,
+Amount field metadata, input mapping, import settings или applied/saved settings.
+Перед Калькулятором наблюдались input_mapping и calculator; настройки импорта
+в этом run не выполнены. Execution/Group/reopen/reexecute не выполнены.
+
+После ввода cursor дважды устарел, в том числе после корректного fresh
+WizrdMCF root read. Raw receipt этого чтения содержит 41 control: AND/OR и
+прочие helper buttons раньше btnExprEdit (index 21) и btnNext (index 36),
+тогда как первая страница выдала 19 записей. Поэтому одного приоритета root
+недостаточно. Исправлено: menu/modal сохраняют приоритет, затем wizard lifecycle,
+Calculator edit/add/mode, editor, expression-name rows и обычные поля. Exact
+colExpressionName текущего wizard стали наблюдаемыми action targets. Прочие
+элементы остаются доступны, guards/freshness не ослаблены. Тест с 70 helper
+buttons проверяет реальный pager и выдачу action refs Next/Edit/Amount в первой
+странице. 243 full client /107 Python /10 packaging PASS; отчёты wizard-priority-*-tests.txt.
+
+Transfer-only audit не принят по корректной причине: до test агент одиночно
+выбрал строку admin. Это выход за разрешённый navigation path; gate не ослаблен.
+Последующие страницы каталога теперь прошли immutable receipt/destination gates.
+Остальные семь FAIL — открытые domain verifiers. Старый frozen audit не менялся.
+Session 63618 terminal, active Hermes/browser нет. Далее полная цепочка начиная
+с настройки импорта, затем метаданные Amount/формула/mapping, Group, execution,
+results и save/reopen/reexecute; цель весь P3–P9 сохраняется.
+
 ## 2026-09-06 — P3: завершён run 001652; исправлена проверка последующих страниц
 
 Полный data-pipeline run 20260906-001652-2b44f209 завершён, процесс exit 0,

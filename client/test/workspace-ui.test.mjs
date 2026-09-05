@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import vm from 'node:vm';
+import { createObservationPages } from '../lib/observation-pages.mjs';
 import { makeWorkspaceUiCode, validateUiAction } from '../lib/workspace-ui.mjs';
 import { assertActionOutcome } from '../lib/action-catalog.mjs';
 
@@ -1108,4 +1109,19 @@ test('root discovery delivers the current wizard ahead of many earlier tables',a
   const read=await page.execute({mode:'observe',root_ref:result.output.ui.elements[0].ref});
   assert.equal(read.output.scan.detail_elements,2);
   assert.ok(read.output.ui.elements.some(e=>e.tid.endsWith('edtValueNull')));
+});
+
+test('Calculator lifecycle and expression controls are delivered before operator palettes',async()=>{
+  const page=new Page(),form=page.add('div','MF;TF-1;WizrdMCF'),base='MF;TF-1;WizrdMCF;';
+  for(let i=0;i<70;i++)page.add('button',base+'CalcDataWizard;btnOperator'+i,'operator '+i,undefined,form);
+  const next=page.add('button',base+'btnNext','Далее',undefined,form);
+  const edit=page.add('button',base+'CalcDataWizard;btnExprEdit','',undefined,form);
+  const row=page.add('td',base+'CalcDataWizard;colExpressionName_Amount','Amount',undefined,form);
+  const raw=await page.execute({mode:'observe'}),pages=createObservationPages(),first=pages.retain(raw);
+  for(const target of [next,edit,row]) {
+    const record=first.output.ui.elements.find(e=>e.tid===target.getAttribute('data-tid'));
+    assert.ok(record,'essential control was not delivered');assert.ok(record.allowed_actions.includes('click'));
+    assert.doesNotThrow(()=>pages.assertIssued(first.output.observation_id,{ref:record.ref}));
+  }
+  assert.ok(first.output.page.next_cursor,'operator palette remains available on later pages');
 });

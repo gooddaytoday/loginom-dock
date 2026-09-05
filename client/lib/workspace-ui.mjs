@@ -265,6 +265,7 @@ function workspaceUiCapability(page, task) {
       // settings affordance can be SVG without a button role.
       || /;Graph;[^;]+;Setting$/.test(getTid(element) ?? '')
       || (getTid(element) ?? '')===workflow?.prefix+';WizrdMCF;CalcDataWizard;cmpExpression'
+      || (getTid(element) ?? '').startsWith(workflow?.prefix+';WizrdMCF;CalcDataWizard;colExpressionName_')
       // E2E bg/selectors.ts:970: context-menu item wrappers carry stable
       // mn;mni* tids even when their inner ARIA menuitem has no test ID.
       || /^mn;mni[^;]+$/.test(getTid(element) ?? '')
@@ -276,8 +277,20 @@ function workspaceUiCapability(page, task) {
       // their pinned test identifiers end with tlb;yes / tlb;no, not btn*.
       || ((getTid(element) ?? '').startsWith('msgbox') && /;tlb;(?:yes|no|ok|cancel)$/.test(getTid(element)) && !!dialogRef(element));
     const priority = { graph_editor: 0, dialog: 1, graph: 2, workflow: 3, global: 4 };
-    const controlPriority = element => /^mn;mni[^;]+$/.test(getTid(element) ?? '') ? -2
-      : element.getAttribute('role') === 'menuitem' ? -1 : priority[scopeOf(element)];
+    const controlPriority = element => {
+      const tid=getTid(element)??'',base=workflow?.prefix+';WizrdMCF;';
+      if(/^mn;mni[^;]+$/.test(tid) || element.getAttribute('role')==='menuitem')return -30;
+      if(dialogRef(element))return -20;
+      // Keep lifecycle and selected-expression controls on the first compact
+      // page, ahead of Calculator operator palettes and rendered preview cells.
+      if(wizardButtons.some(name=>tid===base+name))return -10;
+      if(['btnCalcMode','btnAddExpr','btnExprEdit'].some(name=>tid===base+'CalcDataWizard;'+name))return -9;
+      if(tid===base+'CalcDataWizard;cmpExpression')return -8;
+      if(tid.startsWith(base+'CalcDataWizard;colExpressionName_'))return -7;
+      if((getTid(element.closest('[data-tid]'))??'').startsWith(base) && !dangerous(element)
+        && element.matches('input,textarea,select,[contenteditable="true"]'))return -6;
+      return priority[scopeOf(element)];
+    };
     const controls = candidates.filter(interesting).filter(element=>!selectedRoot || selectedRoot===element || selectedRoot.contains(element))
       .sort((left, right) => controlPriority(left) - controlPriority(right));
     const checkStateOf = element => {
