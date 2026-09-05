@@ -1,3 +1,22 @@
+### Host startup input admission (2026-09-05)
+
+Executor preview/replay CLI accepts repeated `--input-artifact` arguments, each
+an explicit JSON object with exactly `sourcePath` (absolute host path), `name`,
+`bytes`, `sha256`. This is a trusted launcher interface, not an MCP tool. The
+whole batch is validated before file reads: at most 8 files, 16 MiB per file,
+64 MiB total, distinct NFC/case-folded display names. Each argument is bounded
+at 8192 characters. Admission failure aborts startup before bridge connection;
+any partial local staging remains private and is never delivered to an agent.
+The existing store verifies and snapshots bytes before browser connection.
+`dock_prepare` returns public `input_artifacts` descriptors in executor modes;
+source paths and byte buffers are not included. Classic/research reject input
+arguments. Admission is session-local; reconnect creates new artifact IDs.
+
+This does not upload anything to Loginom. No remote destination ownership,
+overwrite handling, upload receipt or server byte verification is claimed.
+The acceptance harness still needs fixture/task pinning and explicit startup
+arguments when the full data-pipeline goal is connected.
+
 ### P3 destination observation (2026-09-05)
 
 Detailed workspace observation exposes `file_storage` as destination evidence:

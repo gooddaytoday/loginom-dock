@@ -1,3 +1,23 @@
+## 2026-09-05 — P3: разрешённые файлы подключены к запуску клиента
+
+CLI executor-preview/replay принимает повторяемый `--input-artifact` JSON
+(sourcePath/name/bytes/sha256) от trusted launcher, валидирует batch до чтения
+файлов и вызывает session artifactStore до подключения bridge. Только absolute
+sourcePath; ≤8 файлов, ≤16 MiB/file, ≤64 MiB/batch, без лишних полей и дубликатов
+NFC/case-folded names. Отказ admission прерывает startup: частичный staging
+не показывается модели. Classic/research input arguments отвергают.
+`dock_prepare` передаёт модели только input_artifacts descriptors; MCP test
+проходит через реальный store и подтверждает доставку без sourcePath.
+Файл пока остаётся локальным, Loginom upload tool/receipt отсутствуют.
+
+184 client / 81 Python PASS. Первый client/packaging run выявил mock session
+без artifactStore; bridge test заменён на реальный store + admission + protocol
+assertions. Повторный полный packaging run: 10/10 PASS.
+Production/runtime публикация и Hermes live run не выполнялись.
+Следующий шаг: установить точную upload conflict семантику (тесты copy/paste
+её не доказывают), typed upload/destination/no-overwrite/reconciliation/server
+bytes proof и подключение fixture pins/admission к полному data-pipeline goal.
+
 ## 2026-09-05 — P3: наблюдение каталога файлового хранилища
 
 Добавлен `file_storage` в подробное workspace observation и его страницы:

@@ -1,3 +1,11 @@
+**Последняя P3 реализация:** CLI `--input-artifact` repeated JSON с exact
+sourcePath/name/bytes/sha256 → session store до bridge; executor dock_prepare
+возвращает input_artifacts descriptors без sourcePath. Batch ≤8/64MiB,
+file ≤16MiB, name duplicates rejected. 184 client / 81 Python / 10 packaging PASS после исправления bridge
+fixture (первый прогон использовал старый mock session без artifactStore). Upload и data-pipeline run ещё не подключены.
+Следующее: no-overwrite semantics + typed browser upload/server bytes proof,
+fixture pins/admission в harness, затем полный P3 и P4–P9.
+
 **Последняя P3 реализация:** file_storage.directory из breadcrumb активной
 вкладки, bounded/ambiguous → unobserved, metadata на страницах и в auditor.
 listing_complete всегда false; upload ещё не реализован. 183/81/10 PASS,

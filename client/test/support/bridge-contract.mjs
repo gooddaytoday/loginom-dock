@@ -1,6 +1,8 @@
 import test, { mock } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtemp, rm } from 'node:fs/promises';
+import { mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { createHash } from 'node:crypto';
+import { createArtifactStore } from '../../lib/artifacts.mjs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { Client as ProtocolClient } from '@modelcontextprotocol/sdk/client/index.js';
@@ -55,6 +57,10 @@ test('MCP application refusals remain typed normal content and the same connecti
   const config = { endpoint: 'https://dock.invalid/mcp', apiKey: 'UNIT-NONSECRET', loginomUrl: 'https://loginom.invalid/?testable=true', mode: 'executor-replay' };
   let bridge, client;
   try {
+    session.artifactStore=await createArtifactStore({directory:join(directory,'input')});
+    const sourcePath=join(directory,'private-source.csv');await writeFile(sourcePath,'abc');
+    const admitted=await session.artifactStore.admit({sourcePath,name:'sales.csv',bytes:3,
+      sha256:createHash('sha256').update('abc').digest('hex')});
     bridge = await createBridge(config, session);
     client = new ProtocolClient({ name: 'test-agent', version: '1.0.0' });
     const [agentTransport, bridgeTransport] = InMemoryTransport.createLinkedPair();
@@ -83,6 +89,8 @@ test('MCP application refusals remain typed normal content and the same connecti
     assert.notEqual(prepared.isError, true);
     const metadata = JSON.parse(prepared.content[0].text);
     assert.equal(metadata.prepared, true);
+    assert.deepEqual(metadata.input_artifacts,[admitted]);
+    assert.equal(JSON.stringify(metadata.input_artifacts).includes(sourcePath),false);
     assert.deepEqual(metadata.executor.available_actions, ['node.add', 'link.create', 'package.save_as']);
     assert.ok(prepared.content.some(block => block.type === 'text' && block.text.includes('dock_ui_action') && block.text.includes('supersede')));
     const beforeInvalid = browserCalls;

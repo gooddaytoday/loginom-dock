@@ -4,7 +4,7 @@ import {mkdtemp,writeFile,readFile,symlink,rm} from 'node:fs/promises';
 import {tmpdir} from 'node:os';
 import {join} from 'node:path';
 import {createHash} from 'node:crypto';
-import {createArtifactStore} from '../lib/artifacts.mjs';
+import {createArtifactStore,admitStartupArtifacts} from '../lib/artifacts.mjs';
 
 test('admission snapshots approved bytes and revalidates the staged artifact before upload',async()=>{
   const directory=await mkdtemp(join(tmpdir(),'dock-artifact-'));
@@ -36,5 +36,25 @@ test('admission rejects symlinks, oversized files, wrong identity and path-like 
     await assert.rejects(()=>store.admit({...approved,sourcePath:link}),/regular file/);
     assert.deepEqual(store.list(),[]);
     assert.equal((await readFile(input)).toString(),'abc');
+  } finally {await rm(directory,{recursive:true,force:true});}
+});
+
+test('startup admission validates the whole batch before file access and exposes descriptors only',async()=>{
+  const directory=await mkdtemp(join(tmpdir(),'dock-artifact-startup-'));
+  try {
+    const sourcePath=join(directory,'private-source.csv');await writeFile(sourcePath,'abc');
+    const request={sourcePath,name:'Sales.csv',bytes:3,sha256:createHash('sha256').update('abc').digest('hex')};
+    const store=await createArtifactStore({directory:join(directory,'staged')});
+    for(const requests of [null,[request,{...request,name:'sales.csv'}],[request,{...request,name:'other',extra:true}],
+      [{...request,sourcePath:'relative.csv'}],[{...request,bytes:16*1024*1024+1}],Array.from({length:9},(_,i)=>({...request,name:String(i)})),
+      Array.from({length:5},(_,i)=>({...request,name:String(i),bytes:16*1024*1024}))]) {
+      await assert.rejects(()=>admitStartupArtifacts(store,requests));assert.deepEqual(store.list(),[]);
+    }
+    const admitted=await admitStartupArtifacts(store,[request]);
+    assert.deepEqual(admitted,store.list());
+    assert.equal(JSON.stringify(admitted).includes(sourcePath),false);
+    assert.deepEqual(Object.keys(admitted[0]).sort(),['artifact_id','bytes','name','sha256']);
+    assert.equal((await store.resolve(admitted[0].artifact_id)).buffer.toString(),'abc');
+    admitted[0].name='mutated';assert.equal(store.list()[0].name,'Sales.csv');
   } finally {await rm(directory,{recursive:true,force:true});}
 });

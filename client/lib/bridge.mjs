@@ -147,7 +147,7 @@ export async function createBridge(config, session) {
             prepared: !actionRuntime || session.metadata.workspaceReady === true, sessionId: session.metadata.sessionId,
             loginomUrl: config.loginomUrl,
             workspace,
-            ...(actionRuntime ? { executor: actionRuntime.describe() } : {}),
+            ...(actionRuntime ? { executor: actionRuntime.describe(), input_artifacts: session.artifactStore.list() } : {}),
             skillUri, skillRevision: prepared.detail.revision, cacheDirectory: prepared.directory,
             source: prepared.detail.source, archiveActive: session.metadata.archiveActive,
           }) }, { type: 'text', text: prepared.detail.content }, ...(actionRuntime ? [{ type: 'text', text:

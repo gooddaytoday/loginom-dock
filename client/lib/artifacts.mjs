@@ -1,13 +1,36 @@
 // Host-only admission. Never expose sourcePath or this API as a model tool.
 import {mkdir, open, lstat, realpath, unlink} from 'node:fs/promises';
 import {constants} from 'node:fs';
-import {join, resolve} from 'node:path';
+import {join, resolve, isAbsolute} from 'node:path';
 import {createHash, randomUUID} from 'node:crypto';
 
 const sha = bytes => createHash('sha256').update(bytes).digest('hex');
 const validName = name => typeof name==='string' && name.length>0 && name.length<=200
   && !/[\\/:<>"|?*\x00-\x1f\x7f]/.test(name) && !/[. ]$/.test(name)
   && !/^(?:con|prn|aux|nul|com[1-9]|lpt[1-9])(?:\.|$)/i.test(name);
+
+// Explicit host startup arguments, never accepted from an MCP/model request.
+// Validate the complete batch before copying any file. A failed copy aborts
+// startup, so partially admitted batches are never exposed to an agent.
+export async function admitStartupArtifacts(store, requests) {
+  if (!Array.isArray(requests) || requests.length>8) throw new Error('Invalid input artifact batch');
+  const names=new Set();let total=0;
+  for (const request of requests) {
+    if (!request || typeof request!=='object' || Array.isArray(request)
+        || Object.keys(request).sort().join(',')!=='bytes,name,sha256,sourcePath'
+        || typeof request.sourcePath!=='string' || !isAbsolute(request.sourcePath)
+        || !validName(request.name) || !Number.isSafeInteger(request.bytes)
+        || request.bytes<0 || request.bytes>16*1024*1024
+        || typeof request.sha256!=='string' || !/^[a-f0-9]{64}$/.test(request.sha256)) throw new Error('Invalid input artifact request');
+    const name=request.name.normalize('NFC').toLowerCase();
+    if (names.has(name)) throw new Error('Input artifact names must be distinct');
+    names.add(name);total+=request.bytes;
+  }
+  if (total>64*1024*1024) throw new Error('Input artifact batch exceeds its byte limit');
+  const admitted=[];
+  for (const request of requests) admitted.push(await store.admit(request));
+  return admitted;
+}
 
 async function readVerified(path, expected, maxBytes) {
   if (!Number.isSafeInteger(expected.bytes) || expected.bytes<0 || expected.bytes>maxBytes

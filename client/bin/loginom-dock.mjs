@@ -4,6 +4,7 @@ import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js'
 import { loadConfig } from '../lib/config.mjs';
 import { createSession } from '../lib/session.mjs';
 import { createBridge } from '../lib/bridge.mjs';
+import { admitStartupArtifacts } from '../lib/artifacts.mjs';
 
 process.umask(0o077);
 let bridge;
@@ -14,6 +15,7 @@ try {
     mode: { type: 'string' },
     'action-manifest-uri': { type: 'string' }, 'action-manifest-sha256': { type: 'string' },
     'replay-bootstrap': { type: 'boolean', default: false },
+    'input-artifact': { type: 'string', multiple: true },
     headless: { type: 'boolean', default: false },
   } });
   const config = await loadConfig({
@@ -24,6 +26,13 @@ try {
     replayBootstrap: values['replay-bootstrap'],
   });
   const session = await createSession(config, { headless: values.headless });
+  if (values['input-artifact']?.length && !['executor-preview','executor-replay'].includes(config.mode)) {
+    throw new Error('Input artifacts require executor mode');
+  }
+  await admitStartupArtifacts(session.artifactStore, (values['input-artifact'] ?? []).map(value => {
+    if (value.length>8192) throw new Error('Input artifact argument is too large');
+    return JSON.parse(value);
+  }));
   bridge = await createBridge(config, session);
   for (const signal of ['SIGINT', 'SIGTERM']) {
     process.once(signal, async () => { await bridge.close(); process.exit(0); });
