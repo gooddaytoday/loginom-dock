@@ -9,13 +9,14 @@ import auto_link_delete
 import manual_reopen
 import rename_effect
 import checked_state
+import upload_probe
 from destinations import storage_segments, render_goal
 from pathlib import Path
 
 GOAL = Path(__file__).parent / "goals/basic-graph.txt"
 from evidence import PREFIX, LOCAL_TOOLS, KNOWLEDGE_TOOLS
 TOOLS = LOCAL_TOOLS | KNOWLEDGE_TOOLS
-MUTATIONS = {PREFIX + name for name in ("dock_action_run", "dock_ui_action", "dock_operation_recover")}
+MUTATIONS = {PREFIX + name for name in ("dock_action_run", "dock_ui_action", "dock_operation_recover", "dock_artifact_upload")}
 EXPECTED = {
     "nodes": ["Источник", "Объединение"],
     "ports": {"Источник": ["Input_Connection[0]", "Input_Var[0]", "Output_Data[0]"],
@@ -718,14 +719,15 @@ def audit(request, evidence, prompt):
         check("run_identity_and_owned_package", bool(re.fullmatch(r"\d{8}-\d{6}-[a-f0-9]{8}", run_id))
               and evidence["run_id"] == run_id and request["package_path"] == path)
         goal_id=request.get('goal_id','basic-graph')
-        if goal_id not in ('basic-graph','auto-link-retain','auto-link-remove','palette-inventory','checkbox-roundtrip','context-menu-checkbox','root-checkbox','file-storage-inspect'):
+        if goal_id not in ('basic-graph','auto-link-retain','auto-link-remove','palette-inventory','checkbox-roundtrip','context-menu-checkbox','root-checkbox','file-storage-inspect','file-upload-probe'):
             raise ValueError('Unsupported goal')
         goal=GOAL.with_name(goal_id+'.txt')
         expected=copy.deepcopy(EXPECTED)
         if goal_id=='auto-link-retain':
             expected['ports']['Объединение'].remove('Input_Data[2]')
             expected['links']=['Источник|Output_Data[0]|Объединение|Input_Data[0]']
-        check("original_goal_only_prompt", prompt == render_goal(goal.read_text(),path,destination)
+        expected_prompt=upload_probe.prompt(goal.read_text(),path,destination,run_id) if goal_id=='file-upload-probe' else render_goal(goal.read_text(),path,destination)
+        check("original_goal_only_prompt", prompt == expected_prompt
               and request["goal_sha256"] == sha(goal.read_bytes()))
         check("approved_model_completed", evidence["process"]["returncode"] == 0
               and evidence["process"]["timed_out"] is False
@@ -755,6 +757,7 @@ def audit(request, evidence, prompt):
         if variant is False:
             check("no_fault_in_basic_goal", evidence.get("operator_fault_receipt") is None)
         tools = evidence["tools"]; calls = evidence["calls"]; events = evidence["events"]
+        check('upload_only_in_declared_probe',goal_id=='file-upload-probe' or not any(c['tool']==PREFIX+'dock_artifact_upload' for c in calls))
         check("nonempty_complete_export", tools and calls and events and evidence["export_complete"] is True)
         check("only_supported_dock_tools", all(c["tool"] in TOOLS | {"tool_search", "tool_describe"} for c in calls)
               and all(t["tool"] in TOOLS for t in tools))
@@ -784,6 +787,8 @@ def audit(request, evidence, prompt):
         check("actual_journal_pins", bool(re.fullmatch(r"[a-f0-9]{64}", revision)) and all(
             e["runtime_revision"] == revision and e["manifest_sha256"] == request["manifest_sha256"]
             and e["session_id"] == prepared["sessionId"] for e in events))
+        if goal_id=='file-upload-probe':
+            return upload_probe.audit(evidence,checks,request,PREFIX,MUTATIONS,file_storage_inspect)
         if goal_id=='file-storage-inspect':
             return file_storage_inspect(evidence, checks, destination)
         if goal_id=='palette-inventory':
@@ -914,13 +919,17 @@ def audit_directory(run):
               and (not request.get("allow_manual_reopen") or request.get("harness_inputs",{}).get("manual_reopen.py")==sha(Path(manual_reopen.__file__).read_bytes()))
               and (request.get("goal_id", "basic-graph") in ("basic-graph","palette-inventory") or request.get("harness_inputs", {}).get("auto_link_delete.py")==sha(Path(auto_link_delete.__file__).read_bytes())))
     report["assertions"].append({"name": "auditor_matches_predeclared_contract", "passed": frozen})
-    if request.get('goal_id') in ('checkbox-roundtrip','context-menu-checkbox','root-checkbox','file-storage-inspect'):
+    if request.get('goal_id') in ('checkbox-roundtrip','context-menu-checkbox','root-checkbox','file-storage-inspect','file-upload-probe'):
         frozen = frozen and all(request.get('harness_inputs', {}).get(name) == sha(Path(__file__).with_name(name).read_bytes())
                                 for name in ('checked_state.py', 'rename_effect.py'))
         report['assertions'].append({'name': 'checkbox_auditor_dependencies_frozen', 'passed': frozen})
     if request.get('schema_version')==2:
         frozen = frozen and request.get('harness_inputs',{}).get('destinations.py') == sha(Path(__file__).with_name('destinations.py').read_bytes())
         report['assertions'].append({'name':'destination_contract_frozen','passed':frozen})
+    if request.get('goal_id')=='file-upload-probe':
+        frozen=frozen and request.get('harness_inputs',{}).get('upload_probe.py')==sha(Path(upload_probe.__file__).read_bytes())
+        frozen=frozen and request.get('harness_inputs',{}).get(upload_probe.FIXTURE)==sha(Path(__file__).with_name('fixtures').joinpath('data-pipeline/sales.csv').read_bytes())
+        report['assertions'].append({'name':'upload_probe_dependencies_frozen','passed':frozen})
     report["all_assertions_passed"] = report["all_assertions_passed"] and frozen
     return report
 

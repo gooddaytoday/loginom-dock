@@ -1,3 +1,18 @@
+## Диагностика отправки файла через Hermes
+
+`--goal file-upload-probe --loginom-user test --storage-directory /test` использует
+закреплённые 230 байтов fixtures/data-pipeline/sales.csv с отдельным display name
+Dock-upload-<run_id>.csv. Launcher явно выдаёт replace grant только этому имени
+в выбранном каталоге и фиксирует public descriptor в request.json; sourcePath
+остаётся private startup argument. Fixture входит в harness pins.
+
+Цель: навигация → свежий directory read → один dock_artifact_upload → inspect
+pending, без последующих изменений UI. Аудит отдельно проверяет admission grant,
+доставленное наблюдение, native submission trace и immutable journal binding.
+PASS означает только корректную отправку в native input и сохранение неизвестного
+server result. Он не доказывает серверное сохранение, SHA скачанной копии,
+отсутствие конфликта или завершение P3. Остальные goals не допускают upload.
+
 ## Локальная проверка передачи и скачивания файла
 
 `artifact-transport-check.mjs BROWSER_RUNTIME_DIR NEW_REPORT_PATH` запускается
