@@ -1,5 +1,12 @@
 # Следующему агенту: с чего начать
 
+**Последняя приёмка:** `20260905-161157-1fb1e122` — 27/27 frozen PASS,
+runtime `1f654a57…`, 45 inputs, 164 client / 75 Python / 10 packaging.
+Bootstrap/palette/vertical scroll 0→800→0 и пустой граф приняты. Active Hermes нет.
+Далее оставшиеся P2 (root/filter, epoch/ABA, desired-state widgets) и P3 с данными,
+затем весь P4–P9. Не повторять palette без новых изменений/сомнений и не считать
+этот PASS завершением полного P2 или исправлением прежнего full graph FAIL.
+
 **Текущий результат:** `20260905-160516-337e3009` — 26/27 frozen FAIL,
 но оба scroll 0→800→0 подтверждены. Аудитор ошибочно считал pre-browser отказ
 мутацией; теперь исключает его только при strict idle/no-effect receipt и

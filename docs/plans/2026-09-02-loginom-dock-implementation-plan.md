@@ -1286,6 +1286,11 @@ Effect contracts реализованы в `4743d427` (семь kinds и binding
 
 ### P2. Общие UI-драйверы и доступное наблюдение
 
+Вертикальный scroll палитры 0→800→0 принят в новом run
+`20260905-161157-1fb1e122`: **27/27 frozen PASS**, runtime `1f654a57…`.
+164 client / 75 Python / 10 packaging. Остальные P2 пункты остаются открытыми;
+особенно крупные roots, epoch/ABA и управление состоянием виджетов.
+
 Run `20260905-154306-0e121bd2` — 26/26: bootstrap not_open до prepare с
 неактивным архивом и неподготовленным workspace; затем bounded readUi на 1920
 DOM элементах, 77 компонентов/12 групп. Runtime `e579941f…`. Ветки bootstrap

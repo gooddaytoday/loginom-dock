@@ -1,5 +1,25 @@
 # Выполнение плана Loginom Dock
 
+## P2 vertical scroll: frozen PASS — 5 сентября 2026
+
+Run `20260905-161157-1fb1e122` — **27/27 frozen PASS**, audit SHA
+`76dabe848ed15a0870e4c4fa52a923d269fe3a9c1bacc565dc1563f814d9ac72`.
+Runtime `1f654a57dd78f819236839b48a3e5c488b2c766e20d2ccde848f0f1507f2a924`,
+45 inputs, harness `391e0204`; Hermes ChatGPT/openai-codex/gpt-5.6-luna/medium.
+164 client / 75 Python / 10 packaging checks актуальны.
+
+Приняты bootstrap до prepare, страницы палитры и реальный scroll owner 0→800→0,
+строго связанный с исходными browser receipts. Пустой наблюдаемый граф сохранён.
+Собраны 77 компонентов/12 групп. reachable-first выдача и отдельная классификация
+pre-browser отказов подтверждены новым неизменённым прогоном; старые FAIL сохранены.
+
+Это закрывает вертикальную прокрутку палитры на текущем профиле, не все P2:
+browser root/filter для крупного DOM, epoch/ABA, горизонтальные/виртуализированные
+виджеты, typed desired-state controls и прочие drivers остаются открытыми.
+Далее реализация оставшихся P2 и первая P3 цепочка с реальными данными; предыдущий
+полный graph regression остаётся историческим FAIL, не закрывается палитрой.
+Активных Hermes нет, production/public release не менялись.
+
 ## P2 scroll: оба направления подтверждены, аудит отказов уточнён — 5 сентября
 
 Run `20260905-160516-337e3009`, runtime
