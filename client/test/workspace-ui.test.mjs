@@ -901,3 +901,52 @@ test('wizard metadata excludes hidden and inactive forms and redacts sensitive t
   assert.ok(!JSON.stringify(output.wizard).includes('never expose'));
   page.add('div',base);assert.equal((await page.observe()).wizard.status,'ambiguous');
 });
+
+
+test('output-column mapping is distinguished from input mapping and the done step',async()=>{
+  const page=new Page(),base='MF;TF-1;WizrdMCF',form=page.add('div',base);
+  page.add('div',base+';cardWizardPanel;p.h;p.t','Настройка соответствия между столбцами',undefined,form);
+  page.add('button',base+';ColumnsMappingEngineOutputPortWizard;btnAddMappingColumn','',undefined,form);
+  const output=await page.observe();
+  assert.equal(output.wizard.stage,'output_mapping');assert.equal(output.wizard.stage_status,'observed');
+  const roots=await page.execute({mode:'observe',discover_roots:true});
+  assert.deepEqual(roots.output.wizard,output.wizard);
+});
+
+test('data table observations preserve field types, row identity, empty strings and null markers',async()=>{
+  for(const suffix of ['ModelForm;PreviewWindow;PreviewForm;DataSetForm','ViewsForm;BrowseView']) {
+    const page=new Page(),base='MF;TF-1;'+suffix,view=page.add('div',base);
+    const header=(key,type)=>{const h=page.add('div',base+';normalHeaderCt;'+key,key,undefined,view);h.attrs.class='x-column-header bg-TBGDataType-'+type+'-before';return h;};
+    header('Comment','dtString');header('Amount','dtFloat');
+    const cell=(key,row,text,isNull=false)=>{
+      const td=page.add('td',base+';normalHeaderCt;'+key+'_'+row,'',undefined,view);
+      if(isNull)td.attrs.class='bg-cell-null-value';
+      const inner=page.add('div',null,text,undefined,td);inner.attrs.class='x-grid-cell-inner';return inner;
+    };
+    cell('Comment',0,'');cell('Comment',1,'<null>',true);cell('Comment',2,'  spaced; value  ');cell('Amount',0,'37.50');
+    const output=await page.observe(),columns=output.ui.table_cells.filter(c=>c.data_column).map(c=>c.data_column);
+    assert.deepEqual(columns.map(c=>[c.column_key,c.declared_type]),[['Comment','string'],['Amount','real']]);
+    const values=output.ui.table_cells.filter(c=>c.data_cell).map(c=>c.data_cell);
+    assert.deepEqual(values.map(c=>[c.column_key,c.row_index,c.display_text,c.null_marker_present]),[
+      ['Comment',0,'',false],['Comment',1,'<null>',true],['Comment',2,'  spaced; value  ',false],['Amount',0,'37.50',false]]);
+    assert.ok(values.every(c=>c.header_observed && c.text_complete && c.view_key===base));
+    const roots=await page.execute({mode:'observe',discover_roots:true});
+    assert.ok(roots.output.ui.elements.some(e=>e.tid===base));
+  }
+});
+
+test('table evidence refuses missing or ambiguous headers, marks truncation and redacts sensitive columns',async()=>{
+  const page=new Page(),base='MF;TF-1;ViewsForm;BrowseView',view=page.add('div',base);
+  const head=page.add('div',base+';normalHeaderCt;Field','Field',undefined,view);head.attrs.class='x-column-header bg-TBGDataType-dtString-before';
+  const cell=page.add('td',base+';normalHeaderCt;Field_0','x'.repeat(2100),undefined,view);
+  let data=(await page.observe()).ui.table_cells.find(c=>c.data_cell).data_cell;
+  assert.equal(data.display_text.length,2048);assert.equal(data.text_complete,false);
+  head.ownText='Пароль';cell.ownText='do-not-export';
+  const redacted=await page.observe();data=redacted.ui.table_cells.find(c=>c.data_cell).data_cell;
+  assert.equal(data.display_text,null);assert.equal(data.redacted,true);assert.ok(!JSON.stringify(redacted.ui.table_cells).includes('do-not-export'));
+  head.ownText='Field';const duplicate=page.add('div',base+';normalHeaderCt;Field','Other',undefined,view);duplicate.attrs.class='x-column-header';
+  data=(await page.observe()).ui.table_cells.find(c=>c.data_cell).data_cell;
+  assert.equal(data.header_observed,false);assert.equal(data.display_text,null);
+  duplicate.remove();head.remove();data=(await page.observe()).ui.table_cells.find(c=>c.data_cell).data_cell;
+  assert.equal(data.header_observed,false);assert.equal(data.text_complete,false);
+});

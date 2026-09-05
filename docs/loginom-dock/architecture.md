@@ -1,3 +1,16 @@
+### Rendered table evidence (2026-09-05)
+
+Existing table_cells records may carry data_column (view/field key and observed
+CSS type) or data_cell (view/field/zero-based row key, bounded untrimmed display
+text, completeness, redaction and observed CSS null marker). This recognizes
+DataSet Preview and Table/BrowseView and preserves empty versus marked-null
+observations. Missing/ambiguous headers suppress text. Fixed data view roots
+are discoverable; traversal and record limits still apply. These are rendered
+observations, not parsed numeric truth or execution/result completeness proof.
+Quick Preview rounds real values; exact comparison needs verified full-precision
+Table formatting. The independent auditor compares these metadata exactly
+against immutable records; wizard metadata is also part of that comparison.
+
 ### Current wizard observation context (2026-09-05)
 
 Workspace observations include a read-only wizard summary: visible form identity,

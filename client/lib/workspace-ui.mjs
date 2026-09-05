@@ -98,7 +98,7 @@ function workspaceUiCapability(page, task) {
       if (dom.length >= maxElements) { const error=new Error('Selected region or global guards exceed the scan budget');error.code='UI_SCAN_LIMIT';throw error; }
       seenElements.add(element);dom.push(element);
     };
-    const regionSelector='[data-tid="MF;cntMain;tlbMainToolbar"],[role="dialog"],.x-window,.bg-dialog,[role="grid"],table,[role="form"],[data-tid$=";WizrdMCF"],[data-tid$=";cmpDiagram"],[data-tid$=";pnlWorkarea"],[data-tid$="NavigationBar;NavigationPanel"]';
+    const regionSelector='[data-tid$=";PreviewForm;DataSetForm"],[data-tid$=";ViewsForm;BrowseView"],[data-tid="MF;cntMain;tlbMainToolbar"],[role="dialog"],.x-window,.bg-dialog,[role="grid"],table,[role="form"],[data-tid$=";WizrdMCF"],[data-tid$=";cmpDiagram"],[data-tid$=";pnlWorkarea"],[data-tid$="NavigationBar;NavigationPanel"]';
     // E2E utils/selectors.Format: whitespace -> underscore, comma removed.
     // This finds candidates, not filesystem identity or absence. CSS hex escapes
     // keep arbitrary filename characters data rather than selector syntax.
@@ -119,6 +119,7 @@ function workspaceUiCapability(page, task) {
     const wizardMarkers={text_import_file:';ImportTextFilePreviewWizard;edtFileName',
       text_import_format:';ImportTextFileParamsWizard;edtValueNull',
       input_mapping:';TuneDataSourceInputPortWizard;btnAddMappingColumn',
+      output_mapping:';ColumnsMappingEngineOutputPortWizard;btnAddMappingColumn',
       calculator:';CalcDataWizard;btnAddExpr',grouping:';GroupDataWizard;grdUsedFields;tbl',
       done:';DoneWizard;edtDisplayName'};
     const wizardButtons=['btnPrev','btnNext','btnDone','btnExecute','btnClose','btnError'];
@@ -373,16 +374,60 @@ function workspaceUiCapability(page, task) {
       return { ref: refOf(element), kind, dialog_ref: owner, text: ownText === null ? textOf(element) : short(ownText), bounding_box: boxOf(element) };
     });
     const messages = readTexts('[role="alert"],[role="status"],.bg-message,.x-message-box,.x-form-invalid-under');
-    const allCells = select('td,th,[role="gridcell"],[role="columnheader"],.x-grid-cell-inner');
+    const allCells = select('td,th,[role="gridcell"],[role="columnheader"],.x-column-header[data-tid],.x-grid-cell-inner');
     const cells = allCells.filter(visible).filter(element=>!selectedRoot || selectedRoot===element || selectedRoot.contains(element))
       .filter(element => !allCells.some(other => { charge(); return other !== element && element.contains(other); }));
+    // E2E previewTable.ts and sBrowseView.ts: header key + zero-based row
+    // identify rendered data cells. CSS type/null markers are observations,
+    // not execution freshness, full result coverage or parsed value claims.
+    const dataIdentity=element=>{
+      const owner=element.closest('td,[role="gridcell"],.x-column-header,[role="columnheader"]')??element;
+      const tid=getTid(owner),match=/^(MF;TF(?:-\d+)?;(?:ModelForm;(?:PreviewWindow;)?PreviewForm;DataSetForm|ViewsForm;BrowseView));normalHeaderCt;([^;]+)$/.exec(tid??'');
+      if(!match || match[2].length>256 || !tid.startsWith(workflow?.prefix+';'))return null;
+      const isHeader=owner.matches('.x-column-header,[role="columnheader"]');
+      const cell=isHeader?null:/^(.+)_(0|[1-9][0-9]*)$/.exec(match[2]);
+      if(!isHeader && (!cell || !Number.isSafeInteger(Number(cell[2]))))return null;
+      return {owner,view_key:match[1],column_key:isHeader?match[2]:cell[1],row_index:cell?Number(cell[2]):null,isHeader};
+    };
+    const typeNames={dtInteger:'integer',dtFloat:'real',dtString:'string',dtBoolean:'boolean',dtDateTime:'datetime',dtVariant:'variant'};
+    const literalCellText=element=>{
+      const walker=document.createTreeWalker(element,4);let node,text='',complete=true;
+      while((node=walker.nextNode())) {
+        charge();const parent=node.parentElement;
+        if(!parent || !visible(parent) || sensitive(parent) || parent.closest('script,style,noscript,textarea'))continue;
+        const part=node.textContent??'';
+        if(text.length+part.length>2048){text+=part.slice(0,2048-text.length);complete=false;break;}
+        text+=part;
+      }
+      return {text,complete};
+    };
     const tableCells = cells.slice(0, 120).map(element => {
       const column = element.getAttribute('aria-colindex');
       const table = element.closest('table,[role="grid"]');
       const headers = table ? allCells.filter(item => { charge(); return item.matches('th,[role="columnheader"]') && table.contains(item); }) : [];
       const index = element.cellIndex ?? (column ? Number(column) - 1 : -1);
       const header = index >= 0 ? textOf(headers[index] ?? element) : '';
-      return { text: sensitivePattern.test(header) ? '[REDACTED]' : textOf(element), row: element.parentElement?.getAttribute('aria-rowindex') ?? null, column };
+      const data=dataIdentity(element);
+      let detail={},redacted=sensitivePattern.test(header);
+      if(data) {
+        const {owner,view_key,column_key,row_index,isHeader}=data;
+        const sourceHeaders=(tids.get(view_key+';normalHeaderCt;'+column_key)??[])
+          .filter(item=>item.matches('.x-column-header,[role="columnheader"]') && visible(item));
+        const sourceHeader=sourceHeaders.length===1?sourceHeaders[0]:null;
+        redacted ||= sensitive(owner) || sensitivePattern.test(column_key) || !!sourceHeader && sensitivePattern.test(textOf(sourceHeader));
+        if(isHeader) {
+          const types=Object.entries(typeNames).filter(([css])=>owner.classList.contains('bg-TBGDataType-'+css+'-before')).map(([,type])=>type);
+          detail.data_column={view_key,column_key,declared_type:types.length===1?types[0]:null,
+            type_status:types.length===1?'observed':types.length?'ambiguous':'unobserved'};
+        } else {
+          redacted ||= !sourceHeader;
+          const literal=!redacted?literalCellText(element):{text:null,complete:false};
+          detail.data_cell={view_key,column_key,row_index,header_observed:!!sourceHeader,
+            display_text:literal.text,text_complete:literal.complete,redacted,
+            null_marker_present:owner.classList.contains('bg-cell-null-value') || element.classList.contains('bg-cell-null-value')};
+        }
+      }
+      return { text: redacted ? '[REDACTED]' : textOf(element), row: element.parentElement?.getAttribute('aria-rowindex') ?? null, column,...detail };
     });
     const workarea = graphPrefix ? all.find(element => getTid(element) === workflow.prefix + ';ModelForm;pnlWorkarea') : null;
     // E2E navigation.GetCurrentTabPath reads the visible breadcrumb labels.

@@ -74,7 +74,9 @@ const values=JSON.parse(text); console.log(JSON.stringify(values.map(value=>crea
         raw=[copy.deepcopy(t['result']) for t in data[0]]
         for value in raw:
             value['output'].pop('observation_id',None)
+            value['output']['wizard']={'status':'observed','title':'Настройка форматов импорта','stage':'text_import_format','controls':{'btnNext':{'status':'observed','enabled':True}}}
             value['output']['ui']['elements'][0]['signature']['large']='x'*1000
+            value['output']['ui']['table_cells']=[{'text':'  value  ','data_cell':{'view_key':'v','column_key':'Comment','row_index':0,'display_text':'  value  ','text_complete':True,'null_marker_present':False,'header_observed':True,'redacted':False}}]
         result=subprocess.run(['node','--input-type=module','-e',script],cwd=root,input=json.dumps(raw),text=True,capture_output=True,check=True)
         projected=json.loads(result.stdout)
         for source,reply in zip(raw,projected):self.assertTrue(rename_effect.journal_equal(source,reply))
@@ -83,6 +85,11 @@ const values=JSON.parse(text); console.log(JSON.stringify(values.map(value=>crea
                        lambda r:r['output']['ui']['truncated'].update(nodes=True),
                        lambda r:r['output']['page'].update(total_records=999),
                        lambda r:r['output']['page'].update(full_dom_complete=True),
+                       lambda r:r['output']['ui']['table_cells'][0]['data_cell'].update(null_marker_present=True),
+                       lambda r:r['output']['ui']['table_cells'][0]['data_cell'].update(row_index=1),
+                       lambda r:r['output']['wizard'].update(title='Wrong title'),
+                       lambda r:r['output']['wizard'].update(stage='done'),
+                       lambda r:r['output'].pop('wizard'),
                        lambda r:r.update(status='AMBIGUOUS')]:
             bad=copy.deepcopy(projected[-1]);mutate(bad)
             self.assertFalse(rename_effect.journal_equal(raw[-1],bad))

@@ -1,3 +1,14 @@
+**Текущий checkpoint P3:** run 233444-3cb9795c terminal, 47/58 frozen FAIL;
+live wizard title/stage подтверждены, импорт дошёл до Done/графа, остальная
+цепочка не выполнена. Исправлен strict auditor whitelist для wizard (старый
+FAIL не переоценён), добавлен output_mapping. В table_cells введены data_column
+типы и data_cell field/row/raw display/null-marker metadata, bounded/redacted.
+231 client /98 Python /10 packaging PASS, live result acceptance ещё нет. Нужны strict typed
+result/execution/formula contracts и семь domain verifiers, затем новый полный
+data-pipeline run. Quick preview округляет; exact numeric proof требует Table
+с проверенным форматированием. Hermes ChatGPT/Luna/medium, explicit test,/test.
+Active Hermes/browser нет. Точные pins/ограничения сверху status.
+
 **Текущий checkpoint P3:** полный run 231342-cb9aaa6c закончен, 50/58 frozen FAIL.
 Transfer подтверждён в полном goal, три узла созданы, настройки/результаты ещё не
 приняты. Добавлены wizard title/stage/lifecycle button states в observe/root/pages

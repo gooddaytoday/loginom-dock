@@ -1,3 +1,44 @@
+## 2026-09-05 — P3: live wizard context и основа чтения табличных данных
+
+Полный run 20260905-233444-3cb9795c закончен, harness 120ec845,
+runtime 3421a6fdacb40f9949270ad42027b4466fbdbdaec298d58b9e79f954033c2ec7.
+**47/58 frozen FAIL**, audit SHA 1ea5c9e7c2fd06ebeefecb1ab0975d30a314a9e474da59c0817c1e7cc0d69713.
+Hermes на текущем Mac / ChatGPT / openai-codex / gpt-5.6-luna / medium,
+explicit test,/test; returncode=0, timed_out=false, 87 API calls. Live wizard
+metadata показал text_import_format / «Настройка форматов импорта» и done /
+«Описание узла» с кнопками. Импорт дошёл до btnDone и возврата в граф; агент
+остановился до Калькулятора/Группировки, выполнения, сохранения и reopen.
+Одно завершение мастера не доказывает применённые настройки или данные.
+
+Native upload/download/host SHA и resolved присутствовали, но строгий transfer
+prefix не принят аудитором: whitelist compact_receipt_equal ещё не включал
+новое поле wizard. Исправлен точным сравнением metadata, не удалением поля;
+negative tests подмены title/stage/отсутствия metadata проходят. Старый frozen
+отчёт не переоценён. Ещё один FAIL: два malformed knowledge read с arguments={},
+не подтвердившие scoped access. Семь domain verifiers по-прежнему отсутствуют.
+Обнаруженный live шаг ColumnsMappingEngineOutputPortWizard добавлен как
+output_mapping по E2E sMapping.DataImport; он отличается от input_mapping.
+
+Добавлена основа read-only result inspect в existing table_cells:
+- data_column: view_key, column_key, declared_type и type_status из известных
+  E2E CSS-классов; неизвестные/неоднозначные типы не угадываются.
+- data_cell: view/column/zero-based row identity, untrimmed display_text до 2048
+  chars с text_complete, observed null_marker_present. Числа пока не парсятся.
+- Поддержаны плавающий/закреплённый DataSet Preview и ViewsForm;BrowseView.
+  Их корни доступны в bounded discovery. Missing/ambiguous header или sensitive
+  header/key скрывает текст; inactive view не выдаётся как распознанный dataset.
+  Метаданные не доказывают execution identity, row count/completeness или precision.
+
+Help visualization/preview/quick-view.md подтверждает округление real до двух
+знаков. Для exact comparison даже этого fixture нельзя исключать скрытую ошибку
+под округлением: нужен Table с проверенным форматированием. Help table/format.md
+описывает исходную точность по умолчанию; E2E sBrowseView.ts — field/row IDs.
+Goal уточнён: продолжить всю цепочку после «Готово», использовать полное
+представление для строгой сверки. Новые table metadata пока проверены локально,
+не live data acceptance. **231 client /98 Python /10 packaging PASS**. Следующий шаг — typed result/execution/formula
+contracts и независимые domain verifiers, затем новая полная live проверка.
+Active Hermes/browser нет; production/public rc2 не менялись.
+
 ## 2026-09-05 — P3: полный прогон дошёл до мастеров; добавлен контекст шага
 
 20260905-231342-cb9aaa6c, data-pipeline, harness acd5c423,
