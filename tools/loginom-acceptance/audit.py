@@ -522,6 +522,31 @@ def auto_link_proof(goal, evidence, check):
         check('automatic_link_removed_by_bound_ui_preserving_nodes_ports',proof is not None)
 
 
+def bootstrap_proof(evidence, check):
+    calls=evidence['calls'];tools=evidence['tools']
+    prepare_rows=[c['row'] for c in calls if c['tool']==PREFIX+'dock_prepare']
+    first_prepare=min(prepare_rows,default=-1)
+    reads=[t for t in tools if t['tool']==PREFIX+'dock_workspace_observe'
+           and isinstance(t.get('result'),dict) and t['result'].get('output',{}).get('bootstrap') is True
+           and t['row']<first_prepare]
+    valid=[]
+    for t in reads:
+        r=t['result'];o=r['output']
+        bound=any(c.get('tool_call_id')==t.get('tool_call_id') and c['tool']==t['tool']
+                  and c.get('arguments')=={'scope':'bootstrap'} and c['row']<t['row'] for c in calls)
+        if (bound and r.get('status')=='SUCCEEDED' and r.get('effect_possible') is False
+            and r.get('cleanup_complete') is True and o.get('observation_only') is True
+            and o.get('target_state') in ('not_open','incompatible_or_loading','indeterminate','login_required','blocked','ready_for_prepare')
+            and not any(k in o for k in ('ui','nodes','links','observation_id'))):valid.append(t)
+    check('bootstrap_read_before_prepare',bool(valid))
+    diagnostics=[t for t in tools if t['tool']==PREFIX+'dock_diagnostics' and isinstance(t.get('result'),dict)
+                 and any(b['row']<t['row']<first_prepare for b in valid)]
+    check('bootstrap_did_not_activate_workspace_or_archive',bool(diagnostics) and all(
+        t['result'].get('archiveActive') is False and t['result'].get('workspaceReady') is not True
+        and t['result'].get('archive') is None for t in diagnostics)
+        and not any(c['tool'] in MUTATIONS and c['row']<first_prepare for c in calls))
+
+
 def palette_inventory(evidence, checks):
     def check(name, passed):checks.append({'name':name,'passed':bool(passed)})
     snapshots=[(t['row'],t['result']['output']) for t in evidence['tools']
@@ -651,6 +676,7 @@ def audit(request, evidence, prompt):
             e["runtime_revision"] == revision and e["manifest_sha256"] == request["manifest_sha256"]
             and e["session_id"] == prepared["sessionId"] for e in events))
         if goal_id=='palette-inventory':
+            bootstrap_proof(evidence, check)
             return palette_inventory(evidence, checks)
         successful_adds = [t for t in tools if t["tool"] == PREFIX + "dock_action_run"
                            and t["result"].get("action_key") == "node.add" and t["result"].get("status") == "SUCCEEDED"]

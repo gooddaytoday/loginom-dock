@@ -4,6 +4,22 @@ import audit
 
 
 class PaletteInventoryTest(unittest.TestCase):
+    def test_bootstrap_proof_requires_order_and_inactive_archive(self):
+        data={'calls':[{'row':1,'tool':audit.PREFIX+'dock_workspace_observe','tool_call_id':'b','arguments':{'scope':'bootstrap'}},
+                       {'row':5,'tool':audit.PREFIX+'dock_prepare'}],
+              'tools':[{'row':2,'tool':audit.PREFIX+'dock_workspace_observe','tool_call_id':'b',
+                        'result':{'status':'SUCCEEDED','effect_possible':False,'cleanup_complete':True,
+                                  'output':{'bootstrap':True,'observation_only':True,'target_state':'not_open'}}},
+                       {'row':4,'tool':audit.PREFIX+'dock_diagnostics','result':{'archiveActive':False,'archive':None}}]}
+        def passed(value):
+            checks=[];audit.bootstrap_proof(value,lambda name,ok:checks.append(bool(ok)));return all(checks)
+        self.assertTrue(passed(data))
+        for change in [lambda d:d['tools'][0].update(row=6),
+                       lambda d:d['tools'][1]['result'].update(archiveActive=True),
+                       lambda d:d['tools'][1]['result'].update(workspaceReady=True),
+                       lambda d:d['tools'][0]['result']['output'].update(ui={})]:
+            bad=copy.deepcopy(data);change(bad);self.assertFalse(passed(bad))
+
     def fixture(self):
         group='MF;TF;ModelForm;colVendors_Компоненты>Импорт;TreeExpander'
         component='MF;TF;ModelForm;colVendors_Компоненты>Импорт>Текстовый_файл;TreeText'
