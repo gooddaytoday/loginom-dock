@@ -1334,3 +1334,28 @@ test('root discovery delivers the owned floating import list ahead of background
   assert.equal(out.output.ui.elements[0].tid,c.form.getAttribute('data-tid'));
   assert.equal(out.output.ui.elements[1].tid,c.list.getAttribute('data-tid'));
 });
+
+
+test('mutation diagnostics distinguish cursor styles without ignoring any epoch change',async()=>{
+  const page=new Page(),button=page.add('button','Safe;btnAction','Act');
+  const before=await page.observe(),target=before.ui.elements.find(e=>e.tid==='Safe;btnAction');
+  const cursor=new Element('div',{class:'CodeMirror-cursor'});
+  page.mutationObserver.pending.push({type:'attributes',attributeName:'style',target:cursor},
+    {type:'attributes',attributeName:'style',target:button},{type:'characterData'},
+    {type:'attributes',attributeName:'value'},{type:'childList'});
+  const result=await page.act({verb:'click',ref:target.ref},before);
+  assert.equal(result.status,'NOT_APPLIED');assert.equal(result.error.code,'UI_EPOCH_CHANGED');
+  assert.equal(result.output.dom_epoch.revision,5);
+  assert.deepEqual(result.output.scan.mutation_counts,{cursor_style:1,other_style:1,attributes:1,child_list:1,text:1,other:0,unclassified:0});
+  assert.deepEqual(page.events,[]);
+});
+
+test('mutation classification caps work while epoch counts every record',async()=>{
+  const page=new Page();await page.observe();
+  const records=Array.from({length:500},()=>({type:'childList'}));
+  page.mutationObserver.callback(records);
+  const after=await page.observe();
+  assert.equal(after.dom_epoch.revision,500);
+  assert.equal(after.scan.mutation_counts.child_list,128);
+  assert.equal(after.scan.mutation_counts.unclassified,372);
+});

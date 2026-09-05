@@ -77,12 +77,27 @@ function workspaceUiCapability(page, task) {
         const error = new Error('DOM mutation tracking is unavailable'); error.code = 'UI_EPOCH_UNAVAILABLE'; throw error;
       }
       state.revision = 0;
-      // Count mutations without retaining their targets, text or attribute values.
-      state.observer = new MutationObserver(records => { state.revision += records.length; });
+      // Diagnostic counters never waive the epoch guard. Retain no DOM nodes,
+      // text, attribute values or arbitrary attribute/class names.
+      state.mutations={cursor_style:0,other_style:0,attributes:0,child_list:0,text:0,other:0,unclassified:0};
+      state.captureMutations=records=>{
+        state.revision+=records.length;
+        for(const record of records.slice(0,128)) {
+          let kind='other';
+          if(record.type==='attributes') {
+            const cursor=record.target?.classList?.contains('CodeMirror-cursors') || record.target?.classList?.contains('CodeMirror-cursor');
+            kind=record.attributeName==='style'?(cursor?'cursor_style':'other_style'):'attributes';
+          } else if(record.type==='childList')kind='child_list';
+          else if(record.type==='characterData')kind='text';
+          state.mutations[kind]++;
+        }
+        state.mutations.unclassified+=Math.max(0,records.length-128);
+      };
+      state.observer = new MutationObserver(records => state.captureMutations(records));
       state.observer.observe(document.documentElement, {subtree:true,childList:true,attributes:true,characterData:true});
     }
     // Delivery of the observer callback may lag behind a new synchronous read.
-    state.revision += state.observer.takeRecords().length;
+    state.captureMutations(state.observer.takeRecords());
     if (!Number.isSafeInteger(state.revision)) {
       const error = new Error('DOM mutation revision overflow'); error.code = 'UI_EPOCH_UNAVAILABLE'; throw error;
     }
@@ -270,7 +285,7 @@ function workspaceUiCapability(page, task) {
         loginom_build:globalThis.bg?.app?.Version ?? null,workflow_ref:workflow,active_identity:active ? textOf(active) : null,
         dom_epoch:{document:state.epoch,revision:state.revision},observation_kind:'roots',wizard,
         ...(storageName===null?{}:{observation_filter:{storage_name:storageName}}),
-        scan:{complete:true,visited_elements:dom.length,detail_elements:0,max_elements:maxElements,max_work:maxWork,max_ms:maxMs},
+        scan:{complete:true,mutation_counts:{...state.mutations},visited_elements:dom.length,detail_elements:0,max_elements:maxElements,max_work:maxWork,max_ms:maxMs},
         nodes:[],links:[],ui:{elements,dialogs:[],messages:[],masks:[],table_cells:[],
           truncated:{elements:regions.length>240,nodes:true,links:true,ports:true,dialogs:true,messages:true,masks:true,table_cells:true}}};
     }
@@ -611,7 +626,7 @@ function workspaceUiCapability(page, task) {
       file_storage:fileStorage,wizard,
       dom_epoch: {document:state.epoch,revision:state.revision},
       ...(selectedRoot ? {observation_root:{ref:rootRef,identity:identityOf(selectedRoot),detail_scope:'elements_and_cells',global_scan:false,global_guards:'fixed_native_queries'}} : {}),
-      scan: { complete: true, visited_elements: dom.length, detail_elements:detailElements, max_elements: maxElements, max_work: maxWork, max_ms: maxMs },
+      scan: { complete: true, mutation_counts:{...state.mutations}, visited_elements: dom.length, detail_elements:detailElements, max_elements: maxElements, max_work: maxWork, max_ms: maxMs },
       nodes, links: links.slice(0, 500), workarea: workarea ? boxOf(workarea) : null,
       ui: { elements, dialogs: dialogs.slice(0, 12), messages: messages.slice(0, 30), masks: masks.slice(0, 12), table_cells: tableCells,
         truncated: { elements: !!selectedRoot || controls.length > 240, nodes: !!selectedRoot || labels.length > 200, links: !!selectedRoot || links.length > 500, ports: !!selectedRoot || nodes.some(node => node.ports.length === 100), dialogs: dialogs.length > 12, messages: !!selectedRoot || messages.length > 30, masks: masks.length > 12, table_cells: !!selectedRoot || cells.length > 120 } } };
@@ -752,7 +767,7 @@ function workspaceUiCapability(page, task) {
         const epochBeforeGesture = await page.evaluate(() => {
           const state=globalThis[Symbol.for('loginom-dock.workspace-ui.identity.v1')];
           if (!state?.observer) return null;
-          state.revision += state.observer.takeRecords().length;
+          state.captureMutations(state.observer.takeRecords());
           return {document:state.epoch,revision:state.revision};
         });
         if (!same(current.dom_epoch,epochBeforeGesture)) fail('UI_EPOCH_CHANGED','The document changed while checking the target; observe again');

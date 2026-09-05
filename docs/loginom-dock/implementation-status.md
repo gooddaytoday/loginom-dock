@@ -1,3 +1,36 @@
+## 2026-09-06 — live импорт и выражение; диагностика повторных epoch отказов
+
+Run 20260906-021403-9b23c08d terminal, session74333 закрыт. ChatGPT subscription /
+openai-codex / gpt-5.6-luna / medium, 91 API calls, exit0, timeout=false.
+Исходники были заморожены на eb294eaa; runtime pin
+1746878d509fcf72a1a50407e03481425cf78a7f814657730a6d3d6cd27003e5.
+Frozen audit 50/58 FAIL, SHA
+8b6bc7f5b816ed7e939abf7758a27bdeb8508d3bec74580bc831e93dae89d5cb.
+Не пройдены navigation gate и семь domain gates; старый audit не пересчитывать.
+
+Live set_wizard_field подтвердил буквальные delimiter=';' (reply113),
+null_marker='\N' (reply126), decimal_separator='.' (reply128). select_wizard_option
+не вызывался, его live приёмка остаётся открытой. При переходе format→output_mapping
+модель ожидала другой этап, получила AMBIGUOUS, затем восстановилась и дошла до
+Done/графа. В Calculator reply200 подтвердил replace_expression
+'Quantity * UnitPrice' в Expr1. Это draft/полный текст, не syntax/Amount/mappings,
+не applied settings и не вычисленный результат.
+
+Последние действия (add expression, Next с неверным ожидаемым grouping, Close)
+получили UI_EPOCH_CHANGED без воздействия. В наблюдениях состояние редактора
+и полный текст одинаковы, но это не доказывает безвредность DOM mutations.
+Для установления причины добавлены scan.mutation_counts: cursor_style,
+other_style, attributes, child_list, text, other, unclassified. Классифицируются
+не более 128 записей на batch, остаток учитывается счётчиком; dom_epoch.revision
+по-прежнему считает ВСЕ записи. Нет игнорирования cursor/style, ослабления ABA
+или повторного click. Не сохраняются DOM targets, тексты/значения атрибутов и
+произвольные имена классов. cursor_style означает лишь фиксированный CSS-маркер,
+а не доказанную безвредность мутации.
+
+263 client /110 Python /10 packaging PASS. Далее получить live категории изменений на Luna,
+исправлять только доказанную причину; параллельно по смыслу остаются node/settings
+binding, lifecycle apply/cancel и весь P3–P9. Active Hermes/browser нет.
+
 ## 2026-09-06 — выбор наблюдаемого пункта списка импорта
 
 Добавлен select_wizard_option через существующий UI receipt/pending. Контракт

@@ -1,3 +1,11 @@
+**Checkpoint:** run021403-9b23c08d terminal, 50/58 frozen FAIL, 91 API calls,
+session74333 закрыт. Live literal delimiter/null/decimal readback и expression
+'Quantity * UnitPrice' в Expr1 подтверждены; select_wizard_option не вызывался.
+Далее повторные UI_EPOCH_CHANGED при одинаковом видимом редакторе. Добавлены
+bounded scan.mutation_counts без ослабления guard; 263 client /110 Python /10 packaging PASS.
+Следующий run на ChatGPT subscription/Luna/medium должен установить типы
+изменений. Node binding/apply/results и полный P3–P9 открыты; active Hermes нет.
+
 **Checkpoint:** select_wizard_option связывает наблюдаемый пункт exact E2E
 boundlist с исходным input и проверяет подпись после одного click; picker/root
 доступны для раскрытия и узкого чтения списка. Native maxlength проверяется
