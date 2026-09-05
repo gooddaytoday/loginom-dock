@@ -4,7 +4,7 @@ from rename_effect import journal_equal
 TARGET_SUFFIX = 'WizrdMCF;ImportTextFilePreviewWizard;chkParallelProcessing;ValueControl;DisplayEl'
 
 
-def audit_goal(evidence, checks, prefix, mutations, require_menu=False, rejected_before_browser=lambda c, e: False):
+def audit_goal(evidence, checks, prefix, mutations, require_menu=False, require_root=False, rejected_before_browser=lambda c, e: False):
     """Prove a three-step checkbox round trip in the real Text Import wizard."""
     def check(name, value):
         checks.append({'name': name, 'passed': bool(value)})
@@ -40,9 +40,41 @@ def audit_goal(evidence, checks, prefix, mutations, require_menu=False, rejected
     if require_menu:
         check('context_menu_opened_and_setup_selected_from_fresh_observation',
               menu_proof(evidence, prefix, mutations, actions[0]['row'] if actions else -1, rejected_before_browser))
+    if require_root:
+        check('every_checked_action_uses_discovered_root_details',root_proof(evidence,prefix,actions,mutations))
     return {'schema_version': 1, 'kind': 'independent_checkbox_roundtrip_audit', 'assertions': checks,
             'all_assertions_passed': bool(checks) and all(c['passed'] for c in checks),
             'limitations': ['Proves one unsaved wizard checkbox only; no data import, apply, radio or reopen acceptance.']}
+
+
+def root_proof(evidence, prefix, actions, mutations):
+    if len(actions)!=3:return False
+    calls=evidence['calls'];tools=evidence['tools']
+    pairs={(c.get('session_id'),c.get('tool_call_id')):c for c in calls}
+    def output(t):
+        r=t.get('result',{})
+        return r.get('output',{}) if isinstance(r,dict) and r.get('status')=='SUCCEEDED' else {}
+    for action in actions:
+        args=action['arguments'];prior=max((c['row'] for c in calls if c['tool'] in mutations and c['row']<action['row']),default=-1)
+        verified=False
+        for t in tools:
+            o=output(t);root=o.get('observation_root',{});call=pairs.get((t.get('session_id'),t.get('tool_call_id')),{});a=call.get('arguments',{})
+            if not (t.get('tool')==prefix+'dock_workspace_observe' and prior<call.get('row',-1)<t['row']<action['row']
+                    and o.get('observation_id')==args.get('observation_id') and root.get('global_scan') is False
+                    and root.get('global_guards')=='fixed_native_queries' and root.get('ref')==a.get('root_ref')
+                    and o.get('ui',{}).get('truncated',{}).get('nodes') is True
+                    and any(e.get('ref')==args['action']['ref'] for e in o.get('ui',{}).get('elements',[]))):continue
+            for d in tools:
+                discovery=output(d)
+                if not (d.get('tool')==prefix+'dock_workspace_observe' and d.get('session_id')==t.get('session_id')
+                        and prior<d['row']<call['row'] and discovery.get('observation_kind')=='roots'
+                        and discovery.get('observation_id')==a.get('observation_id')
+                        and discovery.get('scan',{}).get('detail_elements')==0):continue
+                if any(e.get('ref')==root['ref'] and e.get('identity')==root.get('identity')
+                       and e.get('kind')=='region' and e.get('allowed_actions')==[]
+                       for e in discovery.get('ui',{}).get('elements',[])):verified=True
+        if not verified:return False
+    return True
 
 
 def menu_proof(evidence, prefix, mutations, first_checked_row, rejected_before_browser=lambda c, e: False):

@@ -647,7 +647,7 @@ def audit(request, evidence, prompt):
         check("run_identity_and_owned_package", bool(re.fullmatch(r"\d{8}-\d{6}-[a-f0-9]{8}", run_id))
               and evidence["run_id"] == run_id and request["package_path"] == path)
         goal_id=request.get('goal_id','basic-graph')
-        if goal_id not in ('basic-graph','auto-link-retain','auto-link-remove','palette-inventory','checkbox-roundtrip','context-menu-checkbox'):
+        if goal_id not in ('basic-graph','auto-link-retain','auto-link-remove','palette-inventory','checkbox-roundtrip','context-menu-checkbox','root-checkbox'):
             raise ValueError('Unsupported goal')
         goal=GOAL.with_name(goal_id+'.txt')
         expected=copy.deepcopy(EXPECTED)
@@ -716,8 +716,8 @@ def audit(request, evidence, prompt):
         if goal_id=='palette-inventory':
             bootstrap_proof(evidence, check)
             return palette_inventory(evidence, checks, require_scroll=True)
-        if goal_id in ('checkbox-roundtrip','context-menu-checkbox'):
-            return checked_state.audit_goal(evidence, checks, PREFIX, MUTATIONS, require_menu=goal_id=='context-menu-checkbox',
+        if goal_id in ('checkbox-roundtrip','context-menu-checkbox','root-checkbox'):
+            return checked_state.audit_goal(evidence, checks, PREFIX, MUTATIONS, require_menu=goal_id=='context-menu-checkbox', require_root=goal_id=='root-checkbox',
                                             rejected_before_browser=rejected_before_browser)
         successful_adds = [t for t in tools if t["tool"] == PREFIX + "dock_action_run"
                            and t["result"].get("action_key") == "node.add" and t["result"].get("status") == "SUCCEEDED"]
@@ -841,7 +841,7 @@ def audit_directory(run):
               and (not request.get("allow_manual_reopen") or request.get("harness_inputs",{}).get("manual_reopen.py")==sha(Path(manual_reopen.__file__).read_bytes()))
               and (request.get("goal_id", "basic-graph") in ("basic-graph","palette-inventory") or request.get("harness_inputs", {}).get("auto_link_delete.py")==sha(Path(auto_link_delete.__file__).read_bytes())))
     report["assertions"].append({"name": "auditor_matches_predeclared_contract", "passed": frozen})
-    if request.get('goal_id') in ('checkbox-roundtrip','context-menu-checkbox'):
+    if request.get('goal_id') in ('checkbox-roundtrip','context-menu-checkbox','root-checkbox'):
         frozen = frozen and all(request.get('harness_inputs', {}).get(name) == sha(Path(__file__).with_name(name).read_bytes())
                                 for name in ('checked_state.py', 'rename_effect.py'))
         report['assertions'].append({'name': 'checkbox_auditor_dependencies_frozen', 'passed': frozen})

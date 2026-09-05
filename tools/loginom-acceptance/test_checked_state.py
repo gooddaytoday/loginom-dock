@@ -1,10 +1,34 @@
 import copy
 import unittest
 
-from checked_state import prove, audit_goal, menu_proof, TARGET_SUFFIX
+from checked_state import prove, audit_goal, menu_proof, root_proof, TARGET_SUFFIX
 
 
 class CheckedStateProofTest(unittest.TestCase):
+    def test_root_discovery_detail_chain_and_wrong_root(self):
+        data={'calls':[],'tools':[]};actions=[]
+        for i in range(3):
+            base=i*10
+            discovery={'observation_kind':'roots','observation_id':f'd{i}','scan':{'detail_elements':0},
+                       'ui':{'elements':[{'ref':'ui-region','kind':'region','identity':{'id':1},'allowed_actions':[]}]}}
+            detail={'observation_id':f'o{i}','observation_root':{'ref':'ui-region','identity':{'id':1},
+                    'global_scan':False,'global_guards':'fixed_native_queries'},
+                    'ui':{'truncated':{'nodes':True},'elements':[{'ref':'ui-check'}]}}
+            call={'row':base+3,'session_id':'s','tool_call_id':f'read{i}','tool':'dock_workspace_observe',
+                  'arguments':{'root_ref':'ui-region','observation_id':f'd{i}'}}
+            action={'row':base+5,'tool':'dock_ui_action','arguments':{'observation_id':f'o{i}','action':{'ref':'ui-check'}}}
+            data['calls'].extend([call,action]);actions.append(action)
+            data['tools'].extend([{'row':base+2,'session_id':'s','tool':'dock_workspace_observe','result':{'status':'SUCCEEDED','output':discovery}},
+                                  {**call,'row':base+4,'result':{'status':'SUCCEEDED','output':detail}}])
+        self.assertTrue(root_proof(data,'',actions,{'dock_ui_action'}))
+        for mutate in (
+            lambda d:d['calls'][0]['arguments'].update(root_ref='ui-other'),
+            lambda d:d['tools'][0]['result']['output']['ui']['elements'][0].update(allowed_actions=['click']),
+            lambda d:d['tools'][1]['result']['output']['observation_root'].update(global_scan=True),
+        ):
+            changed=copy.deepcopy(data);mutate(changed)
+            self.assertFalse(root_proof(changed,'',actions,{'dock_ui_action'}))
+
     def fixture(self, noop=False):
         target = {'ref': 'r1', 'tid': 'Wizard;Checkbox;DisplayEl', 'identity': {'id': 1},
                   'label': 'Parallel processing', 'allowed_actions': ['set_checked'],
