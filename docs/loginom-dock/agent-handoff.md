@@ -1,5 +1,11 @@
 # Следующему агенту: с чего начать
 
+**Последняя реализация:** scope=bootstrap у workspace.observe доступен до
+prepare, без навигации/login/draft/archive и без чтения values/text; bounded
+walk 4000/75ms, неполное наблюдение indeterminate. 159 client tests, включая MCP
+gate. Live bootstrap ещё не было; active Hermes нет. Следующее: live bootstrap
+и bounded подробный readUi, далее P2/P3–P9. Предыдущий full graph FAIL открыт.
+
 **Текущая точка:** rename run `20260905-152418-34f63a02` завершён, 35/39 FAIL.
 E2E/Help delivery и rename proof прошли; весь граф/порядок операций не принят
 (лишние входы, неправильная итоговая связь, mutations после save).

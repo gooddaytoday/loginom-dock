@@ -1308,6 +1308,8 @@ bridge и session/build input lists. Новые driver modules сначала п
 - [ ] Добавить read-only bootstrap observation до prepare: только состояние
   приложения, требование авторизации, блокирующие dialogs/masks и поддержанность
   сборки. Не читать пароль, не входить автоматически и не запускать archive capture.
+  Локально реализован scope=bootstrap, проверены serialized code и MCP gate
+  (159 client tests); checkbox остаётся открытым до live acceptance.
 - [ ] Добавить scope/root ref, фильтры по типу, курсоры, явные completeness и
   truncation/value_truncated, schema/identity таблиц и деревьев. Ограничивать
   работу scan, а не только длину ответа. Отличать offscreen от доступного target.

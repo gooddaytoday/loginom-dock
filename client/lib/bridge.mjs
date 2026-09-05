@@ -159,8 +159,8 @@ export async function createBridge(config, session) {
           }
           return await browserGate(async () => {
             extra.signal.throwIfAborted();
-            requirePreparedWorkspace(session.metadata);
             const args = request.params.arguments ?? {};
+            if (!(request.params.name === 'dock_workspace_observe' && args.scope === 'bootstrap')) requirePreparedWorkspace(session.metadata);
             const outcome = request.params.name === 'dock_workspace_observe' ? await actionRuntime.observe({ signal: extra.signal, scope: args.scope, cursor: args.cursor })
               : request.params.name === 'dock_operation_inspect' ? await actionRuntime.inspect({ operationId: args.operation_id, signal: extra.signal })
                 : request.params.name === 'dock_operation_recover' ? await actionRuntime.recover(args.operation_id,

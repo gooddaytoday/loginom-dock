@@ -132,10 +132,64 @@ export async function prepareWorkspaceSession({ metadata, assertAllowed, prepare
 
 export const workspaceObserveTool = {
   name: 'dock_workspace_observe',
-  description: 'Read a compact page of the prepared Loginom workspace. Choose scope all (default), palette, graph or dialogs. Continue with cursor=page.next_cursor alone; pages share observation_id and revision. If the workspace changes, start a new observation. Only delivered UI refs can be used. Truncation and full_dom_complete=false mean this is not proof of the whole workspace. Read-only.',
+  description: 'Read a compact page of the prepared Loginom workspace. Before preparation, scope bootstrap reads only application/build/login/blocker state without navigation, login, draft creation or capture activation. Otherwise choose all (default), palette, graph or dialogs. Continue with cursor=page.next_cursor alone; pages share observation_id and revision. If the workspace changes, start a new observation. Only delivered UI refs can be used. Truncation and full_dom_complete=false mean this is not proof of the whole workspace. Read-only.',
   inputSchema: { type: 'object', properties: {
-    scope: { type: 'string', enum: ['all', 'palette', 'graph', 'dialogs'] },
+    scope: { type: 'string', enum: ['bootstrap', 'all', 'palette', 'graph', 'dialogs'] },
     cursor: { type: 'string', minLength: 1, maxLength: 128 },
   }, additionalProperties: false },
   annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: false },
 };
+
+function bootstrapWorkspace(page, expected) {
+  return (async () => {
+    let origin = null;
+    try { origin = new URL(page.url()).origin; } catch { /* No open application. */ }
+    let output = { bootstrap: true, target_state: 'not_open', origin, authenticated: null,
+      login_required: null, compatible_build: null, observation_only: true };
+    if (origin === expected.origin) {
+      output = await page.evaluate(({ expectedBuild }) => {
+        const started = Date.now(), walker = document.createTreeWalker(document.documentElement, 1);
+        let visited = 0, element, exhausted = false, avatar = false, login = false, dialogs = 0, masks = 0;
+        const visible = element => {
+          const box = element.getBoundingClientRect();
+          if (!(box.width > 0 && box.height > 0)) return false;
+          let depth = 0;
+          for (let parent = element; parent; parent = parent.parentElement) {
+            if (++depth > 64 || Date.now() - started > 75) return false;
+            const style = getComputedStyle(parent);
+            if (parent.hasAttribute('hidden') || style.display === 'none' || ['hidden','collapse'].includes(style.visibility) || style.opacity === '0') return false;
+          }
+          return true;
+        };
+        while (visited < 4000 && Date.now() - started <= 75) {
+          element = walker.nextNode();
+          if (!element) { exhausted = true; break; }
+          visited++;
+          const tid = element.getAttribute('data-tid');
+          const isAvatar = tid === 'MF;cntMain;tlbMainToolbar;btnAvatar';
+          const isLogin = tid === 'LoginForm;Login;edtUsername';
+          const isDialog = element.matches('[role="dialog"],.x-window,.bg-dialog');
+          const isMask = element.matches('.bg-mask-message,.x-mask-msg');
+          if (!(isAvatar || isLogin || isDialog || isMask) || !visible(element)) continue;
+          avatar ||= isAvatar; login ||= isLogin; dialogs += Number(isDialog); masks += Number(isMask);
+        }
+        const build = globalThis.bg?.app?.Version ?? null, compatible = build === expectedBuild;
+        return { bootstrap: true, origin: location.origin, loginom_build: typeof build === 'string' ? build.slice(0,128) : null,
+          target_state: !compatible ? 'incompatible_or_loading' : !exhausted ? 'indeterminate'
+            : login && !avatar ? 'login_required' : dialogs || masks ? 'blocked' : avatar ? 'ready_for_prepare' : 'indeterminate',
+          authenticated: avatar && !login ? true : login && !avatar ? false : null,
+          login_required: login && !avatar ? true : avatar && !login ? false : null,
+          compatible_build: compatible, blockers: { visible_dialogs: dialogs, visible_masks: masks },
+          scan: { visited_elements: visited, complete: exhausted, max_elements: 4000, max_ms: 75 },
+          observation_only: true };
+      }, { expectedBuild: expected.build });
+    }
+    return { status: 'SUCCEEDED', action_key: 'workspace.observe', action_revision: '1', operation_id: null,
+      phase: 'observed', effect_possible: false, cleanup_complete: true, error: null, trace: [], output };
+  })();
+}
+
+export function makeWorkspaceBootstrapCode({ origin, build }) {
+  if (typeof origin !== 'string' || new URL(origin).origin !== origin || typeof build !== 'string' || !build) throw new Error('Bootstrap requires a pinned origin and build');
+  return `async (page) => (${bootstrapWorkspace.toString()})(page, ${JSON.stringify({ origin, build })})`;
+}

@@ -66,6 +66,19 @@ test('MCP application refusals remain typed normal content and the same connecti
     assert.deepEqual(JSON.parse(available.content[0].text).available_actions, ['node.add', 'link.create', 'package.save_as']);
     assert.equal(browserCalls, 0);
 
+    const bootstrap = await client.callTool({ name: 'dock_workspace_observe', arguments: { scope: 'bootstrap' } });
+    const initial = JSON.parse(bootstrap.content[0].text);
+    assert.equal(initial.status, 'SUCCEEDED');
+    assert.equal(initial.output.bootstrap, true);
+    assert.equal(initial.effect_possible, false);
+    assert.equal(browserCalls, 1);
+    assert.equal(session.metadata.workspaceReady, undefined);
+    assert.equal(session.metadata.archiveActive, undefined);
+    assert.equal(page.drops, 0);
+    const premature = await client.callTool({ name: 'dock_workspace_observe', arguments: { scope: 'graph' } });
+    assert.equal(JSON.parse(premature.content[0].text).status, 'FAILED');
+    assert.equal(browserCalls, 1);
+
     const prepared = await client.callTool({ name: 'dock_prepare', arguments: {} });
     assert.notEqual(prepared.isError, true);
     const metadata = JSON.parse(prepared.content[0].text);

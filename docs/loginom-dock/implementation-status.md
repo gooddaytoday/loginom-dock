@@ -1,5 +1,23 @@
 # Выполнение плана Loginom Dock
 
+## P2: read-only bootstrap — 5 сентября 2026
+
+В workspace.observe добавлен scope=bootstrap до dock_prepare. Runtime читает
+только origin/build, признаки login/avatar и количество видимых dialogs/masks.
+Нет перехода на URL, входа, создания черновика, чтения значений/текста полей
+или включения archive capture. Другой origin не сканируется. Walk ограничен
+4000 элементами/75 мс; incomplete scan возвращает indeterminate вместо ready.
+Само чтение не выдаёт action refs и не меняет workspaceReady.
+
+159 client tests прошли, включая serialized browser code, budget exhaustion,
+запрет чтения value/textContent и настоящий MCP bridge: bootstrap разрешён,
+graph до prepare отклонён, session archive/readiness не изменены.
+Это локальная реализация, **live acceptance bootstrap пока отсутствует**.
+Обычный подробный readUi всё ещё требует ограничения scan и дальнейших P2
+drivers; bounded bootstrap не закрывает это требование. Runtime inputs остаются
+45, но source pin изменился. Следующее: live bootstrap + bounded readUi,
+затем P3 цепочка с данными; полный graph regression остаётся незакрытым.
+
 ## P2 regression: rename восстановлен, полная цель не принята — 5 сентября
 
 Run `20260905-152418-34f63a02`, runtime `7eaebd2e…`, Hermes Luna/medium/ChatGPT:

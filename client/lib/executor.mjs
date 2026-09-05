@@ -3,6 +3,7 @@ import { requireCapability } from './capability-registry.mjs';
 import { actionDescribeTool, actionRunTool, assertActionOutcome, validateActionParameters } from './action-catalog.mjs';
 import { makeWorkspaceUiCode, validateUiAction, uiActionSchema } from './workspace-ui.mjs';
 import { createObservationPages } from './observation-pages.mjs';
+import { makeWorkspaceBootstrapCode } from './workspace.mjs';
 
 const identifier = { type: 'string', minLength: 1, maxLength: 128, pattern: '^[A-Za-z0-9._:-]+$' };
 const operationInspectTool = { name: 'dock_operation_inspect',
@@ -1000,8 +1001,9 @@ export function createActionRuntime({ pinned, execute, allowCandidate = false, o
     },
     async observe({ signal, scope, cursor } = {}) {
       signal?.throwIfAborted();
-      if (scope !== undefined && !['all', 'palette', 'graph', 'dialogs'].includes(scope)) throw new Error('Unknown observation scope');
+      if (scope !== undefined && !['bootstrap', 'all', 'palette', 'graph', 'dialogs'].includes(scope)) throw new Error('Unknown observation scope');
       if (cursor !== undefined && (typeof cursor !== 'string' || !cursor || scope !== undefined)) throw new Error('Use cursor alone to continue the original observation scope');
+      if (scope === 'bootstrap') return execute(makeWorkspaceBootstrapCode({ origin: targetOrigin, build: targetBuild }), { signal, timeout: 5000 });
       const outcome = await execute(makeWorkspaceUiCode({ mode: 'observe', expected_build: targetBuild, expected_origin: targetOrigin }), { signal, timeout: 35000 });
       outcome.output.operation = view(pending).output;
       return cursor === undefined ? observations.retain(outcome, { scope }) : observations.next(cursor, outcome);

@@ -1,10 +1,53 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { runInNewContext } from 'node:vm';
-import { makeWorkspacePrepareCode, parseWorkspacePreparation, prepareWorkspaceSession, requirePreparedWorkspace } from '../lib/workspace.mjs';
+import { makeWorkspacePrepareCode, makeWorkspaceBootstrapCode, parseWorkspacePreparation, prepareWorkspaceSession, requirePreparedWorkspace } from '../lib/workspace.mjs';
 import { createSerialGate } from '../lib/clipboard.mjs';
 
 const build = '7.5.0-alpha+build.49202';
+
+async function bootstrap({ url='https://loginom.test/app', actualBuild=build, tids=[], dialog=false, mask=false, size=0 }={}) {
+  let scanned=0, evaluations=0;
+  const elements=[...tids.map(tid=>({tid})), ...(dialog?[{dialog:true}]:[]), ...(mask?[{mask:true}]:[]), ...Array.from({length:size},()=>({}))].map(item=>({
+    getAttribute(name) { assert.equal(name,'data-tid');return item.tid??null; },
+    hasAttribute() { return false; },
+    getBoundingClientRect() { return {width:10,height:10}; },
+    matches(selector) { return selector.includes('role="dialog"') ? !!item.dialog : !!item.mask; },
+    get value() { throw new Error('Credential values must never be read'); },
+    get textContent() { throw new Error('Bootstrap must not read arbitrary text'); },
+  }));
+  const page={url:()=>url, async evaluate(fn,args) {
+    evaluations++;
+    return runInNewContext(`(${fn.toString()})(args)`,{args,location:{origin:'https://loginom.test'},bg:{app:{Version:actualBuild}},
+      Date:{now:()=>0},getComputedStyle:()=>({}),document:{documentElement:{},createTreeWalker:()=>({nextNode:()=>elements[scanned++]??null})}});
+  }};
+  const result=await runInNewContext(makeWorkspaceBootstrapCode({origin:'https://loginom.test',build}),{URL})(page);
+  return {result:JSON.parse(JSON.stringify(result)),evaluations,scanned};
+}
+
+test('bootstrap does not inspect another origin or require preparation',async()=>{
+  const {result,evaluations}=await bootstrap({url:'about:blank'});
+  assert.equal(evaluations,0);assert.equal(result.output.target_state,'not_open');
+  assert.equal(result.effect_possible,false);assert.equal(result.output.observation_only,true);
+});
+
+test('bootstrap reports login, ready, incompatible build and blockers without reading values',async()=>{
+  for (const [options,state] of [
+    [{tids:['LoginForm;Login;edtUsername']},'login_required'],
+    [{tids:['MF;cntMain;tlbMainToolbar;btnAvatar']},'ready_for_prepare'],
+    [{actualBuild:'different'},'incompatible_or_loading'],
+    [{dialog:true,mask:true},'blocked'],
+  ]) {
+    const {result}=await bootstrap(options);assert.equal(result.output.target_state,state);
+    assert.equal(result.output.scan.complete,true);assert.equal(result.output.ui,undefined);
+  }
+});
+
+test('bootstrap stops the DOM walk at its budget and cannot claim readiness',async()=>{
+  const {result,scanned}=await bootstrap({tids:['MF;cntMain;tlbMainToolbar;btnAvatar'],size:5000});
+  assert.equal(scanned,4000);assert.equal(result.output.scan.complete,false);
+  assert.equal(result.output.target_state,'indeterminate');
+});
 function pageFixture({ authenticated = false, workflow = false, actualBuild = build } = {}) {
   const events = [];
   let url = 'about:blank';
