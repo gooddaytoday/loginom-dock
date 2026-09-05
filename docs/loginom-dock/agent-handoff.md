@@ -1,3 +1,9 @@
+**Checkpoint:** run022803-33baaab3 terminal, session72000 закрыт, 50/58 FAIL.
+35 API calls; upstream Codex stream TTFB timeout120s, usage failed=true.
+Calculator не достигнут; mutation_counts работают на графе, причина epoch ещё
+не установлена. Далее повтор того же полного goal на ChatGPT subscription /
+Luna/medium без fallback; полный P3–P9 открыт. Active Hermes/browser нет.
+
 **Checkpoint:** run021403-9b23c08d terminal, 50/58 frozen FAIL, 91 API calls,
 session74333 закрыт. Live literal delimiter/null/decimal readback и expression
 'Quantity * UnitPrice' в Expr1 подтверждены; select_wizard_option не вызывался.

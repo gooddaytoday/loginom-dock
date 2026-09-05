@@ -1,3 +1,26 @@
+## 2026-09-06 — диагностический прогон прерван timeout потока модели
+
+Run 20260906-022803-33baaab3 terminal, session72000 закрыт; исходники заморожены
+на 1dd0ea8e, runtime pin
+91402be94d5c89948ca3942fa408e9fbf6c0804f539ff63af5ad5a3c408da283.
+Preflight/launch подтвердили openai-codex / gpt-5.6-luna / medium. После 35 API
+calls usage completed=false/failed=true, provider/model=null. Прочитано только
+техническое поле error дампа: TimeoutError, Codex stream produced no bytes within
+120s (TTFB threshold: 120s). Process exit0/outer timeout=false не превращают
+этот запуск в успешную модельную сессию. Содержимое request/model prose не читалось.
+
+Frozen audit 50/58 FAIL, SHA
+4b4d8dc09e38edfd8a6d6996c643b9e667217548575d7a35b12692ff3b6721d9.
+Калькулятор не достигнут, причина его epoch отказов всё ещё не установлена.
+Live scan.mutation_counts присутствует (последние graph/root observations имеют
+одинаковые counts; cursor_style=0). Это подтверждает работу диагностики на графе,
+но не доказывает поведение cursor в редакторе. Полный P3–P9 открыт.
+
+Следующая попытка — тот же полный goal и тот же существующий ChatGPT/Luna/medium
+профиль после подтверждённого terminal transport timeout. Без fallback и без
+изменения guards. Это единичная транспортная ошибка, не подтверждённый внешний
+блокер. Active Hermes/browser нет; audit не пересчитывать.
+
 ## 2026-09-06 — live импорт и выражение; диагностика повторных epoch отказов
 
 Run 20260906-021403-9b23c08d terminal, session74333 закрыт. ChatGPT subscription /
