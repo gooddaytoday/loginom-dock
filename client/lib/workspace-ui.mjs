@@ -3,7 +3,7 @@
 export const uiActionSchema = {
   type: 'object', additionalProperties: false, required: ['verb'],
   properties: {
-    verb: { type: 'string', enum: ['click', 'double_click', 'right_click', 'fill', 'press', 'drag', 'scroll', 'set_checked', 'replace_expression'] },
+    verb: { type: 'string', enum: ['click', 'double_click', 'right_click', 'fill', 'press', 'drag', 'scroll', 'set_checked', 'replace_expression', 'set_wizard_field'] },
     checked: { type: 'boolean' },
     delta_y: { type: 'integer', minimum: -1000, maximum: 1000 },
     ref: { type: 'string', maxLength: 128 }, text: { type: 'string', maxLength: 2048 },
@@ -15,12 +15,13 @@ export const uiActionSchema = {
 export function validateUiAction(action, snapshot) {
   if (!action || typeof action !== 'object' || Array.isArray(action) || !uiActionSchema.properties.verb.enum.includes(action.verb)) throw new Error('Unsupported observed UI action');
   const fields = action.verb === 'drag' ? ['verb', 'source_ref', 'target_ref']
-    : ['fill','replace_expression'].includes(action.verb) ? ['verb', 'ref', 'text'] : action.verb === 'press' ? ['verb', 'ref', 'key'] : action.verb === 'scroll' ? ['verb', 'ref', 'delta_y'] : action.verb === 'set_checked' ? ['verb','ref','checked'] : ['verb', 'ref'];
+    : ['fill','replace_expression','set_wizard_field'].includes(action.verb) ? ['verb', 'ref', 'text'] : action.verb === 'press' ? ['verb', 'ref', 'key'] : action.verb === 'scroll' ? ['verb', 'ref', 'delta_y'] : action.verb === 'set_checked' ? ['verb','ref','checked'] : ['verb', 'ref'];
   if (Object.keys(action).some(key => !fields.includes(key)) || fields.some(key => !(key in action))) throw new Error('UI action fields do not match its verb');
   const refs = action.verb === 'drag' ? [action.source_ref, action.target_ref] : [action.ref];
   if (refs.some(ref => typeof ref !== 'string' || !/^ui-[a-zA-Z0-9-]{1,124}$/.test(ref))) throw new Error('UI action requires opaque observed references: copy the element.ref value beginning with ui- from the delivered observation; tid and identity.anchor_tid are not action refs');
   if (action.verb === 'drag' && action.source_ref === action.target_ref) throw new Error('Drag requires different source and target references');
-  if (['fill','replace_expression'].includes(action.verb) && (typeof action.text !== 'string' || action.text.length > 2048 || /\0/.test(action.text))) throw new Error('UI text must be at most 2048 characters without NUL');
+  if (['fill','replace_expression','set_wizard_field'].includes(action.verb) && (typeof action.text !== 'string' || action.text.length > 2048 || /\0/.test(action.text))) throw new Error('UI text must be at most 2048 characters without NUL');
+  if(action.verb==='set_wizard_field' && (action.text.length>256 || /[\r\n]/.test(action.text)))throw new Error('Wizard field text requires at most 256 characters without line breaks');
   if(action.verb==='replace_expression' && (/\r/.test(action.text) || action.text.split('\n').length>128))throw new Error('Expression replacement requires LF lines, at most 128');
   if (action.verb === 'press' && !uiActionSchema.properties.key.enum.includes(action.key)) throw new Error('Unsupported UI key; clipboard and navigation shortcuts are not allowed');
   if (action.verb === 'scroll' && (!Number.isInteger(action.delta_y) || !action.delta_y || Math.abs(action.delta_y)>1000)) throw new Error('Scroll requires a nonzero integer delta_y within -1000..1000');
@@ -234,14 +235,17 @@ function workspaceUiCapability(page, task) {
         controls:Object.fromEntries(wizardButtons.map(name=>{const found=matching(';'+name);return [name,
           {status:found.length===1?'observed':found.length?'ambiguous':'unobserved',enabled:found.length===1?enabled(found[0]):null}];}))};
     }
+    const wizardFields=new Map();
     if(wizard.status==='observed' && wizard.stage==='text_import_format') {
       const base=wizard.root_tid+';ImportTextFileParamsWizard;';
       const fields={delimiter:'edtDelimiterChar',text_qualifier:'edtTextQualifier',null_marker:'edtValueNull',decimal_separator:'edtDecimalSeparator'};
       wizard.settings={status:'draft_ui_values',applied_verified:false,fields:Object.fromEntries(Object.entries(fields).map(([name,key])=>{
-        const owners=(tids.get(base+key+';ValueControl')??[]).filter(item=>visible(item) && !sensitive(item));
+        const owners=(tids.get(base+key+';ValueControl')??[]).filter(item=>wizardForms[0].contains(item) && visible(item) && !sensitive(item));
         const inputs=owners.length===1?dom.filter(item=>{charge();return owners[0].contains(item) && item.matches('input:not([type="hidden"]),textarea') && visible(item) && !sensitive(item);}):[];
         if(owners.length!==1 || inputs.length!==1)return [name,{status:owners.length>1 || inputs.length>1?'ambiguous':'unobserved'}];
         const input=inputs[0],value=String(input.value??'');
+        if(value.length<=256 && !/[\0\r\n]/.test(value) && !input.readOnly && enabled(input))
+          wizardFields.set(input,{name,stage:wizard.stage,root_ref:refOf(wizardForms[0]),owner_ref:refOf(owners[0])});
         return [name,{status:'observed',value:value.slice(0,256),value_length_utf16:value.length,truncated:value.length>256,
           enabled:enabled(input),read_only:input.readOnly===true,source_tid:base+key+';ValueControl'}];
       }))};
@@ -427,11 +431,12 @@ function workspaceUiCapability(page, task) {
         ...(scroll ? { scroll } : {}),
         ...(checkState ? {check_state:checkState} : {}),
         ...(calculatorEditor ? {calculator_editor:calculatorEditor} : {}),
+        ...(wizardFields.has(element) ? {wizard_field:wizardFields.get(element)} : {}),
         signature: { tag, tid, role, type: element.getAttribute('type'), name: element.getAttribute('name'), label, ...fieldValue, dialog_ref: dialogRef(element), scroll, check_state:checkState },
         enabled: isEnabled, visible: true, interaction, bounding_box: boxOf(element),
         // A bounded prefix is not a sufficient value precondition. A dedicated
         // large-field driver must establish its own complete read/write contract.
-        allowed_actions: expressionWritable ? ['replace_expression'] : allowed && !valueTruncated ? ['click', 'double_click', 'right_click', 'press', 'drag', ...(editable ? ['fill'] : []), ...(checkState ? ['set_checked'] : []), ...(scroll && interaction.state === 'point_observed' ? ['scroll'] : [])] : [] };
+        allowed_actions: expressionWritable ? ['replace_expression'] : allowed && !valueTruncated ? ['click', 'double_click', 'right_click', 'press', 'drag', ...(editable ? ['fill',...(wizardFields.has(element)?['set_wizard_field']:[])] : []), ...(checkState ? ['set_checked'] : []), ...(scroll && interaction.state === 'point_observed' ? ['scroll'] : [])] : [] };
     });
     const graphPrefix = workflow ? workflow.prefix + ';Graph;' : null;
     const graphElements = graphPrefix ? all.filter(element => (getTid(element) ?? '').startsWith(graphPrefix)) : [];
@@ -609,7 +614,8 @@ function workspaceUiCapability(page, task) {
   const checkedHandle = async (before, current) => {
     if (!current || !same(before.identity, current.identity) || !same(before.signature, current.signature)
       || !current.allowed_actions.includes(task.action.verb)
-      || task.action.verb==='replace_expression' && !same(before.calculator_editor,current.calculator_editor)) fail('UI_REFERENCE_STALE', 'The observed control changed; observe the workspace again');
+      || task.action.verb==='replace_expression' && !same(before.calculator_editor,current.calculator_editor)
+      || task.action.verb==='set_wizard_field' && !same(before.wizard_field,current.wizard_field)) fail('UI_REFERENCE_STALE', 'The observed control changed; observe the workspace again');
     const locator = locatorFor(current.identity);
     if (await locator.count() !== 1) fail('UI_REFERENCE_STALE', 'Observed control is no longer unique');
     const handle = await locator.elementHandle({ timeout: timeout() });
@@ -692,6 +698,9 @@ function workspaceUiCapability(page, task) {
         if (!current.authenticated) fail('LOGIN_REQUIRED', 'Loginom authentication is required before changing the workspace');
         if (!same(task.snapshot.dom_epoch, current.dom_epoch)) fail('UI_EPOCH_CHANGED', 'The document changed since this observation; observe again even if its visible state looks unchanged');
         if (!same(current.ui.dialogs.map(item => item.ref), task.snapshot.ui.dialogs.map(item => item.ref))) fail('UI_CONTEXT_CHANGED', 'The visible dialog changed; observe the workspace again');
+        if(task.action.verb==='set_wizard_field' && (!same(task.snapshot.wizard,current.wizard)
+          || !same(task.snapshot.active_identity,current.active_identity) || !same(task.snapshot.package_identity,current.package_identity)))
+          fail('WIZARD_CONTEXT_CHANGED','Wizard settings or package changed; observe again');
         const refs = task.action.verb === 'drag' ? [task.action.source_ref, task.action.target_ref] : [task.action.ref];
         if (current.ui.masks.length) {
           const foreground = current.ui.dialogs.reduce((top, dialog) => !top || dialog.z_index >= top.z_index ? dialog : top, null);
@@ -776,6 +785,29 @@ function workspaceUiCapability(page, task) {
           if(!await ownsFocus(''))fail('EXPRESSION_FOCUS_CHANGED','The Calculator input lost focus or did not clear');
           timeout();if(task.action.text)await page.keyboard.type(task.action.text,{delay:0});
         }
+        else if (task.action.verb === 'set_wizard_field') {
+          const before=current.ui.elements.find(item=>item.ref===task.action.ref);
+          const stillOwned=async()=>{
+            const fresh=await readUi(),field=fresh.ui.elements.find(item=>item.ref===task.action.ref);
+            return fresh.authenticated && fresh.origin===current.origin && fresh.loginom_build===current.loginom_build
+              && same(fresh.workflow_ref,current.workflow_ref) && same(fresh.package_identity,current.package_identity)
+              && same(fresh.active_identity,current.active_identity) && same(fresh.wizard,current.wizard)
+              && same(fresh.ui.dialogs,current.ui.dialogs) && same(fresh.ui.masks,current.ui.masks)
+              && field?.allowed_actions.includes('set_wizard_field') && same(field.wizard_field,before.wizard_field)
+              && field.value===before.value && await first.evaluate(element=>document.activeElement===element);
+          };
+          if(before.value===task.action.text) {
+            effectPossible=false;record('ui_state_already_satisfied',{verb:task.action.verb});
+          } else {
+            await clickTarget(1);
+            if(!await stillOwned())fail('WIZARD_FIELD_CHANGED','Wizard field changed while receiving focus; inspect before retry');
+            await first.press('ControlOrMeta+A',{timeout:timeout()});
+            if(!await stillOwned())fail('WIZARD_FIELD_CHANGED','Wizard field changed before replacement; inspect before retry');
+            timeout();
+            if(task.action.text)await page.keyboard.type(task.action.text,{delay:0});
+            else await first.press('Backspace',{timeout:timeout()});
+          }
+        }
         else if (task.action.verb === 'fill') {
           await clickTarget(1);
           await first.press('ControlOrMeta+A', { timeout: timeout() });
@@ -797,6 +829,20 @@ function workspaceUiCapability(page, task) {
         if (effectPossible) record('ui_gesture_applied', { verb: task.action.verb });
         phase = 'observing'; timeout();
         const observed = await readUi();
+        if(task.action.verb==='set_wizard_field') {
+          const before=current.ui.elements.find(item=>item.ref===task.action.ref);
+          const after=observed.ui.elements.find(item=>item.ref===before.ref);
+          const expected=JSON.parse(JSON.stringify(current.wizard));
+          Object.assign(expected.settings.fields[before.wizard_field.name],{value:task.action.text,value_length_utf16:task.action.text.length,truncated:false});
+          if(!observed.authenticated || observed.origin!==current.origin || observed.loginom_build!==current.loginom_build
+            || !same(observed.workflow_ref,current.workflow_ref) || !same(observed.package_identity,current.package_identity)
+            || !same(observed.active_identity,current.active_identity) || !same(observed.wizard,expected)
+            || !same(observed.ui.dialogs,current.ui.dialogs) || !same(observed.ui.masks,current.ui.masks)
+            || !after || !same(after.identity,before.identity) || !same(after.wizard_field,before.wizard_field)
+            || after.value_truncated || after.value!==task.action.text)
+            fail('WIZARD_FIELD_NOT_CONFIRMED','The draft value was not confirmed in the same wizard field; inspect before retry');
+          record('wizard_draft_value_verified',{ref:after.ref,field:after.wizard_field.name,settings_applied:false});
+        }
         if(task.action.verb==='replace_expression') {
           const before=current.ui.elements.find(item=>item.ref===task.action.ref);
           const after=observed.ui.elements.filter(item=>same(item.identity,before.identity));

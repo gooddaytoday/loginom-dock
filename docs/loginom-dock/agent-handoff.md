@@ -1,3 +1,10 @@
+**Checkpoint:** set_wizard_field подключён через dock_ui_action и существующий
+receipt/pending: текущий import-format owner/root, исходные значения, focus,
+keyboard и точный draft readback. 252 client /110 Python /10 packaging PASS. Не доказывает
+node ownership/apply; live ещё не запускался. Следующий шаг — wizard lifecycle,
+node/settings binding и applied readback, затем полный data-pipeline на ChatGPT
+subscription/Luna/medium. Active Hermes/browser нет; полный P3–P9 открыт.
+
 **Checkpoint:** добавлено bounded draft-чтение четырёх полей формата импорта
 в wizard.settings, без applied proof. 248 client /110 Python /10 packaging PASS; live пока
 не запускался. Следующий шаг: typed set/lifecycle с identity/readback через

@@ -1,3 +1,28 @@
+## 2026-09-06 — типизированное изменение поля формата импорта
+
+В существующий dock_ui_action добавлен set_wizard_field (ref + text), только
+для явно предложивших его полей текущего text_import_format. Descriptor связывает
+поле с incarnation текущего wizard root и ValueControl owner. Перед вводом
+проверяются исходные значения мастера, context/epoch и identity поля; после
+получения фокуса и выделения — повторное чтение того же состояния. Ввод идёт
+через клавиатуру, без setter внутреннего компонента. Совпадающее значение
+не вызывает click/type. Допустимы до 256 UTF-16 единиц без NUL/CR/LF.
+
+После ввода проверяются точное значение, тот же ref/owner/root, остальные
+прочитанные поля и контекст. Неподтверждённый результат после возможного
+воздействия остаётся AMBIGUOUS через существующий receipt/pending. Успешная
+trace wizard_draft_value_verified содержит settings_applied=false: это draft,
+не node ownership и не applied settings. Generic fill не стал domain proof.
+Описания инструментов рекомендуют новый контракт для предлагающих его полей.
+
+252 client /110 Python /10 packaging PASS; отчёты wizard-set-*-tests.txt
+в .dock/post-mvp-p0/. негативные проверки покрывают изменённое исходное
+значение, потерю фокуса, смену формы, искажённый readback, read-only и лимит текста.
+Live ещё не запускался. Следующий шаг — wizard lifecycle и node/settings binding,
+чтение после apply, затем новый полный data-pipeline через Hermes с существующей
+подпиской ChatGPT / openai-codex / gpt-5.6-luna / medium, без fallback.
+Полный P3–P9 остаётся открытым; production не менялся.
+
 ## 2026-09-06 — чтение текущих полей формата текстового импорта
 
 В wizard.settings добавлены delimiter, text_qualifier, null_marker и

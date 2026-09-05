@@ -1156,3 +1156,59 @@ test('import settings preserve blank and whitespace values and exclude hidden or
   input.attrs.type='text';input.style.display='none';
   assert.equal((await page.observe()).wizard.settings.fields.delimiter.status,'unobserved');
 });
+
+function importFormatField(page) {
+  const base='MF;TF-1;WizrdMCF',form=page.add('div',base);
+  page.add('div',base+';ImportTextFileParamsWizard;edtValueNull','',undefined,form);
+  const owner=page.add('div',base+';ImportTextFileParamsWizard;edtValueNull;ValueControl','',undefined,form);
+  const input=page.add('input',null,'',undefined,owner);input.value='old';
+  return {form,owner,input};
+}
+
+test('typed wizard field replacement confirms exact draft values without claiming apply',async()=>{
+  for(const text of ['\\N','', '\t ']) {
+    const page=new Page(),c=importFormatField(page),snapshot=await page.observe();
+    const field=snapshot.ui.elements.find(e=>e.wizard_field?.name==='null_marker');
+    assert.ok(field.allowed_actions.includes('set_wizard_field'));
+    const result=await page.act({verb:'set_wizard_field',ref:field.ref,text},snapshot);
+    assert.equal(result.status,'SUCCEEDED',JSON.stringify(result.error));assert.equal(c.input.value,text);
+    assert.ok(result.trace.some(e=>e.event==='wizard_draft_value_verified' && e.settings_applied===false));
+    assert.equal(result.output.wizard.settings.applied_verified,false);
+  }
+});
+
+test('typed wizard field rejects stale values and invalid text before input',async()=>{
+  const page=new Page(),c=importFormatField(page),snapshot=await page.observe();
+  const field=snapshot.ui.elements.find(e=>e.wizard_field);
+  c.input.value='externally changed';
+  const result=await page.act({verb:'set_wizard_field',ref:field.ref,text:'new'},snapshot);
+  assert.equal(result.status,'NOT_APPLIED');assert.deepEqual(page.events,[]);
+  for(const text of ['x'.repeat(257),'a\nb','a\rb'])
+    assert.throws(()=>validateUiAction({verb:'set_wizard_field',ref:field.ref,text}),/256/);
+});
+
+test('wizard replacement retains uncertainty on focus loss, ownership change and corrupt readback',async()=>{
+  for(const mode of ['focus','owner','corrupt']) {
+    const page=new Page(),c=importFormatField(page),snapshot=await page.observe();
+    const field=snapshot.ui.elements.find(e=>e.wizard_field);
+    const click=page.mouse.click;
+    page.mouse.click=async(...args)=>{await click(...args);
+      if(mode==='focus')page.document.activeElement=page.document.body;
+      if(mode==='owner')c.form.attrs['data-tid']='MF;TF-1;PreviousWizard';
+    };
+    if(mode==='corrupt')page.keyboard.type=async()=>{c.input.value='wrong';};
+    const result=await page.act({verb:'set_wizard_field',ref:field.ref,text:'new'},snapshot);
+    assert.equal(result.status,'AMBIGUOUS',mode);
+    assert.ok(!result.trace.some(e=>e.event==='wizard_draft_value_verified'));
+    if(mode!=='corrupt')assert.equal(c.input.value,'old');
+  }
+});
+
+test('satisfied wizard field issues no keyboard or click and read-only editor denies typed set',async()=>{
+  const page=new Page(),c=importFormatField(page),snapshot=await page.observe();
+  const field=snapshot.ui.elements.find(e=>e.wizard_field);
+  const result=await page.act({verb:'set_wizard_field',ref:field.ref,text:'old'},snapshot);
+  assert.equal(result.status,'SUCCEEDED');assert.equal(result.output.gesture_applied,false);
+  assert.deepEqual(page.events,[]);
+  c.input.readOnly=true;assert.ok(!(await page.observe()).ui.elements.some(e=>e.wizard_field));
+});
