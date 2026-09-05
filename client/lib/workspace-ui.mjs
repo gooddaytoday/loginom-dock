@@ -176,6 +176,19 @@ function workspaceUiCapability(page, task) {
       }
       return null;
     };
+    const interactionOf = element => {
+      const box=boxOf(element), width=globalThis.innerWidth ?? document.documentElement.clientWidth,
+        height=globalThis.innerHeight ?? document.documentElement.clientHeight;
+      if (![width,height].every(Number.isFinite)) return { state:'unverified', point:null };
+      if (box.x>=width || box.y>=height || box.x+box.width<=0 || box.y+box.height<=0) return {state:'outside_viewport',point:null};
+      const left=Math.max(0,box.x),right=Math.min(width,box.x+box.width),top=Math.max(0,box.y),bottom=Math.min(height,box.y+box.height);
+      for (const y of [0.5,0.25,0.75]) for (const x of [0.5,0.25,0.75]) {
+        charge();
+        const point={x:left+(right-left)*x,y:top+(bottom-top)*y},hit=document.elementFromPoint(point.x,point.y);
+        if (hit && (hit===element || element.contains(hit))) return {state:'point_observed',point};
+      }
+      return {state:'point_not_observed',point:null};
+    };
     const elements = controls.slice(0, 240).map(element => {
       const identity = identityOf(element), tag = element.tagName.toLowerCase(), tid = getTid(element);
       const editable = element.matches('textarea,input:not([type="button"]):not([type="submit"]):not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="color"]),[contenteditable="true"]') && !element.readOnly;
@@ -187,7 +200,7 @@ function workspaceUiCapability(page, task) {
       return { ref: refOf(element), tid, identity, kind, role, label, scope: scopeOf(element), ...(value === undefined ? {} : { value }),
         ...(scroll ? { scroll } : {}),
         signature: { tag, tid, role, type: element.getAttribute('type'), name: element.getAttribute('name'), label, ...(value === undefined ? {} : { value }), dialog_ref: dialogRef(element), scroll },
-        enabled: isEnabled, visible: true, bounding_box: boxOf(element),
+        enabled: isEnabled, visible: true, interaction: interactionOf(element), bounding_box: boxOf(element),
         allowed_actions: allowed ? ['click', 'double_click', 'press', 'drag', ...(editable ? ['fill'] : []), ...(scroll ? ['scroll'] : [])] : [] };
     });
     const graphPrefix = workflow ? workflow.prefix + ';Graph;' : null;

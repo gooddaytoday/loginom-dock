@@ -512,3 +512,16 @@ test('virtualized row replacement after scrolling issues a new incarnation', asy
   assert.notEqual(next.ref,ref);assert.equal(next.label,'New row');
   assert.equal((await page.act({verb:'click',ref},snapshot)).status,'NOT_APPLIED');
 });
+
+test('observation distinguishes rendered offscreen and covered targets from reachable targets',async()=>{
+  const page=new Page();page.context.innerWidth=1000;page.context.innerHeight=800;
+  page.add('button','Hit;btnVisible','Visible',{x:30,y:100,width:100,height:25});
+  page.add('button','Hit;btnOffscreen','Offscreen',{x:30,y:1200,width:100,height:25});
+  page.add('button','Hit;btnCovered','Covered',{x:300,y:100,width:100,height:25});
+  page.add('div','Overlay','',{x:295,y:95,width:110,height:35});
+  const s=await page.observe();
+  const state=tid=>s.ui.elements.find(e=>e.tid===tid).interaction.state;
+  assert.equal(state('Hit;btnVisible'),'point_observed');
+  assert.equal(state('Hit;btnOffscreen'),'outside_viewport');
+  assert.equal(state('Hit;btnCovered'),'point_not_observed');
+});

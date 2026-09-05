@@ -1,5 +1,26 @@
 # Выполнение плана Loginom Dock
 
+## P2 scroll: частичный live результат и доступность targets — 5 сентября
+
+Run `20260905-155228-ebda6a6b` завершён: **25/27 frozen FAIL**, SHA
+`6fe9e2e675aff81315a810407ea40c673276bf03268d7bb5b7c07e1e2091a74f`.
+Hermes Luna/medium/ChatGPT реально прокрутил palette owner с 0 до 800
+(ui_scroll_applied, row 38), но не вернулся вверх. Четыре прочих жеста были
+NOT_APPLIED с UI_REFERENCE_OBSCURED: DOM/rendered presence не давала агенту
+достаточно информации о доступной точке. Пустой граф/bootstrap/pins приняты;
+полный scroll goal не принят. Старый отчёт не пересчитывать.
+
+После прогона добавлено поле interaction в наблюдаемые элементы:
+outside_viewport, point_observed, point_not_observed или unverified.
+Девять пробных точек проверяются через elementFromPoint в пределах viewport
+и scan budget. Это выборочная подсказка, не полное доказательство недоступности
+и не замена независимого checkedHandle (включая специальную SVG geometry).
+visible по-прежнему означает отрисованный DOM. Tool description направляет
+агента к point_observed и к другим страницам после scroll.
+163 client / 74 Python checks прошли. Live нового interaction ещё нет.
+Активных Hermes нет. Далее повтор scroll, browser root/filter, epoch/ABA и
+оставшиеся P2/P3–P9. Отказ по крупному DOM не считать готовым root-scoped чтением.
+
 ## P2: вертикальная прокрутка наблюдаемой области — 5 сентября 2026
 
 ui.act получил verb=scroll, ref и целочисленный delta_y от -1000 до 1000

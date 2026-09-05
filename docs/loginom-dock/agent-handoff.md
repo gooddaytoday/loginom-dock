@@ -1,5 +1,12 @@
 # Следующему агенту: с чего начать
 
+**Текущая точка:** scroll run `20260905-155228-ebda6a6b` — 25/27 FAIL:
+реальный scroll 0→800, возврата вверх нет, targets obscured. Добавлена подсказка
+interaction (sampled hit points/viewport) без ослабления action guard.
+163 client / 74 Python; live interaction ещё нет, active Hermes нет.
+Далее повтор scroll, browser root/filter и epoch/ABA, затем остальной P2/P3–P9.
+Подробности и SHA — верх implementation-status.
+
 **Последняя реализация:** вертикальный ui.act scroll по наблюдаемому ref/
 scroll owner, clamped delta_y, guards/signature и новые refs после рендера.
 162 client tests. Live scroll ещё не было; active Hermes нет. Далее bounded
