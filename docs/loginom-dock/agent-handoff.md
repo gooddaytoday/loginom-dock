@@ -1,5 +1,13 @@
 # Следующему агенту: с чего начать
 
+**Последний live:** checkbox-roundtrip `20260905-164028-032ecbdd` — 21/24
+frozen FAIL, мастер не открыт, set_checked не вызывался. Active Hermes нет.
+После run добавлен observed graph `;Setting` (E2E wizard.OpenNodeSettings и
+selectors.ts:1068), 168 client tests; 79 Python. Следующее — новый live
+checkbox-roundtrip --require-verification на Luna/medium/ChatGPT. Goal и
+аудитор уже подключены; оставлять мастер открытым после возврата значения,
+без cancel/apply/save. Старые записи ниже описывают предшествующие состояния.
+
 **Подготовка live checkbox:** добавлен independent helper `checked_state.py`
 с проверкой desired state/no-op по исходному completed receipt и 3 тестами
 подмены evidence (78 Python PASS). Пока не подключён к audit goal; запуск

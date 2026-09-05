@@ -465,6 +465,19 @@ test('palette spans provide observed references for enumeration without raw sele
   assert.equal((await page.act({ verb: 'click', ref: target.ref }, snapshot)).status, 'NOT_APPLIED');
 });
 
+test('node settings affordance without button role is observable and guarded', async () => {
+  const page = new Page();
+  const settings = page.add('g', 'MF;TF-1;Graph;Текстовый_файл;Setting', '', {x:30,y:50,width:20,height:20});
+  page.add('g', 'MF;TF-1;Graph;Текстовый_файл;UnknownDecoration', '');
+  const snapshot = await page.observe();
+  const target = snapshot.ui.elements.find(item => item.tid === settings.getAttribute('data-tid'));
+  assert.ok(target?.allowed_actions.includes('click'));
+  assert.ok(!snapshot.ui.elements.some(item => item.tid?.endsWith(';UnknownDecoration')));
+  assert.equal((await page.act({verb:'click',ref:target.ref},snapshot)).status,'SUCCEEDED');
+  settings.remove();
+  assert.equal((await page.act({verb:'click',ref:target.ref},snapshot)).status,'NOT_APPLIED');
+});
+
 test('oversized DOM stops observation and rejects a gesture before input without an empty graph claim', async () => {
   const page=new Page();page.add('button','Safe;btnAction','Action');
   const snapshot=await page.observe();

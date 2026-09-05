@@ -1,5 +1,21 @@
 # Выполнение плана Loginom Dock
 
+## Checkbox live: мастер не открыт, исправлена выдача Setting — 5 сентября
+
+Run `20260905-164028-032ecbdd` — **21/24 frozen FAIL**, audit SHA
+`ef642fd8e9b53d39ff49522ed2e32bfdf8b1837719063dd5298dceb6c007cab0`.
+Hermes Luna/medium/ChatGPT создал узел, читал E2E/Help, но не выполнил ни одного
+set_checked. Были REQUEST_REJECTED, UI_REFERENCE_OBSCURED, клики по метке и
+другим graph refs; мастер и checkbox cycle не приняты. Run завершён.
+
+E2E `bg/helpers/wizard.ts:29` открывает мастер через node.Setting;
+`bg/selectors.ts:1068` задаёт `Graph;<node>;Setting`. Observer не включал
+такой SVG control без стандартной роли. Добавлено точное распознавание этого
+суффикса, без произвольных graph decorations; тест проверяет click и stale
+после удаления. 168 client tests прошли, 79 Python актуальны. Новый live ещё
+не выполнялся; старый FAIL не пересчитывать. Далее повтор checkbox-roundtrip
+с --require-verification, затем остальные P2/P3–P9.
+
 ## Подготовка независимой приёмки checkbox — 5 сентября 2026
 
 Добавлен `tools/loginom-acceptance/checked_state.py`: привязка ответа к одной

@@ -165,6 +165,9 @@ function workspaceUiCapability(page, task) {
       // Pinned E2E bg/selectors.ts:272,279,286: palette tree labels and
       // expanders are spans without button/treeitem roles in some UI builds.
       || /;ModelForm;colVendors_Компоненты>[^;]+;(?:TreeText|TreeExpander)$/.test(getTid(element) ?? '')
+      // E2E bg/selectors.ts:1068 and bg/helpers/wizard.ts:29: the node
+      // settings affordance can be SVG without a button role.
+      || /;Graph;[^;]+;Setting$/.test(getTid(element) ?? '')
       || /;(?:Display|Input)El$/.test(getTid(element) ?? '') && element.matches('.x-form-checkbox,.x-form-radio')
       // Loginom message-box buttons are anchors without an ARIA button role;
       // their pinned test identifiers end with tlb;yes / tlb;no, not btn*.
