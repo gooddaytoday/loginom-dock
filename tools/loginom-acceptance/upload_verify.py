@@ -1,4 +1,4 @@
-"""Independent same-session server-copy byte proof; upload completion stays open."""
+"""Independent transfer completion from same-session server-copy byte proof."""
 import copy
 import upload_probe
 import rename_effect
@@ -52,7 +52,7 @@ def audit(evidence, checks, request, prefix, mutations, storage_audit):
                 'upload_operation_id':upload_id,'destination':destination,'suggested_name':descriptor['name'],
                 'download_completed':True,'bytes_verification_required':True,'file_ref':args.get('file_ref'),'observation_id':args.get('observation_id')}
     expected={**raw_output,'bytes_verification_required':False,'bytes_verified':True,
-              'bytes':descriptor['bytes'],'sha256':descriptor['sha256'],'upload_completion_verified':False}
+              'bytes':descriptor['bytes'],'sha256':descriptor['sha256'],'upload_completion_verified':True}
     check('host_verified_exact_bytes',result.get('status')=='SUCCEEDED' and result.get('action_key')=='artifact.verify'
           and result.get('action_revision')=='1' and result.get('operation_id')==args.get('verification_id')
           and result.get('phase')=='verified' and result.get('cleanup_complete') is True and result.get('error') is None
@@ -65,16 +65,27 @@ def audit(evidence, checks, request, prefix, mutations, storage_audit):
           and raw.get('phase')=='downloaded' and raw.get('cleanup_complete') is True and raw.get('effect_possible') is True
           and raw.get('error') is None)
     verified=[e for e in events if e.get('phase')=='download_verified' and e.get('operation_id')==args.get('verification_id')]
-    check('host_proof_bound_to_artifact_and_request',len(verified)==1 and verified[0].get('outcome')==result
+    byte_result=copy.deepcopy(result)
+    byte_result.setdefault('output',{})['upload_completion_verified']=False
+    check('host_proof_bound_to_artifact_and_request',len(verified)==1 and verified[0].get('outcome')==byte_result
           and verified[0].get('parameters')=={'upload_operation_id':upload_id,'observation_id':args.get('observation_id'),'file_ref':args.get('file_ref')}
           and verified[0].get('checkpoint',{}).get('artifact')==artifact)
     after=[t for t in tools if t['tool']==prefix+'dock_operation_inspect' and t['row']>call['row']]
     summary={'verification_id':args.get('verification_id'),'status':'SUCCEEDED','bytes_verified':True,
-             'upload_completion_verified':False,'destination':destination,'bytes':descriptor['bytes'],'sha256':descriptor['sha256']}
-    check('byte_proof_does_not_claim_upload_completion',bool(after) and all(t['result'].get('output',{}).get('state')=='pending'
+             'upload_completion_verified':True,'destination':destination,'bytes':descriptor['bytes'],'sha256':descriptor['sha256']}
+    transfers=[e for e in events if e.get('phase')=='transfer_completed' and e.get('operation_id')==upload_id]
+    completed=transfers[0].get('outcome',{}) if len(transfers)==1 else {}
+    check('transfer_completion_recorded',len(transfers)==1 and completed.get('status')=='SUCCEEDED'
+          and completed.get('action_key')=='artifact.upload' and completed.get('operation_id')==upload_id
+          and completed.get('cleanup_complete') is True and completed.get('error') is None
+          and completed.get('output',{}).get('transfer_postcondition')=='destination_bytes_digest_and_size'
+          and completed['output'].get('verification_required') is False and completed['output'].get('server_copy_verification')==summary)
+    finalized=[e for e in events if e.get('phase')=='verification_completed' and e.get('operation_id')==args.get('verification_id')]
+    check('final_verification_recorded',len(finalized)==1 and finalized[0].get('outcome')==result)
+    check('verified_transfer_releases_pending',bool(after) and all(t['result'].get('output',{}).get('state')=='resolved'
           and t['result']['output'].get('operation_id')==upload_id
-          and t['result']['output'].get('outcome',{}).get('status')=='AMBIGUOUS'
+          and t['result']['output'].get('outcome')==completed
           and t['result']['output']['outcome'].get('output',{}).get('server_copy_verification')==summary for t in after))
     check('no_mutations_after_verification',not any(c['tool'] in mutations and c['row']>call['row'] for c in calls))
     return {'all_assertions_passed':all(c['passed'] for c in checks),'assertions':checks,'goal':'file-upload-verify',
-            'destination':destination,'limitations':['Downloaded server copy matches admitted bytes. Upload completion, reject/conflict and download budget remain open.']}
+            'destination':destination,'limitations':['Confirmed replace transfer satisfies exact destination byte postcondition. Reject/conflict and download budget remain open.']}

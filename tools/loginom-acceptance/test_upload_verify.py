@@ -28,14 +28,19 @@ class UploadVerifyTest(unittest.TestCase):
         native={'status':'SUCCEEDED','action_key':'artifact.download','action_revision':'1','operation_id':'verify',
                 'phase':'downloaded','cleanup_complete':True,'effect_possible':True,'error':None,'output':output}
         result={**copy.deepcopy(native),'action_key':'artifact.verify','phase':'verified',
-                'output':{**output,'bytes_verification_required':False,'bytes_verified':True,'bytes':230,'sha256':artifact['sha256'],'upload_completion_verified':False}}
+                'output':{**output,'bytes_verification_required':False,'bytes_verified':True,'bytes':230,'sha256':artifact['sha256'],'upload_completion_verified':True}}
         data['tools'].append({**call,'row':13,'result':result})
         data['events'].extend([{'phase':'download_completed','operation_id':'verify','outcome':native},
-                              {'phase':'download_verified','operation_id':'verify','outcome':copy.deepcopy(result),
+                              {'phase':'download_verified','operation_id':'verify','outcome':{**copy.deepcopy(result),'output':{**result['output'],'upload_completion_verified':False}},
                                'parameters':{'upload_operation_id':'up','observation_id':'file-obs','file_ref':'ui-file'},'checkpoint':{'artifact':artifact}}])
         after=copy.deepcopy(inspection)
         after['outcome']['output']['server_copy_verification']={'verification_id':'verify','status':'SUCCEEDED','bytes_verified':True,
-            'upload_completion_verified':False,'destination':artifact['upload']['destination'],'bytes':230,'sha256':artifact['sha256']}
+            'upload_completion_verified':True,'destination':artifact['upload']['destination'],'bytes':230,'sha256':artifact['sha256']}
+        after['state']='resolved'
+        after['outcome'].update(status='SUCCEEDED',error=None,cleanup_complete=True)
+        after['outcome']['output'].update(verification_required=False,transfer_postcondition='destination_bytes_digest_and_size')
+        data['events'].extend([{'phase':'transfer_completed','operation_id':'up','outcome':copy.deepcopy(after['outcome'])},
+                               {'phase':'verification_completed','operation_id':'verify','outcome':copy.deepcopy(result)}])
         data['tools'].append({'session_id':'s','tool_call_id':'after','tool':PREFIX+'dock_operation_inspect','row':15,'result':{'output':after}})
         return data,request
 
@@ -47,10 +52,10 @@ class UploadVerifyTest(unittest.TestCase):
     def test_rejects_wrong_bytes_file_receipt_context_or_completion_claim(self):
         for change in [lambda d:d['tools'][-2]['result']['output'].update(sha256='0'*64),
                        lambda d:d['tools'][-3]['result']['output']['ui']['elements'][0].update(label='other.csv'),
-                       lambda d:d['events'][-2]['outcome']['output'].update(destination='/other'),
-                       lambda d:d['events'][-1]['checkpoint'].update(artifact={}),
+                       lambda d:next(e for e in d['events'] if e['phase']=='download_completed')['outcome']['output'].update(destination='/other'),
+                       lambda d:next(e for e in d['events'] if e['phase']=='download_verified')['checkpoint'].update(artifact={}),
                        lambda d:d['tools'][-3]['result']['output']['operation'].update(state='resolved'),
-                       lambda d:d['tools'][-1]['result']['output'].update(state='resolved'),
+                       lambda d:d['tools'][-1]['result']['output'].update(state='pending'),
                        lambda d:d['calls'].append({**d['calls'][-1],'row':20,'tool_call_id':'repeat'})]:
             data,request=self.fixture();change(data)
             self.assertFalse(upload_verify.audit(data,[],request,PREFIX,MUTATIONS,file_storage_inspect)['all_assertions_passed'])

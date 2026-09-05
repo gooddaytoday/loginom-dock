@@ -4,8 +4,10 @@
 к той же однократной отправке поиск точной строки CSV, один dock_artifact_verify
 и inspect исходной операции. Аудит связывает file ref с raw observation и pending
 context, native download receipt — с host download_verified, grant и исходным
-SHA/size. Совпавшие байты не означают upload completion: исходная операция должна
-остаться pending с upload_completion_verified=false. Прогон не закрывает P3,
+SHA/size. Теперь после confirmed submission, совпадения байтов, cleanup и durable
+transfer_completed/verification_completed исходная операция должна стать resolved,
+а upload_completion_verified=true. Прежний frozen run 222924 проверял ещё pending
+поведение; новый контракт не переоценивает тот отчёт. Прогон не закрывает P3,
 reject/конфликты или download budget. Все helper/fixture inputs закреплены до run.
 
 ## Диагностика отправки файла через Hermes
@@ -61,9 +63,10 @@ data-pipeline acceptance; diagnostic run должен учитывать нез�
 новый verification_id, observation_id и file_ref подробного чтения строки CSV.
 Он сверяет скачанную копию с admitted SHA/size. При lost reply сначала inspect
 исходной операции; новый ID не обходит незавершённое скачивание. Успех byte proof
-не снимает upload pending: upload_completion_verified остаётся false. Для живой
-проверки этой цепочки ещё нужен отдельный goal/auditor; текущий file-upload-probe
-разрешает только submission + pending inspection и не должен вызываться для verify.
+при confirmed submission/cleanup и durable completion снимает pending. Ошибка
+SHA, неопределённая отправка, cleanup или journal failure сохраняют блокировку.
+Для живой цепочки используется file-upload-verify; file-upload-probe разрешает
+только submission + pending inspection и не должен вызываться для verify.
 
 ## Имена Loginom и destination (schema 2, 2026-09-05)
 

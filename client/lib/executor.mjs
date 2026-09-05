@@ -27,7 +27,7 @@ const artifactUploadTool = {name:'dock_artifact_upload',
     properties:{artifact_id:identifier,upload_grant_id:identifier,observation_id:identifier,operation_id:identifier}},
   annotations:{readOnlyHint:false,destructiveHint:true,openWorldHint:false}};
 const artifactVerifyTool={name:'dock_artifact_verify',
-  description:'Download and verify the exact authorized CSV for a pending upload. operation_id is the ORIGINAL upload; verification_id is a new unique verification request. Supply observation_id and file_ref from a fresh detailed file-row observation. This checks downloaded name, size and SHA, without resubmitting the upload. Repeat the same verification_id or inspect the original operation after a lost response; never bypass uncertainty with a new ID. A verified server copy does not yet prove upload transfer completion, so the original upload stays pending.',
+  description:'Download and verify the exact authorized CSV for a pending upload. operation_id is the ORIGINAL upload; verification_id is a new unique verification request. Supply observation_id and file_ref from a fresh detailed file-row observation. This checks downloaded name, size and SHA, without resubmitting the upload. Repeat the same verification_id or inspect the original operation after a lost response; never bypass uncertainty with a new ID. Confirmed submission plus matching destination bytes, cleanup and durable receipts complete the original transfer. Inspect it and obtain fresh UI refs before continuing.',
   inputSchema:{type:'object',additionalProperties:false,required:['operation_id','verification_id','observation_id','file_ref'],
     properties:{operation_id:identifier,verification_id:identifier,observation_id:identifier,file_ref:identifier}},
   annotations:{readOnlyHint:false,destructiveHint:false,openWorldHint:false}};
@@ -961,8 +961,8 @@ export function createActionRuntime({ pinned, execute, artifactStore, allowCandi
       await remember(attempt,'download_completed',raw);attempt.rawRecorded=true;
     }
     const artifact=operation.checkpoint.artifact;
-    let outcome={...structuredClone(raw),action_key:'artifact.verify'};
-    if(raw.status==='SUCCEEDED') {
+    let outcome=attempt.byteOutcome ?? {...structuredClone(raw),action_key:'artifact.verify'};
+    if(!attempt.byteOutcome && raw.status==='SUCCEEDED') {
       const expected={artifact_id:artifact.artifact_id,upload_grant_id:artifact.upload.grant_id,
         upload_operation_id:operation.id,destination:artifact.upload.destination,suggested_name:artifact.name,
         download_completed:true,bytes_verification_required:true,file_ref:attempt.parameters.file_ref,
@@ -980,7 +980,35 @@ export function createActionRuntime({ pinned, execute, artifactStore, allowCandi
           error:{code:'DOWNLOADED_ARTIFACT_MISMATCH',message:'Downloaded bytes do not match the admitted artifact'}};
       }
     }
-    await remember(attempt,'download_verified',outcome);
+    attempt.byteOutcome=structuredClone(outcome);
+    if(!attempt.byteRecorded) {await remember(attempt,'download_verified',outcome);attempt.byteRecorded=true;}
+    if(outcome.output.bytes_verified===true && operation.outcome.output.upload_submitted===true
+      && operation.outcome.cleanup_complete===true && raw.cleanup_complete===true) {
+      // The transfer contract's postcondition is exact destination bytes/size/
+      // digest, not a visible filename or a network-idle heuristic. Both native
+      // calls have completed; retain the proof across cleanup/journal failures.
+      try {
+        await attempt.lease.release();await operation.uploadLease.release();
+      } catch {
+        attempt.outcome={...structuredClone(outcome),status:'AMBIGUOUS',phase:'cleanup',cleanup_complete:false,
+          error:{code:'TRANSFER_CLEANUP_FAILED',message:'Transfer proof is retained; temporary file cleanup is unconfirmed'}};
+        operation.cleanupConfirmed=false;
+        return attempt.outcome;
+      }
+      const summary={verification_id:attempt.id,status:'SUCCEEDED',bytes_verified:true,upload_completion_verified:true,
+        destination:artifact.upload.destination,bytes:artifact.bytes,sha256:artifact.sha256};
+      const completedUpload={...structuredClone(operation.outcome),status:'SUCCEEDED',phase:'verified',error:null,
+        cleanup_complete:true,output:{...structuredClone(operation.outcome.output),verification_required:false,
+          transfer_postcondition:'destination_bytes_digest_and_size',server_copy_verification:summary}};
+      const completedVerification={...structuredClone(outcome),output:{...outcome.output,upload_completion_verified:true}};
+      if(!attempt.transferRecorded) {await remember(operation,'transfer_completed',completedUpload);attempt.transferRecorded=true;}
+      await remember(attempt,'verification_completed',completedVerification);
+      operation.outcome=completedUpload;operation.transportUncertain=false;operation.cleanupConfirmed=true;
+      attempt.outcome=completedVerification;attempt.settled=true;
+      auxiliary.set(attempt.id,{signature:attempt.signature,outcome:structuredClone(completedVerification)});
+      if(pending===operation)pending=null;
+      return completedVerification;
+    }
     attempt.outcome=outcome;attempt.settled=true;
     auxiliary.set(attempt.id,{signature:attempt.signature,outcome:structuredClone(outcome)});
     operation.transportUncertain=false;operation.cleanupConfirmed=raw.cleanup_complete===true;
@@ -1018,6 +1046,8 @@ export function createActionRuntime({ pinned, execute, artifactStore, allowCandi
           pending = null; return operation.outcome;
         }
       }
+      if(operation.cleanupConfirmed===false && operation.verification?.byteOutcome?.output?.bytes_verified===true)
+        return failed(operation,'TRANSFER_FINALIZATION_PENDING','Verified bytes are retained; transfer cleanup has not completed');
       if (operation.cleanupConfirmed === false) return failed(operation, 'CLEANUP_RECEIPT_MISSING',
         'The browser call finished but cleanup is unconfirmed. Inspect and restore_control before further mutations.');
       if (['ui.act','artifact.upload'].includes(operation.action.capability)) {
