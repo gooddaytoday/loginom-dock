@@ -1,3 +1,42 @@
+## 2026-09-06 — P3: завершён run 001652; исправлена проверка последующих страниц
+
+Полный data-pipeline run 20260906-001652-2b44f209 завершён, процесс exit 0,
+без timeout, Hermes openai-codex/gpt-5.6-luna/medium, 63 API calls. Учётная
+запись test, destination /test; harness 84ef4e42. Runtime source pin
+f48ed0c38a8827d5953a559e5d4d18e2e038ff57bb4303b0a07e95ac18b46136.
+Однократный frozen audit: 49/58 FAIL, SHA
+f662fa2ca4170e62d22e294702458b4614236eb4fee90c6ffcacdfc823bbf8cf.
+
+Native upload/verify вернули success/completion, но независимая передача НЕ
+принята: directory receipt и delivered destination gates не прошли. Причина
+аудитора: последний directory read был четвёртой страницей (offset 86), а
+compact_receipt_equal принимал только offset 0. Сохранённый FAIL не пересчитан.
+Остальные семь FAIL — незавершённые domain verifiers. Модель дошла до
+text_import_format, затем завершила работу после повторных stale cursor / ref
+rejections. Калькулятор, его document API/keyboard и вся последующая цепочка
+не проверены этим запуском. Терминал session 96624 закрыт; active Hermes нет.
+
+Исправлена независимая проверка all-scope continuation pages: точный offset/
+returned, slice contents, total, cursor presence, omission/truncated flags,
+metadata; последняя страница сама по себе не объявляется complete snapshot.
+Тест формирует три страницы через настоящий JS renderer, проверяет их и
+отклоняет подмену offset/content/directory/completeness. Это не ослабляет raw
+receipt binding и не принимает model domain_proof. 107 Python PASS.
+
+Для recovery после stale cursor добавлена подсказка: заново scope roots, затем
+fresh WizrdMCF root_ref/observation_id. Discovery приоритетно выдаёт текущий
+wizard перед его таблицами; тест с 80 предыдущими таблицами подтверждает, что
+root доступен первым и detailed read ограничен двумя элементами. Guards/freshness
+не ослаблены. 242 client /10 packaging PASS, отдельные 12 paging tests PASS. Отчёты
+.dock/post-mvp-p0/continuation-{client,pages-client,audit-python,packaging}-tests.txt.
+Эффективность recovery и editor contract требуют следующего полного live run.
+
+Дополнительный source finding: E2E tests/issues/04k/04k0/4336.ts проверяет, что
+после Next выбирается выражение с ошибкой, даже если перед этим выбрано другое.
+Для error readback связывать фактическое поле после validation и MsgBox через
+BtnError (bg/helpers/wizard.ts HasWizardError). 4337.ts skipped — только источник
+исторического сценария, не актуальное acceptance evidence. Цель весь P3–P9.
+
 ## 2026-09-06 — P3: typed замена выражения с чтением документа
 
 Добавлен replace_expression в существующий dock_ui_action/receipt/pending,

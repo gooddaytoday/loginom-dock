@@ -6,7 +6,7 @@ import re
 def compact_receipt_equal(record, reply):
     """Bind every delivered value to the immutable receipt, without erasing data.
 
-    This verifies the first all-scope projection of a UI receipt. Revision is
+    This verifies any all-scope page projection of a UI receipt. Revision is
     an opaque correlation token here, not an independently proven DOM epoch.
     Unknown projection versions/fields fail closed.
     """
@@ -14,7 +14,7 @@ def compact_receipt_equal(record, reply):
     page=actual.get('page',{})
     if (set(page)!={'schema_version','scope','offset','returned','total_records','next_cursor',
                     'captured_snapshot_complete','full_dom_complete'}
-        or page.get('schema_version')!=1 or page.get('scope')!='all' or page.get('offset')!=0
+        or page.get('schema_version')!=1 or page.get('scope')!='all'
         or page.get('full_dom_complete') is not False
         or not re.fullmatch(r'[a-f0-9]{64}',actual.get('observation_revision',''))):return False
     if {k:v for k,v in record.items() if k!='output'}!={k:v for k,v in reply.items() if k!='output'}:return False
@@ -36,18 +36,20 @@ def compact_receipt_equal(record, reply):
         rows.append(('elements',value))
     collections=('elements','dialogs','masks','messages','table_cells')
     for key in collections[1:]:rows.extend((key,item) for item in ui.get(key,[]))
-    count=page.get('returned')
-    if type(count) is not int or not 0<=count<=min(len(rows),32) or (rows and not count):return False
-    if page.get('total_records')!=len(rows) or page['captured_snapshot_complete'] is not (count==len(rows)):return False
+    count=page.get('returned');offset=page.get('offset')
+    if type(offset) is not int or not 0<=offset<=len(rows):return False
+    if type(count) is not int or not 0<=count<=min(len(rows)-offset,32) or (rows and not count):return False
+    end=offset+count
+    if page.get('total_records')!=len(rows) or page['captured_snapshot_complete'] is not (offset==0 and end==len(rows)):return False
     cursor=page['next_cursor']
-    if count<len(rows):
+    if end<len(rows):
         if not isinstance(cursor,str) or not re.fullmatch(r'[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}',cursor):return False
     elif cursor is not None:return False
     expected.update(nodes=[],links=[],ui={key:[] for key in collections})
     expected['ui']['truncated']=copy.deepcopy(ui.get('truncated',{}))
-    for key,item in rows[:count]:
+    for key,item in rows[offset:end]:
         (expected[key] if key in ('nodes','links') else expected['ui'][key]).append(item)
-    for key,_ in rows[count:]:expected['ui']['truncated'][key]=True
+    for key,_ in rows[:offset]+rows[end:]:expected['ui']['truncated'][key]=True
     if any('ports_page' in node for node in expected['nodes']):expected['ui']['truncated']['ports']=True
     return expected=={k:v for k,v in actual.items() if k not in ('page','observation_revision')}
 

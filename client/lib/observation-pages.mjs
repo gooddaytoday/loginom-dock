@@ -139,7 +139,7 @@ export function createObservationPages({ maxBytes = 12000, maxRecords = 32, capa
       if (!entry) throw new Error('Observation cursor is stale or belongs to another session');
       if (fresh.status !== 'SUCCEEDED' || revision(fresh.output) !== entry.revision) {
         remove(entry.id);
-        throw new Error('Workspace changed between observation pages; begin a new observation');
+        throw new Error('Workspace changed between observation pages; begin a new observation. If this repeats in a wizard, use scope roots, then read its freshly delivered WizrdMCF root_ref and observation_id. Do not reuse refs from the invalidated observation');
       }
       return { ...fresh, output: render(entry, page.offset) };
     },

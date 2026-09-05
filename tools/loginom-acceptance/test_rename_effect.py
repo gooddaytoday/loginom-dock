@@ -95,3 +95,34 @@ const values=JSON.parse(text); console.log(JSON.stringify(values.map(value=>crea
             self.assertFalse(rename_effect.journal_equal(raw[-1],bad))
 
 if __name__=='__main__':unittest.main()
+
+class ContinuationProjection(unittest.TestCase):
+    def test_all_pages_match_their_native_receipt_and_reject_changed_offset_content(self):
+        root=Path(__file__).resolve().parents[2]
+        raw={'status':'SUCCEEDED','operation_id':'read','output':{'nodes':[],'links':[],
+          'file_storage':{'status':'observed','directory':'/test'},
+          'ui':{'elements':[{'ref':f'ui-{i}','label':f'cell {i}','signature':{'tag':'td','private':'hidden'}} for i in range(70)],
+                'dialogs':[],'masks':[],'messages':[],'table_cells':[], 'truncated':{}}}}
+        script="""import {createObservationPages} from './client/lib/observation-pages.mjs';
+let text='';for await(const part of process.stdin)text+=part;
+const raw=JSON.parse(text),pages=createObservationPages(),out=[];
+let page=pages.retain(structuredClone(raw));out.push(page);
+while(page.output.page.next_cursor){page=pages.next(page.output.page.next_cursor,structuredClone(raw));out.push(page);}
+console.log(JSON.stringify(out));"""
+        result=subprocess.run(['node','--input-type=module','-e',script],cwd=root,input=json.dumps(raw),text=True,capture_output=True,check=True)
+        pages=json.loads(result.stdout)
+        self.assertEqual([p['output']['page']['offset'] for p in pages],[0,32,64])
+        for reply in pages:
+            self.assertTrue(rename_effect.journal_equal(raw,reply))
+            for mutate in [lambda r:r['output']['page'].update(offset=True),
+                           lambda r:r['output']['page'].update(offset=-1),
+                           lambda r:r['output']['page'].update(offset=999),
+                           lambda r:r['output']['page'].update(offset=r['output']['page']['offset']+1),
+                           lambda r:r['output']['ui']['elements'][0].update(label='changed'),
+                           lambda r:r['output']['file_storage'].update(directory='/wrong')]:
+                changed=copy.deepcopy(reply);mutate(changed)
+                self.assertFalse(rename_effect.journal_equal(raw,changed))
+        changed=copy.deepcopy(pages[-1]);changed['output']['page']['captured_snapshot_complete']=True
+        self.assertFalse(rename_effect.journal_equal(raw,changed))
+        changed=copy.deepcopy(pages[-1]);changed['output']['ui']['truncated']['elements']=False
+        self.assertFalse(rename_effect.journal_equal(raw,changed))

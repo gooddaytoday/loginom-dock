@@ -1,3 +1,12 @@
+**Checkpoint P3:** run 20260906-001652-2b44f209 terminal, 49/58 frozen FAIL,
+остановился на форматах импорта после stale pages/refs. Transfer tools success,
+но strict audit не поддержал directory page offset 86; исправлен для будущих
+runs (старый FAIL не пересчитан). 107 Python /242 client /10 packaging PASS; root discovery
+теперь выдаёт wizard первым, error hint/goal направляют в fresh narrow read.
+Калькулятор document/keyboard в live ещё не проверен. Далее новый полный
+run data-pipeline и оставшиеся domain gates/P3–P9. Active Hermes/browser нет,
+session 96624 terminal. Точные pins и ограничения сверху status.
+
 **Checkpoint P3 (6 сентября):** replace_expression подключён через существующий
 UI receipt. Exact selected field/expression mode/writable CodeMirror document,
 полный bounded LF read, keyboard replacement, focus/identity guards и exact

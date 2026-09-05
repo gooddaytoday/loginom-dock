@@ -1096,3 +1096,16 @@ test('Calculator field switch during focus acquisition prevents clearing either 
   assert.equal(result.status,'AMBIGUOUS');assert.equal(c.state.text,'original');
   assert.ok(!page.events.includes('Backspace'));
 });
+
+test('root discovery delivers the current wizard ahead of many earlier tables',async()=>{
+  const page=new Page();
+  for(let i=0;i<80;i++)page.add('table',null);
+  const form=page.add('div','MF;TF-1;WizrdMCF');
+  page.add('input','MF;TF-1;WizrdMCF;ImportTextFileParamsWizard;edtValueNull','',undefined,form);
+  const result=await page.execute({mode:'observe',discover_roots:true});
+  assert.equal(result.status,'SUCCEEDED');assert.equal(result.output.ui.elements[0].tid,'MF;TF-1;WizrdMCF');
+  assert.deepEqual(result.output.ui.elements[0].allowed_actions,[]);
+  const read=await page.execute({mode:'observe',root_ref:result.output.ui.elements[0].ref});
+  assert.equal(read.output.scan.detail_elements,2);
+  assert.ok(read.output.ui.elements.some(e=>e.tid.endsWith('edtValueNull')));
+});

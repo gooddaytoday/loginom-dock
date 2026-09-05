@@ -235,7 +235,10 @@ function workspaceUiCapability(page, task) {
           {status:found.length===1?'observed':found.length?'ambiguous':'unobserved',enabled:found.length===1?enabled(found[0]):null}];}))};
     }
     if (discoverRoots) {
-      const regions=regionElements.filter(element=>visible(element) && !sensitive(element) && scopeOf(element)!=='inactive_workflow');
+      const regions=regionElements.filter(element=>visible(element) && !sensitive(element) && scopeOf(element)!=='inactive_workflow')
+        // Deliver the current wizard root before its tables, so a changing form
+        // can be read narrowly without paging through those tables first.
+        .sort((a,b)=>Number(getTid(b)===workflow?.prefix+';WizrdMCF')-Number(getTid(a)===workflow?.prefix+';WizrdMCF'));
       const elements=regions.slice(0,240).map(element=>({ref:refOf(element),tid:getTid(element),identity:identityOf(element),
         kind:'region',label:textOf(element),scope:scopeOf(element),visible:true,enabled:enabled(element),allowed_actions:[],
         signature:{tag:element.tagName.toLowerCase()},bounding_box:boxOf(element)}));
