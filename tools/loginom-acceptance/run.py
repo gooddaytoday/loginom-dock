@@ -129,6 +129,7 @@ def execute(args):
             "fault_injection": False if fault == "none" else fault,
             "require_knowledge_recovery": getattr(args, "require_knowledge_recovery", False),
             "allow_manual_reopen": getattr(args,"allow_manual_reopen",False),
+            "require_verification": getattr(args, "require_verification", False),
             "require_delivered_context": getattr(args, "require_delivered_context", False),
             "budget": {"timeout_seconds": args.timeout, "max_turns": args.max_turns},
             "series": {"planned_attempts": 1, "variant": fault, "pass_criteria": "audit.py declared variant contract"},
@@ -242,6 +243,7 @@ def main():
                         help="Only variants with a supported independent auditor may run")
     parser.add_argument("--require-knowledge-recovery", action="store_true",
                         help="Require observed failure, scoped retrieval and reads of E2E and Help before continuation")
+    parser.add_argument("--require-verification", action="store_true")
     parser.add_argument("--require-delivered-context", action="store_true",
                         help="Require automatic E2E/Help delivery bound to a failure and journal before successful continuation")
     parser.add_argument("--goal", choices=["basic-graph", "auto-link-retain", "auto-link-remove"], default="basic-graph")

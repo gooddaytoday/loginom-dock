@@ -116,6 +116,38 @@ def knowledge_recovery_proof(evidence, pairs, check):
         and pairs[t["session_id"], t["tool_call_id"]]["row"] > last_read for t in tools))
 
 
+def verification_proof(evidence, check):
+    rows=[t for t in evidence['tools'] if isinstance(t.get('result'),dict)
+          and t['result'].get('action_key') and t['result'].get('status')
+          and not t['result'].get('request_rejected')]
+    valid=bool(rows)
+    for row in rows:
+        out=row['result']; proofs=row.get('verifications',[])
+        if len(proofs)!=1:
+            valid=False; continue
+        proof=proofs[0]; events=[e.get('event') for e in out.get('trace',[])]
+        valid=valid and proof.get('kind')=='dock_outcome_verification' and proof.get('schema_version')==1
+        valid=valid and proof.get('operation_id')==out.get('operation_id') and proof.get('action_key')==out.get('action_key')
+        valid=valid and bool(re.fullmatch(r'[a-f0-9]{64}',proof.get('receipt_sha256','')))
+        valid=valid and any(e.get('phase')=='verification_delivered' and e.get('operation_id')==out.get('operation_id')
+                           and e.get('verification')==proof for e in evidence['events'])
+        valid=valid and proof.get('goal')=={'state':'not_verified','obligations':[]}
+        valid=valid and proof.get('settings')=={'state':'not_checked'} and proof.get('data')=={'state':'not_checked'}
+        expected_kind={'node.add':'create','link.create':'create','package.save_as':'save'}.get(out['action_key'])
+        state='unverified'
+        if expected_kind and out.get('cleanup_complete') is True:
+            if out['status']=='NOT_APPLIED':state='not_applied'
+            elif out['status']=='SUCCEEDED' and 'postcondition_verified' in events:
+                if expected_kind!='save' or (out['output'].get('reopened') is True and 'reopened_package_observed' in events):state='verified'
+        valid=valid and proof.get('domain_effect')=={'state':state,'kind':expected_kind}
+        valid=valid and proof.get('gesture')=={'state':'performed' if 'ui_gesture_applied' in events else 'not_proven'}
+        ui=out.get('output',{}).get('ui'); truncated=bool(ui and any(v is True for v in ui.get('truncated',{}).values()))
+        valid=valid and proof.get('observation')=={'state':'bounded' if ui else 'not_provided',
+            'completeness':'truncated' if truncated else 'not_proven',
+            'limitations':['visible_DOM_only','no_dataset_revision','no_full_graph_proof'] if ui else []}
+    check('verification_claims_delivered_and_journal_bound',valid)
+
+
 def delivered_context_proof(evidence, pairs, check):
     bundles=[]
     for t in evidence['tools']:
@@ -552,6 +584,8 @@ def audit(request, evidence, prompt):
         if request.get("native_skill"):
             check("pinned_native_skill_unchanged", evidence.get("native_skill_unchanged") is True
                   and request["native_skill"]["sha256"] == request["runtime_source_pin"]["inputs"].get(request["native_skill"]["source"]))
+        if request.get("require_verification"):
+            verification_proof(evidence, check)
         if request.get("require_delivered_context"):
             delivered_context_proof(evidence, pairs, check)
         if request.get("require_knowledge_recovery"):

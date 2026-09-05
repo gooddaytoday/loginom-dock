@@ -61,3 +61,28 @@ goal obligations ещё требуется для завершения P1.
 у recover исходный ID — `operation_id`, у UI repair — `recovery_operation_id`.
 Это подсказки, а не разрешение обходить runtime guard. Неизвестная receipt
 оставляет только observe/inspect; cleanup failure требует restore_control.
+
+
+## Раздельный блок проверки v1
+
+Клиент возвращает второй JSON-блок `dock_outcome_verification`, связанный с
+operation/action и SHA исходной квитанции. Оболочка проверяется до классификации;
+предметный успех требует совпадающего локального handler, output schema,
+подтверждённого cleanup и postcondition trace. Save дополнительно требует
+reopened=true и наблюдения открытого пакета. Исходная квитанция не меняется.
+Блок фиксируется в execution journal перед возвратом; отказ записи не стирает
+уже завершённую операцию, а возвращает явную недоступность блока.
+
+Поля gesture/domain_effect/observation/settings/data/goal разделены. UI gesture
+не повышается до domain effect; нынешний DOM readout всегда bounded, даже если
+все известные truncation flags false. Settings/data пока not_checked, а goal
+not_verified с пустыми obligations: в текущих трёх actions нет проверки этих
+обязательств. Будущие handlers должны добавлять проверяемые evidence contracts,
+а не просто менять эти строки. Валидатор блока повторно вычисляет все claims
+по bound receipt и отклоняет произвольное повышение.
+
+Приёмка с `--require-verification` независимо проверяет доставку, поля и
+соответствующую запись журнала. Digest блока сохраняется и сверяется с журналом;
+аудитор этой проверки не переинтерпретирует JSON-number serialization для
+повторного вычисления SHA. Unit contract проверяет повторное связывание digest.
+Это доказательство заявленных границ действия, не аудит всех данных сценария.

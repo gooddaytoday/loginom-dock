@@ -48,14 +48,14 @@ def unwrap(value, depth=0):
     if isinstance(value,dict) and value.get('type')=='text' and 'text' in value:return unwrap(value['text'],depth+1)
     return value
 
-def recovery_contexts(value, depth=0):
+def transport_documents(value, kind, depth=0):
     if depth > 16:
         return []
     if isinstance(value, str):
         if value.startswith('<untrusted_tool_result'):
             start=value.find('\n\n'); end=value.rfind('\n</untrusted_tool_result>')
             if start>=0 and end>start:
-                return recovery_contexts(value[start+2:end],depth+1)
+                return transport_documents(value[start+2:end],kind,depth+1)
         try:
             decoded=json.loads(value)
         except ValueError:
@@ -63,17 +63,21 @@ def recovery_contexts(value, depth=0):
             for line in value.splitlines():
                 try: decoded=json.loads(line)
                 except ValueError: continue
-                found.extend(recovery_contexts(decoded,depth+1))
+                found.extend(transport_documents(decoded,kind,depth+1))
             return found
-        return recovery_contexts(decoded,depth+1)
+        return transport_documents(decoded,kind,depth+1)
     if isinstance(value,list):
-        return [context for part in value for context in recovery_contexts(part,depth+1)]
+        return [context for part in value for context in transport_documents(part,kind,depth+1)]
     if isinstance(value,dict):
-        if value.get('kind') == 'dock_recovery_context':
+        if value.get('kind') == kind:
             return [value]
         return [context for key in ('result','Ok','content','text') if key in value
-                for context in recovery_contexts(value[key],depth+1)]
+                for context in transport_documents(value[key],kind,depth+1)]
     return []
+
+
+def recovery_contexts(value, depth=0):
+    return transport_documents(value, 'dock_recovery_context', depth)
 
 
 def export_history(home, secrets):
@@ -152,7 +156,8 @@ def export_history(home, secrets):
             record={'row':row,'session_id':session,'tool_call_id':identifier,'provider_tool_call_id':raw_id,'tool':name,
                     **({'transport_tool':transport} if transport!=name else {}),'result':unwrap(content),
                     **({'pairing_error':'missing_or_ambiguous_call'} if not call else {}),
-                    **({'recovery_contexts':recovery_contexts(content)} if name in LOCAL_TOOLS else {})}
+                    **({'recovery_contexts':recovery_contexts(content),
+                        'verifications':transport_documents(content,'dock_outcome_verification')} if name in LOCAL_TOOLS else {})}
             tools.append(record)
             originals.append({'row':row,'session':session,'identifier':identifier,'content':content,'timestamp':stamp,'active':is_active,'record':record})
         return clean(calls,secrets),clean(tools,secrets)

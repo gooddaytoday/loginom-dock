@@ -15,6 +15,7 @@ import { createActionRuntime, parseCapabilityResult } from './executor.mjs';
 import { makeWorkspacePrepareCode, parseWorkspacePreparation, prepareWorkspaceSession, requirePreparedWorkspace, workspaceObserveTool } from './workspace.mjs';
 import { createExecutionJournal } from './execution-journal.mjs';
 import { createRecoveryContext } from './recovery-context.mjs';
+import { outcomeVerification } from './outcome-verification.mjs';
 
 // Keep the runtime receipt byte-for-byte meaningful to reconciliation/journal
 // consumers; recovery advice is a separate MCP content block, never an effect.
@@ -168,6 +169,13 @@ export async function createBridge(config, session) {
                     { observationId: args.observation_id, operationId: args.operation_id, recoveryOperationId: args.recovery_operation_id, signal: extra.signal })
                     : await actionRuntime.run(args.action_key, args.parameters, { signal: extra.signal, operationId: args.operation_id });
             const reply = actionReply(outcome);
+            try {
+              const verification = outcomeVerification(outcome, pinnedActions.actions.get(outcome.action_key));
+              await recordExecution({ phase: 'verification_delivered', operation_id: outcome.operation_id, verification });
+              reply.content.push({ type: 'text', text: JSON.stringify(verification) });
+            } catch {
+              reply.content.push({ type: 'text', text: 'Verification explanation unavailable; retain the original operation receipt. This does not establish goal completion.' });
+            }
             try {
               const context = await recoveryContext(outcome);
               if (context) {

@@ -90,7 +90,12 @@ test('MCP application refusals remain typed normal content and the same connecti
     const succeeded = await client.callTool({ name: 'dock_action_run', arguments: { action_key: 'node.add', parameters: nodeParameters, operation_id: 'after-three-refusals' } });
     assert.notEqual(succeeded.isError, true);
     assert.equal(JSON.parse(succeeded.content[0].text).status, 'SUCCEEDED');
-    assert.equal(succeeded.content.length, 1);
+    assert.equal(succeeded.content.length, 2);
+    const verification = JSON.parse(succeeded.content[1].text);
+    assert.equal(verification.kind, 'dock_outcome_verification');
+    assert.equal(verification.operation_id, 'after-three-refusals');
+    assert.equal(verification.domain_effect.state, 'verified');
+    assert.equal(verification.goal.state, 'not_verified');
     assert.equal(page.drops, 1);
     assert.deepEqual(page.nodes.map(node => node.label), ['Источник']);
   } finally {
