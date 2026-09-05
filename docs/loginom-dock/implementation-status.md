@@ -1,5 +1,27 @@
 # Выполнение плана Loginom Dock
 
+## P2: desired checked state — 5 сентября 2026
+
+ui.act поддерживает set_checked с boolean checked и observed ref. Observer
+читает native checkbox/radio, ARIA checked/mixed и Loginom Ext DisplayEl/InputEl:
+точный parent tid, x-form-cb-checked и проверку доступности. Источники: pinned
+E2E bg/helpers/wizard.ts:425–455, 506–531 и bg/consts/app_consts.ts:245;
+состояние Loginom не определяется по input.value.
+
+При уже достигнутом значении клика нет: effect_possible=false,
+gesture_applied=false и ui_state_already_satisfied. Иначе один реальный click,
+новое readUi и проверка состояния/identity. Неподтверждённый результат остаётся
+AMBIGUOUS с UI_STATE_NOT_CONFIRMED; автоматического повторного toggle нет.
+Radio разрешает только checked=true, выбор другой опции делается её ref.
+ui_state_verified — readback одного переключателя, не готовность мастера,
+сохранённых настроек, данных или всей пользовательской цели.
+
+167 client tests прошли (idempotent no-op, failure without retry, точный Ext
+owner и radio restriction), 75 Python acceptance tests. **Live мастер с этим
+verb ещё не принят.** Далее нужно принять set_checked на реальном мастере,
+добавить остальные widgets и продолжить root/filter/epoch/P3 с данными.
+Active Hermes нет. Старые palette PASS относятся к прежнему runtime.
+
 ## P2 vertical scroll: frozen PASS — 5 сентября 2026
 
 Run `20260905-161157-1fb1e122` — **27/27 frozen PASS**, audit SHA

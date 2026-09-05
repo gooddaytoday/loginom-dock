@@ -527,3 +527,41 @@ test('observation distinguishes rendered offscreen and covered targets from reac
   assert.equal(state('Hit;btnOffscreen'),'outside_viewport');
   assert.equal(state('Hit;btnCovered'),'point_not_observed');
 });
+
+test('set_checked reads back native state and does not toggle an already satisfied request',async()=>{
+  const page=new Page();page.waitForTimeout=async()=>{};
+  const input=page.add('input','Wizard;Flag');input.attrs.type='checkbox';input.checked=false;
+  const click=page.mouse.click;page.mouse.click=async(...args)=>{await click(...args);input.checked=!input.checked;};
+  const before=await page.observe(),ref=before.ui.elements.find(e=>e.tid==='Wizard;Flag').ref;
+  const first=await page.act({verb:'set_checked',ref,checked:true},before);
+  assert.equal(first.status,'SUCCEEDED');assert.equal(input.checked,true);
+  assert.ok(first.trace.some(t=>t.event==='ui_state_verified' && t.checked===true));
+  const count=page.events.length;
+  const again=await page.act({verb:'set_checked',ref,checked:true},first.output);
+  assert.equal(again.status,'SUCCEEDED');assert.equal(again.effect_possible,false);
+  assert.equal(again.output.gesture_applied,false);assert.equal(page.events.length,count);
+  assert.ok(!again.trace.some(t=>t.event==='ui_gesture_applied'));
+  assert.throws(()=>validateUiAction({verb:'set_checked',ref,checked:'true'}),/boolean/);
+});
+
+test('unconfirmed checkbox change stays ambiguous instead of blindly retrying a toggle',async()=>{
+  const page=new Page();page.waitForTimeout=async()=>{};
+  const input=page.add('input','Wizard;Flag');input.attrs.type='checkbox';input.checked=false;
+  const s=await page.observe(),ref=s.ui.elements.find(e=>e.tid==='Wizard;Flag').ref;
+  const r=await page.act({verb:'set_checked',ref,checked:true},s);
+  assert.equal(r.status,'AMBIGUOUS');assert.equal(r.error.code,'UI_STATE_NOT_CONFIRMED');
+  assert.equal(page.events.filter(e=>e==='click').length,1);
+});
+
+test('Loginom Ext DisplayEl state is read from its exact checked owner and radio cannot be unchecked',async()=>{
+  const page=new Page();page.waitForTimeout=async()=>{};
+  const owner=page.add('div','Wizard;Option','',{x:20,y:90,width:150,height:50});
+  const display=page.add('span','Wizard;Option;DisplayEl','',{x:30,y:100,width:20,height:20},owner);
+  display.attrs.class='x-form-radio';display.classList.contains=name=>display.attrs.class.split(' ').includes(name);
+  owner.classList.contains=name=>(owner.attrs.class??'').split(' ').includes(name);
+  const click=page.mouse.click;page.mouse.click=async(...args)=>{await click(...args);owner.attrs.class='x-form-cb-checked';};
+  const s=await page.observe(),target=s.ui.elements.find(e=>e.tid==='Wizard;Option;DisplayEl');
+  assert.equal(target.check_state.source,'loginom_ext');assert.equal(target.check_state.checked,false);
+  assert.throws(()=>validateUiAction({verb:'set_checked',ref:target.ref,checked:false},s),/radio/);
+  assert.equal((await page.act({verb:'set_checked',ref:target.ref,checked:true},s)).status,'SUCCEEDED');
+});

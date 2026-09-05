@@ -1,5 +1,11 @@
 # Следующему агенту: с чего начать
 
+**Последняя реализация:** set_checked для native/ARIA/Loginom Ext, desired
+boolean, без повторного toggle при уже достигнутом значении, readback/ambiguity.
+167 client / 75 Python. Live мастера с новым verb ещё нет; active Hermes нет.
+Далее принять checkbox/radio на реальном мастере, остальные widgets/root/filter/
+epoch и P3 с данными. Подробные semantics/источники — верх implementation-status.
+
 **Последняя приёмка:** `20260905-161157-1fb1e122` — 27/27 frozen PASS,
 runtime `1f654a57…`, 45 inputs, 164 client / 75 Python / 10 packaging.
 Bootstrap/palette/vertical scroll 0→800→0 и пустой граф приняты. Active Hermes нет.

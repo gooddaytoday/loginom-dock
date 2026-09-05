@@ -1335,7 +1335,10 @@ bridge и session/build input lists. Новые driver modules сначала п
   при повторном использовании того же DOM элемента ещё не закрыты.
 - [ ] По реальным мастерам добавить выбор option, checkbox/radio по желаемому
   состоянию, context menu/right click, hover при необходимости и ввод больших
-  значений в конкретные поддержанные поля. Все gestures используют увиденные
+  значений в конкретные поддержанные поля. set_checked реализован для
+  native/ARIA/Loginom Ext с readback и no-op,
+  167 client tests; live мастер и остальные виды управления ещё предстоят.
+  Все gestures используют увиденные
   refs и bounded budgets; raw CSS/XPath/JS и произвольные viewport-координаты
   generic UI от модели не появляются. Логический `target_position` доменного
   node.add/move допустим при проверенном преобразовании в геометрию Loginom.

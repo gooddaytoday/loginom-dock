@@ -3,7 +3,8 @@
 export const uiActionSchema = {
   type: 'object', additionalProperties: false, required: ['verb'],
   properties: {
-    verb: { type: 'string', enum: ['click', 'double_click', 'fill', 'press', 'drag', 'scroll'] },
+    verb: { type: 'string', enum: ['click', 'double_click', 'fill', 'press', 'drag', 'scroll', 'set_checked'] },
+    checked: { type: 'boolean' },
     delta_y: { type: 'integer', minimum: -1000, maximum: 1000 },
     ref: { type: 'string', maxLength: 128 }, text: { type: 'string', maxLength: 2048 },
     key: { type: 'string', enum: ['Enter', 'Escape', 'Tab', 'Shift+Tab', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Home', 'End', 'PageUp', 'PageDown', 'Backspace', 'Delete', 'Space', 'F2'] },
@@ -14,7 +15,7 @@ export const uiActionSchema = {
 export function validateUiAction(action, snapshot) {
   if (!action || typeof action !== 'object' || Array.isArray(action) || !uiActionSchema.properties.verb.enum.includes(action.verb)) throw new Error('Unsupported observed UI action');
   const fields = action.verb === 'drag' ? ['verb', 'source_ref', 'target_ref']
-    : action.verb === 'fill' ? ['verb', 'ref', 'text'] : action.verb === 'press' ? ['verb', 'ref', 'key'] : action.verb === 'scroll' ? ['verb', 'ref', 'delta_y'] : ['verb', 'ref'];
+    : action.verb === 'fill' ? ['verb', 'ref', 'text'] : action.verb === 'press' ? ['verb', 'ref', 'key'] : action.verb === 'scroll' ? ['verb', 'ref', 'delta_y'] : action.verb === 'set_checked' ? ['verb','ref','checked'] : ['verb', 'ref'];
   if (Object.keys(action).some(key => !fields.includes(key)) || fields.some(key => !(key in action))) throw new Error('UI action fields do not match its verb');
   const refs = action.verb === 'drag' ? [action.source_ref, action.target_ref] : [action.ref];
   if (refs.some(ref => typeof ref !== 'string' || !/^ui-[a-zA-Z0-9-]{1,124}$/.test(ref))) throw new Error('UI action requires opaque observed references');
@@ -22,11 +23,13 @@ export function validateUiAction(action, snapshot) {
   if (action.verb === 'fill' && (typeof action.text !== 'string' || action.text.length > 2048 || /\0/.test(action.text))) throw new Error('UI text must be at most 2048 characters without NUL');
   if (action.verb === 'press' && !uiActionSchema.properties.key.enum.includes(action.key)) throw new Error('Unsupported UI key; clipboard and navigation shortcuts are not allowed');
   if (action.verb === 'scroll' && (!Number.isInteger(action.delta_y) || !action.delta_y || Math.abs(action.delta_y)>1000)) throw new Error('Scroll requires a nonzero integer delta_y within -1000..1000');
+  if (action.verb === 'set_checked' && typeof action.checked !== 'boolean') throw new Error('set_checked requires a boolean checked value');
   if (snapshot) {
     if (!Array.isArray(snapshot.ui?.elements)) throw new Error('UI action requires an observation snapshot');
     for (const ref of refs) {
       const elements = snapshot.ui.elements.filter(element => element.ref === ref);
       if (elements.length !== 1 || !elements[0].allowed_actions?.includes(action.verb)) throw new Error('UI reference is absent, ambiguous, or does not support this action');
+      if (action.verb==='set_checked' && elements[0].check_state?.kind==='radio' && !action.checked) throw new Error('Select the desired radio option; a radio cannot be independently unchecked');
     }
   }
   return action;
@@ -162,11 +165,29 @@ function workspaceUiCapability(page, task) {
       // Pinned E2E bg/selectors.ts:272,279,286: palette tree labels and
       // expanders are spans without button/treeitem roles in some UI builds.
       || /;ModelForm;colVendors_Компоненты>[^;]+;(?:TreeText|TreeExpander)$/.test(getTid(element) ?? '')
+      || /;(?:Display|Input)El$/.test(getTid(element) ?? '') && element.matches('.x-form-checkbox,.x-form-radio')
       // Loginom message-box buttons are anchors without an ARIA button role;
       // their pinned test identifiers end with tlb;yes / tlb;no, not btn*.
       || ((getTid(element) ?? '').startsWith('msgbox') && /;tlb;(?:yes|no|ok|cancel)$/.test(getTid(element)) && !!dialogRef(element));
     const priority = { graph_editor: 0, dialog: 1, graph: 2, workflow: 3, global: 4 };
     const controls = candidates.filter(interesting).sort((left, right) => priority[scopeOf(left)] - priority[scopeOf(right)]);
+    const checkStateOf = element => {
+      const type=element.getAttribute('type'),role=element.getAttribute('role');
+      if (element.tagName.toLowerCase()==='input' && ['checkbox','radio'].includes(type)) {
+        return {kind:type,checked:element.checked===true,indeterminate:element.indeterminate===true,source:'native'};
+      }
+      // E2E wizard.ts:425-455 and app_consts.ts:245: exact owner tid and
+      // x-form-cb-checked are Loginom's Ext checkbox state, not input.value.
+      const tid=getTid(element),ownerTid=tid?.replace(/;(?:Display|Input)El$/,'');
+      if (ownerTid!==tid && element.matches('.x-form-checkbox,.x-form-radio')) {
+        const owners=tids.get(ownerTid)??[];
+        if (owners.length===1 && owners[0].contains(element)) return {kind:element.matches('.x-form-radio')?'radio':'checkbox',
+          checked:owners[0].classList.contains('x-form-cb-checked'),indeterminate:false,source:'loginom_ext',owner_ref:refOf(owners[0])};
+      }
+      const value=element.getAttribute('aria-checked');
+      if (['checkbox','radio'].includes(role) && ['true','false','mixed'].includes(value)) return {kind:role,checked:value==='mixed'?null:value==='true',indeterminate:value==='mixed',source:'aria'};
+      return null;
+    };
     const scrollOf = element => {
       for (let parent=element; parent && parent!==document.body; parent=parent.parentElement) {
         charge();
@@ -197,12 +218,14 @@ function workspaceUiCapability(page, task) {
       const isEnabled = enabled(element), allowed = identity && isEnabled && !dangerous(element);
       const scroll = scrollOf(element);
       const interaction = interactionOf(element);
+      const checkState=checkStateOf(element);
       const value = editable && !sensitive(element) ? String(element.value ?? (element.isContentEditable ? element.textContent : '') ?? '').slice(0, 2048) : undefined;
       return { ref: refOf(element), tid, identity, kind, role, label, scope: scopeOf(element), ...(value === undefined ? {} : { value }),
         ...(scroll ? { scroll } : {}),
-        signature: { tag, tid, role, type: element.getAttribute('type'), name: element.getAttribute('name'), label, ...(value === undefined ? {} : { value }), dialog_ref: dialogRef(element), scroll },
+        ...(checkState ? {check_state:checkState} : {}),
+        signature: { tag, tid, role, type: element.getAttribute('type'), name: element.getAttribute('name'), label, ...(value === undefined ? {} : { value }), dialog_ref: dialogRef(element), scroll, check_state:checkState },
         enabled: isEnabled, visible: true, interaction, bounding_box: boxOf(element),
-        allowed_actions: allowed ? ['click', 'double_click', 'press', 'drag', ...(editable ? ['fill'] : []), ...(scroll && interaction.state === 'point_observed' ? ['scroll'] : [])] : [] };
+        allowed_actions: allowed ? ['click', 'double_click', 'press', 'drag', ...(editable ? ['fill'] : []), ...(checkState ? ['set_checked'] : []), ...(scroll && interaction.state === 'point_observed' ? ['scroll'] : [])] : [] };
     });
     const graphPrefix = workflow ? workflow.prefix + ';Graph;' : null;
     const graphElements = graphPrefix ? all.filter(element => (getTid(element) ?? '').startsWith(graphPrefix)) : [];
@@ -381,6 +404,12 @@ function workspaceUiCapability(page, task) {
         if (task.action.verb === 'click') await clickTarget(1);
         else if (task.action.verb === 'double_click') await clickTarget(2);
         else if (task.action.verb === 'press') await first.press(task.action.key, { timeout: timeout() });
+        else if (task.action.verb === 'set_checked') {
+          const before=current.ui.elements.find(item=>item.ref===task.action.ref).check_state;
+          if (before.checked===task.action.checked && !before.indeterminate) {
+            effectPossible=false;record('ui_state_already_satisfied',{verb:task.action.verb,checked:task.action.checked});
+          } else { await clickTarget(1); await page.waitForTimeout(50); }
+        }
         else if (task.action.verb === 'scroll') {
           const expected=current.ui.elements.find(item=>item.ref===task.action.ref).scroll;
           const moved=await first.evaluate((element,{expected,delta})=>{
@@ -417,11 +446,17 @@ function workspaceUiCapability(page, task) {
           await page.mouse.up(); mouseHeld = false;
           record('cleanup_completed', { resource: 'mouse' });
         } else fail('UI_ACTION_INVALID', 'Unsupported UI gesture');
-        record('ui_gesture_applied', { verb: task.action.verb });
+        if (effectPossible) record('ui_gesture_applied', { verb: task.action.verb });
         phase = 'observing'; timeout();
         const observed = await readUi();
+        if (task.action.verb==='set_checked') {
+          const before=current.ui.elements.find(item=>item.ref===task.action.ref);
+          const matches=observed.ui.elements.filter(item=>same(item.identity,before.identity) && item.tid===before.tid && item.label===before.label && item.check_state?.kind===before.check_state.kind);
+          if (matches.length!==1 || matches[0].check_state.checked!==task.action.checked || matches[0].check_state.indeterminate) fail('UI_STATE_NOT_CONFIRMED','The requested checked state was not confirmed; inspect before any retry');
+          record('ui_state_verified',{verb:task.action.verb,ref:matches[0].ref,checked:task.action.checked});
+        }
         phase = 'completed';
-        outcome = result('SUCCEEDED', { ...observed, gesture_applied: true, verification_required: true });
+        outcome = result('SUCCEEDED', { ...observed, gesture_applied: effectPossible, verification_required: true });
       }
     } catch (error) {
       record('ui_action_failed', { code: error?.code ?? 'UI_BROWSER_CALL_FAILED' });
