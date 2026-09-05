@@ -1005,3 +1005,94 @@ test('calculator rendering caps line count and excludes hidden lines',async()=>{
   assert.equal(result.rendered_lines.length,32);assert.equal(result.rendered_lines[0],'0');
   assert.equal(result.rendered_lines[31],'31');assert.equal(result.rendering_truncated,true);
 });
+
+function calculatorDocument(page,text='original') {
+  const base='MF;TF-1;WizrdMCF;CalcDataWizard;';
+  const button=page.add('button',base+'btnCalcMode');
+  const icon=page.add('span',null,'',undefined,button);icon.attrs.class='bg-TBGCalcMode-cmExpression';
+  const row=page.add('table',null);row.attrs.class='x-grid-item-selected';
+  const field=page.add('td',base+'colExpressionName_Amount','Amount',undefined,row);
+  const editor=page.add('div',base+'cmpExpression');
+  const wrapper=page.add('div',null,'',undefined,editor);wrapper.attrs.class='CodeMirror';
+  const input=page.add('textarea',null,'',undefined,wrapper);
+  const state={text,readOnly:false};
+  const doc={firstLine:()=>0,lastLine:()=>state.text.split('\n').length-1,
+    lineCount:()=>state.text.split('\n').length,getLine:i=>state.text.split('\n')[i]};
+  wrapper.CodeMirror={getDoc:()=>doc,getInputField:()=>input,getWrapperElement:()=>wrapper,getOption:()=>state.readOnly};
+  return {base,editor,wrapper,input,icon,row,field,state,doc};
+}
+
+test('Calculator document read distinguishes empty, multiline and offscreen text from rendering',async()=>{
+  const page=new Page(),c=calculatorDocument(page,'first\n\n last ');
+  page.add('pre',null,'visible prefix',undefined,c.wrapper);
+  const read=async()=>(await page.observe()).ui.elements.find(e=>e.tid===c.base+'cmpExpression');
+  let record=await read();assert.equal(record.calculator_editor.document.text,'first\n\n last ');
+  assert.equal(record.calculator_editor.document.full_text_verified,true);
+  assert.equal(record.calculator_editor.selected_expression.tid,c.field.getAttribute('data-tid'));
+  assert.deepEqual(record.allowed_actions,['replace_expression']);
+  c.state.text='';record=await read();assert.equal(record.calculator_editor.document.text,'');
+  assert.equal(record.calculator_editor.document.full_text_verified,true);
+  c.state.text='x'.repeat(2049);record=await read();assert.deepEqual(record.allowed_actions,[]);
+  assert.equal(record.calculator_editor.document.full_text_verified,false);
+});
+
+test('Calculator replacement requires selected field, expression mode and writable owned document',async()=>{
+  const page=new Page(),c=calculatorDocument(page);
+  const read=async()=>(await page.observe()).ui.elements.find(e=>e.tid===c.base+'cmpExpression');
+  c.row.attrs.class='';assert.deepEqual((await read()).allowed_actions,[]);
+  c.row.attrs.class='x-grid-item-selected';c.state.readOnly=true;assert.deepEqual((await read()).allowed_actions,[]);
+  c.state.readOnly=false;c.icon.attrs.class='bg-TBGCalcMode-cmJavaScript';assert.deepEqual((await read()).allowed_actions,[]);
+  c.icon.attrs.class='bg-TBGCalcMode-cmExpression';c.wrapper.CodeMirror.getWrapperElement=()=>c.editor;
+  assert.deepEqual((await read()).allowed_actions,[]);
+  assert.throws(()=>validateUiAction({verb:'replace_expression',ref:'ui-1',text:'a\rb'}),/LF/);
+});
+
+function calculatorKeyboard(page,c,{corrupt=false,loseFocus=false}={}) {
+  page.keyboard.press=async key=>{
+    page.events.push(key);
+    if(key==='ControlOrMeta+A')page.selectedAll=true;
+    if(key==='Backspace' && page.selectedAll){c.state.text='';page.selectedAll=false;}
+    if(loseFocus && key==='ControlOrMeta+A')page.document.activeElement=page.document.body;
+  };
+  page.keyboard.type=async text=>{page.events.push('keyboard_type');c.state.text+=corrupt?'wrong':text;};
+}
+
+test('typed Calculator replacement confirms exact multiline and empty document via keyboard',async()=>{
+  for(const text of ['Quantity * UnitPrice','a\n\n b','']) {
+    const page=new Page(),c=calculatorDocument(page);calculatorKeyboard(page,c);
+    const snapshot=await page.observe(),record=snapshot.ui.elements.find(e=>e.tid===c.base+'cmpExpression');
+    const result=await page.act({verb:'replace_expression',ref:record.ref,text},snapshot);
+    assert.equal(result.status,'SUCCEEDED',JSON.stringify(result.error));assert.equal(c.state.text,text);
+    assert.ok(result.trace.some(e=>e.event==='expression_text_verified' && e.settings_applied===false));
+    assert.equal(result.output.verification_required,true);
+  }
+});
+
+test('typed Calculator replacement refuses changed original document before keyboard input',async()=>{
+  const page=new Page(),c=calculatorDocument(page);calculatorKeyboard(page,c);
+  const snapshot=await page.observe(),record=snapshot.ui.elements.find(e=>e.tid===c.base+'cmpExpression');
+  c.state.text='changed without DOM mutation';
+  const result=await page.act({verb:'replace_expression',ref:record.ref,text:'new'},snapshot);
+  assert.equal(result.status,'NOT_APPLIED');assert.equal(page.events.length,0);
+});
+
+test('typed Calculator replacement preserves uncertainty on focus loss or mismatching readback',async()=>{
+  for(const options of [{loseFocus:true},{corrupt:true}]) {
+    const page=new Page(),c=calculatorDocument(page);calculatorKeyboard(page,c,options);
+    const snapshot=await page.observe(),record=snapshot.ui.elements.find(e=>e.tid===c.base+'cmpExpression');
+    const result=await page.act({verb:'replace_expression',ref:record.ref,text:'new'},snapshot);
+    assert.equal(result.status,'AMBIGUOUS');
+    assert.equal(result.error.code,options.loseFocus?'EXPRESSION_FOCUS_CHANGED':'EXPRESSION_TEXT_NOT_CONFIRMED');
+    if(options.loseFocus)assert.equal(c.state.text,'original');
+    assert.ok(!result.trace.some(e=>e.event==='expression_text_verified'));
+  }
+});
+
+test('Calculator field switch during focus acquisition prevents clearing either expression',async()=>{
+  const page=new Page(),c=calculatorDocument(page);calculatorKeyboard(page,c);
+  const snapshot=await page.observe(),record=snapshot.ui.elements.find(e=>e.tid===c.base+'cmpExpression');
+  const click=page.mouse.click;page.mouse.click=async(...args)=>{await click(...args);c.row.attrs.class='';};
+  const result=await page.act({verb:'replace_expression',ref:record.ref,text:'new'},snapshot);
+  assert.equal(result.status,'AMBIGUOUS');assert.equal(c.state.text,'original');
+  assert.ok(!page.events.includes('Backspace'));
+});

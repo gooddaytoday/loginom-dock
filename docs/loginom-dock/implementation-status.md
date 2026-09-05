@@ -1,3 +1,32 @@
+## 2026-09-06 — P3: typed замена выражения с чтением документа
+
+Добавлен replace_expression в существующий dock_ui_action/receipt/pending,
+без отдельного журнала. Он доступен только exact Calculator cmpExpression,
+при единственном выбранном поле (E2E colExpressionName + x-grid-item-selected),
+режиме expression и writable CodeMirror document. Read-only public методы
+getDoc/getInputField/getWrapperElement, firstLine/lastLine/lineCount/getLine
+читают полный LF-текст независимо от viewport: максимум 128 строк/2048 UTF-16.
+Поддокумент, неподдержанные методы/размер, readOnly и неоднозначность не дают
+права на замену. rendered_lines остаются fallback, не full-text proof.
+
+Ввод — native click/keyboard select-all/backspace/type; setter API редактора
+не используется. Перед clearing и вводом проверяются выбранное поле, mode,
+identity документа/input/wrapper, текст и фокус. После — точное чтение текста
+того же документа. Потеря фокуса/получение другого текста сохраняет AMBIGUOUS.
+expression_text_verified НЕ означает проверенный синтаксис или applied/saved
+settings: syntax_validity=unverified, settings_applied=false. Эти gates открыты.
+Подсказки observe/action и полный diagnostic goal обновлены.
+
+Источники: E2E calculator_helpers.ts, sCalculator.ts, app_consts.ts; публичный
+[CodeMirror 5 API](https://raw.githubusercontent.com/codemirror/codemirror5/master/doc/manual.html).
+Наличие API и правильный keyboard input в текущем Loginom ещё требуют live
+проверки; локальный DOM double этого не доказывает. 240 full client /106 Python /
+10 packaging PASS, затем дополнительный race-test: 61 targeted workspace-ui PASS.
+Отчёты .dock/post-mvp-p0/expression-contract-*-tests.txt. Runtime inputs остаются 46.
+Далее новый полный data-pipeline run на Hermes ChatGPT/Luna/medium, test,/test,
+после него исправлять фактическую границу. Все семь domain gates остаются открыты;
+execution/full typed results/saved reopen и P4–P9 не заменены этим контрактом.
+
 ## 2026-09-06 — P3: наблюдаемый контекст редактора Калькулятора
 
 В workspace-ui добавлен calculator_editor у exact cmpExpression текущего

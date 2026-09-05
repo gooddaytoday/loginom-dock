@@ -3,7 +3,7 @@
 export const uiActionSchema = {
   type: 'object', additionalProperties: false, required: ['verb'],
   properties: {
-    verb: { type: 'string', enum: ['click', 'double_click', 'right_click', 'fill', 'press', 'drag', 'scroll', 'set_checked'] },
+    verb: { type: 'string', enum: ['click', 'double_click', 'right_click', 'fill', 'press', 'drag', 'scroll', 'set_checked', 'replace_expression'] },
     checked: { type: 'boolean' },
     delta_y: { type: 'integer', minimum: -1000, maximum: 1000 },
     ref: { type: 'string', maxLength: 128 }, text: { type: 'string', maxLength: 2048 },
@@ -15,12 +15,13 @@ export const uiActionSchema = {
 export function validateUiAction(action, snapshot) {
   if (!action || typeof action !== 'object' || Array.isArray(action) || !uiActionSchema.properties.verb.enum.includes(action.verb)) throw new Error('Unsupported observed UI action');
   const fields = action.verb === 'drag' ? ['verb', 'source_ref', 'target_ref']
-    : action.verb === 'fill' ? ['verb', 'ref', 'text'] : action.verb === 'press' ? ['verb', 'ref', 'key'] : action.verb === 'scroll' ? ['verb', 'ref', 'delta_y'] : action.verb === 'set_checked' ? ['verb','ref','checked'] : ['verb', 'ref'];
+    : ['fill','replace_expression'].includes(action.verb) ? ['verb', 'ref', 'text'] : action.verb === 'press' ? ['verb', 'ref', 'key'] : action.verb === 'scroll' ? ['verb', 'ref', 'delta_y'] : action.verb === 'set_checked' ? ['verb','ref','checked'] : ['verb', 'ref'];
   if (Object.keys(action).some(key => !fields.includes(key)) || fields.some(key => !(key in action))) throw new Error('UI action fields do not match its verb');
   const refs = action.verb === 'drag' ? [action.source_ref, action.target_ref] : [action.ref];
   if (refs.some(ref => typeof ref !== 'string' || !/^ui-[a-zA-Z0-9-]{1,124}$/.test(ref))) throw new Error('UI action requires opaque observed references: copy the element.ref value beginning with ui- from the delivered observation; tid and identity.anchor_tid are not action refs');
   if (action.verb === 'drag' && action.source_ref === action.target_ref) throw new Error('Drag requires different source and target references');
-  if (action.verb === 'fill' && (typeof action.text !== 'string' || action.text.length > 2048 || /\0/.test(action.text))) throw new Error('UI text must be at most 2048 characters without NUL');
+  if (['fill','replace_expression'].includes(action.verb) && (typeof action.text !== 'string' || action.text.length > 2048 || /\0/.test(action.text))) throw new Error('UI text must be at most 2048 characters without NUL');
+  if(action.verb==='replace_expression' && (/\r/.test(action.text) || action.text.split('\n').length>128))throw new Error('Expression replacement requires LF lines, at most 128');
   if (action.verb === 'press' && !uiActionSchema.properties.key.enum.includes(action.key)) throw new Error('Unsupported UI key; clipboard and navigation shortcuts are not allowed');
   if (action.verb === 'scroll' && (!Number.isInteger(action.delta_y) || !action.delta_y || Math.abs(action.delta_y)>1000)) throw new Error('Scroll requires a nonzero integer delta_y within -1000..1000');
   if (action.verb === 'set_checked' && typeof action.checked !== 'boolean') throw new Error('set_checked requires a boolean checked value');
@@ -125,7 +126,7 @@ function workspaceUiCapability(page, task) {
     const wizardButtons=['btnPrev','btnNext','btnDone','btnExecute','btnClose','btnError'];
     const wizardSelectors=['[data-tid$=";WizrdMCF"]','[data-tid$=";WizrdMCF;cardWizardPanel;p.h;p.t"]',
       ...Object.values(wizardMarkers).map(suffix=>'[data-tid$=";WizrdMCF'+suffix+'"]'),
-      '[data-tid$=";WizrdMCF;CalcDataWizard;cmpExpression"]','[data-tid$=";WizrdMCF;CalcDataWizard;btnCalcMode"]','span.bg-TBGCalcMode-cmExpression,span.bg-TBGCalcMode-cmJavaScript',
+      '[data-tid*=";WizrdMCF;CalcDataWizard;colExpressionName_"]','[data-tid$=";WizrdMCF;CalcDataWizard;cmpExpression"]','[data-tid$=";WizrdMCF;CalcDataWizard;btnCalcMode"]','span.bg-TBGCalcMode-cmExpression,span.bg-TBGCalcMode-cmJavaScript',
       ...wizardButtons.map(name=>'[data-tid$=";WizrdMCF;'+name+'"]')].join(',');
     if (requestedRoot || discoverRoots) {
       // Native fixed queries discover global blockers/context without walking
@@ -345,11 +346,39 @@ function workspaceUiCapability(page, task) {
         }
         lines.push(text);if(truncated)break;
       }
+      const selected=all.filter(item=>{charge();return (getTid(item)??'').startsWith(base+'colExpressionName_') &&
+        visible(item) && !sensitive(item) && item.closest('table')?.classList.contains('x-grid-item-selected');});
+      const selectedExpression=selected.length===1?{ref:refOf(selected[0]),tid:getTid(selected[0]),label:textOf(selected[0])}:null;
+      let documentRead={status:'unavailable',full_text_verified:false};
+      const wrappers=dom.filter(item=>{charge();return element.contains(item) && item.matches('.CodeMirror') && visible(item);});
+      // CodeMirror 5 public read APIs, scoped to the exact editor wrapper. No
+      // setValue/replaceRange or execution of the supplied expression here.
+      if(wrappers.length===1 && !redacted && !dom.some(item=>{charge();return element.contains(item) && sensitive(item);}))try {
+        const wrapper=wrappers[0],cm=wrapper.CodeMirror,doc=cm?.getDoc?.(),input=cm?.getInputField?.();
+        if(cm?.getWrapperElement?.()===wrapper && input?.isConnected && wrapper.contains(input) && !sensitive(input)
+          && doc && ['firstLine','lastLine','lineCount','getLine'].every(key=>typeof doc[key]==='function')) {
+          const count=doc.lineCount(),first=doc.firstLine(),last=doc.lastLine();
+          if(!Number.isInteger(count) || count<1 || count>128 || first!==0 || last!==count-1)documentRead={status:'unsupported_size_or_subdocument',full_text_verified:false};
+          else {
+            const parts=[];let length=0,valid=true;
+            for(let i=0;i<count;i++) {
+              charge();const line=doc.getLine(i);
+              if(typeof line!=='string' || /[\r\n\0]/.test(line) || (length+=line.length+(i?1:0))>2048){valid=false;break;}
+              parts.push(line);
+            }
+            documentRead=valid?{status:'observed',full_text_verified:true,text:parts.join('\n'),
+              wrapper_ref:refOf(wrapper),input_ref:refOf(input),document_ref:refOf(doc),
+              writable:typeof cm.getOption==='function' && cm.getOption('readOnly')===false && !input.readOnly && !input.disabled}:
+              {status:'unsupported_text_or_size',full_text_verified:false};
+          }
+        }
+      } catch(error) {if(error?.code==='UI_SCAN_LIMIT')throw error;documentRead={status:'read_failed',full_text_verified:false};}
       return {kind:'calculator',status:peers.filter(visible).length===1?'observed':'ambiguous',
         mode:modes.length===1?modes[0]==='Expression'?'expression':'javascript':null,
         mode_status:buttons.length>1 || modes.length>1?'ambiguous':modes.length===1?'observed':'unobserved',
-        rendered_lines:redacted?[]:lines,rendering_truncated:truncated,redacted,
-        full_text_verified:false,syntax_validity:'unverified'};
+        selected_expression:selectedExpression,document:documentRead,
+        rendered_lines:documentRead.full_text_verified || redacted?[]:lines,rendering_truncated:truncated,redacted,
+        full_text_verified:documentRead.full_text_verified,syntax_validity:'unverified'};
     };
     const elements = controls.slice(0, 240).map(element => {
       const identity = identityOf(element), tag = element.tagName.toLowerCase(), tid = getTid(element);
@@ -361,6 +390,8 @@ function workspaceUiCapability(page, task) {
       const interaction = interactionOf(element);
       const checkState=checkStateOf(element);
       const calculatorEditor=calculatorEditorOf(element);
+      const expressionWritable=identity && isEnabled && calculatorEditor?.status==='observed' && calculatorEditor.mode==='expression'
+        && calculatorEditor.selected_expression && calculatorEditor.document.full_text_verified && calculatorEditor.document.writable;
       const fullValue = editable && !sensitive(element) ? String(element.value ?? (element.isContentEditable ? element.textContent : '') ?? '') : undefined;
       const value = fullValue?.slice(0, 2048), valueTruncated = fullValue !== undefined && fullValue.length > 2048;
       const fieldValue = value === undefined ? {} : {value, value_truncated:valueTruncated, value_length_utf16:fullValue.length};
@@ -372,7 +403,7 @@ function workspaceUiCapability(page, task) {
         enabled: isEnabled, visible: true, interaction, bounding_box: boxOf(element),
         // A bounded prefix is not a sufficient value precondition. A dedicated
         // large-field driver must establish its own complete read/write contract.
-        allowed_actions: allowed && !valueTruncated ? ['click', 'double_click', 'right_click', 'press', 'drag', ...(editable ? ['fill'] : []), ...(checkState ? ['set_checked'] : []), ...(scroll && interaction.state === 'point_observed' ? ['scroll'] : [])] : [] };
+        allowed_actions: expressionWritable ? ['replace_expression'] : allowed && !valueTruncated ? ['click', 'double_click', 'right_click', 'press', 'drag', ...(editable ? ['fill'] : []), ...(checkState ? ['set_checked'] : []), ...(scroll && interaction.state === 'point_observed' ? ['scroll'] : [])] : [] };
     });
     const graphPrefix = workflow ? workflow.prefix + ';Graph;' : null;
     const graphElements = graphPrefix ? all.filter(element => (getTid(element) ?? '').startsWith(graphPrefix)) : [];
@@ -549,7 +580,8 @@ function workspaceUiCapability(page, task) {
   };
   const checkedHandle = async (before, current) => {
     if (!current || !same(before.identity, current.identity) || !same(before.signature, current.signature)
-      || !current.allowed_actions.includes(task.action.verb)) fail('UI_REFERENCE_STALE', 'The observed control changed; observe the workspace again');
+      || !current.allowed_actions.includes(task.action.verb)
+      || task.action.verb==='replace_expression' && !same(before.calculator_editor,current.calculator_editor)) fail('UI_REFERENCE_STALE', 'The observed control changed; observe the workspace again');
     const locator = locatorFor(current.identity);
     if (await locator.count() !== 1) fail('UI_REFERENCE_STALE', 'Observed control is no longer unique');
     const handle = await locator.elementHandle({ timeout: timeout() });
@@ -692,6 +724,30 @@ function workspaceUiCapability(page, task) {
           record('ui_scroll_applied',moved);
           await page.waitForTimeout(50);
         }
+        else if (task.action.verb === 'replace_expression') {
+          const before=current.ui.elements.find(item=>item.ref===task.action.ref).calculator_editor;
+          const ownsFocus=async(expectedText=before.document.text)=>{
+            const fresh=await readUi(),found=fresh.ui.elements.find(item=>item.ref===task.action.ref)?.calculator_editor;
+            if(!fresh.authenticated || fresh.origin!==current.origin || !same(fresh.workflow_ref,current.workflow_ref)
+              || !same(fresh.ui.masks,current.ui.masks) || !same(fresh.ui.dialogs,current.ui.dialogs)
+              || !found || found.mode!=='expression' || found.document.text!==expectedText || !same(found.selected_expression,before.selected_expression)
+              || !found.document.full_text_verified || !found.document.writable)return false;
+            return first.evaluate((element,expected)=>{
+            const state=globalThis[Symbol.for('loginom-dock.workspace-ui.identity.v1')];
+            const wrappers=[...element.querySelectorAll('.CodeMirror')];
+            if(wrappers.length!==1)return false;
+            const wrapper=wrappers[0],cm=wrapper.CodeMirror,input=cm?.getInputField?.();
+            return state?.ids.get(wrapper)===expected.wrapper_ref && state.ids.get(input)===expected.input_ref &&
+              state.ids.get(cm?.getDoc?.())===expected.document_ref && document.activeElement===input && wrapper.contains(input);
+          },before.document);};
+          await clickTarget(1);
+          if(!await ownsFocus())fail('EXPRESSION_FOCUS_CHANGED','The Calculator input did not receive focus');
+          await page.keyboard.press('ControlOrMeta+A');
+          if(!await ownsFocus())fail('EXPRESSION_FOCUS_CHANGED','The Calculator input lost focus before replacement');
+          await page.keyboard.press('Backspace');
+          if(!await ownsFocus(''))fail('EXPRESSION_FOCUS_CHANGED','The Calculator input lost focus or did not clear');
+          timeout();if(task.action.text)await page.keyboard.type(task.action.text,{delay:0});
+        }
         else if (task.action.verb === 'fill') {
           await clickTarget(1);
           await first.press('ControlOrMeta+A', { timeout: timeout() });
@@ -713,6 +769,17 @@ function workspaceUiCapability(page, task) {
         if (effectPossible) record('ui_gesture_applied', { verb: task.action.verb });
         phase = 'observing'; timeout();
         const observed = await readUi();
+        if(task.action.verb==='replace_expression') {
+          const before=current.ui.elements.find(item=>item.ref===task.action.ref);
+          const after=observed.ui.elements.filter(item=>same(item.identity,before.identity));
+          const editor=after.length===1?after[0].calculator_editor:null;
+          if(!editor || editor.mode!=='expression' || !same(editor.selected_expression,before.calculator_editor.selected_expression)
+            || !editor.document.full_text_verified || editor.document.text!==task.action.text
+            || ['wrapper_ref','input_ref','document_ref'].some(key=>editor.document[key]!==before.calculator_editor.document[key]))
+            fail('EXPRESSION_TEXT_NOT_CONFIRMED','Replacement text was not confirmed in the same selected expression; inspect before retry');
+          record('expression_text_verified',{ref:after[0].ref,selected_expression:editor.selected_expression,
+            syntax_validity:'unverified',settings_applied:false});
+        }
         if (task.action.verb==='set_checked') {
           const before=current.ui.elements.find(item=>item.ref===task.action.ref);
           const matches=observed.ui.elements.filter(item=>same(item.identity,before.identity) && item.tid===before.tid && item.label===before.label && item.check_state?.kind===before.check_state.kind);

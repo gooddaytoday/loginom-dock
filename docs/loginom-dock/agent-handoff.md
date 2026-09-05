@@ -1,3 +1,11 @@
+**Checkpoint P3 (6 сентября):** replace_expression подключён через существующий
+UI receipt. Exact selected field/expression mode/writable CodeMirror document,
+полный bounded LF read, keyboard replacement, focus/identity guards и exact
+readback. Не подтверждает syntax/apply/save. 240 full client +61 targeted /
+106 Python /10 packaging PASS. API/keyboard в живом Loginom ещё не проверены.
+Следующий шаг — новый полный data-pipeline run; затем domain/execution/results
+и весь P3–P9. Перед запуском active Hermes/browser нет. Детали сверху status.
+
 **Checkpoint P3 (6 сентября):** calculator_editor observation показывает режим
 expression/javascript и bounded rendered_lines; не подтверждает полный текст,
 синтаксис или сохранение. E2E helper сам предупреждает о ненадёжном empty/
