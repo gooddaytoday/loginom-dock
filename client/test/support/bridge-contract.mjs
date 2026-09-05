@@ -67,6 +67,11 @@ test('MCP application refusals remain typed normal content and the same connecti
     await Promise.all([bridge.server.connect(bridgeTransport), client.connect(agentTransport)]);
     const listed = await client.listTools();
     assert.ok(listed.tools.some(tool => tool.name === 'dock_operation_recover'));
+    assert.ok(listed.tools.some(tool => tool.name === 'dock_artifact_upload'));
+    const rejectedUpload=await client.callTool({name:'dock_artifact_upload',arguments:{artifact_id:'a',upload_grant_id:'g',
+      observation_id:'o',operation_id:'u',destination:'/other'}});
+    assert.equal(JSON.parse(rejectedUpload.content[0].text).error.code,'REQUEST_REJECTED');
+    assert.equal(browserCalls,0);
     const available = await client.callTool({ name: 'dock_action_describe', arguments: {} });
     assert.notEqual(available.isError, true);
     assert.deepEqual(JSON.parse(available.content[0].text).available_actions, ['node.add', 'link.create', 'package.save_as']);

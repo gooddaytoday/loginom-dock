@@ -10,7 +10,7 @@ import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { openArchive } from './archive.mjs';
 import { diagnoseConnection } from './diagnostics.mjs';
-import { pinActionCatalog, assertCatalogTarget } from './action-catalog.mjs';
+import { pinActionCatalog, assertCatalogTarget, validateActionParameters } from './action-catalog.mjs';
 import { createActionRuntime, parseCapabilityResult } from './executor.mjs';
 import { makeWorkspacePrepareCode, parseWorkspacePreparation, prepareWorkspaceSession, requirePreparedWorkspace, workspaceObserveTool } from './workspace.mjs';
 import { createExecutionJournal } from './execution-journal.mjs';
@@ -72,7 +72,7 @@ export async function createBridge(config, session) {
       pinnedActions = pinned;
       recoveryContext = createRecoveryContext({ remote, pinned, knownSecrets: [config.apiKey] });
       Object.assign(session.metadata, pinned.pins);
-      actionRuntime = createActionRuntime({ pinned, allowCandidate: replay, onRecord: recordExecution,
+      actionRuntime = createActionRuntime({ pinned, artifactStore:session.artifactStore, allowCandidate: replay, onRecord: recordExecution,
         targetOrigin: config.loginomUrl ? new URL(config.loginomUrl).origin : undefined, execute: async (code, options) => {
         const response = await browser.callTool({ name: 'browser_run_code_unsafe', arguments: { code } }, undefined, options);
         return parseCapabilityResult(response);
@@ -88,7 +88,7 @@ export async function createBridge(config, session) {
       catalog.routes.set('dock_action_describe', 'action');
       catalog.routes.set('dock_action_run', 'action');
       catalog.routes.set('dock_workspace_observe', 'action');
-      for (const name of ['dock_operation_inspect', 'dock_operation_recover', 'dock_ui_action']) catalog.routes.set(name, 'action');
+      for (const name of ['dock_operation_inspect', 'dock_operation_recover', 'dock_ui_action', 'dock_artifact_upload']) catalog.routes.set(name, 'action');
     }
     await session.save(catalog);
     const server = new Server({ name: 'loginom-dock', version: session.metadata.client }, {
@@ -160,11 +160,18 @@ export async function createBridge(config, session) {
           return await browserGate(async () => {
             extra.signal.throwIfAborted();
             const args = request.params.arguments ?? {};
+            if(request.params.name==='dock_artifact_upload') {
+              const definition=actionRuntime.tools.find(tool=>tool.name==='dock_artifact_upload');
+              if(!definition)throw new Error('Artifact upload is unavailable in this session');
+              validateActionParameters(definition.inputSchema,args);
+            }
             if (!(request.params.name === 'dock_workspace_observe' && args.scope === 'bootstrap')) requirePreparedWorkspace(session.metadata);
             const outcome = request.params.name === 'dock_workspace_observe' ? await actionRuntime.observe({ signal: extra.signal, scope: args.scope, cursor: args.cursor, rootRef: args.root_ref, observationId: args.observation_id, storageName: args.storage_name })
               : request.params.name === 'dock_operation_inspect' ? await actionRuntime.inspect({ operationId: args.operation_id, signal: extra.signal })
                 : request.params.name === 'dock_operation_recover' ? await actionRuntime.recover(args.operation_id,
                   { strategy: args.strategy, recoveryOperationId: args.recovery_operation_id, observationId: args.observation_id, signal: extra.signal })
+                  : request.params.name === 'dock_artifact_upload' ? await actionRuntime.upload({artifactId:args.artifact_id,grantId:args.upload_grant_id,
+                    observationId:args.observation_id,operationId:args.operation_id,signal:extra.signal})
                   : request.params.name === 'dock_ui_action' ? await actionRuntime.uiAct(args.action,
                     { observationId: args.observation_id, operationId: args.operation_id, recoveryOperationId: args.recovery_operation_id, signal: extra.signal })
                     : await actionRuntime.run(args.action_key, args.parameters, { signal: extra.signal, operationId: args.operation_id });

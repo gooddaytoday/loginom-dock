@@ -21,7 +21,62 @@ const uiActionTool = { name: 'dock_ui_action',
     action: uiActionSchema },
     required: ['observation_id', 'operation_id', 'action'], additionalProperties: false },
   annotations: { readOnlyHint: false, destructiveHint: true, openWorldHint: false } };
+const artifactUploadTool = {name:'dock_artifact_upload',
+  description:'Submit an operator-authorized input artifact to its exact Loginom destination. Requires artifact_id and upload_grant_id from dock_prepare plus a fresh observation of the current storage directory. This candidate supports only explicitly authorized replace; reject is unavailable and never silently changed. Submission is not upload completion: the operation remains pending for server verification. A repeated operation_id never sends the file again. No local paths, selectors, or overwrite choices are accepted.',
+  inputSchema:{type:'object',additionalProperties:false,required:['artifact_id','upload_grant_id','observation_id','operation_id'],
+    properties:{artifact_id:identifier,upload_grant_id:identifier,observation_id:identifier,operation_id:identifier}},
+  annotations:{readOnlyHint:false,destructiveHint:true,openWorldHint:false}};
 export const executorTools = [actionDescribeTool, actionRunTool, operationInspectTool, operationRecoverTool, uiActionTool];
+
+async function browserArtifactUpload(page,task,observe) {
+  let phase='preconditions',effect=false,input;
+  const trace=[];
+  const outcome=(status,code,output={})=>({status,action_key:'artifact.upload',action_revision:'1',operation_id:task.operation_id,
+    phase,effect_possible:effect,cleanup_complete:true,output,error:code?{code,message:code}:null,trace});
+  const same=(a,b)=>JSON.stringify(a)===JSON.stringify(b);
+  try {
+    if(task.artifact.upload.overwrite!=='replace')return outcome('NOT_APPLIED','UPLOAD_POLICY_UNAVAILABLE');
+    const read=await observe(page),current=read.output;
+    if(read.status!=='SUCCEEDED')return outcome('NOT_APPLIED','UPLOAD_OBSERVATION_FAILED');
+    if(!current.authenticated || current.origin!==task.expected_origin || current.loginom_build!==task.expected_build
+      || !same(current.workflow_ref,task.snapshot.workflow_ref) || !same(current.dom_epoch,task.snapshot.dom_epoch))
+      return outcome('NOT_APPLIED','UPLOAD_CONTEXT_CHANGED');
+    if(current.file_storage?.status!=='observed' || current.file_storage.directory!==task.artifact.upload.directory
+      || current.ui.dialogs.length || current.ui.masks.length)return outcome('NOT_APPLIED','UPLOAD_DESTINATION_UNAVAILABLE');
+    const prefix=current.workflow_ref?.prefix;
+    if(typeof prefix!=='string' || !/^MF;TF(?:-\d+)?$/.test(prefix))return outcome('NOT_APPLIED','UPLOAD_CONTEXT_CHANGED');
+    // E2E bg/helpers/filestorage.UploadFiles uses this hidden native input.
+    const toolbar=page.locator(`[data-tid="${prefix};FileStorageForm;tbrActions"]`);
+    const target=toolbar.locator('input[type="file"]');
+    if(await toolbar.count()!==1 || !await toolbar.isVisible() || !await toolbar.isEnabled()
+      || await target.count()!==1 || !await target.isEnabled())return outcome('NOT_APPLIED','UPLOAD_INPUT_UNAVAILABLE');
+    input=await target.elementHandle();
+    if(!input || !await input.evaluate(element=>element.isConnected && element.tagName==='INPUT' && element.type==='file'))
+      return outcome('NOT_APPLIED','UPLOAD_INPUT_UNAVAILABLE');
+    const epoch=await page.evaluate(()=>{
+      const state=globalThis[Symbol.for('loginom-dock.workspace-ui.identity.v1')];
+      if(!state?.observer)return null;
+      state.revision+=state.observer.takeRecords().length;return {document:state.epoch,revision:state.revision};
+    });
+    if(!same(epoch,current.dom_epoch))return outcome('NOT_APPLIED','UPLOAD_CONTEXT_CHANGED');
+    trace.push({event:'upload_preconditions_verified',destination:task.artifact.upload.destination});
+    phase='submitting';effect=true;
+    await input.setInputFiles(task.upload_path,{timeout:15000});
+    phase='submitted';trace.push({event:'upload_input_submitted'});
+    // Native input completion does not establish completion of Loginom's
+    // asynchronous server transfer. Keep the operation pending, even on receipt.
+    return outcome('AMBIGUOUS','UPLOAD_SERVER_VERIFICATION_REQUIRED',{upload_submitted:true,
+      artifact_id:task.artifact.artifact_id,upload_grant_id:task.artifact.upload.grant_id,destination:task.artifact.upload.destination,
+      bytes:task.artifact.bytes,sha256:task.artifact.sha256,verification_required:true});
+  } catch {return outcome(effect?'AMBIGUOUS':'NOT_APPLIED',effect?'UPLOAD_SUBMISSION_UNCERTAIN':'UPLOAD_PREFLIGHT_FAILED');}
+  finally {if(input)try{await input.dispose();}catch{}}
+}
+
+export function makeArtifactUploadCode(options) {
+  const observe=makeWorkspaceUiCode({mode:'observe',root_ref:options.snapshot?.observation_root?.ref,
+    expected_build:options.expected_build,expected_origin:options.expected_origin});
+  return `async (page) => (${browserArtifactUpload.toString()})(page,${JSON.stringify(options)},${observe})`;
+}
 
 function browserCapability(page, task) {
   const started = Date.now();
@@ -744,7 +799,7 @@ export function parseCapabilityResult(response) {
   throw new Error('Pinned browser capability returned no typed result');
 }
 
-export function createActionRuntime({ pinned, execute, allowCandidate = false, onRecord = async () => {}, now = Date.now, targetBuild = pinned?.compatibility?.loginom_build, targetOrigin }) {
+export function createActionRuntime({ pinned, execute, artifactStore, allowCandidate = false, onRecord = async () => {}, now = Date.now, targetBuild = pinned?.compatibility?.loginom_build, targetOrigin }) {
   if (!pinned?.actions || !pinned?.selectors) throw new Error('A verified pinned action catalog is required');
   let pending = null;
   let running = false;
@@ -834,13 +889,15 @@ export function createActionRuntime({ pinned, execute, allowCandidate = false, o
         }
         if (state.receipt.action_key === operation.action.action_key) operation.outcome = state.receipt;
         if (operation.cleanupConfirmed && operation.outcome.status !== 'AMBIGUOUS') {
+          if(operation.action.capability==='artifact.upload' && operation.outcome.status==='NOT_APPLIED')await operation.uploadLease?.release();
           pending = null; return operation.outcome;
         }
       }
       if (operation.cleanupConfirmed === false) return failed(operation, 'CLEANUP_RECEIPT_MISSING',
         'The browser call finished but cleanup is unconfirmed. Inspect and restore_control before further mutations.');
-      if (operation.action.capability === 'ui.act') {
+      if (['ui.act','artifact.upload'].includes(operation.action.capability)) {
         await remember(operation, 'reconciled', operation.outcome);
+        if(operation.action.capability==='artifact.upload' && operation.outcome?.status==='NOT_APPLIED')await operation.uploadLease?.release();
         if (operation.outcome.status !== 'AMBIGUOUS') pending = null;
         return operation.outcome;
       }
@@ -861,6 +918,7 @@ export function createActionRuntime({ pinned, execute, allowCandidate = false, o
     base.unshift({ tool: 'dock_operation_inspect', arguments: { operation_id: operation.id },
       required_fields: [], requires: [], provides: ['completion_receipt', 'cleanup_state'] });
     if (operation.transportUncertain) return { recovery_options: [], next_steps: base };
+    if(operation.action.capability==='artifact.upload')return {recovery_options:[],next_steps:base};
     const strategies = operation.cleanupConfirmed === false ? ['restore_control']
       : ['abandon_operation', ...(operation.action.capability === 'ui.act' ? ['accept_observed_state'] : []),
         ...(operation.action.capability === 'link.create.v1' && operation.parameters.target_port.kind === 'add'
@@ -907,12 +965,13 @@ export function createActionRuntime({ pinned, execute, allowCandidate = false, o
     return view(operation, await reconcilePending());
   };
   return Object.freeze({
-    tools: executorTools,
+    tools: [...executorTools,...(allowCandidate && artifactStore ? [artifactUploadTool] : [])],
     assertPreparationAllowed() {
       if (running || pending) throw new Error('Dock preparation cannot run while an action is running or its effect remains uncertain');
     },
     describe(actionKey) {
       if (actionKey === undefined) return { available_actions: [...pinned.actions.keys()],
+        ...(allowCandidate && artifactStore ? {artifact_upload_tool:'dock_artifact_upload'} : {}),
         ui_action_tool: 'dock_ui_action', observation_tool: 'dock_workspace_observe', session_manifest: structuredClone(pinned.pins) };
       const action = find(actionKey);
       return { action: structuredClone(action), session_manifest: structuredClone(pinned.pins) };
@@ -936,6 +995,7 @@ export function createActionRuntime({ pinned, execute, allowCandidate = false, o
       if (operations.has(recoveryOperationId)) throw new Error('Recovery ID conflicts with an existing operation');
       const operation = operations.get(operationId);
       if (!operation || pending !== operation) throw new Error('Recovery requires the pending operation of this session');
+      if(operation.action.capability==='artifact.upload')throw new Error('Upload requires server transfer verification before recovery or abandonment');
       if (!['complete_link', 'restore_control', 'accept_observed_state', 'abandon_operation'].includes(strategy)) throw new Error('Unsupported recovery strategy');
       if (strategy === 'complete_link' && operation.action.capability !== 'link.create.v1') throw new Error('complete_link requires a pending link.create operation');
       if (strategy === 'accept_observed_state' && operation.action.capability !== 'ui.act') throw new Error('Only a generic UI gesture can accept an observed state; domain actions require verified postconditions');
@@ -1022,6 +1082,7 @@ export function createActionRuntime({ pinned, execute, allowCandidate = false, o
     },
     async uiAct(action, { observationId, operationId, recoveryOperationId, signal } = {}) {
       signal?.throwIfAborted(); checkId(operationId);
+      if(pending?.action.capability==='artifact.upload')throw new Error('Upload is pending server verification; only observation and inspection are available');
       const signature = fingerprint('ui.act', [observationId, action, recoveryOperationId ?? null]);
       if (auxiliary.has(operationId)) {
         const previous = auxiliary.get(operationId);
@@ -1097,6 +1158,49 @@ export function createActionRuntime({ pinned, execute, allowCandidate = false, o
         auxiliary.set(operationId, { signature, outcome: structuredClone(outcome) });
         return outcome;
       } finally { running = false; }
+    },
+    async upload({artifactId,grantId,observationId,operationId,signal}={}) {
+      signal?.throwIfAborted();checkId(operationId);
+      if(!allowCandidate || !artifactStore)throw new Error('Artifact upload is available only in an authorized candidate session');
+      const artifact=artifactStore.getUploadGrant(artifactId,grantId);
+      const signature=fingerprint('artifact.upload',[artifactId,grantId,observationId]);
+      if(auxiliary.has(operationId))throw new Error('Upload operation ID conflicts with another request');
+      if(operations.has(operationId)) {
+        const previous=operations.get(operationId);
+        if(previous.signature!==signature || previous.action.capability!=='artifact.upload')throw new Error('Upload operation ID was already used with different parameters');
+        return previous.outcome ? structuredClone(previous.outcome) : failed(previous,'OPERATION_STILL_PENDING','The browser operation is still running');
+      }
+      if(running || pending)throw new Error('Resolve the pending Dock operation before uploading');
+      if(artifact.upload.overwrite!=='replace')throw new Error('reject upload policy is not implemented; it cannot be replaced implicitly');
+      const snapshot=observations.get(observationId);
+      if(!snapshot || snapshot.file_storage?.status!=='observed' || snapshot.file_storage.directory!==artifact.upload.directory)
+        throw new Error('Observe the exact authorized Loginom storage directory before uploading');
+      running=true;
+      try {
+        const lease=await artifactStore.stageUpload(artifactId);
+        const operation={id:operationId,signature,uploadLease:lease,action:{action_key:'artifact.upload',revision:'1',capability:'artifact.upload'},
+          parameters:{artifact_id:artifactId,upload_grant_id:grantId,observation_id:observationId,destination:artifact.upload.destination,overwrite:artifact.upload.overwrite},
+          checkpoint:{workflow_ref:snapshot.workflow_ref,file_storage:snapshot.file_storage,artifact},deadline:now()+30000};
+        try {await lease.verify();signal?.throwIfAborted();await remember(operation,'prepared');signal?.throwIfAborted();}
+        catch(error){await lease.release();throw error;}
+        operations.set(operationId,operation);pending=operation;observations.clear();
+        let outcome;
+        try {
+          const receipt=receiptOptions(operation,operationId,'artifact.upload',signature);
+          const code=makeArtifactUploadCode({operation_id:operationId,artifact,upload_path:lease.path,snapshot,
+            expected_build:targetBuild,expected_origin:targetOrigin});
+          outcome=assertActionOutcome(await execute(withBrowserReceipt(`(${code})(page)`,receipt),{timeout:35000}));
+          if(outcome.operation_id!==operationId || outcome.action_key!=='artifact.upload' || outcome.action_revision!=='1')
+            throw new Error('Upload receipt identity mismatch');
+        } catch {operation.transportUncertain=true;outcome=failed(operation,'BROWSER_CALL_UNCERTAIN','Inspect the upload receipt before any further mutation');}
+        operation.cleanupConfirmed=!operation.transportUncertain && outcome.cleanup_complete===true;
+        operation.outcome=outcome;
+        await remember(operation,'completed',outcome);
+        if(!operation.transportUncertain && outcome.status==='NOT_APPLIED' && operation.cleanupConfirmed) {
+          await lease.release();pending=null;
+        }
+        return structuredClone(outcome);
+      } finally {running=false;}
     },
     async run(actionKey, parameters, { signal, operationId } = {}) {
       signal?.throwIfAborted();

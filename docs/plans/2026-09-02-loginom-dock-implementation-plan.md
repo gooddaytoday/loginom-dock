@@ -1401,6 +1401,11 @@ Native MCP/Chromium synthetic file input → download → host verification пр
 Host admission теперь может явно закрепить upload grant для пары artifact_id /
 grant_id, точного directory + display name и политики reject/replace без default.
 Grant не является выполнением загрузки или подтверждением enforceable reject.
+В replay подключён dock_artifact_upload: четыре ID → grant → context/directory /
+epoch guards → native input. Только явный replace; reject пока не поддержан.
+После отправки сохраняется pending AMBIGUOUS до server verification. Повторы
+и lost-response recovery используют существующий executor receipt; это ещё
+не live acceptance и не завершение пункта доставки файла.
 
 **Зависит от:** P1/P2. Сначала одна цель от файла до проверенного результата;
 по ней выделить устойчивые lifecycle мастера и исполнения.

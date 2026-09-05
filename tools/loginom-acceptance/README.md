@@ -24,8 +24,13 @@ Trusted CLI `--input-artifact` принимает `sourcePath`, `name`, `bytes`,
 Admission выдаёт artifact_id, а для upload — отдельный session-local grant_id
 и точный destination с исходным display name. Без upload входной файл не имеет
 разрешённого назначения. Grant — разрешение, не выполненная загрузка и не
-доказательство отсутствия конфликта. Model upload tool пока не подключён;
-его будущий adapter обязан обеспечить политику, прежде чем менять сервер.
+доказательство отсутствия конфликта. В replay теперь есть dock_artifact_upload
+с четырьмя ID: artifact_id, upload_grant_id, observation_id, operation_id.
+Он поддерживает отправку только по явному replace grant; reject пока отвергает
+до staging. После отправки операция остаётся AMBIGUOUS до серверной проверки,
+которую ещё нужно реализовать. Повтор ID не отправляет файл заново; разрешены
+observe/inspect, но не abandon/UI repair/следующие мутации. Это ещё не runnable
+data-pipeline acceptance; diagnostic run должен учитывать незавершённый transfer.
 
 ## Имена Loginom и destination (schema 2, 2026-09-05)
 

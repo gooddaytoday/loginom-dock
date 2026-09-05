@@ -1,3 +1,40 @@
+## 2026-09-05 — P3: candidate upload submission через существующий executor
+
+Подключён dock_artifact_upload в replay/allowCandidate с artifactStore. MCP
+схема строго требует artifact_id/upload_grant_id/observation_id/operation_id;
+пути/overwrite/прочие поля запроса отклоняются. Runtime получает точный grant,
+проверяет наблюдаемый directory, stageUpload/verify и сохраняет prepared journal.
+В браузере свежий read проверяет authenticated origin/build/workflow/DOM epoch,
+directory и отсутствие dialogs/masks. Нужен единственный enabled hidden
+input[type=file] под видимым active FileStorageForm;tbrActions (E2E UploadFiles).
+После получения handle epoch проверяется снова; native setInputFiles получает
+только private staged path. Ошибки не возвращают native message/локальный путь.
+
+Сейчас поддерживается только явно разрешённый replace. reject даёт отказ до
+staging, без fallback. После native input выдаётся AMBIGUOUS с
+UPLOAD_SERVER_VERIFICATION_REQUIRED, не SUCCEEDED: server transfer ещё может
+выполняться. Тот же executor pending/browserReceipt/journal сохраняет операцию.
+Повторный/одновременный ID не отправляет файл; другой ID блокируется. inspect
+восстанавливает потерянный receipt без setInputFiles. Pending upload не допускает
+prepare/UI repair/abandon/new mutation. Source lease остаётся до подтверждения;
+NOT_APPLIED освобождает его после browser completion, в том числе восстановленного.
+Отмена до dispatch (включая во время prepared journal) освобождает staging.
+
+208 full client /10 packaging PASS; после финального исправления освобождения
+lease при восстановленном NOT_APPLIED и describe metadata — 33 targeted
+executor/bridge/upload PASS. Upload tests исполняют сериализованный production
+driver/runtime с внешними DOM/Playwright doubles: context/epoch/auth/build,
+mask/dialog, неуникальный/недоступный input, concurrent repeat, cancellation,
+lost reply/submission error, blocking repair и отсутствие пути в journal.
+MCP test проверяет публикацию tool и отказ на лишний destination до браузера.
+Python/live не запускались. Production/public rc2 не менялись, активных
+Hermes/browser нет. Runtime inputs остаются 46 (новых runtime modules нет).
+
+Это submission-only candidate, НЕ P3 acceptance. Далее server transfer completion
+и скачанная копия с привязкой к operation/destination, bounded download,
+reconciliation, real conflict/reject semantics; затем fixture pipeline и P4–P9.
+До этого нельзя трактовать upload_submitted или наличие строки как успех загрузки.
+
 ## 2026-09-05 — P3: явное разрешение на точный upload destination
 
 Trusted startup --input-artifact теперь допускает optional upload с точными

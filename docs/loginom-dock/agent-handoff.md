@@ -1,4 +1,18 @@
-**Текущий следующий шаг P3:** host upload grants готовы. В --input-artifact
+**Текущая P3 реализация:** dock_artifact_upload подключён только к replay /
+allowCandidate с artifactStore. Принимает только artifact_id/upload_grant_id /
+observation_id/operation_id. Точный grant, свежий directory/context/epoch,
+штатный hidden input под active toolbar. Сейчас ТОЛЬКО явно разрешённый replace;
+reject возвращает отказ до staging, не подменяется. После native setInputFiles
+результат AMBIGUOUS/UPLOAD_SERVER_VERIFICATION_REQUIRED; это НЕ completed upload.
+Использованы существующие executor pending / browserReceipt / journal. Повторы
+не отправляют файл, lost response восстанавливается inspect. Пока pending upload,
+нельзя ui repair/abandon/prepare/новую мутацию. Нужна реализация server verification
+и transfer completion, download-event binding, budget, reject/conflict semantics.
+Live НЕ запускался. 208 full client /10 packaging PASS до финального lease recovery;
+после него targeted executor/bridge/upload PASS (точные числа сверху status).
+Active Hermes/browser нет. Затем реальная приёмка на test и весь P3–P9.
+
+**Предыдущий шаг P3:** host upload grants готовы. В --input-artifact
 optional upload={directory,overwrite:reject|replace}; нет default. Descriptor
 содержит grant_id/exact destination; getUploadGrant связывает artifact_id и
 grant_id, не принимает подмену пути/политики. Session-local, lease metadata

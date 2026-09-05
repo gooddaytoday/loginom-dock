@@ -1,3 +1,27 @@
+### Candidate upload submission (2026-09-05)
+
+Replay sessions with an artifact store expose dock_artifact_upload. Its strict
+request schema accepts four opaque IDs only: artifact, upload grant, observation,
+operation. The runtime resolves the host grant, validates observed storage,
+stages/verifies the original bytes, and journals public parameters before calling
+the browser. The browser rereads context/DOM epoch/directory, refuses masks and
+dialogs, checks the active FileStorageForm toolbar and its unique enabled hidden
+file input (E2E UploadFiles), rechecks epoch, then calls native setInputFiles on
+the retained handle. No generic UI file-input action is exposed.
+
+Only explicit replace grants are currently executable. reject is refused before
+staging and is never converted to replace. This is a candidate submission path,
+not completed P3 upload support. A completed native input call returns AMBIGUOUS /
+UPLOAD_SERVER_VERIFICATION_REQUIRED because Loginom's server transfer can still
+be running. The existing executor pending gate, browserReceipt and journal hold
+that operation: repeated/concurrent IDs do not submit again; inspect recovers a
+lost receipt without resubmission. Pending upload prohibits new mutation, UI
+repair, preparation and abandonment. Only observation/inspection remain enabled.
+NOT_APPLIED releases the source after known browser completion, including when
+that proof was recovered from a lost response. Otherwise the lease stays until
+verified transfer completion or browser shutdown. Server verification/recovery,
+download binding/budget and enforceable reject semantics remain to be added.
+
 ### Private file-transfer leases (2026-09-05)
 
 stageUpload validates an admitted artifact again and creates a private named copy
