@@ -4,7 +4,7 @@ from rename_effect import journal_equal
 TARGET_SUFFIX = 'WizrdMCF;ImportTextFilePreviewWizard;chkParallelProcessing;ValueControl;DisplayEl'
 
 
-def audit_goal(evidence, checks, prefix, mutations, require_menu=False):
+def audit_goal(evidence, checks, prefix, mutations, require_menu=False, rejected_before_browser=lambda c, e: False):
     """Prove a three-step checkbox round trip in the real Text Import wizard."""
     def check(name, value):
         checks.append({'name': name, 'passed': bool(value)})
@@ -39,18 +39,19 @@ def audit_goal(evidence, checks, prefix, mutations, require_menu=False):
           for c in calls if c['tool'] == prefix + 'dock_action_run'))
     if require_menu:
         check('context_menu_opened_and_setup_selected_from_fresh_observation',
-              menu_proof(evidence, prefix, mutations, actions[0]['row'] if actions else -1))
+              menu_proof(evidence, prefix, mutations, actions[0]['row'] if actions else -1, rejected_before_browser))
     return {'schema_version': 1, 'kind': 'independent_checkbox_roundtrip_audit', 'assertions': checks,
             'all_assertions_passed': bool(checks) and all(c['passed'] for c in checks),
             'limitations': ['Proves one unsaved wizard checkbox only; no data import, apply, radio or reopen acceptance.']}
 
 
-def menu_proof(evidence, prefix, mutations, first_checked_row):
+def menu_proof(evidence, prefix, mutations, first_checked_row, rejected_before_browser=lambda c, e: False):
     calls = evidence['calls']
+    effective = [c for c in calls if c['tool'] in mutations and not rejected_before_browser(c, evidence)]
     def bound(call):
         args = call.get('arguments', {})
         action = args.get('action', {})
-        prior = max((c['row'] for c in calls if c['tool'] in mutations and c['row'] < call['row']), default=-1)
+        prior = max((c['row'] for c in effective if c['row'] < call['row']), default=-1)
         targets = [item for t in evidence['tools'] if prior < t['row'] < call['row']
                    and isinstance(t.get('result'), dict)
                    and t['result'].get('output', {}).get('observation_id') == args.get('observation_id')
@@ -74,11 +75,14 @@ def menu_proof(evidence, prefix, mutations, first_checked_row):
         return target, records[0]['output']
     rights = [c for c in calls if c['tool'] == prefix+'dock_ui_action'
               and c.get('arguments', {}).get('action', {}).get('verb') == 'right_click']
-    if len(rights) != 1: return False
-    right = rights[0]; opened = bound(right)
+    if not rights: return False
+    # A label and its node open different menus. Prior observed right clicks
+    # are allowed, but every one must have a real, successful browser receipt.
+    if not all(bound(c) for c in rights): return False
+    right = rights[-1]; opened = bound(right)
     if not opened or ';Graph;Текстовый_файл' not in opened[0].get('tid', ''): return False
     if not any(e.get('tid') == 'mn;mniSetupNode' for e in opened[1].get('ui', {}).get('elements', [])): return False
-    later = [c for c in calls if c['tool'] in mutations and right['row'] < c['row'] < first_checked_row]
+    later = [c for c in effective if right['row'] < c['row'] < first_checked_row]
     if len(later) != 1 or later[0]['tool'] != prefix+'dock_ui_action': return False
     selected = bound(later[0])
     return bool(selected and later[0]['arguments']['action']['verb'] == 'click'

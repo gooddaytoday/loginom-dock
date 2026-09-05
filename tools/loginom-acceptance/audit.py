@@ -717,7 +717,8 @@ def audit(request, evidence, prompt):
             bootstrap_proof(evidence, check)
             return palette_inventory(evidence, checks, require_scroll=True)
         if goal_id in ('checkbox-roundtrip','context-menu-checkbox'):
-            return checked_state.audit_goal(evidence, checks, PREFIX, MUTATIONS, require_menu=goal_id=='context-menu-checkbox')
+            return checked_state.audit_goal(evidence, checks, PREFIX, MUTATIONS, require_menu=goal_id=='context-menu-checkbox',
+                                            rejected_before_browser=rejected_before_browser)
         successful_adds = [t for t in tools if t["tool"] == PREFIX + "dock_action_run"
                            and t["result"].get("action_key") == "node.add" and t["result"].get("status") == "SUCCEEDED"]
         components = []

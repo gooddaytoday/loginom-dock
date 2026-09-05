@@ -87,6 +87,30 @@ class CheckedStateProofTest(unittest.TestCase):
                 {**call,'row':i*4+3,'result':copy.deepcopy(raw)}])
             data['events'].append({'phase':'completed','operation_id':f'op{i}','outcome':raw})
         self.assertTrue(menu_proof(data, '', {'dock_ui_action'}, 10))
+        # A pre-browser rejection does not mutate the observed menu. It is
+        # excluded only by the shared strict receipt + absent-journal proof.
+        from audit import rejected_before_browser
+        rejected = copy.deepcopy(data)
+        rejected['calls'].insert(1, {'tool':'dock_ui_action','row':4,'session_id':'s','tool_call_id':'bad',
+                                    'arguments':{'operation_id':'bad-op'}})
+        rejected['tools'].append({'tool':'dock_ui_action','row':4.5,'session_id':'s','tool_call_id':'bad',
+            'result':{'request_rejected':True,'effect_possible':False,'status':'FAILED','phase':'request_rejected',
+                      'action_key':'request.validate','operation_id':None,'trace':[],
+                      'error':{'code':'REQUEST_REJECTED'},'output':{'operation':{
+                          'state':'idle','cleanup_confirmed':True,'effect_state':'none'}}}})
+        self.assertTrue(menu_proof(rejected, '', {'dock_ui_action'}, 10, rejected_before_browser))
+        rejected['tools'][-1]['result']['effect_possible'] = True
+        self.assertFalse(menu_proof(rejected, '', {'dock_ui_action'}, 10, rejected_before_browser))
+        repeated = copy.deepcopy(data)
+        for item in repeated['calls'] + repeated['tools']: item['row'] += 4
+        first_call = copy.deepcopy(data['calls'][0]); first_call.update(tool_call_id='earlier')
+        first_observe = copy.deepcopy(data['tools'][0])
+        first_reply = copy.deepcopy(data['tools'][1]); first_reply.update(tool_call_id='earlier')
+        first_reply['result']['operation_id']='earlier-op'
+        repeated['calls'].insert(0, first_call)
+        repeated['tools'][:0]=[first_observe,first_reply]
+        repeated['events'].append({'phase':'completed','operation_id':'earlier-op','outcome':copy.deepcopy(first_reply['result'])})
+        self.assertTrue(menu_proof(repeated, '', {'dock_ui_action'}, 14))
         for mutate in (
             lambda d:d['calls'][1]['arguments'].update(observation_id='old'),
             lambda d:d['events'][1]['outcome']['output']['ui']['elements'].clear(),
