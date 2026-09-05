@@ -21,6 +21,18 @@ test('restricts credential files, endpoint and identity before connecting', asyn
   const options = { ...actor, configPath: path, stateDir: join(directory, 'state') };
   await writeFile(path, JSON.stringify(valid), { mode: 0o600 });
   assert.equal((await loadConfig(options)).apiKey, 'test-only');
+  assert.equal((await loadConfig(options)).mode, 'classic');
+  assert.equal((await loadConfig({ ...options, mode: 'executor-preview' })).mode, 'executor-preview');
+  await assert.rejects(loadConfig({ ...options, mode: 'executor-replay' }), /exact Dock catalog manifest/);
+  const replay = await loadConfig({ ...options, mode: 'executor-replay',
+    actionManifestUri: 'viking://resources/loginom-dock/catalogs/executor-preview/releases/2026.09.04-mvp.1-candidate/manifest.json',
+    actionManifestSha256: 'a'.repeat(64), replayBootstrap: true });
+  assert.equal(replay.mode, 'executor-replay');
+  assert.equal(replay.replayBootstrap, true);
+  await assert.rejects(loadConfig({ ...options, mode: 'classic', actionManifestUri: replay.actionManifestUri,
+    actionManifestSha256: replay.actionManifestSha256 }), /only allowed/);
+  await assert.rejects(loadConfig({ ...options, replayBootstrap: true }), /only allowed/);
+  await assert.rejects(loadConfig({ ...options, mode: 'production' }), /mode must be/);
   if (process.platform !== 'win32') {
     await chmod(path, 0o644);
     await assert.rejects(loadConfig(options), /private/);

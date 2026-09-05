@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { readCatalog, combineCatalogs, connectRemote } from '../lib/catalog.mjs';
+import { readCatalog, combineCatalogs, connectRemote, selectToolGroups } from '../lib/catalog.mjs';
 
 const tool = (name) => ({ name, inputSchema: { type: 'object', properties: {} } });
 
@@ -25,6 +25,25 @@ test('preserves tool schemas and isolates the pinned session from later catalog 
   assert.equal(result.routes.get('read'), 'remote');
   assert.equal(result.routes.get('browser_navigate'), 'browser');
   assert.equal(result.sha256.length, 64);
+});
+
+test('executor-preview removes every raw browser and clipboard tool while keeping only action entrypoints', () => {
+  const groups = selectToolGroups('executor-preview', {
+    remoteTools: [tool('read')], browserTools: [tool('browser_click'), tool('browser_run_code_unsafe')],
+    commonLocalTools: [tool('dock_diagnostics'), tool('dock_prepare'), tool('dock_clipboard_transfer')],
+    executorLocalTools: [tool('dock_diagnostics'), tool('dock_prepare'), tool('dock_action_describe'), tool('dock_action_run')],
+  });
+  const names = combineCatalogs(groups).tools.map(item => item.name);
+  assert.deepEqual(names, ['read', 'dock_diagnostics', 'dock_prepare', 'dock_action_describe', 'dock_action_run']);
+  assert.equal(names.some(name => name.startsWith('browser_')), false);
+  assert.equal(names.includes('dock_clipboard_transfer'), false);
+  assert.deepEqual(selectToolGroups('executor-replay', {
+    remoteTools: [tool('read')], browserTools: [tool('browser_click')], commonLocalTools: [tool('dock_clipboard_transfer')],
+    executorLocalTools: [tool('dock_action_run')],
+  }), { remote: [tool('read')], local: [tool('dock_action_run')] });
+  assert.deepEqual(Object.keys(selectToolGroups('research', {
+    remoteTools: [], browserTools: [], commonLocalTools: [], executorLocalTools: [],
+  })), ['remote', 'browser', 'local']);
 });
 
 

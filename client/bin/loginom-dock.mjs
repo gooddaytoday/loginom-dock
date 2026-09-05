@@ -11,11 +11,17 @@ try {
   const { values } = parseArgs({ options: {
     config: { type: 'string' }, 'state-dir': { type: 'string' },
     agent: { type: 'string' }, 'adapter-revision': { type: 'string' },
+    mode: { type: 'string' },
+    'action-manifest-uri': { type: 'string' }, 'action-manifest-sha256': { type: 'string' },
+    'replay-bootstrap': { type: 'boolean', default: false },
     headless: { type: 'boolean', default: false },
   } });
   const config = await loadConfig({
     configPath: values.config || process.env.LOGINOM_DOCK_CONFIG,
     stateDir: values['state-dir'], agent: values.agent, adapterRevision: values['adapter-revision'],
+    mode: values.mode || process.env.LOGINOM_DOCK_MODE || 'classic',
+    actionManifestUri: values['action-manifest-uri'], actionManifestSha256: values['action-manifest-sha256'],
+    replayBootstrap: values['replay-bootstrap'],
   });
   const session = await createSession(config, { headless: values.headless });
   bridge = await createBridge(config, session);

@@ -44,10 +44,16 @@ export async function createSession(config, { headless = false } = {}) {
   const chromiumRevision = browsers.browsers.find(item => item.name === 'chromium');
   const clientHash = createHash('sha256');
   for (const file of ['../.node-version', '../package.json', '../package-lock.json',
-    '../bin/loginom-dock.mjs', './config.mjs', './session.mjs', './catalog.mjs',
-    './bridge.mjs', './clipboard.mjs', './skill.mjs', './hooks.mjs', './history.mjs', './archive.mjs', './redact.mjs',
+    '../bin/loginom-dock.mjs', './config.mjs', './session.mjs', './catalog.mjs', './action-catalog.mjs', './executor.mjs',
+    './bridge.mjs', './workspace.mjs', './workspace-ui.mjs', './execution-journal.mjs', './recovery-context.mjs', './platform.mjs', './native.mjs', './clipboard.mjs', './skill.mjs', './hooks.mjs', './history.mjs', './archive.mjs', './redact.mjs',
     '../bin/hook.mjs', '../bin/dispatch.mjs', './hook-runtime.mjs', './install.mjs', './diagnostics.mjs', '../../examples/memory-plugin-shared/lib/mcp-proxy-config.mjs',
-    '../../examples/memory-plugin-shared/lib/batch-send.mjs', '../../examples/memory-plugin-shared/lib/capture-utils.mjs']) {
+    '../../examples/memory-plugin-shared/lib/batch-send.mjs', '../../examples/memory-plugin-shared/lib/capture-utils.mjs',
+    '../../examples/memory-plugin-shared/lib/pending-queue.mjs', '../../examples/memory-plugin-shared/lib/retryable.mjs',
+    '../../plugins/loginom-dock/.codex-plugin/plugin.json', '../../plugins/loginom-dock/.mcp.json',
+    '../../plugins/loginom-dock/hooks/hooks.json', '../../plugins/loginom-dock/scripts/launch.sh',
+    '../../plugins/loginom-dock/scripts/launch.cmd', '../../plugins/loginom-dock/skills/loginom/SKILL.md',
+    '../../plugins/loginom-dock-hermes/plugin.yaml', '../../plugins/loginom-dock-hermes/__init__.py',
+    '../../plugins/loginom-dock-hermes/skills/loginom/SKILL.md']) {
     clientHash.update(file + '\0').update(await readFile(new URL(file, import.meta.url)));
   }
   const browserConfig = join(directory, 'playwright.json');
@@ -61,13 +67,13 @@ export async function createSession(config, { headless = false } = {}) {
   const releaseName = relative(join(config.stateDir, 'releases'), releaseRoot);
   const runtimeRelease = /^[0-9A-Za-z.+-]+-[a-f0-9]{12}$/.test(releaseName) ? releaseName : null;
   const metadata = {
-    sessionId: id, agent: config.agent, adapterRevision: config.adapterRevision,
+    sessionId: id, agent: config.agent, adapterRevision: config.adapterRevision, mode: config.mode,
     node: process.versions.node, client: own.version, playwrightMcp: mcp.version,
     clientRevision: clientHash.digest('hex'),
     runtimeRelease,
     playwright: core.version, sdk: sdk.version,
     chromiumRevision: chromiumRevision.revision, chromiumVersion: chromiumRevision.browserVersion,
-    profile, artifacts, archiveActive: false, skillRevision: null,
+    profile, artifacts, archiveActive: false, skillRevision: null, workspaceReady: false, targetIdentity: null,
   };
   return {
     directory, metadata, browserRoot, browserConfig,

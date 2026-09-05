@@ -1,0 +1,11 @@
+{
+  "schema_version": 1,
+  "abi": 1,
+  "executor_revision": "1.1.0",
+  "outcomes": ["SUCCEEDED", "NOT_APPLIED", "FAILED", "AMBIGUOUS"],
+  "capabilities": {
+    "node.add.v1": { "mutates": ["workflow.node", "workflow.link"], "reconciliation": "one added node plus observed automatic incident links; all preexisting graph content is preserved" },
+    "link.create.v1": { "mutates": ["workflow.link", "workflow.port"], "reconciliation": "link and target port snapshot diff" },
+    "package.save_as.v1": { "mutates": ["package.storage", "workspace.active_package"], "reconciliation": "conflict dialog and active package identity" }
+  }
+}

@@ -42,3 +42,11 @@ export function combineCatalogs(groups) {
   const serialized = JSON.stringify(tools);
   return { tools, routes, sha256: createHash('sha256').update(serialized).digest('hex') };
 }
+
+export function selectToolGroups(mode, { remoteTools, browserTools, commonLocalTools, executorLocalTools }) {
+  if (['executor-preview', 'executor-replay'].includes(mode)) {
+    return { remote: remoteTools, local: executorLocalTools };
+  }
+  if (!['classic', 'research'].includes(mode)) throw new Error(`Unknown Dock mode: ${mode}`);
+  return { remote: remoteTools, browser: browserTools, local: commonLocalTools };
+}

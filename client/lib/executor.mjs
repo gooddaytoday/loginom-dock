@@ -1,0 +1,1107 @@
+import { randomUUID, createHash } from 'node:crypto';
+import { actionDescribeTool, actionRunTool, assertActionOutcome, validateActionParameters } from './action-catalog.mjs';
+import { makeWorkspaceUiCode, validateUiAction, uiActionSchema } from './workspace-ui.mjs';
+
+const identifier = { type: 'string', minLength: 1, maxLength: 128, pattern: '^[A-Za-z0-9._:-]+$' };
+const operationInspectTool = { name: 'dock_operation_inspect',
+  description: 'Inspect or reconcile a Dock operation from its actual browser receipt and current UI. Read-only; explains partial effects and available recovery. A tool failure does not terminate the task.',
+  inputSchema: { type: 'object', properties: { operation_id: identifier }, additionalProperties: false },
+  annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: false } };
+const operationRecoverTool = { name: 'dock_operation_recover',
+  description: 'Recover in the same session: complete_link connects the existing added input; restore_control confirms cleanup of a completed call; accept_observed_state resolves an uncertain generic UI gesture after a fresh observation. abandon_operation explicitly stops pursuing a completed operation after inspecting its fresh state, so a mistaken request or changed goal can be corrected with new actions. Its original outcome remains unsuccessful; it does not undo effects or verify the goal. Both observation strategies require observation_id and confirmed browser completion/cleanup. operation_id is the original pending ID; recovery_operation_id is a NEW unique request ID (for example repair-001). Inspect first, verify and continue.',
+  inputSchema: { type: 'object', properties: { operation_id: identifier, recovery_operation_id: identifier,
+    observation_id: identifier, strategy: { type: 'string', enum: ['complete_link', 'restore_control', 'accept_observed_state', 'abandon_operation'] } }, required: ['operation_id', 'recovery_operation_id', 'strategy'], additionalProperties: false },
+  annotations: { readOnlyHint: false, destructiveHint: true, openWorldHint: false } };
+const uiActionTool = { name: 'dock_ui_action',
+  description: 'Perform one bounded UI gesture on a fresh ref from dock_workspace_observe: click, double_click, fill, press or drag. action uses verb, e.g. {verb:"click",ref:"<observed ui-ref>"} or {verb:"drag",source_ref:"<observed ui-ref>",target_ref:"<observed ui-ref>"}. Use for settings, execution, inspection and repairs outside the ready-made actions. No JavaScript or selectors. A successful gesture is not proof of task completion: inspect its result. operation_id is a NEW unique UI request ID; for a pending partial action, recovery_operation_id is that ORIGINAL pending operation ID.',
+  inputSchema: { type: 'object', properties: { observation_id: identifier, operation_id: identifier, recovery_operation_id: identifier,
+    action: uiActionSchema },
+    required: ['observation_id', 'operation_id', 'action'], additionalProperties: false },
+  annotations: { readOnlyHint: false, destructiveHint: true, openWorldHint: false } };
+export const executorTools = [actionDescribeTool, actionRunTool, operationInspectTool, operationRecoverTool, uiActionTool];
+
+function browserCapability(page, task) {
+  const started = Date.now();
+  const deadline = task.deadline_at ?? started + task.action.timeout_ms;
+  const trace = [];
+  let phase = 'preconditions';
+  let effectPossible = false;
+  let mouseHeld = false;
+  let transientEditor = null;
+  let transientDialog = false;
+  let restoreViewport = null;
+  let workflow = task.checkpoint?.workflow_ref ?? null;
+  let loginomBuild = null;
+  const record = (event, detail = {}) => trace.push({ at_ms: Date.now() - started, event, ...detail });
+  const remaining = () => Math.max(0, deadline - Date.now());
+  const wait = ms => page.waitForTimeout(Math.min(ms, remaining()));
+  const result = (status, output = {}, error = null) => ({ status, action_key: task.action.action_key,
+    action_revision: task.action.revision, operation_id: task.operation_id, phase, effect_possible: effectPossible, output, error, trace });
+  const safeMessage = error => String(error?.message ?? error ?? 'unknown failure').slice(0, 1000);
+  const ensureDeadline = () => { if (Date.now() >= deadline) throw new Error('Action deadline exceeded'); };
+  const interact = async (operation, effect = false) => {
+    ensureDeadline();
+    if (effect) { effectPossible = true; phase = 'applying'; }
+    return operation(Math.max(1, remaining()));
+  };
+  const same = (left, right) => JSON.stringify(left) === JSON.stringify(right);
+  const sorted = values => [...values].sort();
+
+  const cssString = value => JSON.stringify(value).replaceAll('\u2028', '\\2028 ').replaceAll('\u2029', '\\2029 ');
+  const tid = (modifier, value, suffix = '') => page.locator(`[data-tid${modifier}=${cssString(value)}]${suffix}`);
+  const visible = async locator => {
+    const count = await locator.count();
+    const matches = [];
+    for (let index = 0; index < count; index++) if (await locator.nth(index).isVisible()) matches.push(locator.nth(index));
+    return matches;
+  };
+  const encode = (value, encoder) => {
+    if (encoder === 'integer') {
+      if (!Number.isInteger(value) || value < 0 || value > 999) throw new Error('Unsafe selector integer');
+      return String(value);
+    }
+    if (typeof value !== 'string' || !value || value.length > 200 || /[;|<>"'\\\r\n]/.test(value)) {
+      throw new Error('Unsafe Loginom selector parameter');
+    }
+    return value.replace(/\s/g, '_').replace(/,/g, '');
+  };
+  const activePrefix = async () => {
+    const tabs = await visible(tid('^', 'MF;cntMain;cntWorkspace;Workspace;t.br;tb', '.x-tab-active'));
+    if (tabs.length !== 1) throw new Error('Exactly one selected Loginom workspace tab is required');
+    const tabTid = await tabs[0].getAttribute('data-tid');
+    const match = /^MF;cntMain;cntWorkspace;Workspace;t\.br;tb(?:-(\d+))?$/.exec(tabTid ?? '');
+    if (!match) throw new Error('Selected Loginom workspace tab has an unknown identity');
+    const prefix = match[1] ? `MF;TF-${match[1]}` : 'MF;TF';
+    if (workflow && (workflow.tab_tid !== tabTid || workflow.prefix !== prefix)) {
+      throw new Error('Active workflow changed since the operation was prepared');
+    }
+    return prefix;
+  };
+  const interpolate = (definition, bindings) => definition.value.replace(/\{([a-z][a-z0-9_]*)\}/g, (_, name) => {
+    if (!(name in bindings)) throw new Error(`Missing selector binding ${name}`);
+    return encode(bindings[name], definition.parameters[name]);
+  });
+  const resolve = async (symbol, bindings = {}, options = {}) => {
+    ensureDeadline();
+    const definition = task.selectors[symbol];
+    if (!definition || !task.action.selector_symbols.includes(symbol)) throw new Error(`Selector ${symbol} is not allowed by the action`);
+    let value = interpolate(definition, bindings);
+    let match = definition.match;
+    if (['activeTab', 'activeWorkflow'].includes(definition.scope)) {
+      const prefix = await activePrefix();
+      value = `${prefix};${value}`;
+      match = 'exact';
+    }
+    const operator = { exact: '', prefix: '^', suffix: '$' }[match];
+    const classSuffix = definition.required_class ? `.${definition.required_class}` : '';
+    const all = tid(operator, value, classSuffix);
+    let matches = [...Array(await all.count()).keys()].map(index => all.nth(index));
+    if (definition.visibility !== 'any') {
+      const visibility = await Promise.all(matches.map(locator => locator.isVisible()));
+      matches = matches.filter((_, index) => visibility[index] === (definition.visibility === 'visible'));
+    }
+    const expected = options.cardinality ?? definition.cardinality;
+    if ((expected === 'one' && matches.length !== 1) || (expected === 'zeroOrOne' && matches.length > 1)) {
+      throw new Error(`Selector ${symbol} cardinality ${matches.length}, expected ${expected}`);
+    }
+    if (expected === 'many') return matches;
+    if (matches.length === 0) return null;
+    const locator = matches[0];
+    if (definition.state.includes('enabled') && !(await locator.isEnabled())) throw new Error(`Selector ${symbol} is disabled`);
+    if (options.stable !== false) {
+      const first = await locator.boundingBox();
+      if (!first) throw new Error(`Selector ${symbol} has no interaction geometry`);
+      await wait(50);
+      const second = await locator.boundingBox();
+      if (!second || ['x', 'y', 'width', 'height'].some(key => Math.abs(first[key] - second[key]) > 0.75)) {
+        throw new Error(`Selector ${symbol} geometry is unstable`);
+      }
+      const point = { x: second.x + second.width / 2, y: second.y + second.height / 2 };
+      const viewport = page.viewportSize();
+      if (viewport && (point.x < 0 || point.y < 0 || point.x > viewport.width || point.y > viewport.height)) {
+        throw new Error(`Selector ${symbol} is outside the viewport`);
+      }
+    }
+    return locator;
+  };
+  const poll = async (probe, interval = 100) => {
+    for (;;) {
+      ensureDeadline();
+      const value = await probe();
+      if (value) return value;
+      await wait(interval);
+    }
+  };
+  const waitForNoMask = async (maxWaitMs = 10000) => {
+    const waitDeadline = Math.min(deadline, Date.now() + maxWaitMs);
+    while (Date.now() < waitDeadline) {
+      const masks = await visible(page.locator('.bg-mask-message'));
+      if (!masks.length) return;
+      await wait(100);
+    }
+    throw new Error('Loginom is masked by an in-progress operation');
+  };
+  const ensureReady = async () => {
+    await resolve('loginom.ready_avatar', {}, { stable: false });
+    loginomBuild = await page.evaluate(() => globalThis.bg?.app?.Version ?? null);
+    if (task.expected_build && loginomBuild !== task.expected_build) throw new Error('Loginom build differs from the verified executor target');
+    const prefix = await activePrefix();
+    await waitForNoMask();
+    const tab = await resolve('workspace.active_tab', {}, { stable: false });
+    workflow ??= { tab_tid: await tab.getAttribute('data-tid'), prefix };
+    record('preconditions_verified', { active_tab: prefix });
+    return prefix;
+  };
+  const graphNodes = async prefix => page.locator(`[data-tid^=${cssString(prefix + ';Graph;')}][data-tid$=";Label;Label"]`).evaluateAll(elements =>
+    [...new Set(elements.filter(element => {
+      const style = getComputedStyle(element);
+      return style.display !== 'none' && style.visibility !== 'hidden';
+    }).map(element => (element.getAttribute('data-tid') ?? '').split(';Graph;')[1]?.replace(/;Label;Label$/, ''))
+      .filter(label => label && label !== 'Переменные_сценария'))].sort());
+  const ports = async (prefix, nodeLabel) => page.locator(`[data-tid^=${cssString(prefix + ';Graph;' + nodeLabel + ';')}]`).evaluateAll(elements =>
+    [...new Set(elements.map(element => element.getAttribute('data-tid')).filter(value => /;(?:Input|Output)_[^;]+$/.test(value ?? '')))].sort());
+  const graphLinks = async prefix => page.locator(`[data-tid^=${cssString(prefix + ';Graph;')}]`).evaluateAll(elements =>
+    [...new Set(elements.map(element => element.getAttribute('data-tid')).filter(value => {
+      const body = (value ?? '').split(';Graph;')[1] ?? '';
+      return body.split('|').length === 4 && !body.includes(';');
+    }))].sort());
+  const rawGraph = async prefix => ({ nodes: await Promise.all((await graphNodes(prefix)).map(async label =>
+    ({ label, ports: await ports(prefix, label) }))), links: await graphLinks(prefix) });
+  const graphSnapshot = async prefix => {
+    const nodes = await graphNodes(prefix);
+    const mappings = new Map();
+    const canonicalPorts = [];
+    for (const node of nodes) {
+      const rawPorts = (await ports(prefix, node)).map(value => value.slice((prefix + ';Graph;' + node + ';').length));
+      const groups = new Map(), mapping = new Map();
+      for (const port of rawPorts) {
+        const match = /^(.*)-(\d+)$/.exec(port);
+        if (!match) { mapping.set(port, port); continue; }
+        const kind = match[1], list = groups.get(kind) ?? [];
+        list.push({ raw: port, index: Number(match[2]) }); groups.set(kind, list);
+      }
+      for (const [kind, group] of groups) {
+        group.sort((left, right) => left.index - right.index);
+        group.forEach((port, ordinal) => mapping.set(port.raw, `${kind}[${ordinal}]`));
+      }
+      mappings.set(node, mapping);
+      canonicalPorts.push({ node_label: node, tids: sorted([...mapping.values()].map(port => `${node};${port}`)) });
+    }
+    // Loginom recreates live port indices on reopen (observed 0,1,3 -> 0,1,2).
+    // Preserve type/direction/count and ordinal, and remap each link endpoint
+    // through the same bijection. A different ordinal still changes the graph.
+    const canonicalLinks = (await graphLinks(prefix)).map(value => {
+      const [source, output, target, input] = value.slice((prefix + ';Graph;').length).split('|');
+      const sourcePort = mappings.get(source)?.get(output), targetPort = mappings.get(target)?.get(input);
+      if (!sourcePort || !targetPort) throw new Error('Graph link endpoint is absent from its node port snapshot');
+      return `${source}|${sourcePort}|${target}|${targetPort}`;
+    });
+    return { nodes, ports: canonicalPorts, links: sorted(canonicalLinks) };
+  };
+  const nodeRef = nodeLabel => ({ kind: 'node', node_label: nodeLabel, workflow_ref: { ...workflow } });
+  const checkNodeRef = node => {
+    if (!node.workflow_ref || node.workflow_ref.tab_tid !== workflow.tab_tid || node.workflow_ref.prefix !== workflow.prefix) throw new Error('Node reference belongs to a different workflow');
+  };
+  const nodeDropGeometry = async () => {
+    const workareaBox = await (await resolve('workflow.workarea')).boundingBox();
+    if (!workareaBox) throw new Error('Workflow has no interaction geometry');
+    const point = { x: workareaBox.x + task.parameters.target_position.x, y: workareaBox.y + task.parameters.target_position.y };
+    const graph = await resolve('workflow.graph', {}, { stable: false });
+    return graph.evaluate((element, point) => {
+      // Pinned, read-only local probe. ModelForm.js:2483-2500 subtracts cntDiagram,
+      // Graph.js:808-813 adds scroll and divides by scale; mouseup snaps to grid.
+      // SVG rect x/y are painted in view coordinates, not pnlWorkarea coordinates.
+      const app = globalThis.bg?.app;
+      const card = app?.Application?.FInstance?.FMainForm?.Items?.Workspace?.getActiveTab();
+      const model = card?.Controller?.FController;
+      if (!app?.ModelForm || !(model instanceof app.ModelForm) || !model.View?.getEl()?.dom?.contains(element)) {
+        throw new Error('Pinned ModelForm geometry probe does not match the active DOM');
+      }
+      const diagram = model.FDiagram, mxGraph = diagram?.FmxGraph, view = mxGraph?.view;
+      if (mxGraph?.container !== element || mxGraph.gridSize !== 8 || !(diagram.FInitialScale > 0) || !(view?.scale > 0)) {
+        throw new Error('Pinned graph geometry profile is unavailable');
+      }
+      const box = model.Items.cntDiagram.getBox();
+      const scale = view.scale / diagram.FInitialScale;
+      const logical = { x: Math.round((point.x - box.x + element.scrollLeft) / scale),
+        y: Math.round((point.y - box.y + element.scrollTop) / scale) };
+      const snapped = { x: Math.round(logical.x / 8) * 8, y: Math.round(logical.y / 8) * 8 };
+      if (snapped.x < 0 || snapped.y < 0) throw new Error('Requested drop lies outside the diagram');
+      return { point, snapped,
+        svg: { x: (snapped.x + view.translate.x) * view.scale, y: (snapped.y + view.translate.y) * view.scale },
+        scale, view_scale: view.scale, origin: { x: box.x, y: box.y }, scroll: { x: element.scrollLeft, y: element.scrollTop } };
+    }, point);
+  };
+  const verifyNodePosition = async (nodeLabel, expected) => {
+    if (!expected?.svg) throw new Error('Node position has no pre-mutation geometry checkpoint');
+    const created = await resolve('workflow.node', { node_label: nodeLabel });
+    const rectangle = created.locator('rect').first();
+    const x = await rectangle.getAttribute('x'), y = await rectangle.getAttribute('y');
+    const actual = { x: Number(x), y: Number(y) };
+    if (x === null || y === null || !Number.isFinite(actual.x) || !Number.isFinite(actual.y)) {
+      throw new Error('Created node has no verified SVG rectangle coordinates');
+    }
+    // mxGraph rounds SVG drawing coordinates to pixels. No extra grid-cell
+    // tolerance is accepted: the grid calculation was performed before mutation.
+    if (Math.abs(actual.x - expected.svg.x) > 0.75 || Math.abs(actual.y - expected.svg.y) > 0.75) {
+      throw new Error(`Created node position differs from the expected SVG grid position (${actual.x}, ${actual.y}; expected ${expected.svg.x}, ${expected.svg.y})`);
+    }
+    return { actual_svg: actual, expected_svg: expected.svg, logical: expected.snapped };
+  };
+  const drag = async (source, targetPoint, { sourcePoint, steps = 20 } = {}) => {
+    const box = await source.boundingBox();
+    if (!box) throw new Error('Drag source lost its geometry');
+    const start = sourcePoint ?? { x: box.x + box.width / 2, y: box.y + box.height / 2 };
+    await interact(() => page.mouse.move(start.x, start.y));
+    // mouse.down itself can be applied before the transport reports an error.
+    mouseHeld = true;
+    try {
+      await interact(() => page.mouse.down(), true);
+      await interact(() => page.mouse.move(targetPoint.x, targetPoint.y, { steps }), true);
+    } finally {
+      await page.mouse.up();
+      mouseHeld = false;
+      record('mouse_released');
+    }
+  };
+  const nodeCheckpoint = async () => {
+    const prefix = await ensureReady();
+    await resolve(`component.${task.parameters.component_key}`);
+    const box = await (await resolve('workflow.workarea')).boundingBox();
+    const position = task.parameters.target_position;
+    if (!box || position.x < 8 || position.y < 8 || position.x > box.width - 8 || position.y > box.height - 8) {
+      throw new Error('Target position is outside the workflow');
+    }
+    const before = await graphNodes(prefix);
+    if (task.parameters.expected_label && before.includes(encode(task.parameters.expected_label, 'loginom_tid'))) {
+      throw new Error('Expected node label already exists before this operation');
+    }
+    return { workflow_ref: { ...workflow }, nodes: before, graph: await rawGraph(prefix), geometry: await nodeDropGeometry() };
+  };
+  const reconcileNode = async before => {
+    const prefix = await ensureReady();
+    // Loginom hides the label while its inline editor is open. An empty
+    // label snapshot then cannot prove that the node was never created.
+    const graph = await resolve('workflow.graph', {}, { stable: false });
+    if ((await visible(graph.locator('textarea'))).length) {
+      return result('AMBIGUOUS', { reason: 'node rename editor is still open' });
+    }
+    const after = await graphNodes(prefix);
+    const added = after.filter(value => !before.nodes.includes(value));
+    const removed = before.nodes.filter(value => !after.includes(value));
+    if (!added.length && !removed.length) {
+      if (before.graph && !same(await rawGraph(prefix), before.graph)) return result('AMBIGUOUS', {
+        reason: 'unrelated graph changed', added_labels: [], removed_labels: [] });
+      return result('NOT_APPLIED');
+    }
+    if (added.length !== 1 || removed.length) return result('AMBIGUOUS', { added_labels: added, removed_labels: removed });
+    const label = added[0];
+    let autoCreatedLinks = [];
+    if (before.graph) {
+      const current = await rawGraph(prefix);
+      current.nodes = current.nodes.filter(node => node.label !== label);
+      if (!same(current, before.graph)) {
+        const addedLinks = current.links.filter(link => !before.graph.links.includes(link));
+        const ownedLinks = addedLinks.filter(link => {
+          const parts = link.slice((prefix + ';Graph;').length).split('|');
+          return parts.length === 4 && (parts[0] === label || parts[2] === label);
+        });
+        const withoutOwnedLinks = { ...current, links: current.links.filter(link => !ownedLinks.includes(link)) };
+        if (!same(withoutOwnedLinks, before.graph)) return result('AMBIGUOUS', {
+          added_label: label, added_links: addedLinks, repairable_links: [], reason: 'unrelated graph changed' });
+        // Loginom can connect nearby nodes on drop. These fully observed incident
+        // links are a normal effect of adding a node, not an uncertain operation.
+        // The agent must still decide whether they satisfy the scenario goal.
+        autoCreatedLinks = ownedLinks;
+      }
+    }
+    if (task.parameters.expected_label && encode(task.parameters.expected_label, 'loginom_tid') !== label) {
+      return result('AMBIGUOUS', { added_label: label, auto_created_links: autoCreatedLinks,
+        repairable_links: autoCreatedLinks, reason: 'requested rename is not confirmed' });
+    }
+    const position = await verifyNodePosition(label, before.geometry);
+    const reportsAutoLinks = !!task.action.output_schema.properties?.auto_created_links
+      && !!task.action.output_schema.properties?.goal_verified;
+    if (autoCreatedLinks.length && !reportsAutoLinks) return result('AMBIGUOUS', {
+      added_label: label, added_links: autoCreatedLinks, repairable_links: autoCreatedLinks,
+      reason: 'This legacy catalog cannot report automatic links; inspect their suitability before completing the node operation' });
+    phase = 'verified';
+    record('postcondition_verified', { added_count: 1, node_label: label, position, auto_created_links: autoCreatedLinks });
+    return result('SUCCEEDED', { node_ref: nodeRef(label), ...(reportsAutoLinks
+      ? { auto_created_links: autoCreatedLinks, goal_verified: false } : {}) });
+  };
+  const runNodeAdd = async () => {
+    const before = await nodeCheckpoint();
+    if (task.checkpoint && !same(before, task.checkpoint)) throw new Error('Workflow changed after node preflight');
+    const prefix = workflow.prefix;
+    const component = await resolve(`component.${task.parameters.component_key}`);
+    record('node_snapshot_before', { count: before.nodes.length, geometry: before.geometry });
+    await drag(component, before.geometry.point);
+    record('component_dragged', { component_key: task.parameters.component_key });
+    let after;
+    try { after = await poll(async () => {
+      const snapshot = await graphNodes(prefix);
+      return !same(snapshot, before.nodes) ? snapshot : null;
+    }); } catch { after = await graphNodes(prefix); }
+    const added = after.filter(value => !before.nodes.includes(value));
+    const removed = before.nodes.filter(value => !after.includes(value));
+    if (!added.length && !removed.length) return reconcileNode(before);
+    if (added.length !== 1 || removed.length) return result('AMBIGUOUS', { added_labels: added, removed_labels: removed });
+    let label = added[0];
+    if (task.parameters.expected_label) {
+      const expectedLabel = encode(task.parameters.expected_label, 'loginom_tid');
+      if (expectedLabel !== label) {
+        const existing = await resolve('workflow.node', { node_label: expectedLabel }, { cardinality: 'zeroOrOne', stable: false });
+        if (existing) return result('AMBIGUOUS', { added_label: label, reason: 'expected label already exists' });
+        await interact(timeout => resolve('workflow.node_label', { node_label: label }, { stable: false }).then(item => item.dblclick({ timeout })), true);
+        const graph = await resolve('workflow.graph', {}, { stable: false });
+        const editors = await visible(graph.locator('textarea'));
+        if (editors.length !== 1) return result('AMBIGUOUS', { added_label: label, reason: 'rename editor cardinality' });
+        transientEditor = editors[0];
+        await interact(timeout => transientEditor.click({ timeout }));
+        await interact(timeout => transientEditor.press('ControlOrMeta+A', { timeout }));
+        await interact(() => page.keyboard.type(task.parameters.expected_label, { delay: 20 }), true);
+        await interact(timeout => transientEditor.press('Enter', { timeout }), true);
+        await poll(() => resolve('workflow.node', { node_label: expectedLabel }, { cardinality: 'zeroOrOne', stable: false }));
+        transientEditor = null;
+        label = expectedLabel;
+      }
+      record('node_renamed', { node_label: label });
+    }
+    return reconcileNode(before);
+  };
+  const portSymbol = (direction, port) => `workflow.port.${direction}.${port.kind}`;
+  const portBindings = (node, port) => ({ node_label: node.node_label, port_index: port.index ?? 0 });
+  const linkCheckpoint = async () => {
+    const prefix = await ensureReady();
+    const { source_node: sourceNode, target_node: targetNode, source_port: sourcePort, target_port: targetPort } = task.parameters;
+    checkNodeRef(sourceNode); checkNodeRef(targetNode);
+    const source = await resolve(portSymbol('output', sourcePort), portBindings(sourceNode, sourcePort));
+    const target = await resolve(portSymbol('input', targetPort), portBindings(targetNode, targetPort));
+    return { workflow_ref: { ...workflow },
+      source_tid: await source.getAttribute('data-tid'), target_tid: await target.getAttribute('data-tid'),
+      links: await graphLinks(prefix), ports: await ports(prefix, targetNode.node_label), graph: await rawGraph(prefix) };
+  };
+  const reconcileLink = async (before, context = null) => {
+    const prefix = await ensureReady();
+    const { source_node: sourceNode, target_node: targetNode, target_port: targetPort } = task.parameters;
+    checkNodeRef(sourceNode); checkNodeRef(targetNode);
+    const currentLinks = await graphLinks(prefix);
+    const currentPorts = await ports(prefix, targetNode.node_label);
+    const addedLinks = currentLinks.filter(value => !before.links.includes(value));
+    const removedLinks = before.links.filter(value => !currentLinks.includes(value));
+    const addedPorts = currentPorts.filter(value => !before.ports.includes(value));
+    const removedPorts = before.ports.filter(value => !currentPorts.includes(value));
+    const sourceInfo = before.source_tid.split(';').at(-1);
+    const targetInfo = before.target_tid.split(';').at(-1);
+    const linkPrefix = `${prefix};Graph;${sourceNode.node_label}|${sourceInfo}|${targetNode.node_label}|`;
+    if (before.graph) {
+      const current = await rawGraph(prefix);
+      current.links = current.links.filter(link => !addedLinks.includes(link) || !link.startsWith(linkPrefix));
+      current.nodes = current.nodes.map(node => node.label === targetNode.node_label
+        ? { ...node, ports: node.ports.filter(port => !addedPorts.includes(port)) } : node);
+      if (!same(current, before.graph)) return result('AMBIGUOUS', { reason: 'unrelated graph changed', added_links: addedLinks, added_ports: addedPorts });
+    }
+    if (context) record('link_observation', { ...context,
+      baseline: { ports: before.ports, links: before.links },
+      current: { ports: currentPorts, links: currentLinks },
+      delta: { added_ports: addedPorts, removed_ports: removedPorts, added_links: addedLinks, removed_links: removedLinks } });
+    if (removedLinks.length || removedPorts.length) return result('AMBIGUOUS', { removed_links: removedLinks, removed_ports: removedPorts });
+    if (targetPort.kind === 'add') {
+      const targetTid = addedPorts[0];
+      const exact = targetTid && linkPrefix + targetTid.split(';').at(-1);
+      if (addedPorts.length === 1 && addedLinks.length === 1 && addedLinks[0] === exact) {
+        phase = 'verified';
+        record('postcondition_verified', { add_port_created: true, exact_link: true });
+        return result('SUCCEEDED', { link_ref: { kind: 'link', tid: exact }, target_port_tid: targetTid });
+      }
+    } else {
+      const exact = linkPrefix + targetInfo;
+      if (currentLinks.includes(exact) && !addedPorts.length && addedLinks.every(link => link === exact)) {
+        phase = 'verified';
+        record('postcondition_verified', { exact_link: true, reconciled: before.links.includes(exact) });
+        return result('SUCCEEDED', { link_ref: { kind: 'link', tid: exact }, reconciled: before.links.includes(exact) });
+      }
+    }
+    if (addedLinks.length || addedPorts.length) return result('AMBIGUOUS', { added_links: addedLinks, added_ports: addedPorts });
+    return result('NOT_APPLIED');
+  };
+  const runLinkCreate = async () => {
+    const before = await linkCheckpoint();
+    if (task.checkpoint && !same(before, task.checkpoint)) throw new Error('Workflow changed after link preflight');
+    const initial = await reconcileLink(before, { stage: 'initial', attempt: 0 });
+    if (initial.status !== 'NOT_APPLIED') return initial;
+    const graph = await resolve('workflow.graph', {}, { stable: false });
+    const viewportState = await graph.evaluate(element => ({ scrollLeft: element.scrollLeft, scrollTop: element.scrollTop }));
+    restoreViewport = () => graph.evaluate((element, state) => { element.scrollLeft = state.scrollLeft; element.scrollTop = state.scrollTop; }, viewportState);
+    const { source_node: sourceNode, target_node: targetNode, source_port: sourcePort, target_port: targetPort } = task.parameters;
+    for (let attempt = 0; attempt <= task.action.retry_budget; attempt++) {
+      // Any partial port/link mutation stops retries, even a single unlinked port.
+      const prior = await reconcileLink(before, { stage: 'before_drag', attempt: attempt + 1 });
+      if (prior.status !== 'NOT_APPLIED') return prior;
+      const freshSource = await resolve(portSymbol('output', sourcePort), portBindings(sourceNode, sourcePort));
+      const freshTarget = await resolve(portSymbol('input', targetPort), portBindings(targetNode, targetPort));
+      const sourceBox = await freshSource.boundingBox(), targetBox = await freshTarget.boundingBox();
+      if (!sourceBox || !targetBox) throw new Error('Port geometry disappeared');
+      const corrections = [{ x: 0, y: 0 }, { x: -1, y: 0 }, { x: 0, y: 1 }, { x: 1, y: 0 }, { x: -1, y: 1 }, { x: 1, y: 1 }];
+      const correction = corrections[attempt % corrections.length];
+      const sourcePoint = { x: sourceBox.x + sourceBox.width / 2, y: sourceBox.y + sourceBox.height / 2 };
+      const targetPoint = { x: targetBox.x + targetBox.width / 2 + correction.x, y: targetBox.y + targetBox.height / 2 + correction.y };
+      record('port_drag_attempt', { attempt: attempt + 1, correction, source_point: sourcePoint, target_point: targetPoint });
+      await drag(freshSource, targetPoint, { sourcePoint, steps: 10 + attempt * 4 });
+      await wait(150);
+      await waitForNoMask();
+      const observed = await reconcileLink(before, { stage: 'after_drag', attempt: attempt + 1 });
+      if (observed.status !== 'NOT_APPLIED') return observed;
+      // Require another settled observation before permitting a new attempt.
+      await wait(150);
+      await waitForNoMask();
+      const settled = await reconcileLink(before, { stage: 'settled_after_drag', attempt: attempt + 1 });
+      if (settled.status !== 'NOT_APPLIED') return settled;
+    }
+    return reconcileLink(before, { stage: 'retry_exhausted', attempt: task.action.retry_budget + 1 });
+  };
+  const recoverLink = async () => {
+    const before = task.checkpoint;
+    if (!before?.graph || task.parameters.target_port.kind !== 'add') throw new Error('Recovery requires an Input_Add graph checkpoint');
+    const observed = await reconcileLink(before, { stage: 'before_recovery', attempt: 1 });
+    if (observed.status !== 'AMBIGUOUS' || observed.output.reason || observed.output.added_links?.length !== 0
+        || observed.output.added_ports?.length !== 1) return observed;
+    const targetTid = observed.output.added_ports[0];
+    if (!targetTid.startsWith(before.workflow_ref.prefix + ';Graph;' + task.parameters.target_node.node_label + ';Input_Data-')) {
+      throw new Error('The observed partial port is not an input data port of the requested target');
+    }
+    const source = tid('', before.source_tid), target = tid('', targetTid);
+    if (await source.count() !== 1 || await target.count() !== 1) throw new Error('Recovery ports are no longer unique');
+    const box = await target.boundingBox();
+    if (!box) throw new Error('Recovery target has no geometry');
+    record('partial_link_recovery', { target_port_tid: targetTid, creates_port: false });
+    const graph = await resolve('workflow.graph', {}, { stable: false });
+    const viewport = await graph.evaluate(element => ({ scrollLeft: element.scrollLeft, scrollTop: element.scrollTop }));
+    restoreViewport = () => graph.evaluate((element, state) => { element.scrollLeft = state.scrollLeft; element.scrollTop = state.scrollTop; }, viewport);
+    await drag(source, { x: box.x + box.width / 2, y: box.y + box.height / 2 });
+    await wait(200); await waitForNoMask();
+    return reconcileLink(before, { stage: 'after_recovery', attempt: 1 });
+  };
+  const normalizedPackagePath = () => {
+    let value = task.parameters.path.trim().replaceAll('\\', '/').replace(/\/+/g, '/');
+    if (!value.startsWith('/')) value = '/' + value;
+    if (!value.toLowerCase().endsWith('.lgp')) value += '.lgp';
+    if (value.includes('/../') || value.endsWith('/..') || value.includes('/./') || /[\0\r\n]/.test(value)) throw new Error('Unsafe package path');
+    const roots = task.action.effect.allowed_roots;
+    if (!Array.isArray(roots) || !roots.some(root => value === root || value.startsWith(root + '/'))) throw new Error('Package path is outside the allowed Loginom storage root');
+    return value;
+  };
+  const packageIdentity = async () => page.evaluate(() => {
+    // Pinned read-only probe of cached navigation records. PackageFileName is a
+    // local getter (MapTree.js:2151-2154), not a server proxy or RPC operation.
+    const app = globalThis.bg?.app;
+    let node = app?.Application?.FInstance?.FMainForm?.Items?.Workspace?.getActiveTab()?.Controller?.Node?.data?.node;
+    const seen = new Set();
+    for (let depth = 0; node && depth < 32 && !seen.has(node); depth++) {
+      seen.add(node);
+      if (app.PackageTreeNode && node instanceof app.PackageTreeNode) {
+        const path = node.PackageFileName;
+        return { path: typeof path === 'string' ? path : null, name: node.PackageName ?? null };
+      }
+      node = node.ParentNode;
+    }
+    throw new Error('Active workflow has no verified cached package identity');
+  });
+  const normalizeStoredPath = value => {
+    if (typeof value !== 'string' || !value.trim()) return null;
+    value = value.replaceAll('\\', '/').replace(/\/+/g, '/');
+    return value.startsWith('/') ? value : '/' + value;
+  };
+  const packageCheckpoint = async () => {
+    const prefix = await ensureReady();
+    const tab = await resolve('workspace.active_tab', {}, { stable: false });
+    return { workflow_ref: { ...workflow }, path: normalizedPackagePath(),
+      identity: (await tab.innerText()).trim(), package_identity: await packageIdentity(), graph: await graphSnapshot(prefix) };
+  };
+  const verifyReopenedPackage = async before => {
+    const prefix = await ensureReady();
+    const activeTab = await resolve('workspace.active_tab', {}, { stable: false });
+    const identity = (await activeTab.innerText()).trim();
+    const reopenedIdentity = await packageIdentity();
+    const normalizedPath = normalizeStoredPath(reopenedIdentity.path);
+    const signature = await graphSnapshot(prefix);
+    const pathMatches = normalizedPath === before.path, graphMatches = same(signature, before.graph);
+    record('reopened_package_observed', { requested_path: before.path, actual_path: normalizedPath,
+      tab_caption: identity, path_matches: pathMatches, graph_matches: graphMatches, graph: signature });
+    if (!pathMatches || !graphMatches) {
+      return result('AMBIGUOUS', { path: before.path, actual_path: normalizedPath, tab_caption: identity,
+        path_matches: pathMatches, graph_matches: graphMatches, expected_graph: before.graph, actual_graph: signature,
+        reason: 'reopened package path or graph differs' });
+    }
+    phase = 'verified';
+    record('postcondition_verified', { reopened: true, package_path: normalizedPath, tab_caption: identity, graph: signature });
+    return result('SUCCEEDED', { package_ref: { kind: 'package', path: normalizedPath, active_identity: normalizedPath }, reopened: true });
+  };
+  const writeFileName = async (field, value) => {
+    const input = field.locator('input');
+    await interact(timeout => input.click({ timeout }));
+    await interact(timeout => input.press('ControlOrMeta+A', { timeout }));
+    await interact(() => page.keyboard.type(value, { delay: 10 }));
+    await interact(timeout => input.press('Tab', { timeout }));
+    if (await input.inputValue() !== value) throw new Error('Loginom file name editor did not commit the requested path');
+  };
+  const runPackageSaveAs = async () => {
+    const before = await packageCheckpoint();
+    if (task.checkpoint && !same(before, task.checkpoint)) throw new Error('Package changed after save preflight');
+    const click = async (symbol, effect = false) => interact(timeout => resolve(symbol).then(item => item.click({ timeout })), effect);
+    transientDialog = true;
+    await click('packages.menu');
+    await click('packages.save_as');
+    const input = await poll(() => resolve('file_dialog.file_name', {}, { cardinality: 'zeroOrOne', stable: false }));
+    await writeFileName(input, before.path);
+    await click('file_dialog.confirm', true);
+    record('save_requested', { path: before.path });
+    const saved = await poll(async () => {
+      const message = await resolve('message.text', {}, { cardinality: 'zeroOrOne', stable: false });
+      if (message && (await message.innerText()).toLocaleLowerCase('ru').includes('существует')) return 'conflict';
+      const errorMessage = await resolve('message.error', {}, { cardinality: 'zeroOrOne', stable: false });
+      if (errorMessage) throw new Error((await errorMessage.innerText()).slice(0, 500));
+      const dialog = await resolve('file_dialog.file_name', {}, { cardinality: 'zeroOrOne', stable: false });
+      const masks = await visible(page.locator('.bg-mask-message'));
+      return !dialog && !masks.length ? 'saved' : null;
+    });
+    if (saved === 'conflict') {
+      if (task.parameters.conflict_policy === 'replace') {
+        await click('message.yes', true);
+        record('overwrite_confirmed');
+      } else {
+        const no = await resolve('message.no', {}, { cardinality: 'zeroOrOne', stable: false });
+        if (!no) return result('AMBIGUOUS', { path: before.path, reason: 'overwrite cancellation is unavailable' });
+        await interact(timeout => no.click({ timeout }));
+        record('conflict_rejected');
+        return result('NOT_APPLIED', { path: before.path, conflict: true });
+      }
+    }
+    await waitForNoMask(60000);
+    await poll(async () => !(await resolve('file_dialog.file_name', {}, { cardinality: 'zeroOrOne', stable: false })));
+    const errorMessage = await resolve('message.error', {}, { cardinality: 'zeroOrOne', stable: false });
+    if (errorMessage) throw new Error((await errorMessage.innerText()).slice(0, 500));
+    transientDialog = false;
+    await click('packages.menu');
+    await click('packages.close', true);
+    // Closing and reopening necessarily changes the selected tab identity.
+    const closedTabTid = workflow.tab_tid;
+    workflow = null;
+    await poll(async () => {
+      const unsaved = await resolve('message.text', {}, { cardinality: 'zeroOrOne', stable: false });
+      if (unsaved && (await unsaved.innerText()).toLocaleLowerCase('ru').includes('сохранить изменения')) {
+        transientDialog = true;
+        throw new Error('Package remained dirty after save');
+      }
+      return await tid('', closedTabTid).count() === 0;
+    });
+    record('saved_package_closed');
+    transientDialog = true;
+    await click('packages.menu');
+    await click('packages.open');
+    const openInput = await poll(() => resolve('file_dialog.file_name', {}, { cardinality: 'zeroOrOne', stable: false }));
+    await writeFileName(openInput, before.path);
+    await click('file_dialog.confirm', true);
+    await poll(async () => {
+      const errorMessage = await resolve('message.error', {}, { cardinality: 'zeroOrOne', stable: false });
+      if (errorMessage) throw new Error((await errorMessage.innerText()).slice(0, 500));
+      try { return await resolve('workflow.graph', {}, { cardinality: 'zeroOrOne', stable: false }); }
+      catch (error) {
+        if (/selected Loginom workspace tab|unknown identity/.test(error.message)) return null;
+        throw error;
+      }
+    });
+    await waitForNoMask(60000);
+    transientDialog = false;
+    return verifyReopenedPackage(before);
+  };
+  const observe = async () => {
+    const prefix = await ensureReady();
+    const labels = await graphNodes(prefix);
+    const nodes = [];
+    for (const label of labels) {
+      const locator = await resolve('workflow.node', { node_label: label }, { stable: false });
+      const nodePorts = [];
+      for (const portTid of await ports(prefix, label)) {
+        const locator = tid('', portTid);
+        if (await locator.count() !== 1) throw new Error('Observed port has ambiguous identity');
+        nodePorts.push({ tid: portTid, bounding_box: await locator.boundingBox() });
+      }
+      nodes.push({ node_ref: nodeRef(label), bounding_box: await locator.boundingBox(), ports: nodePorts });
+    }
+    const tab = await resolve('workspace.active_tab', {}, { stable: false });
+    const workarea = await (await resolve('workflow.workarea', {}, { stable: false })).boundingBox();
+    const observedPackage = await packageIdentity();
+    return result('SUCCEEDED', { authenticated: true, loginom_build: loginomBuild, workflow_ref: { ...workflow },
+      active_identity: (await tab.innerText()).trim(), package_identity: { path: normalizeStoredPath(observedPackage.path), name: observedPackage.name },
+      nodes, links: await graphLinks(prefix), workarea });
+  };
+  return (async () => {
+    record('action_started', { capability: task.action.capability, mode: task.mode ?? 'apply' });
+    let outcome;
+    try {
+      if (task.mode === 'observe') outcome = await observe();
+      else if (task.mode === 'prepare') {
+        const checkpoint = task.action.capability === 'node.add.v1' ? await nodeCheckpoint()
+          : task.action.capability === 'link.create.v1' ? await linkCheckpoint() : await packageCheckpoint();
+        phase = 'prepared';
+        outcome = { ...result('NOT_APPLIED'), checkpoint };
+      } else if (task.mode === 'reconcile') {
+        phase = 'reconciling';
+        if (task.action.capability === 'node.add.v1') outcome = await reconcileNode(task.checkpoint);
+        else if (task.action.capability === 'link.create.v1') outcome = await reconcileLink(task.checkpoint);
+        else outcome = result('AMBIGUOUS', {}, { code: 'SAVE_RECEIPT_MISSING', message: 'A lost save response cannot prove close/reopen from a read-only DOM snapshot' });
+      } else if (task.mode === 'recover_link') outcome = await recoverLink();
+      else if (task.action.capability === 'node.add.v1') outcome = await runNodeAdd();
+      else if (task.action.capability === 'link.create.v1') outcome = await runLinkCreate();
+      else if (task.action.capability === 'package.save_as.v1') outcome = await runPackageSaveAs();
+      else throw new Error('Unknown local capability');
+    } catch (error) {
+      record('action_failed', { phase, effect_possible: effectPossible });
+      outcome = result(effectPossible || task.mode === 'reconcile' ? 'AMBIGUOUS' : 'FAILED', {}, { code: 'CAPABILITY_ERROR', message: safeMessage(error) });
+    } finally {
+      const cleanup = async (name, operation) => {
+        try { await operation(); record('cleanup_completed', { resource: name }); }
+        catch (error) {
+          record('cleanup_failed', { resource: name });
+          outcome = result('AMBIGUOUS', {}, { code: 'CLEANUP_FAILED', message: safeMessage(error) });
+        }
+      };
+      if (mouseHeld) await cleanup('mouse', () => page.mouse.up());
+      if (transientEditor) await cleanup('rename_editor', async () => {
+        if (await transientEditor.isVisible()) await transientEditor.press('Escape', { timeout: 3000 });
+      });
+      if (transientDialog) await cleanup('transient_dialog', () => page.keyboard.press('Escape'));
+      if (restoreViewport) await cleanup('viewport', restoreViewport);
+    }
+    outcome.cleanup_complete = !trace.some(entry => entry.event === 'cleanup_failed');
+    return outcome;
+  })();
+}
+
+export function makeCapabilityCode(action, selectors, parameters, options = {}) {
+  const allowedSelectors = Object.fromEntries(action.selector_symbols.map(symbol => [symbol, selectors.get(symbol)]));
+  const task = { action: structuredClone(action), selectors: structuredClone(allowedSelectors), parameters: structuredClone(parameters), ...structuredClone(options) };
+  const body = `(${browserCapability.toString()})(page, ${JSON.stringify(task)})`;
+  return ['apply', 'recover_link'].includes(task.mode) && task.receipt_namespace
+    ? withBrowserReceipt(body, task) : `async (page) => ${body}`;
+}
+
+// The receipt lives on the Playwright Page in the local browser server, outside
+// the web application's JS world. Losing an MCP response does not lose proof
+// that this exact operation finished its finally/cleanup block.
+function browserReceipt(page, task, perform) {
+  const symbol = Symbol.for('loginom-dock.operation-receipts.v1');
+  const ledger = page[symbol] ??= new Map();
+  const key = task.receipt_namespace + '/' + (task.receipt_id ?? task.operation_id);
+  const previous = ledger.get(key);
+  const envelope = (state, output = {}) => ({ status: 'SUCCEEDED', action_key: 'operation.inspect', action_revision: '1',
+    operation_id: task.operation_id, phase: 'observed', effect_possible: false, output: { state, ...output }, error: null, trace: [] });
+  if (task.receipt_read) {
+    if (!previous) return envelope('missing');
+    if (previous.signature !== task.receipt_signature) return envelope('identity_mismatch');
+    return envelope(previous.state, previous.outcome ? { receipt: previous.outcome } : {});
+  }
+  if (previous) {
+    if (previous.signature !== task.receipt_signature) throw new Error('Browser operation receipt identity mismatch');
+    if (previous.state === 'completed') return previous.outcome;
+    throw new Error('Browser operation already started; inspect its receipt before retrying');
+  }
+  for (const [oldKey, value] of ledger) {
+    if (ledger.size < 128) break;
+    if (value.state === 'completed' && oldKey !== key) ledger.delete(oldKey);
+  }
+  if (ledger.size >= 128) throw new Error('Browser receipt capacity reached');
+  const entry = { state: 'running', signature: task.receipt_signature };
+  ledger.set(key, entry);
+  return (async () => {
+    try { const outcome = await perform(); entry.outcome = outcome; entry.state = 'completed'; return outcome; }
+    catch (error) { entry.state = 'unknown'; throw error; }
+  })();
+}
+function withBrowserReceipt(body, options) {
+  return `async (page) => (${browserReceipt.toString()})(page, ${JSON.stringify(options)}, () => ${body})`;
+}
+
+export function parseCapabilityResult(response) {
+  if (response?.isError) throw new Error('Pinned browser capability call failed');
+  for (const block of response?.content ?? []) {
+    if (block.type !== 'text') continue;
+    const match = block.text.match(/^### Result\n([\s\S]*?)(?:\n### |$)/);
+    const source = match?.[1] ?? block.text;
+    try { return assertActionOutcome(JSON.parse(source)); } catch {}
+  }
+  throw new Error('Pinned browser capability returned no typed result');
+}
+
+export function createActionRuntime({ pinned, execute, allowCandidate = false, onRecord = async () => {}, now = Date.now, targetBuild = pinned?.compatibility?.loginom_build, targetOrigin }) {
+  if (!pinned?.actions || !pinned?.selectors) throw new Error('A verified pinned action catalog is required');
+  let pending = null;
+  let running = false;
+  const operations = new Map();
+  const auxiliary = new Map();
+  const observations = new Map();
+  const receiptNamespace = randomUUID();
+  const checkId = id => { if (typeof id !== 'string' || !/^[A-Za-z0-9_.:-]{1,128}$/.test(id)) throw new Error('A stable operation identifier is required'); };
+  const fingerprint = (actionKey, parameters) => {
+    const canonical = value => value && typeof value === 'object'
+      ? Array.isArray(value) ? value.map(canonical) : Object.fromEntries(Object.keys(value).sort().map(key => [key, canonical(value[key])])) : value;
+    return createHash('sha256').update(JSON.stringify([actionKey, canonical(parameters)])).digest('hex');
+  };
+  const find = actionKey => {
+    if (typeof actionKey !== 'string' || !actionKey.trim()) throw new Error('action_key is required');
+    const action = pinned.actions.get(actionKey);
+    if (!action) throw new Error(`Action ${actionKey} is not present in the pinned catalog`);
+    const accepted = pinned.acceptanceVerified === true && pinned.pins?.catalogLifecycleStatus === 'production';
+    if (action.status !== 'production' && !(action.status === 'candidate' && (allowCandidate || accepted))) {
+      throw new Error(`Action ${actionKey} is not executable in this session (${action.status})`);
+    }
+    return action;
+  };
+  const failed = (operation, code, message, status = 'AMBIGUOUS') => ({ status,
+    action_key: operation.action.action_key, action_revision: operation.action.revision,
+    operation_id: operation.id, output: {}, error: { code, message }, trace: [] });
+  const receiptOptions = (operation, id, key, signature) => {
+    operation.lastReceipt = { id, signature, action_key: key, operation_id: id };
+    return { receipt_namespace: receiptNamespace, receipt_id: id, receipt_signature: signature };
+  };
+  const invoke = async (operation, mode, { receiptId, ...options } = {}) => {
+    const mutation = ['apply', 'recover_link'].includes(mode);
+    const receipt = mutation ? receiptOptions(operation, receiptId ?? operation.id, operation.action.action_key,
+      fingerprint(mode, [operation.action.action_key, operation.parameters, operation.checkpoint])) : {};
+    // Recovery receipts retain the original action identity; their storage ID is
+    // distinct so repeating recovery never performs another physical gesture.
+    if (mutation) operation.lastReceipt.operation_id = operation.id;
+    const outcome = await execute(makeCapabilityCode(operation.action, pinned.selectors, operation.parameters, {
+      operation_id: operation.id, mode, checkpoint: operation.checkpoint, expected_build: targetBuild,
+      ...receipt, ...(mutation ? { deadline_at: mode === 'apply' ? operation.deadline : now() + operation.action.timeout_ms } : {}),
+    }), { timeout: operation.action.timeout_ms + 5000, ...options });
+    assertActionOutcome(outcome);
+    if (outcome.action_key !== operation.action.action_key || outcome.action_revision !== operation.action.revision) {
+      throw new Error('Dock capability outcome identity does not match the pinned action');
+    }
+    if (outcome.operation_id !== operation.id) throw new Error('Dock capability operation identity does not match');
+    if (mode !== 'prepare' && outcome.status === 'SUCCEEDED') validateActionParameters(operation.action.output_schema, outcome.output, 'output');
+    return outcome;
+  };
+  const remember = async (operation, phase, outcome) => {
+    await onRecord({ operation_id: operation.id, action_key: operation.action.action_key, action_revision: operation.action.revision,
+      phase, parameters: structuredClone(operation.parameters), checkpoint: structuredClone(operation.checkpoint ?? null),
+      deadline_at: operation.deadline ?? null, ...(outcome ? { outcome: structuredClone(outcome) } : {}) });
+  };
+  const readReceipt = async operation => {
+    if (!operation.lastReceipt) return { state: 'missing' };
+    const reference = operation.lastReceipt;
+    const code = `async (page) => (${browserReceipt.toString()})(page, ${JSON.stringify({ receipt_namespace: receiptNamespace,
+      receipt_id: reference.id, receipt_signature: reference.signature, receipt_read: true, operation_id: operation.id })})`;
+    const value = await execute(code, { timeout: 10000 });
+    assertActionOutcome(value);
+    const state = value.output;
+    if (state?.state === 'completed') {
+      const receipt = assertActionOutcome(state.receipt);
+      if (receipt.operation_id !== reference.operation_id || receipt.action_key !== reference.action_key) throw new Error('Recovered browser receipt has a different identity');
+      if (receipt.action_key === operation.action.action_key && receipt.status === 'SUCCEEDED' && operation.action.output_schema) {
+        validateActionParameters(operation.action.output_schema, receipt.output, 'output');
+      }
+    }
+    return state;
+  };
+  const reconcilePending = async () => {
+    const operation = pending;
+    try {
+      if (operation.transportUncertain) {
+        const state = await readReceipt(operation);
+        if (state?.state !== 'completed') return failed(operation, 'OPERATION_STILL_PENDING',
+          `Browser receipt is ${state?.state ?? 'unavailable'}; only observation is available until actual completion is established`);
+        operation.transportUncertain = false;
+        operation.cleanupConfirmed = state.receipt.cleanup_complete === true;
+        await remember(operation, 'receipt_recovered', state.receipt);
+        if (auxiliary.has(operation.lastReceipt.id)) {
+          const cached = auxiliary.get(operation.lastReceipt.id);
+          cached.outcome = { ...structuredClone(state.receipt), ...(cached.outcome.recovery_operation_id
+            ? { recovery_operation_id: cached.outcome.recovery_operation_id } : {}) };
+        }
+        if (state.receipt.action_key === operation.action.action_key) operation.outcome = state.receipt;
+        if (operation.cleanupConfirmed && operation.outcome.status !== 'AMBIGUOUS') {
+          pending = null; return operation.outcome;
+        }
+      }
+      if (operation.cleanupConfirmed === false) return failed(operation, 'CLEANUP_RECEIPT_MISSING',
+        'The browser call finished but cleanup is unconfirmed. Inspect and restore_control before further mutations.');
+      if (operation.action.capability === 'ui.act') {
+        await remember(operation, 'reconciled', operation.outcome);
+        if (operation.outcome.status !== 'AMBIGUOUS') pending = null;
+        return operation.outcome;
+      }
+      const outcome = await invoke(operation, 'reconcile');
+      await remember(operation, 'reconciled', outcome);
+      operation.outcome = outcome;
+      if (outcome.status === 'SUCCEEDED' || outcome.status === 'NOT_APPLIED') {
+        pending = null;
+        operation.outcome = outcome;
+      }
+      return outcome;
+    } catch (error) { return failed(operation, 'RECONCILIATION_FAILED', String(error?.message ?? error).slice(0, 1000)); }
+  };
+  const view = (operation, outcome) => ({ status: 'SUCCEEDED', action_key: 'operation.inspect', action_revision: '1',
+    operation_id: operation?.id, phase: 'observed', effect_possible: false, error: null, trace: [], output: {
+      operation_id: operation?.id ?? null, state: !operation ? 'idle' : pending === operation ? 'pending' : 'resolved',
+      outcome: outcome ?? operation?.outcome ?? null, cleanup_confirmed: operation ? operation.cleanupConfirmed === true : true,
+      effect_state: !operation ? 'none' : operation.transportUncertain ? 'unknown' : pending === operation ? 'partial_or_unverified'
+        : operation.outcome?.resolution ? 'observed_unverified' : 'verified',
+      recovery_options: !operation || pending !== operation || operation.transportUncertain ? []
+        : operation.cleanupConfirmed === false ? ['restore_control']
+          : ['abandon_operation', ...(operation.action.capability === 'ui.act' ? ['accept_observed_state'] : []), ...(operation.action.capability === 'link.create.v1' && operation.parameters.target_port.kind === 'add'
+            && !operation.outcome?.output?.reason && operation.outcome?.output?.added_ports?.length === 1 && operation.outcome?.output?.added_links?.length === 0 ? ['complete_link'] : []), 'inspect_ui', 'ui_repair'],
+    } });
+  const retainObservation = outcome => {
+    if (outcome?.output?.ui) {
+      const id = randomUUID(); outcome.output.observation_id = id;
+      observations.set(id, structuredClone(outcome.output));
+      while (observations.size > 8) observations.delete(observations.keys().next().value);
+    }
+    return outcome;
+  };
+  const inspect = async ({ operationId, signal } = {}) => {
+    signal?.throwIfAborted();
+    const operation = operationId ? operations.get(operationId) : pending;
+    if (operationId && !operation) throw new Error('Operation is not known in this session');
+    if (!operation || pending !== operation) return view(operation);
+    return view(operation, await reconcilePending());
+  };
+  return Object.freeze({
+    tools: executorTools,
+    assertPreparationAllowed() {
+      if (running || pending) throw new Error('Dock preparation cannot run while an action is running or its effect remains uncertain');
+    },
+    describe(actionKey) {
+      if (actionKey === undefined) return { available_actions: [...pinned.actions.keys()],
+        ui_action_tool: 'dock_ui_action', observation_tool: 'dock_workspace_observe', session_manifest: structuredClone(pinned.pins) };
+      const action = find(actionKey);
+      return { action: structuredClone(action), session_manifest: structuredClone(pinned.pins) };
+    },
+    requestFailure(error) {
+      return { status: pending ? 'AMBIGUOUS' : 'FAILED', action_key: pending?.action.action_key ?? 'request.validate',
+        action_revision: pending?.action.revision ?? '1', operation_id: pending?.id ?? null,
+        phase: 'request_rejected', effect_possible: !!pending, request_rejected: true,
+        output: { available_actions: [...pinned.actions.keys()], ui_action_tool: 'dock_ui_action', operation: view(pending).output },
+        error: { code: 'REQUEST_REJECTED', message: String(error?.message ?? error).slice(0, 1000) }, trace: [] };
+    },
+    inspect,
+    async recover(operationId, { strategy, recoveryOperationId, observationId, signal } = {}) {
+      signal?.throwIfAborted(); checkId(operationId); checkId(recoveryOperationId);
+      const signature = fingerprint('recover', [operationId, strategy, observationId ?? null]);
+      if (auxiliary.has(recoveryOperationId)) {
+        const previous = auxiliary.get(recoveryOperationId);
+        if (previous.signature !== signature) throw new Error('Recovery operation ID was already used with different parameters');
+        return structuredClone(previous.outcome);
+      }
+      if (operations.has(recoveryOperationId)) throw new Error('Recovery ID conflicts with an existing operation');
+      const operation = operations.get(operationId);
+      if (!operation || pending !== operation) throw new Error('Recovery requires the pending operation of this session');
+      if (!['complete_link', 'restore_control', 'accept_observed_state', 'abandon_operation'].includes(strategy)) throw new Error('Unsupported recovery strategy');
+      if (strategy === 'complete_link' && operation.action.capability !== 'link.create.v1') throw new Error('complete_link requires a pending link.create operation');
+      if (strategy === 'accept_observed_state' && operation.action.capability !== 'ui.act') throw new Error('Only a generic UI gesture can accept an observed state; domain actions require verified postconditions');
+      if (running) throw new Error('Another Dock action is still running');
+      running = true;
+      try {
+        await reconcilePending();
+        if (!pending) return { ...structuredClone(operation.outcome), recovery_operation_id: recoveryOperationId };
+        if (operation.transportUncertain) throw new Error('The browser operation has not confirmed completion; inspect before recovery');
+        if (strategy !== 'restore_control' && !operation.cleanupConfirmed) throw new Error('Restore browser control before repairing the graph');
+        if (strategy === 'accept_observed_state' || strategy === 'abandon_operation') {
+          const snapshot = observations.get(observationId);
+          if (!snapshot) throw new Error('Observe the current UI before accepting its state');
+          const current = await execute(makeWorkspaceUiCode({ mode: 'observe', expected_build: targetBuild, expected_origin: targetOrigin }), { signal, timeout: 35000 });
+          const identity = value => [value.origin, value.loginom_build, value.workflow_ref, value.package_identity, value.nodes, value.links, value.ui];
+          if (current.status !== 'SUCCEEDED' || fingerprint('ui-state', identity(snapshot)) !== fingerprint('ui-state', identity(current.output))) {
+            throw new Error('Observed state changed before acceptance; inspect the fresh UI');
+          }
+          const resolution = strategy === 'abandon_operation' ? 'abandoned_after_observation' : 'accepted_observed_state';
+          const resolved = { ...structuredClone(operation.outcome), resolution, goal_verified: false,
+            recovery_operation_id: recoveryOperationId, observation_id: observationId };
+          await remember(operation, strategy === 'abandon_operation' ? 'operation_abandoned' : 'observed_state_accepted', resolved);
+          operation.outcome = resolved; pending = null; observations.clear();
+          const result = { status: 'SUCCEEDED', action_key: 'operation.recover', action_revision: '1', operation_id: operationId,
+            phase: 'resolved', effect_possible: false, error: null, trace: [], output: { resolution,
+              goal_verified: false, original_outcome: resolved }, recovery_operation_id: recoveryOperationId };
+          auxiliary.set(recoveryOperationId, { signature, outcome: structuredClone(result) });
+          return result;
+        }
+        if ((operation.recoveryAttempts ?? 0) >= 12) throw new Error('Recovery budget exhausted; inspect and report the unresolved state');
+        operation.recoveryAttempts = (operation.recoveryAttempts ?? 0) + 1;
+        const record = { ...operation, id: recoveryOperationId, parameters: { original_operation_id: operationId, strategy } };
+        await remember(record, 'recovery_prepared');
+        observations.clear();
+        let outcome;
+        try {
+          if (strategy === 'complete_link') outcome = await invoke(operation, 'recover_link', { receiptId: recoveryOperationId });
+          else {
+            const receipt = receiptOptions(operation, recoveryOperationId, 'operation.restore_control', signature);
+            const body = `(async () => { const outcome = {status:'SUCCEEDED', action_key:'operation.restore_control',action_revision:'1',operation_id:${JSON.stringify(recoveryOperationId)},phase:'cleanup',effect_possible:true,output:{},error:null,trace:[]}; try { await page.mouse.up(); await page.keyboard.press('Escape'); outcome.cleanup_complete=true; } catch(error) { outcome.status='AMBIGUOUS';outcome.cleanup_complete=false;outcome.error={code:'CLEANUP_FAILED',message:String(error.message).slice(0,500)}; } return outcome; })()`;
+            const restored = await execute(withBrowserReceipt(body, receipt), { timeout: 15000 });
+            if (!restored.cleanup_complete) { operation.cleanupConfirmed = false; outcome = failed(operation, 'CLEANUP_FAILED', 'Browser cleanup failed'); }
+            else { operation.cleanupConfirmed = true; outcome = operation.action.capability === 'ui.act'
+              ? { ...operation.outcome, cleanup_complete: true } : await invoke(operation, 'reconcile'); }
+          }
+        } catch (error) {
+          operation.transportUncertain = true;
+          outcome = failed(operation, 'BROWSER_CALL_UNCERTAIN', String(error?.message ?? error).slice(0, 1000));
+        }
+        if (!operation.transportUncertain && outcome.status === 'FAILED' && outcome.cleanup_complete === true) {
+          const attempt = outcome;
+          outcome = await invoke(operation, 'reconcile');
+          outcome.recovery_attempt = attempt;
+        }
+        operation.outcome = outcome;
+        if (!operation.transportUncertain) operation.cleanupConfirmed = outcome.cleanup_complete === true;
+        await remember(record, 'recovery_completed', outcome);
+        const returned = { ...outcome, recovery_operation_id: recoveryOperationId };
+        auxiliary.set(recoveryOperationId, { signature, outcome: structuredClone(returned) });
+        if (!operation.transportUncertain && operation.cleanupConfirmed && ['SUCCEEDED', 'NOT_APPLIED'].includes(outcome.status)) pending = null;
+        return returned;
+      } finally { running = false; }
+    },
+    async observe({ signal } = {}) {
+      signal?.throwIfAborted();
+      const outcome = await execute(makeWorkspaceUiCode({ mode: 'observe', expected_build: targetBuild, expected_origin: targetOrigin }), { signal, timeout: 35000 });
+      outcome.output.operation = view(pending).output;
+      return retainObservation(outcome);
+    },
+    async uiAct(action, { observationId, operationId, recoveryOperationId, signal } = {}) {
+      signal?.throwIfAborted(); checkId(operationId);
+      const signature = fingerprint('ui.act', [observationId, action, recoveryOperationId ?? null]);
+      if (auxiliary.has(operationId)) {
+        const previous = auxiliary.get(operationId);
+        if (previous.signature !== signature) throw new Error('UI operation ID was already used with different parameters');
+        return structuredClone(previous.outcome);
+      }
+      if (operations.has(operationId)) throw new Error('UI operation ID conflicts with an existing operation');
+      const snapshot = observations.get(observationId);
+      if (!snapshot) throw new Error('Observation is stale or belongs to another session; observe again');
+      validateUiAction(action, snapshot);
+      if (running) throw new Error('Another Dock action is still running');
+      if (recoveryOperationId && pending?.id !== recoveryOperationId) throw new Error('Recovery binding does not match the pending operation');
+      if (pending && (!recoveryOperationId || pending.transportUncertain || !pending.cleanupConfirmed)) {
+        throw new Error('Inspect the pending operation and confirm browser completion/cleanup before UI repair');
+      }
+      if (pending && (pending.recoveryAttempts ?? 0) >= 12) throw new Error('Recovery budget exhausted; report the unresolved state');
+      const original = pending;
+      // While a domain action is pending, repair only its known created node,
+      // target node, or the corresponding editor/dialog. Unrelated graph items
+      // remain protected by both ref scope and the original graph checkpoint.
+      if (original) {
+        const output = original.outcome?.output ?? {};
+        const label = original.action.capability === 'node.add.v1'
+          ? output.added_label ?? (output.added_labels?.length === 1 ? output.added_labels[0] : null)
+          : original.action.capability === 'link.create.v1' ? original.parameters.target_node.node_label : null;
+        const prefix = original.checkpoint.workflow_ref?.prefix;
+        const references = [action.ref, action.source_ref, action.target_ref].filter(Boolean);
+        for (const ref of references) {
+          const element = snapshot.ui.elements.find(item => item.ref === ref);
+          const tidValue = element?.tid ?? element?.identity?.anchor_tid ?? '';
+          const owned = label && (tidValue === `${prefix};Graph;${label}` || tidValue.startsWith(`${prefix};Graph;${label};`));
+          const source = original.action.capability === 'link.create.v1' && tidValue === original.checkpoint.source_tid
+            && action.verb === 'drag' && action.source_ref === ref;
+          const uiOwned = original.action.capability === 'ui.act' && original.checkpoint.target_tids?.includes(tidValue);
+          const createdLink = original.action.capability === 'node.add.v1' && output.repairable_links?.includes(tidValue);
+          const linkPrefix = `${prefix};Graph;${original.parameters.source_node?.node_label}|${original.checkpoint.source_tid?.split(';').at(-1)}|${original.parameters.target_node?.node_label}|`;
+          const misplacedLink = original.action.capability === 'link.create.v1' && !output.reason
+            && original.checkpoint.graph && output.added_links?.includes(tidValue)
+            && !original.checkpoint.links.includes(tidValue) && tidValue.startsWith(linkPrefix)
+            && !output.removed_links?.length && !output.removed_ports?.length;
+          const editor = element?.kind === 'field' && (element?.scope === 'graph_editor' || tidValue === `${prefix};Graph`);
+          const dialog = element?.scope === 'dialog' || !!element?.signature?.dialog_ref;
+          if (!owned && !source && !uiOwned && !createdLink && !misplacedLink && !editor && !dialog) throw new Error('UI repair target is outside the pending operation; inspect its actual partial result');
+        }
+      }
+      running = true;
+      const uiOperation = { id: operationId, signature, action: { action_key: 'ui.act', revision: '1', capability: 'ui.act' },
+        parameters: { action, observation_id: observationId, recovery_operation_id: recoveryOperationId ?? null },
+        checkpoint: { workflow_ref: snapshot.workflow_ref, target_tids: [action.ref, action.source_ref, action.target_ref].filter(Boolean)
+          .map(ref => snapshot.ui.elements.find(item => item.ref === ref)).map(item => item.tid ?? item.identity?.anchor_tid) }, deadline: now() + 30000 };
+      const owner = original ?? uiOperation;
+      try {
+        await remember(uiOperation, 'prepared');
+        if (original) original.recoveryAttempts = (original.recoveryAttempts ?? 0) + 1;
+        else { operations.set(operationId, uiOperation); pending = uiOperation; }
+        const receipt = receiptOptions(owner, operationId, 'ui.act', signature);
+        observations.clear();
+        let outcome;
+        try {
+          const code = makeWorkspaceUiCode({ mode: 'act', expected_build: targetBuild, expected_origin: targetOrigin,
+            operation_id: operationId, action, snapshot });
+          outcome = await execute(withBrowserReceipt(`(${code})(page)`, receipt), { timeout: 35000 });
+        } catch (error) { owner.transportUncertain = true; outcome = failed(uiOperation, 'BROWSER_CALL_UNCERTAIN', String(error?.message ?? error).slice(0, 1000)); }
+        if (!owner.transportUncertain) owner.cleanupConfirmed = outcome.cleanup_complete === true;
+        uiOperation.outcome = outcome;
+        await remember(uiOperation, 'completed', outcome);
+        if (original && !owner.transportUncertain && owner.cleanupConfirmed) {
+          const resolved = await reconcilePending();
+          outcome.output.recovery = view(original, resolved).output;
+        } else if (!original && !owner.transportUncertain && owner.cleanupConfirmed && outcome.status !== 'AMBIGUOUS') pending = null;
+        retainObservation(outcome);
+        auxiliary.set(operationId, { signature, outcome: structuredClone(outcome) });
+        return outcome;
+      } finally { running = false; }
+    },
+    async run(actionKey, parameters, { signal, operationId } = {}) {
+      signal?.throwIfAborted();
+      const action = find(actionKey);
+      validateActionParameters(action.input_schema, parameters);
+      if (operationId !== undefined && (typeof operationId !== 'string' || !/^[A-Za-z0-9_.:-]{1,128}$/.test(operationId))) {
+        throw new Error('operation_id must be a stable identifier with at most 128 characters');
+      }
+      if (running) throw new Error('Another Dock action is still running');
+      running = true;
+      try {
+        const signature = fingerprint(actionKey, parameters);
+        if (operationId && auxiliary.has(operationId)) throw new Error('Operation ID conflicts with a recovery or UI operation');
+        if (operationId && operations.has(operationId) && operations.get(operationId).signature !== signature) {
+          throw new Error('operation_id was already used with different parameters');
+        }
+        if (pending) {
+          const reconciled = await reconcilePending();
+          if (pending || (operationId && operationId === reconciled.operation_id) || signature === operations.get(reconciled.operation_id)?.signature) return reconciled;
+        }
+        if (operationId && operations.has(operationId)) {
+          const previous = operations.get(operationId);
+          if (previous.signature !== signature) throw new Error('operation_id was already used with different parameters');
+          return structuredClone(previous.outcome);
+        }
+        const operation = { id: operationId ?? randomUUID(), action, signature, parameters: structuredClone(parameters) };
+        let prepared;
+        try { prepared = await invoke(operation, 'prepare', { signal }); }
+        catch (error) { return failed(operation, 'PREFLIGHT_FAILED', String(error?.message ?? error).slice(0, 1000), 'FAILED'); }
+        if (prepared.status !== 'NOT_APPLIED' || prepared.phase !== 'prepared' || !prepared.checkpoint?.workflow_ref) return prepared;
+        operation.checkpoint = prepared.checkpoint;
+        signal?.throwIfAborted();
+        operation.deadline = now() + action.timeout_ms;
+        await remember(operation, 'prepared');
+        signal?.throwIfAborted();
+        operations.set(operation.id, operation);
+        pending = operation;
+        observations.clear();
+        let outcome;
+        try {
+          // Keep the browser gate until the bounded mutation reports completion,
+          // even when its caller cancels. Cancellation never frees a live action.
+          outcome = await invoke(operation, 'apply');
+        } catch (error) {
+          operation.transportUncertain = true;
+          outcome = failed(operation, 'BROWSER_CALL_UNCERTAIN', String(error?.message ?? error).slice(0, 1000));
+        }
+        operation.outcome = outcome;
+        operation.cleanupConfirmed = outcome.cleanup_complete === true;
+        try { await remember(operation, 'completed', outcome); }
+        catch (error) {
+          operation.outcome = failed(operation, 'EVIDENCE_WRITE_FAILED', String(error?.message ?? error).slice(0, 1000));
+          return operation.outcome;
+        }
+        if (outcome.status !== 'AMBIGUOUS' && operation.cleanupConfirmed) pending = null;
+        return outcome;
+      } finally { running = false; }
+    },
+  });
+}
