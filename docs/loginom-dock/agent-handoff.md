@@ -1,5 +1,14 @@
 # Следующему агенту: с чего начать
 
+**Подготовка live checkbox:** добавлен independent helper `checked_state.py`
+с проверкой desired state/no-op по исходному completed receipt и 3 тестами
+подмены evidence (78 Python PASS). Пока не подключён к audit goal; запуск
+Hermes ещё не выполнялся. Следующее: отдельный goal/audit для первой страницы
+Text Import: `sImportTxt.previewWizard.ChkParallelProcessing`, смена значения,
+повтор без клика, возврат исходного значения и cancel мастера. Caller helper-а
+обязан доказать доставку observed ref, свежесть и границы цели; helper сам
+доказывает только один переход. Затем freeze harness и новый live run Luna/medium.
+
 **Последняя реализация:** set_checked для native/ARIA/Loginom Ext, desired
 boolean, без повторного toggle при уже достигнутом значении, readback/ambiguity.
 167 client / 75 Python. Live мастера с новым verb ещё нет; active Hermes нет.

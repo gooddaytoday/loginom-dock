@@ -1,5 +1,16 @@
 # Выполнение плана Loginom Dock
 
+## Подготовка независимой приёмки checkbox — 5 сентября 2026
+
+Добавлен `tools/loginom-acceptance/checked_state.py`: привязка ответа к одной
+исходной completed browser receipt, проверка identity/tid/readback и различение
+смены значения от no-op без жеста. Подменённые ответы, другой session, отсутствие
+журнала, неверный readback и ложный no-op отвергаются. 78 Python tests прошли.
+Helper ещё не подключён к отдельной цели: доставка и свежесть target должны
+проверяться вызывающим аудитором. Live запуск не выполнялся; P2 не закрыт.
+По E2E `bg/sels/import/sImportTxt.ts` выбран флажок «Параллельная обработка»
+на первой странице Text Import для будущей проверки смены/повтора/возврата.
+
 ## P2: desired checked state — 5 сентября 2026
 
 ui.act поддерживает set_checked с boolean checked и observed ref. Observer
