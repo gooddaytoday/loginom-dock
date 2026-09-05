@@ -105,7 +105,8 @@ def validate_build(texts, activate=False, acceptance=None):
     for action in actions:
         contract = EXECUTOR_PROFILE["capabilities"].get(action.get("capability"))
         require(contract is not None and action.get("action_key") == contract["action_key"]
-                and action.get("effect", {}).get("kind") == contract["effect_kind"],
+                and action.get("effect", {}).get("kind") == contract["effect_kind"]
+                and action.get("effect", {}).get("resource") == contract["effect_resource"],
                 "Action does not match a local capability contract")
     selectors = {item["symbol"]: item for item in documents["selectors.json"]["selectors"]}
     require(bool(selectors) and len(selectors) == len(documents["selectors.json"]["selectors"]), "Selector keys are empty or duplicated")

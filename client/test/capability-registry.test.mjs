@@ -22,9 +22,9 @@ test('local registry agrees with advertised tools, ABI and authored action contr
 test('unknown JSON actions and cross-wired known handlers fail before browser dispatch', async () => {
   let browserCalls = 0;
   for (const action of [
-    { action_key: 'node.add', capability: 'link.create.v1', effect: { kind: 'create' } },
-    { action_key: 'package.save_as', capability: 'package.save_as.v1', effect: { kind: 'create' } },
-    { action_key: 'future.inspect', capability: 'future.inspect.v1', effect: { kind: 'inspect' } },
+    { action_key: 'node.add', capability: 'link.create.v1', effect: { kind: 'create', resource: 'workflow.node' } },
+    { action_key: 'package.save_as', capability: 'package.save_as.v1', effect: { kind: 'create', resource: 'workflow.node' } },
+    { action_key: 'future.inspect', capability: 'future.inspect.v1', effect: { kind: 'inspect', resource: 'workspace' } },
   ]) {
     action.status = 'candidate';
     assert.throws(() => makeCapabilityCode(action, new Map(), {}), /local capability/);

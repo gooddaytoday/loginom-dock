@@ -161,7 +161,6 @@ function validateActions(catalog, manifest, allowedStatuses) {
     if (!Number.isInteger(action.retry_budget) || action.retry_budget < 0 || action.retry_budget > 10) fail(`${action.action_key}.retry_budget is invalid`);
     stringArray(action.selector_symbols, `${action.action_key}.selector_symbols`);
     for (const field of ['preconditions', 'postconditions', 'cleanup']) stringArray(action[field], `${action.action_key}.${field}`);
-    if (!isObject(action.effect) || !['create', 'save'].includes(action.effect.kind)) fail(`${action.action_key}.effect is invalid`);
     if (!isObject(action.idempotency) || action.idempotency.policy !== 'reconcile_before_retry') fail(`${action.action_key}.idempotency is invalid`);
     validateJsonSchema(action.input_schema, `${action.action_key}.input_schema`);
     validateJsonSchema(action.output_schema, `${action.action_key}.output_schema`);
