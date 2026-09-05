@@ -2,9 +2,9 @@
 
 **Последняя работа:** `f9f80a21`, outcome verification v1, runtime
 `e9027c5b…`, 43 inputs; 148 client / 66 Python / 10 packaging tests.
-Запущен `20260905-144056-ad856011` с --require-verification. Сначала проверить
-его живой процесс/завершение, затем frozen audit; успех пока не заявлен.
-Не менять runtime/harness пока run активен. Далее P1 inventory/effects и P2–P9.
+Run `20260905-144056-ad856011` с --require-verification завершён: **30/30
+frozen PASS**, включая доставку claims/journal и точный save/reopen.
+Активных Hermes нет. Далее P1 live/Help inventory и effects, затем P2–P9.
 Подробности — самый верх implementation-status; старые текущие pins ниже
 исторические. Локальный checkpoint находится в .dock/post-mvp-p1/active-run.json.
 

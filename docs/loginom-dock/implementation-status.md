@@ -16,11 +16,13 @@ cleanup и postcondition trace; Save дополнительно требует r
 независимую проверку доставки, границ claims и связи с journal. Граница SHA
 проверки отдельно описана в executor-contracts.md.
 Runtime `e9027c5b8ad672c1601c35be917207e30d1aff8180c310e0af85985d47832ad0`,
-43 inputs. **Live run запущен, результат ещё не проверен:**
+43 inputs. **Live run принят: 30/30 frozen PASS**:
 `20260905-144056-ad856011`, basic-graph без fault, --require-verification,
 Hermes / ChatGPT / openai-codex / gpt-5.6-luna / medium.
-Не менять runtime/harness до завершения и не считать прошлый 34/34 новым proof.
-После завершения выполнить audit.py с новым output в каталоге этого run.
+Audit SHA `22b9b83815298bc57eef675ecc449acbc8d0deebced4f432e328832a80fcc11c`;
+`.dock/post-mvp-p0/runs/20260905-144056-ad856011/audit.json`.
+Доставка раздельных claims/journal и точный save/reopen подтверждены.
+Прогон завершён, активных Hermes нет. Прошлый 34/34 не подменяет этот proof.
 P1 ещё требует live/Help inventory и завершения effect/расширяемого proof
 контракта перед переходом к P2. Публичная поставка не менялась.
 

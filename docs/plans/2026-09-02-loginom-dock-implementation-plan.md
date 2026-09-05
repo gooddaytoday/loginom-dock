@@ -1237,7 +1237,7 @@ tool schemas в `bridge.mjs`/`catalog.mjs`, bootstrap/full skills и publisher
   read-only inspection и передачи файлов. Текущий validator допускает только
   `create/save`; не подгонять все эффекты под них. Зафиксировать precondition,
   postcondition, reconciliation и ownership для каждого вида.
-- [ ] Разделить outputs: выполненный жест, проверенный domain effect, полнота
+- [x] Разделить outputs: выполненный жест, проверенный domain effect, полнота
   наблюдения, проверенные настройки/данные, выполненные обязательства цели.
   Усилить validation discriminated outcome: сейчас `assertActionOutcome`
   проверяет только object/status/trace, а предметный output — отдельная schema.
@@ -1270,6 +1270,13 @@ Registry/schema/recovery подтверждены реальным rename run
 `20260905-142903-f1cc2e29` — 34/34 PASS с E2E/Help и save/reopen,
 commit `78b0a103`, runtime `96043954…`, 145 client / 10 packaging tests.
 P1 остаётся незавершённым по inventory, новым effects и раздельному proof.
+
+Раздельный outcome verification v1 принят: `f9f80a21`, runtime `e9027c5b…`,
+43 inputs; 148 client / 66 Python / 10 packaging checks. Реальный run
+`20260905-144056-ad856011` — 30/30 с обязательной доставкой verification и
+journal binding, точным save/reopen. Полнота DOM не объявляется доказанной;
+settings/data и goal остаются not_checked/not_verified до профильных handlers.
+Далее P1 live/Help inventory и расширение effect contracts.
 
 ### P2. Общие UI-драйверы и доступное наблюдение
 
