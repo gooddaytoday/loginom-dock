@@ -1,5 +1,24 @@
 # Выполнение плана Loginom Dock
 
+## P3: зафиксирован первый набор данных и oracle — 5 сентября 2026
+
+В `tools/loginom-acceptance/fixtures/data-pipeline` добавлены sales.csv,
+expected.json, task.txt и README. Шесть строк, UTF-8/`;`, целые/вещественные/
+строки, quoted delimiter, пустая строка и отдельный null marker `\N`, ноль и
+отрицательное количество. CSV 230 bytes, SHA
+`f628434c20873f7dd9a8ee142c17af7c0b99f447114fcf60e983f6ed6b357eb3`.
+Зафиксированы все строки import/calculator/group и типы. Amount=Quantity*UnitPrice;
+по Region итог QuantitySum/AmountSum/RowCount: Запад 1/0/2, Север 5/52/2,
+Юг 4/10/2. Итоги пересчитаны независимо Decimal по CSV, SHA/размер/null/quotes
+проверены. Это fixture-only, не Loginom acceptance.
+
+Runnable goal пока не включён: нужны artifact admission/upload receipt,
+настройки и formula/mappings readback, execution/result и save/reopen proof.
+E2E filestorage.UploadFiles найден: загрузка через скрытый input toolbar и
+проверка имени. Для P3 одной проверки имени недостаточно; generic UI file input
+по-прежнему закрыт. Далее отдельный контракт передачи разрешённого artifact и
+реализация upload, затем вся цепочка и negative/empty варианты. Active Hermes нет.
+
 ## Roots → details → checkbox: frozen live PASS — 5 сентября 2026
 
 Run `20260905-195407-939bc201` — **25/25 frozen PASS**, audit SHA

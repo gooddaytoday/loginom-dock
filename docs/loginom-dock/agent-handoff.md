@@ -1,5 +1,14 @@
 # Следующему агенту: с чего начать
 
+**Текущая P3 работа:** fixture data-pipeline (sales.csv/expected.json/task.txt/
+README) зафиксирован: 6→6→3 строки, types/null/empty, точные итоговые суммы.
+Это ещё не runnable/live goal. Следующее — typed artifact admission/upload
+с SHA/size/destination/no-overwrite и receipt; затем import/calculator/group
+settings + execution/result + save/reopen. E2E механика загрузки:
+bg/helpers/filestorage.ts:350, input под FileStorageForm;tbrActions; helper
+проверяет только имя, этого недостаточно для P3 proof. Active Hermes нет.
+Последний roots PASS и границы P2 ниже, полный P0–P9 остаётся целью.
+
 **Последняя приёмка:** `20260905-195407-939bc201` root-checkbox — 25/25 frozen
 PASS, runtime `d2f70522…`, harness `1ce1608c`. Roots → root details → checked
 cycle приняты на реальном WizrdMCF, Luna/medium/ChatGPT. 179 client / 81 Python /
