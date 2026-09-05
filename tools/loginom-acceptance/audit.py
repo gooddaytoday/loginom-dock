@@ -659,7 +659,7 @@ def file_storage_inspect(evidence, checks):
         if reply and rejected_before_browser(call,evidence):continue
         args=call.get('arguments',{});action=args.get('action',{})
         observations=[t for t in tools if t['session_id']==call['session_id'] and t['row']<call['row']
-                      and t['result'].get('output',{}).get('observation_id')==args.get('observation_id')]
+                      and isinstance(t['result'],dict) and t['result'].get('output',{}).get('observation_id')==args.get('observation_id')]
         targets=[item for t in observations for item in t['result'].get('output',{}).get('ui',{}).get('elements',[])
                  if item.get('ref')==action.get('ref')]
         tids={item.get('tid') for item in targets}

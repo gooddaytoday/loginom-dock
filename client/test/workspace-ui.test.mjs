@@ -748,3 +748,16 @@ test('file storage directory uses active complete breadcrumbs and never proves f
   labels[1].ownText='data';bar.attrs['data-tid']='MF;TF-2;NavigationBar;NavigationPanel';
   assert.equal((await page.observe()).file_storage.directory,null);
 });
+
+test('file storage name cells expose E2E targets without requiring a button role', async () => {
+  const page=new Page();
+  const row=page.add('td','MF;TF-1;FileStorageForm;colName_user','user');
+  const observed=await page.observe();
+  const target=observed.ui.elements.find(e=>e.tid===row.getAttribute('data-tid'));
+  assert.ok(target.allowed_actions.includes('double_click'));
+  assert.deepEqual(target.identity,{anchor_tid:row.getAttribute('data-tid'),path:[]});
+  row.remove();
+  page.add('td','MF;TF-1;FileStorageForm;colName_user','user');
+  const result=await page.execute({mode:'act',snapshot:observed,action:{verb:'double_click',ref:target.ref}});
+  assert.notEqual(result.status,'SUCCEEDED');assert.deepEqual(page.events,[]);
+});

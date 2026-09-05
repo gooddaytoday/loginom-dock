@@ -229,6 +229,9 @@ function workspaceUiCapability(page, task) {
       // E2E bg/selectors.ts:970: context-menu item wrappers carry stable
       // mn;mni* tids even when their inner ARIA menuitem has no test ID.
       || /^mn;mni[^;]+$/.test(getTid(element) ?? '')
+      // E2E filestorage.FolderSelector/OpenFolder: storage names are table
+      // cells without button roles. The observed row identity owns the gesture.
+      || /;FileStorageForm;colName_[^;]+$/.test(getTid(element) ?? '')
       || /;(?:Display|Input)El$/.test(getTid(element) ?? '') && element.matches('.x-form-checkbox,.x-form-radio')
       // Loginom message-box buttons are anchors without an ARIA button role;
       // their pinned test identifiers end with tlb;yes / tlb;no, not btn*.
