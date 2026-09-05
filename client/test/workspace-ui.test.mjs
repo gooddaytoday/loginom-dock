@@ -761,3 +761,15 @@ test('file storage name cells expose E2E targets without requiring a button role
   const result=await page.execute({mode:'act',snapshot:observed,action:{verb:'double_click',ref:target.ref}});
   assert.notEqual(result.status,'SUCCEEDED');assert.deepEqual(page.events,[]);
 });
+
+test('observation error codes cross a serialized browser boundary without exception text', async () => {
+  for (const [code,expected] of [['UI_SCAN_LIMIT','UI_SCAN_LIMIT'],[undefined,'UI_OBSERVATION_FAILED']]) {
+    const page=new Page(),evaluate=page.evaluate.bind(page);
+    page.evaluate=async (...args)=>{try{return clone(await evaluate(...args));}catch(error){throw new Error(error.message);}};
+    page.document.createTreeWalker=()=>{const error=new Error('private-page-value');error.code=code;throw error;};
+    const result=await page.execute({mode:'observe'});
+    assert.equal(result.status,'NOT_APPLIED');assert.equal(result.error.code,expected);
+    assert.equal(JSON.stringify(result).includes('private-page-value'),false);
+    if (code) assert.equal(result.output.scan.complete,false);
+  }
+});

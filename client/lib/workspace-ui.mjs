@@ -49,7 +49,9 @@ function workspaceUiCapability(page, task) {
   // A WeakMap records DOM incarnations, without adding attributes or mutating
   // Loginom. Re-rendering an identical-looking control invalidates its old ref.
   // The state is document-bound; navigation invalidates every previous reference.
-  const readUi = () => page.evaluate(({rootRef,discoverRoots}) => {
+  const readUi = async () => {
+    const observed = await page.evaluate(({rootRef,discoverRoots}) => {
+    try {
     const scanStarted = Date.now(), maxElements = 6000, maxWork = 250000, maxMs = 500;
     let work = 0;
     const charge = () => {
@@ -391,7 +393,24 @@ function workspaceUiCapability(page, task) {
       nodes, links: links.slice(0, 500), workarea: workarea ? boxOf(workarea) : null,
       ui: { elements, dialogs: dialogs.slice(0, 12), messages: messages.slice(0, 30), masks: masks.slice(0, 12), table_cells: tableCells,
         truncated: { elements: !!selectedRoot || controls.length > 240, nodes: !!selectedRoot || labels.length > 200, links: !!selectedRoot || links.length > 500, ports: !!selectedRoot || nodes.some(node => node.ports.length === 100), dialogs: dialogs.length > 12, messages: !!selectedRoot || messages.length > 30, masks: masks.length > 12, table_cells: !!selectedRoot || cells.length > 120 } } };
+    } catch (error) {
+      // Playwright serializes thrown Errors without arbitrary properties such
+      // as our code. Return a small data envelope across the realm boundary;
+      // never export exception messages that may contain page/private values.
+      const code=['UI_SCAN_LIMIT','UI_ROOT_STALE','UI_EPOCH_UNAVAILABLE'].includes(error?.code)
+        ? error.code : 'UI_OBSERVATION_FAILED';
+      return {ui_read_failure:{code}};
+    }
   },{rootRef:task.root_ref ?? task.snapshot?.observation_root?.ref ?? null,discoverRoots:task.discover_roots===true});
+    if (observed?.ui_read_failure) {
+      const code=observed.ui_read_failure.code;
+      const messages={UI_SCAN_LIMIT:'Workspace scan budget exceeded; use root discovery and a narrower observation',
+        UI_ROOT_STALE:'Observed root is detached, hidden, inactive or expired',
+        UI_EPOCH_UNAVAILABLE:'DOM mutation tracking is unavailable',UI_OBSERVATION_FAILED:'Browser observation failed'};
+      fail(Object.hasOwn(messages,code)?code:'UI_OBSERVATION_FAILED',messages[code]??messages.UI_OBSERVATION_FAILED);
+    }
+    return observed;
+  };
 
   const locatorFor = identity => {
     if (!identity || !Array.isArray(identity.path) || identity.path.some(index => !Number.isInteger(index) || index < 0) || identity.path.length > 64) fail('UI_REFERENCE_INVALID', 'Observed control identity is invalid');
