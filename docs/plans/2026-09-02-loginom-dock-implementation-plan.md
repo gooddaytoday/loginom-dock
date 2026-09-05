@@ -1286,6 +1286,13 @@ Effect contracts реализованы в `4743d427` (семь kinds и binding
 
 ### P2. Общие UI-драйверы и доступное наблюдение
 
+Root discovery + scoped details + действия приняты на реальном Text Import
+в `20260905-195407-939bc201`: 25/25 frozen PASS, runtime `d2f70522…`.
+179 client / 81 Python / 10 packaging. Scoped scan с 6500 background elements
+и внешним blocker/duplicate tid принят локально, не большим live fixture.
+Полный пункт P2 остаётся открытым: type filters/table identity/виртуализация,
+options/radio/large-field и остальные профили ещё требуют реализации/приёмки.
+
 DOM epoch реализован и совместимость принята в `20260905-172843-f90ebea6`:
 25/25 frozen PASS, runtime `f4db7d2a…`. 172 client / 80 Python / 10 packaging.
 Локально проверен DOM A→B→A и устаревший cursor; live run подтвердил работу

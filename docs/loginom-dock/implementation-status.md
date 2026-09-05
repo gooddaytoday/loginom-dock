@@ -1,5 +1,25 @@
 # Выполнение плана Loginom Dock
 
+## Roots → details → checkbox: frozen live PASS — 5 сентября 2026
+
+Run `20260905-195407-939bc201` — **25/25 frozen PASS**, audit SHA
+`8994097cc52abcfbb10849e7fc9b7512ff4e3f7f96b441765b851729d873e6a6`.
+Runtime `d2f705228f65429c2df7995e2fb5418a82e6f2147a4f9415092f1eb611978209`,
+harness `1ce1608c`, Hermes ChatGPT/openai-codex/gpt-5.6-luna/medium.
+Каждый set_checked использовал новое scope=roots, затем root_ref/observation_id
+подробного чтения MF;TF-1;WizrdMCF. Независимый аудитор связал discovered region
+identity, read-only refs, global_scan=false и controls из подробного снимка;
+исходные action receipts и checkbox cycle сохранены. 179 client / 81 Python /
+10 packaging актуальны. Active Hermes нет.
+
+Это live acceptance реального обычного мастера, не большой live DOM/виртуальная
+таблица. 6500-element background и глобальные blockers/duplicate tid проверены
+serialized локальными тестами. Native-query cost остаётся непрерываемым внутри
+вызова. Остальные P2 options/radio/large-field/horizontal/table identity и P3–P9
+открыты. Следующее — оставшиеся widgets и первая CSV→Import→Calculator→Group
+цепочка с upload, execution/result proof, save/reopen. Не повторять checkbox
+без нового изменения; не считать root PASS завершением всего выхода из MVP.
+
 ## P2: первоначальный поиск областей — 5 сентября 2026
 
 workspace.observe scope=roots обнаруживает region refs на уже большом DOM через

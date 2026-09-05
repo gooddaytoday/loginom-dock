@@ -1,5 +1,13 @@
 # Следующему агенту: с чего начать
 
+**Последняя приёмка:** `20260905-195407-939bc201` root-checkbox — 25/25 frozen
+PASS, runtime `d2f70522…`, harness `1ce1608c`. Roots → root details → checked
+cycle приняты на реальном WizrdMCF, Luna/medium/ChatGPT. 179 client / 81 Python /
+10 packaging. Active Hermes нет. Далее остальные P2 widgets и P3 CSV→Import→
+Calculator→Group с upload/execution/result/save-reopen, затем P4–P9. Большой DOM
+пока только local serialized test; обычный live мастер не подменяет эту границу.
+Точные SHA/доказательства — верх status. Checkbox без новой причины не повторять.
+
 **Последняя реализация:** scope=roots для первичного discovery на большом DOM,
 region refs без gestures → detailed root_ref read, cursor сохраняет read mode.
 179 client / 80 Python. Тест с 6500 background elements: 0 TreeWalker calls на
