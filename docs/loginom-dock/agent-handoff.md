@@ -1,3 +1,12 @@
+**Текущий checkpoint P3 (6 сентября):** добавлен rendered_results.py — независимый
+comparator видимых typed cells с Decimal/явной локалью, null/empty и сохранением
+дубликатов. Встроен в diagnostic data-pipeline и frozen checks; 106 Python PASS.
+Не подтверждает full result: format/row coverage/execution/node ownership ещё
+не доказаны, семь domain gates остаются missing. Runtime не менялся после
+предыдущих 231 client /10 packaging. Следующий шаг — expression editor contract
+и execution/result evidence, затем новая полная live проверка. Active Hermes/
+browser нет; точные ограничения сверху status, цель весь P3–P9 сохранена.
+
 **Текущий checkpoint P3:** run 233444-3cb9795c terminal, 47/58 frozen FAIL;
 live wizard title/stage подтверждены, импорт дошёл до Done/графа, остальная
 цепочка не выполнена. Исправлен strict auditor whitelist для wizard (старый

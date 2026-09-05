@@ -942,7 +942,7 @@ def audit_directory(run):
         frozen=frozen and request.get('harness_inputs',{}).get('upload_verify.py')==sha(Path(upload_verify.__file__).read_bytes())
         report['assertions'].append({'name':'upload_verify_auditor_frozen','passed':frozen})
     if request.get('goal_id')=='data-pipeline':
-        frozen=frozen and all(request.get('harness_inputs',{}).get(name)==sha(Path(__file__).parent.joinpath(name).read_bytes()) for name in ('data_pipeline.py',*data_pipeline.FIXTURES))
+        frozen=frozen and all(request.get('harness_inputs',{}).get(name)==sha(Path(__file__).parent.joinpath(name).read_bytes()) for name in ('data_pipeline.py','rendered_results.py',*data_pipeline.FIXTURES))
         report['assertions'].append({'name':'pipeline_fixture_and_auditor_frozen','passed':frozen})
     report["all_assertions_passed"] = report["all_assertions_passed"] and frozen
     return report

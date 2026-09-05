@@ -1,3 +1,38 @@
+## 2026-09-06 — P3: независимое сравнение отображаемых таблиц
+
+Добавлен host-only auditor helper rendered_results.py и подключён к диагностике
+полного data-pipeline. Он читает только raw observation_completed, связанные
+с фактическим вызовом/ответом dock_workspace_observe через точное сравнение
+квитанции. Model domain_proof и непривязанные/подменённые ответы игнорируются.
+Helper и CSV/expected/task включены в frozen dependency check аудитора.
+
+Сравнение поддерживает текущие fixture import/calculator/group: точные имена
+полей и типы, view/workflow identity, field/row identity, полную матрицу видимых
+ячеек, untrimmed строки и observed null marker. Counter сохраняет число
+дубликатов, но не требует одинакового порядка строк. Локальный numeric parser
+использует Decimal и явные decimal/group separators, проверяет группировку,
+не применяет float tolerance, не принимает NaN/Infinity/пробелы на краях или
+дробь для integer. Неоднозначные имена после потенциально lossy Format не
+восстанавливаются: текущий comparator допускает literal ASCII fixture keys.
+
+Результат называется rendered_rows_match, не complete_result_verified.
+Подтверждение числового формата пока отсутствует в live evidence: diagnostic
+caller не передаёт догадку о локали, а получает numeric_format_required.
+Даже пустая отображаемая таблица или совпадение всех видимых строк не доказывает
+общее число строк, настройки форматирования, свежий execution, node ownership
+или результаты после reopen. Семь domain gates остаются открыты. Это рабочий
+компонент сравнения для будущего полного verifier, не P3 acceptance.
+
+**106 Python PASS**: все три ожидаемые таблицы, замена типа/числа/null/строки,
+перестановка и потеря дубликатов, пропуски/дубли cell IDs и заголовков,
+редактирование связанного ответа, отсутствующая локаль, неверная группировка,
+малое числовое отличие, literal <null>, пустой набор и malformed context.
+Client runtime не менялся, прежние 231 client /10 packaging относятся к той же
+ревизии; live в этом шаге не запускался. Следующий шаг — типизированный контракт
+редактора выражения и execution/result ownership/coverage/format evidence,
+после чего заменить missing domain gates независимыми проверками и продолжить
+полный P3–P9. Active Hermes/browser нет; production/public rc2 не менялись.
+
 ## 2026-09-05 — P3: live wizard context и основа чтения табличных данных
 
 Полный run 20260905-233444-3cb9795c закончен, harness 120ec845,

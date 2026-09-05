@@ -7,6 +7,8 @@ cannot admit P3, even if every gesture or the model's final answer says success.
 from pathlib import Path
 import upload_probe
 import upload_verify
+import json
+import rendered_results
 
 FIXTURES = tuple('fixtures/data-pipeline/'+name for name in ('sales.csv','expected.json','task.txt'))
 DOMAIN_GATES = ('wizard_settings_readback', 'calculator_expression_and_mappings',
@@ -56,5 +58,6 @@ def audit(evidence, checks, request, prefix, mutations, storage_audit, rejected_
     for gate in DOMAIN_GATES:check('unimplemented_verifier_'+gate,False)
     return {'all_assertions_passed':False,'assertions':checks,'goal':'data-pipeline',
             'acceptance_status':'diagnostic_only_domain_verifiers_incomplete',
+            'rendered_result_diagnostics':rendered_results.diagnose(evidence,json.loads(Path(__file__).with_name('fixtures').joinpath('data-pipeline/expected.json').read_text()),prefix),
             'transfer_verified':transfer_passed,'pre_action_rejections':len(rejected),'missing_domain_verifiers':list(DOMAIN_GATES),
             'limitations':['Full P3 task requested; typed domain evidence audit is not implemented. No P3 acceptance claim is possible.']}

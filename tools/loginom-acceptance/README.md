@@ -1,3 +1,13 @@
+## Сравнение отображаемых результатов
+
+rendered_results.py сравнивает data_column/data_cell с полным expected fixture,
+используя явный числовой формат и Decimal, без округления и удаления дубликатов.
+Полный diagnostic audit включает сравнения только для неизменённых raw receipts,
+связанных с реальным вызовом/ответом. Numeric format пока не подтверждён, поэтому
+live diagnostics требуют его доказательства, а не выбирают локаль по догадке.
+rendered_rows_match не является допуском P3: полное покрытие строк, владение
+результатом, новый execution и сохранность после reopen проверяются отдельно.
+
 ## Полная диагностика P3
 
 `--goal data-pipeline --loginom-user test --storage-directory /test` ставит
