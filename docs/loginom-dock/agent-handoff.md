@@ -1,5 +1,13 @@
 # Следующему агенту: с чего начать
 
+**Последний результат:** `20260905-151931-7698def0` palette inventory —
+24/24 frozen PASS, runtime `7eaebd2e…`, 45 inputs. 77 компонентов/12 групп
+в executor/inventory; 77 coverage rows presence-only, statuses planned.
+155 client / 72 Python / 10 packaging. Активных Hermes нет.
+**Далее:** real rename regression с E2E/Help и save/reopen на новом runtime,
+затем bounded browser scan/bootstrap и остальные P2/P3. Подробности и SHA —
+верх implementation-status. Очереди ниже — история.
+
 **Актуальная очередь после добавления страниц:** observation-pages.mjs подключён
 к runtime/bridge: 12000 bytes/32 records, scopes, cursors, fresh snapshot digest,
 private full guards и issued-ref admission. 45 runtime inputs. Live ещё не было.

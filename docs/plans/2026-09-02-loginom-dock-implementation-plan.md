@@ -1286,6 +1286,11 @@ Effect contracts реализованы в `4743d427` (семь kinds и binding
 
 ### P2. Общие UI-драйверы и доступное наблюдение
 
+Реальные страницы приняты в palette run `20260905-151931-7698def0`:
+24/24, runtime `7eaebd2e…`, 77 компонентов/12 групп. Строки coverage получили
+только presence evidence; скрытые элементы и режимы не объявлены полными.
+Rename regression с новым форматом ещё предстоит, как и остальные пункты P2.
+
 5 сентября добавлена первая host-часть observation paging: компактные ответы,
 scopes, cursors с проверкой свежего snapshot digest и admission только выданных
 refs. Это не закрывает пункт ниже: browser scan/root filters/virtualization и

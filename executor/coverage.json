@@ -3,7 +3,7 @@
   "scope": "post-mvp-required",
   "inventory_completeness": {
     "e2e_component_labels": "complete_for_pinned_node_namespace",
-    "live_catalog": "pending",
+    "live_catalog": "77 observed entries in 12 groups; hidden/virtualized completeness not proven",
     "help_modes": "77_component_documents_bound; detailed_mode_review_partial",
     "not_a_release_attestation": true
   },
@@ -31,6 +31,11 @@
       "commit": "353e506ba04b77a2926d8ddf8472b36c684b67fd",
       "attribution": "Loginom Help, BaseGroup Labs",
       "scope": "reviewed component documents; does not establish runtime availability"
+    },
+    "live-palette": {
+      "path": "executor/inventory/palette-2026-09-05.json",
+      "sha256": "256e7faa65c7d9ea9c0f344b7e5f87c0e3e18e92f785a9a2c4489beb5b189baf",
+      "scope": "observed names only; not configuration, execution or licensing proof"
     }
   },
   "contracts": {
@@ -100,11 +105,10 @@
       "unit_evidence": [],
       "live_evidence": [],
       "known_gaps": [
-        "Наличие в E2E labels не подтверждает доступность в текущей лицензии/UI",
         "Нет принятого сквозного контракта",
         "Разделы Help найдены; детальные режимы и live доступность требуют проверки"
       ],
-      "next_step": "Проверить доступность в live UI; source review мастера и отдельная цепочка с данными",
+      "next_step": "Source review мастера и отдельная цепочка с настройкой, данными и save/reopen",
       "documented_sections": [
         {
           "section": "Порты",
@@ -118,7 +122,13 @@
           "section": "Применение параметров в запросах",
           "line": 32
         }
-      ]
+      ],
+      "palette_observation": {
+        "source": "live-palette",
+        "tid": "MF;TF-1;ModelForm;colVendors_Компоненты>Импорт>1С_Запрос;TreeText",
+        "observed_label": "1С Запрос",
+        "proof_scope": "presence_only"
+      }
     },
     {
       "id": "component.imports.DataBase",
@@ -149,11 +159,10 @@
       "unit_evidence": [],
       "live_evidence": [],
       "known_gaps": [
-        "Наличие в E2E labels не подтверждает доступность в текущей лицензии/UI",
         "Нет принятого сквозного контракта",
         "Разделы Help найдены; детальные режимы и live доступность требуют проверки"
       ],
-      "next_step": "Проверить доступность в live UI; source review мастера и отдельная цепочка с данными",
+      "next_step": "Source review мастера и отдельная цепочка с настройкой, данными и save/reopen",
       "documented_sections": [
         {
           "section": "Порты",
@@ -167,7 +176,13 @@
           "section": "Применение переменных в запросах",
           "line": 78
         }
-      ]
+      ],
+      "palette_observation": {
+        "source": "live-palette",
+        "tid": "MF;TF-1;ModelForm;colVendors_Компоненты>Импорт>База_данных;TreeText",
+        "observed_label": "База данных",
+        "proof_scope": "presence_only"
+      }
     },
     {
       "id": "component.imports.Text",
@@ -198,17 +213,22 @@
       "unit_evidence": [],
       "live_evidence": [],
       "known_gaps": [
-        "Наличие в E2E labels не подтверждает доступность в текущей лицензии/UI",
         "Нет принятого сквозного контракта",
         "Разделы Help найдены; детальные режимы и live доступность требуют проверки"
       ],
-      "next_step": "Проверить доступность в live UI; source review мастера и отдельная цепочка с данными",
+      "next_step": "Source review мастера и отдельная цепочка с настройкой, данными и save/reopen",
       "documented_sections": [
         {
           "section": "Мастер настройки",
           "line": 16
         }
-      ]
+      ],
+      "palette_observation": {
+        "source": "live-palette",
+        "tid": "MF;TF-1;ModelForm;colVendors_Компоненты>Импорт>Текстовый_файл;TreeText",
+        "observed_label": "Текстовый файл",
+        "proof_scope": "presence_only"
+      }
     },
     {
       "id": "component.imports.Warehouse",
@@ -239,11 +259,10 @@
       "unit_evidence": [],
       "live_evidence": [],
       "known_gaps": [
-        "Наличие в E2E labels не подтверждает доступность в текущей лицензии/UI",
         "Нет принятого сквозного контракта",
         "Разделы Help найдены; детальные режимы и live доступность требуют проверки"
       ],
-      "next_step": "Проверить доступность в live UI; source review мастера и отдельная цепочка с данными",
+      "next_step": "Source review мастера и отдельная цепочка с настройкой, данными и save/reopen",
       "documented_sections": [
         {
           "section": "Порты",
@@ -253,7 +272,13 @@
           "section": "Мастер настройки",
           "line": 22
         }
-      ]
+      ],
+      "palette_observation": {
+        "source": "live-palette",
+        "tid": "MF;TF-1;ModelForm;colVendors_Компоненты>Импорт>Deductor_Warehouse;TreeText",
+        "observed_label": "Deductor Warehouse",
+        "proof_scope": "presence_only"
+      }
     },
     {
       "id": "component.imports.Excel",
@@ -284,11 +309,10 @@
       "unit_evidence": [],
       "live_evidence": [],
       "known_gaps": [
-        "Наличие в E2E labels не подтверждает доступность в текущей лицензии/UI",
         "Нет принятого сквозного контракта",
         "Разделы Help найдены; детальные режимы и live доступность требуют проверки"
       ],
-      "next_step": "Проверить доступность в live UI; source review мастера и отдельная цепочка с данными",
+      "next_step": "Source review мастера и отдельная цепочка с настройкой, данными и save/reopen",
       "documented_sections": [
         {
           "section": "Мастер настройки",
@@ -298,7 +322,13 @@
           "section": "Особенности множественного импорта",
           "line": 127
         }
-      ]
+      ],
+      "palette_observation": {
+        "source": "live-palette",
+        "tid": "MF;TF-1;ModelForm;colVendors_Компоненты>Импорт>Excel_файл;TreeText",
+        "observed_label": "Excel файл",
+        "proof_scope": "presence_only"
+      }
     },
     {
       "id": "component.imports.Kafka",
@@ -329,11 +359,10 @@
       "unit_evidence": [],
       "live_evidence": [],
       "known_gaps": [
-        "Наличие в E2E labels не подтверждает доступность в текущей лицензии/UI",
         "Нет принятого сквозного контракта",
         "Разделы Help найдены; детальные режимы и live доступность требуют проверки"
       ],
-      "next_step": "Проверить доступность в live UI; source review мастера и отдельная цепочка с данными",
+      "next_step": "Source review мастера и отдельная цепочка с настройкой, данными и save/reopen",
       "documented_sections": [
         {
           "section": "Порты",
@@ -343,7 +372,13 @@
           "section": "Мастер настройки",
           "line": 21
         }
-      ]
+      ],
+      "palette_observation": {
+        "source": "live-palette",
+        "tid": "MF;TF-1;ModelForm;colVendors_Компоненты>Импорт>Kafka;TreeText",
+        "observed_label": "Kafka",
+        "proof_scope": "presence_only"
+      }
     },
     {
       "id": "component.imports.Lgd",
@@ -374,11 +409,10 @@
       "unit_evidence": [],
       "live_evidence": [],
       "known_gaps": [
-        "Наличие в E2E labels не подтверждает доступность в текущей лицензии/UI",
         "Нет принятого сквозного контракта",
         "Разделы Help найдены; детальные режимы и live доступность требуют проверки"
       ],
-      "next_step": "Проверить доступность в live UI; source review мастера и отдельная цепочка с данными",
+      "next_step": "Source review мастера и отдельная цепочка с настройкой, данными и save/reopen",
       "documented_sections": [
         {
           "section": "Порты",
@@ -388,7 +422,13 @@
           "section": "Мастер настройки",
           "line": 20
         }
-      ]
+      ],
+      "palette_observation": {
+        "source": "live-palette",
+        "tid": "MF;TF-1;ModelForm;colVendors_Компоненты>Импорт>Loginom_Data_файл;TreeText",
+        "observed_label": "Loginom Data файл",
+        "proof_scope": "presence_only"
+      }
     },
     {
       "id": "component.imports.Xml",
@@ -419,11 +459,10 @@
       "unit_evidence": [],
       "live_evidence": [],
       "known_gaps": [
-        "Наличие в E2E labels не подтверждает доступность в текущей лицензии/UI",
         "Нет принятого сквозного контракта",
         "Разделы Help найдены; детальные режимы и live доступность требуют проверки"
       ],
-      "next_step": "Проверить доступность в live UI; source review мастера и отдельная цепочка с данными",
+      "next_step": "Source review мастера и отдельная цепочка с настройкой, данными и save/reopen",
       "documented_sections": [
         {
           "section": "Порты",
@@ -433,7 +472,13 @@
           "section": "Мастер настройки",
           "line": 21
         }
-      ]
+      ],
+      "palette_observation": {
+        "source": "live-palette",
+        "tid": "MF;TF-1;ModelForm;colVendors_Компоненты>Импорт>XML_файл;TreeText",
+        "observed_label": "XML файл",
+        "proof_scope": "presence_only"
+      }
     },
     {
       "id": "component.transform.GroupData",
@@ -464,17 +509,22 @@
       "unit_evidence": [],
       "live_evidence": [],
       "known_gaps": [
-        "Наличие в E2E labels не подтверждает доступность в текущей лицензии/UI",
         "Нет принятого сквозного контракта",
         "Разделы Help найдены; детальные режимы и live доступность требуют проверки"
       ],
-      "next_step": "Проверить доступность в live UI; source review мастера и отдельная цепочка с данными",
+      "next_step": "Source review мастера и отдельная цепочка с настройкой, данными и save/reopen",
       "documented_sections": [
         {
           "section": "Мастер настройки",
           "line": 44
         }
-      ]
+      ],
+      "palette_observation": {
+        "source": "live-palette",
+        "tid": "MF;TF-1;ModelForm;colVendors_Компоненты>Трансформация>Группировка;TreeText",
+        "observed_label": "Группировка",
+        "proof_scope": "presence_only"
+      }
     },
     {
       "id": "component.transform.DateTimeReform",
@@ -505,17 +555,22 @@
       "unit_evidence": [],
       "live_evidence": [],
       "known_gaps": [
-        "Наличие в E2E labels не подтверждает доступность в текущей лицензии/UI",
         "Нет принятого сквозного контракта",
         "Разделы Help найдены; детальные режимы и live доступность требуют проверки"
       ],
-      "next_step": "Проверить доступность в live UI; source review мастера и отдельная цепочка с данными",
+      "next_step": "Source review мастера и отдельная цепочка с настройкой, данными и save/reopen",
       "documented_sections": [
         {
           "section": "Мастер настройки",
           "line": 32
         }
-      ]
+      ],
+      "palette_observation": {
+        "source": "live-palette",
+        "tid": "MF;TF-1;ModelForm;colVendors_Компоненты>Трансформация>Дата_и_время;TreeText",
+        "observed_label": "Дата и время",
+        "proof_scope": "presence_only"
+      }
     },
     {
       "id": "component.transform.EnrichData",
@@ -546,11 +601,10 @@
       "unit_evidence": [],
       "live_evidence": [],
       "known_gaps": [
-        "Наличие в E2E labels не подтверждает доступность в текущей лицензии/UI",
         "Нет принятого сквозного контракта",
         "Разделы Help найдены; детальные режимы и live доступность требуют проверки"
       ],
-      "next_step": "Проверить доступность в live UI; source review мастера и отдельная цепочка с данными",
+      "next_step": "Source review мастера и отдельная цепочка с настройкой, данными и save/reopen",
       "documented_sections": [
         {
           "section": "Порты",
@@ -560,7 +614,13 @@
           "section": "Мастер настройки",
           "line": 21
         }
-      ]
+      ],
+      "palette_observation": {
+        "source": "live-palette",
+        "tid": "MF;TF-1;ModelForm;colVendors_Компоненты>Трансформация>Дополнение_данных;TreeText",
+        "observed_label": "Дополнение данных",
+        "proof_scope": "presence_only"
+      }
     },
     {
       "id": "component.transform.Replace",
@@ -591,17 +651,22 @@
       "unit_evidence": [],
       "live_evidence": [],
       "known_gaps": [
-        "Наличие в E2E labels не подтверждает доступность в текущей лицензии/UI",
         "Нет принятого сквозного контракта",
         "Разделы Help найдены; детальные режимы и live доступность требуют проверки"
       ],
-      "next_step": "Проверить доступность в live UI; source review мастера и отдельная цепочка с данными",
+      "next_step": "Source review мастера и отдельная цепочка с настройкой, данными и save/reopen",
       "documented_sections": [
         {
           "section": "Мастер настройки",
           "line": 23
         }
-      ]
+      ],
+      "palette_observation": {
+        "source": "live-palette",
+        "tid": "MF;TF-1;ModelForm;colVendors_Компоненты>Трансформация>Замена;TreeText",
+        "observed_label": "Замена",
+        "proof_scope": "presence_only"
+      }
     },
     {
       "id": "component.transform.Calculator",
@@ -632,11 +697,10 @@
       "unit_evidence": [],
       "live_evidence": [],
       "known_gaps": [
-        "Наличие в E2E labels не подтверждает доступность в текущей лицензии/UI",
         "Нет принятого сквозного контракта",
         "Разделы Help найдены; детальные режимы и live доступность требуют проверки"
       ],
-      "next_step": "Проверить доступность в live UI; source review мастера и отдельная цепочка с данными",
+      "next_step": "Source review мастера и отдельная цепочка с настройкой, данными и save/reopen",
       "documented_sections": [
         {
           "section": "Мастер настройки",
@@ -646,7 +710,13 @@
           "section": "Синтаксис калькулятора",
           "line": 101
         }
-      ]
+      ],
+      "palette_observation": {
+        "source": "live-palette",
+        "tid": "MF;TF-1;ModelForm;colVendors_Компоненты>Трансформация>Калькулятор;TreeText",
+        "observed_label": "Калькулятор",
+        "proof_scope": "presence_only"
+      }
     },
     {
       "id": "component.transform.CrossTable",
@@ -677,17 +747,22 @@
       "unit_evidence": [],
       "live_evidence": [],
       "known_gaps": [
-        "Наличие в E2E labels не подтверждает доступность в текущей лицензии/UI",
         "Нет принятого сквозного контракта",
         "Разделы Help найдены; детальные режимы и live доступность требуют проверки"
       ],
-      "next_step": "Проверить доступность в live UI; source review мастера и отдельная цепочка с данными",
+      "next_step": "Source review мастера и отдельная цепочка с настройкой, данными и save/reopen",
       "documented_sections": [
         {
           "section": "Мастер настройки",
           "line": 50
         }
-      ]
+      ],
+      "palette_observation": {
+        "source": "live-palette",
+        "tid": "MF;TF-1;ModelForm;colVendors_Компоненты>Трансформация>Кросс-таблица;TreeText",
+        "observed_label": "Кросс-таблица",
+        "proof_scope": "presence_only"
+      }
     },
     {
       "id": "component.transform.UnionData",
@@ -718,11 +793,10 @@
       "unit_evidence": [],
       "live_evidence": [],
       "known_gaps": [
-        "Наличие в E2E labels не подтверждает доступность в текущей лицензии/UI",
         "Нет принятого сквозного контракта",
         "Разделы Help найдены; детальные режимы и live доступность требуют проверки"
       ],
-      "next_step": "Проверить доступность в live UI; source review мастера и отдельная цепочка с данными",
+      "next_step": "Source review мастера и отдельная цепочка с настройкой, данными и save/reopen",
       "documented_sections": [
         {
           "section": "Мастер настройки",
@@ -732,7 +806,13 @@
           "section": "Описание узла",
           "line": 91
         }
-      ]
+      ],
+      "palette_observation": {
+        "source": "live-palette",
+        "tid": "MF;TF-1;ModelForm;colVendors_Компоненты>Трансформация>Объединение;TreeText",
+        "observed_label": "Объединение",
+        "proof_scope": "presence_only"
+      }
     },
     {
       "id": "component.transform.ReformColumns",
@@ -763,11 +843,10 @@
       "unit_evidence": [],
       "live_evidence": [],
       "known_gaps": [
-        "Наличие в E2E labels не подтверждает доступность в текущей лицензии/UI",
         "Нет принятого сквозного контракта",
         "Разделы Help найдены; детальные режимы и live доступность требуют проверки"
       ],
-      "next_step": "Проверить доступность в live UI; source review мастера и отдельная цепочка с данными",
+      "next_step": "Source review мастера и отдельная цепочка с настройкой, данными и save/reopen",
       "documented_sections": [
         {
           "section": "Мастер настройки",
@@ -777,7 +856,13 @@
           "section": "Исключение столбцов",
           "line": 44
         }
-      ]
+      ],
+      "palette_observation": {
+        "source": "live-palette",
+        "tid": "MF;TF-1;ModelForm;colVendors_Компоненты>Трансформация>Параметры_полей;TreeText",
+        "observed_label": "Параметры полей",
+        "proof_scope": "presence_only"
+      }
     },
     {
       "id": "component.transform.UngroupData",
@@ -808,11 +893,10 @@
       "unit_evidence": [],
       "live_evidence": [],
       "known_gaps": [
-        "Наличие в E2E labels не подтверждает доступность в текущей лицензии/UI",
         "Нет принятого сквозного контракта",
         "Разделы Help найдены; детальные режимы и live доступность требуют проверки"
       ],
-      "next_step": "Проверить доступность в live UI; source review мастера и отдельная цепочка с данными",
+      "next_step": "Source review мастера и отдельная цепочка с настройкой, данными и save/reopen",
       "documented_sections": [
         {
           "section": "Порты",
@@ -822,7 +906,13 @@
           "section": "Мастер настройки",
           "line": 91
         }
-      ]
+      ],
+      "palette_observation": {
+        "source": "live-palette",
+        "tid": "MF;TF-1;ModelForm;colVendors_Компоненты>Трансформация>Разгруппировка;TreeText",
+        "observed_label": "Разгруппировка",
+        "proof_scope": "presence_only"
+      }
     },
     {
       "id": "component.transform.ColumnFlipping",
@@ -853,11 +943,10 @@
       "unit_evidence": [],
       "live_evidence": [],
       "known_gaps": [
-        "Наличие в E2E labels не подтверждает доступность в текущей лицензии/UI",
         "Нет принятого сквозного контракта",
         "Разделы Help найдены; детальные режимы и live доступность требуют проверки"
       ],
-      "next_step": "Проверить доступность в live UI; source review мастера и отдельная цепочка с данными",
+      "next_step": "Source review мастера и отдельная цепочка с настройкой, данными и save/reopen",
       "documented_sections": [
         {
           "section": "Порты",
@@ -867,7 +956,13 @@
           "section": "Мастер настройки",
           "line": 44
         }
-      ]
+      ],
+      "palette_observation": {
+        "source": "live-palette",
+        "tid": "MF;TF-1;ModelForm;colVendors_Компоненты>Трансформация>Свертка_столбцов;TreeText",
+        "observed_label": "Свертка столбцов",
+        "proof_scope": "presence_only"
+      }
     },
     {
       "id": "component.transform.SlidingWindow",
@@ -898,11 +993,10 @@
       "unit_evidence": [],
       "live_evidence": [],
       "known_gaps": [
-        "Наличие в E2E labels не подтверждает доступность в текущей лицензии/UI",
         "Нет принятого сквозного контракта",
         "Разделы Help найдены; детальные режимы и live доступность требуют проверки"
       ],
-      "next_step": "Проверить доступность в live UI; source review мастера и отдельная цепочка с данными",
+      "next_step": "Source review мастера и отдельная цепочка с настройкой, данными и save/reopen",
       "documented_sections": [
         {
           "section": "Порты",
@@ -912,7 +1006,13 @@
           "section": "Мастер настройки",
           "line": 58
         }
-      ]
+      ],
+      "palette_observation": {
+        "source": "live-palette",
+        "tid": "MF;TF-1;ModelForm;colVendors_Компоненты>Трансформация>Скользящее_окно;TreeText",
+        "observed_label": "Скользящее окно",
+        "proof_scope": "presence_only"
+      }
     },
     {
       "id": "component.transform.JoinData",
@@ -943,11 +1043,10 @@
       "unit_evidence": [],
       "live_evidence": [],
       "known_gaps": [
-        "Наличие в E2E labels не подтверждает доступность в текущей лицензии/UI",
         "Нет принятого сквозного контракта",
         "Разделы Help найдены; детальные режимы и live доступность требуют проверки"
       ],
-      "next_step": "Проверить доступность в live UI; source review мастера и отдельная цепочка с данными",
+      "next_step": "Source review мастера и отдельная цепочка с настройкой, данными и save/reopen",
       "documented_sections": [
         {
           "section": "Мастер настройки",
@@ -980,7 +1079,13 @@
           "path": "data/processors/transformation/join/right.md",
           "sha256": "221aa7ee249ccb24a915abd98d6198d118f3b68e6258465db080b1ee8dc754db"
         }
-      ]
+      ],
+      "palette_observation": {
+        "source": "live-palette",
+        "tid": "MF;TF-1;ModelForm;colVendors_Компоненты>Трансформация>Слияние;TreeText",
+        "observed_label": "Слияние",
+        "proof_scope": "presence_only"
+      }
     },
     {
       "id": "component.transform.ColUnionData",
@@ -1011,17 +1116,22 @@
       "unit_evidence": [],
       "live_evidence": [],
       "known_gaps": [
-        "Наличие в E2E labels не подтверждает доступность в текущей лицензии/UI",
         "Нет принятого сквозного контракта",
         "Разделы Help найдены; детальные режимы и live доступность требуют проверки"
       ],
-      "next_step": "Проверить доступность в live UI; source review мастера и отдельная цепочка с данными",
+      "next_step": "Source review мастера и отдельная цепочка с настройкой, данными и save/reopen",
       "documented_sections": [
         {
           "section": "Мастер настройки",
           "line": 25
         }
-      ]
+      ],
+      "palette_observation": {
+        "source": "live-palette",
+        "tid": "MF;TF-1;ModelForm;colVendors_Компоненты>Трансформация>Соединение;TreeText",
+        "observed_label": "Соединение",
+        "proof_scope": "presence_only"
+      }
     },
     {
       "id": "component.transform.Sorting",
@@ -1052,17 +1162,22 @@
       "unit_evidence": [],
       "live_evidence": [],
       "known_gaps": [
-        "Наличие в E2E labels не подтверждает доступность в текущей лицензии/UI",
         "Нет принятого сквозного контракта",
         "Разделы Help найдены; детальные режимы и live доступность требуют проверки"
       ],
-      "next_step": "Проверить доступность в live UI; source review мастера и отдельная цепочка с данными",
+      "next_step": "Source review мастера и отдельная цепочка с настройкой, данными и save/reopen",
       "documented_sections": [
         {
           "section": "Мастер настройки",
           "line": 24
         }
-      ]
+      ],
+      "palette_observation": {
+        "source": "live-palette",
+        "tid": "MF;TF-1;ModelForm;colVendors_Компоненты>Трансформация>Сортировка;TreeText",
+        "observed_label": "Сортировка",
+        "proof_scope": "presence_only"
+      }
     },
     {
       "id": "component.transform.FilterData",
@@ -1093,17 +1208,22 @@
       "unit_evidence": [],
       "live_evidence": [],
       "known_gaps": [
-        "Наличие в E2E labels не подтверждает доступность в текущей лицензии/UI",
         "Нет принятого сквозного контракта",
         "Разделы Help найдены; детальные режимы и live доступность требуют проверки"
       ],
-      "next_step": "Проверить доступность в live UI; source review мастера и отдельная цепочка с данными",
+      "next_step": "Source review мастера и отдельная цепочка с настройкой, данными и save/reopen",
       "documented_sections": [
         {
           "section": "Мастер настройки",
           "line": 34
         }
-      ]
+      ],
+      "palette_observation": {
+        "source": "live-palette",
+        "tid": "MF;TF-1;ModelForm;colVendors_Компоненты>Трансформация>Фильтр_строк;TreeText",
+        "observed_label": "Фильтр строк",
+        "proof_scope": "presence_only"
+      }
     },
     {
       "id": "component.control.ExecNode",
@@ -1134,11 +1254,10 @@
       "unit_evidence": [],
       "live_evidence": [],
       "known_gaps": [
-        "Наличие в E2E labels не подтверждает доступность в текущей лицензии/UI",
         "Нет принятого сквозного контракта",
         "Разделы Help найдены; детальные режимы и live доступность требуют проверки"
       ],
-      "next_step": "Проверить доступность в live UI; source review мастера и отдельная цепочка с данными",
+      "next_step": "Source review мастера и отдельная цепочка с настройкой, данными и save/reopen",
       "documented_sections": [
         {
           "section": "Порты",
@@ -1148,7 +1267,13 @@
           "section": "Мастер настройки",
           "line": 25
         }
-      ]
+      ],
+      "palette_observation": {
+        "source": "live-palette",
+        "tid": "MF;TF-1;ModelForm;colVendors_Компоненты>Управление>Выполнение_узла;TreeText",
+        "observed_label": "Выполнение узла",
+        "proof_scope": "presence_only"
+      }
     },
     {
       "id": "component.control.SuperNode",
@@ -1179,11 +1304,10 @@
       "unit_evidence": [],
       "live_evidence": [],
       "known_gaps": [
-        "Наличие в E2E labels не подтверждает доступность в текущей лицензии/UI",
         "Нет принятого сквозного контракта",
         "Разделы Help найдены; детальные режимы и live доступность требуют проверки"
       ],
-      "next_step": "Проверить доступность в live UI; source review мастера и отдельная цепочка с данными",
+      "next_step": "Source review мастера и отдельная цепочка с настройкой, данными и save/reopen",
       "documented_sections": [
         {
           "section": "Порты",
@@ -1197,7 +1321,13 @@
           "section": "Область построения Подмодели",
           "line": 51
         }
-      ]
+      ],
+      "palette_observation": {
+        "source": "live-palette",
+        "tid": "MF;TF-1;ModelForm;colVendors_Компоненты>Управление>Подмодель;TreeText",
+        "observed_label": "Подмодель",
+        "proof_scope": "presence_only"
+      }
     },
     {
       "id": "component.control.ReferenceNode",
@@ -1228,11 +1358,10 @@
       "unit_evidence": [],
       "live_evidence": [],
       "known_gaps": [
-        "Наличие в E2E labels не подтверждает доступность в текущей лицензии/UI",
         "Нет принятого сквозного контракта",
         "Разделы Help найдены; детальные режимы и live доступность требуют проверки"
       ],
-      "next_step": "Проверить доступность в live UI; source review мастера и отдельная цепочка с данными",
+      "next_step": "Source review мастера и отдельная цепочка с настройкой, данными и save/reopen",
       "documented_sections": [
         {
           "section": "Порты",
@@ -1246,7 +1375,13 @@
           "section": "Видимость узлов",
           "line": 20
         }
-      ]
+      ],
+      "palette_observation": {
+        "source": "live-palette",
+        "tid": "MF;TF-1;ModelForm;colVendors_Компоненты>Управление>Узел-ссылка;TreeText",
+        "observed_label": "Узел-ссылка",
+        "proof_scope": "presence_only"
+      }
     },
     {
       "id": "component.control.Condition",
@@ -1277,11 +1412,10 @@
       "unit_evidence": [],
       "live_evidence": [],
       "known_gaps": [
-        "Наличие в E2E labels не подтверждает доступность в текущей лицензии/UI",
         "Нет принятого сквозного контракта",
         "Разделы Help найдены; детальные режимы и live доступность требуют проверки"
       ],
-      "next_step": "Проверить доступность в live UI; source review мастера и отдельная цепочка с данными",
+      "next_step": "Source review мастера и отдельная цепочка с настройкой, данными и save/reopen",
       "documented_sections": [
         {
           "section": "Порты",
@@ -1291,7 +1425,13 @@
           "section": "Мастер настройки",
           "line": 29
         }
-      ]
+      ],
+      "palette_observation": {
+        "source": "live-palette",
+        "tid": "MF;TF-1;ModelForm;colVendors_Компоненты>Управление>Условие;TreeText",
+        "observed_label": "Условие",
+        "proof_scope": "presence_only"
+      }
     },
     {
       "id": "component.control.Loop",
@@ -1322,11 +1462,10 @@
       "unit_evidence": [],
       "live_evidence": [],
       "known_gaps": [
-        "Наличие в E2E labels не подтверждает доступность в текущей лицензии/UI",
         "Нет принятого сквозного контракта",
         "Разделы Help найдены; детальные режимы и live доступность требуют проверки"
       ],
-      "next_step": "Проверить доступность в live UI; source review мастера и отдельная цепочка с данными",
+      "next_step": "Source review мастера и отдельная цепочка с настройкой, данными и save/reopen",
       "documented_sections": [
         {
           "section": "Порты",
@@ -1336,7 +1475,13 @@
           "section": "Мастер настройки",
           "line": 29
         }
-      ]
+      ],
+      "palette_observation": {
+        "source": "live-palette",
+        "tid": "MF;TF-1;ModelForm;colVendors_Компоненты>Управление>Цикл;TreeText",
+        "observed_label": "Цикл",
+        "proof_scope": "presence_only"
+      }
     },
     {
       "id": "component.research.AutoCorrelation",
@@ -1367,11 +1512,10 @@
       "unit_evidence": [],
       "live_evidence": [],
       "known_gaps": [
-        "Наличие в E2E labels не подтверждает доступность в текущей лицензии/UI",
         "Нет принятого сквозного контракта",
         "Разделы Help найдены; детальные режимы и live доступность требуют проверки"
       ],
-      "next_step": "Проверить доступность в live UI; source review мастера и отдельная цепочка с данными",
+      "next_step": "Source review мастера и отдельная цепочка с настройкой, данными и save/reopen",
       "documented_sections": [
         {
           "section": "Описание",
@@ -1385,7 +1529,13 @@
           "section": "Мастер настройки",
           "line": 67
         }
-      ]
+      ],
+      "palette_observation": {
+        "source": "live-palette",
+        "tid": "MF;TF-1;ModelForm;colVendors_Компоненты>Исследование>Автокорреляция;TreeText",
+        "observed_label": "Автокорреляция",
+        "proof_scope": "presence_only"
+      }
     },
     {
       "id": "component.research.Duplicates",
@@ -1416,11 +1566,10 @@
       "unit_evidence": [],
       "live_evidence": [],
       "known_gaps": [
-        "Наличие в E2E labels не подтверждает доступность в текущей лицензии/UI",
         "Нет принятого сквозного контракта",
         "Разделы Help найдены; детальные режимы и live доступность требуют проверки"
       ],
-      "next_step": "Проверить доступность в live UI; source review мастера и отдельная цепочка с данными",
+      "next_step": "Source review мастера и отдельная цепочка с настройкой, данными и save/reopen",
       "documented_sections": [
         {
           "section": "Описание",
@@ -1430,7 +1579,13 @@
           "section": "Порты",
           "line": 46
         }
-      ]
+      ],
+      "palette_observation": {
+        "source": "live-palette",
+        "tid": "MF;TF-1;ModelForm;colVendors_Компоненты>Исследование>Дубликаты_и_противоречия;TreeText",
+        "observed_label": "Дубликаты и противоречия",
+        "proof_scope": "presence_only"
+      }
     },
     {
       "id": "component.research.Quality",
@@ -1455,11 +1610,16 @@
       "unit_evidence": [],
       "live_evidence": [],
       "known_gaps": [
-        "Наличие в E2E labels не подтверждает доступность в текущей лицензии/UI",
         "Нет принятого сквозного контракта",
         "В проверенном Help найден визуализатор «Качество данных», не одноимённый processor; не приравнивать автоматически"
       ],
-      "next_step": "Проверить доступность в live UI; source review мастера и отдельная цепочка с данными"
+      "next_step": "Source review мастера и отдельная цепочка с настройкой, данными и save/reopen",
+      "palette_observation": {
+        "source": "live-palette",
+        "tid": "MF;TF-1;ModelForm;colVendors_Компоненты>Исследование>Качество_данных;TreeText",
+        "observed_label": "Качество данных",
+        "proof_scope": "presence_only"
+      }
     },
     {
       "id": "component.research.CorrAnalysis",
@@ -1490,11 +1650,10 @@
       "unit_evidence": [],
       "live_evidence": [],
       "known_gaps": [
-        "Наличие в E2E labels не подтверждает доступность в текущей лицензии/UI",
         "Нет принятого сквозного контракта",
         "Разделы Help найдены; детальные режимы и live доступность требуют проверки"
       ],
-      "next_step": "Проверить доступность в live UI; source review мастера и отдельная цепочка с данными",
+      "next_step": "Source review мастера и отдельная цепочка с настройкой, данными и save/reopen",
       "documented_sections": [
         {
           "section": "Описание",
@@ -1508,7 +1667,13 @@
           "section": "Мастер настройки",
           "line": 65
         }
-      ]
+      ],
+      "palette_observation": {
+        "source": "live-palette",
+        "tid": "MF;TF-1;ModelForm;colVendors_Компоненты>Исследование>Корреляционный_анализ;TreeText",
+        "observed_label": "Корреляционный анализ",
+        "proof_scope": "presence_only"
+      }
     },
     {
       "id": "component.research.FactorAnalysis",
@@ -1539,11 +1704,10 @@
       "unit_evidence": [],
       "live_evidence": [],
       "known_gaps": [
-        "Наличие в E2E labels не подтверждает доступность в текущей лицензии/UI",
         "Нет принятого сквозного контракта",
         "Разделы Help найдены; детальные режимы и live доступность требуют проверки"
       ],
-      "next_step": "Проверить доступность в live UI; source review мастера и отдельная цепочка с данными",
+      "next_step": "Source review мастера и отдельная цепочка с настройкой, данными и save/reopen",
       "documented_sections": [
         {
           "section": "Описание",
@@ -1557,7 +1721,13 @@
           "section": "Мастер настройки",
           "line": 65
         }
-      ]
+      ],
+      "palette_observation": {
+        "source": "live-palette",
+        "tid": "MF;TF-1;ModelForm;colVendors_Компоненты>Исследование>Факторный_анализ;TreeText",
+        "observed_label": "Факторный анализ",
+        "proof_scope": "presence_only"
+      }
     },
     {
       "id": "component.preprocessing.DataRecovery",
@@ -1588,11 +1758,10 @@
       "unit_evidence": [],
       "live_evidence": [],
       "known_gaps": [
-        "Наличие в E2E labels не подтверждает доступность в текущей лицензии/UI",
         "Нет принятого сквозного контракта",
         "Разделы Help найдены; детальные режимы и live доступность требуют проверки"
       ],
-      "next_step": "Проверить доступность в live UI; source review мастера и отдельная цепочка с данными",
+      "next_step": "Source review мастера и отдельная цепочка с настройкой, данными и save/reopen",
       "documented_sections": [
         {
           "section": "Порты",
@@ -1602,7 +1771,13 @@
           "section": "Мастер настройки",
           "line": 21
         }
-      ]
+      ],
+      "palette_observation": {
+        "source": "live-palette",
+        "tid": "MF;TF-1;ModelForm;colVendors_Компоненты>Предобработка>Заполнение_пропусков;TreeText",
+        "observed_label": "Заполнение пропусков",
+        "proof_scope": "presence_only"
+      }
     },
     {
       "id": "component.preprocessing.Binning",
@@ -1633,11 +1808,10 @@
       "unit_evidence": [],
       "live_evidence": [],
       "known_gaps": [
-        "Наличие в E2E labels не подтверждает доступность в текущей лицензии/UI",
         "Нет принятого сквозного контракта",
         "Разделы Help найдены; детальные режимы и live доступность требуют проверки"
       ],
-      "next_step": "Проверить доступность в live UI; source review мастера и отдельная цепочка с данными",
+      "next_step": "Source review мастера и отдельная цепочка с настройкой, данными и save/reopen",
       "documented_sections": [
         {
           "section": "Описание",
@@ -1651,7 +1825,13 @@
           "section": "Особенности выполнения узла",
           "line": 92
         }
-      ]
+      ],
+      "palette_observation": {
+        "source": "live-palette",
+        "tid": "MF;TF-1;ModelForm;colVendors_Компоненты>Предобработка>Квантование;TreeText",
+        "observed_label": "Квантование",
+        "proof_scope": "presence_only"
+      }
     },
     {
       "id": "component.preprocessing.CoarseClasses",
@@ -1682,11 +1862,10 @@
       "unit_evidence": [],
       "live_evidence": [],
       "known_gaps": [
-        "Наличие в E2E labels не подтверждает доступность в текущей лицензии/UI",
         "Нет принятого сквозного контракта",
         "Разделы Help найдены; детальные режимы и live доступность требуют проверки"
       ],
-      "next_step": "Проверить доступность в live UI; source review мастера и отдельная цепочка с данными",
+      "next_step": "Source review мастера и отдельная цепочка с настройкой, данными и save/reopen",
       "documented_sections": [
         {
           "section": "Описание",
@@ -1696,7 +1875,13 @@
           "section": "Мастер настройки",
           "line": 76
         }
-      ]
+      ],
+      "palette_observation": {
+        "source": "live-palette",
+        "tid": "MF;TF-1;ModelForm;colVendors_Компоненты>Предобработка>Конечные_классы;TreeText",
+        "observed_label": "Конечные классы",
+        "proof_scope": "presence_only"
+      }
     },
     {
       "id": "component.preprocessing.DataPartition",
@@ -1727,11 +1912,10 @@
       "unit_evidence": [],
       "live_evidence": [],
       "known_gaps": [
-        "Наличие в E2E labels не подтверждает доступность в текущей лицензии/UI",
         "Нет принятого сквозного контракта",
         "Разделы Help найдены; детальные режимы и live доступность требуют проверки"
       ],
-      "next_step": "Проверить доступность в live UI; source review мастера и отдельная цепочка с данными",
+      "next_step": "Source review мастера и отдельная цепочка с настройкой, данными и save/reopen",
       "documented_sections": [
         {
           "section": "Описание",
@@ -1745,7 +1929,13 @@
           "section": "Мастер настройки",
           "line": 22
         }
-      ]
+      ],
+      "palette_observation": {
+        "source": "live-palette",
+        "tid": "MF;TF-1;ModelForm;colVendors_Компоненты>Предобработка>Разбиение_на_множества;TreeText",
+        "observed_label": "Разбиение на множества",
+        "proof_scope": "presence_only"
+      }
     },
     {
       "id": "component.preprocessing.Elimoutlier",
@@ -1776,11 +1966,10 @@
       "unit_evidence": [],
       "live_evidence": [],
       "known_gaps": [
-        "Наличие в E2E labels не подтверждает доступность в текущей лицензии/UI",
         "Нет принятого сквозного контракта",
         "Разделы Help найдены; детальные режимы и live доступность требуют проверки"
       ],
-      "next_step": "Проверить доступность в live UI; source review мастера и отдельная цепочка с данными",
+      "next_step": "Source review мастера и отдельная цепочка с настройкой, данными и save/reopen",
       "documented_sections": [
         {
           "section": "Описание",
@@ -1794,7 +1983,13 @@
           "section": "Мастер настройки",
           "line": 22
         }
-      ]
+      ],
+      "palette_observation": {
+        "source": "live-palette",
+        "tid": "MF;TF-1;ModelForm;colVendors_Компоненты>Предобработка>Редактирование_выбросов;TreeText",
+        "observed_label": "Редактирование выбросов",
+        "proof_scope": "presence_only"
+      }
     },
     {
       "id": "component.preprocessing.Smoothing",
@@ -1825,11 +2020,10 @@
       "unit_evidence": [],
       "live_evidence": [],
       "known_gaps": [
-        "Наличие в E2E labels не подтверждает доступность в текущей лицензии/UI",
         "Нет принятого сквозного контракта",
         "Разделы Help найдены; детальные режимы и live доступность требуют проверки"
       ],
-      "next_step": "Проверить доступность в live UI; source review мастера и отдельная цепочка с данными",
+      "next_step": "Source review мастера и отдельная цепочка с настройкой, данными и save/reopen",
       "documented_sections": [
         {
           "section": "Описание",
@@ -1843,7 +2037,13 @@
           "section": "Мастер настройки",
           "line": 26
         }
-      ]
+      ],
+      "palette_observation": {
+        "source": "live-palette",
+        "tid": "MF;TF-1;ModelForm;colVendors_Компоненты>Предобработка>Сглаживание;TreeText",
+        "observed_label": "Сглаживание",
+        "proof_scope": "presence_only"
+      }
     },
     {
       "id": "component.preprocessing.Sampling",
@@ -1874,11 +2074,10 @@
       "unit_evidence": [],
       "live_evidence": [],
       "known_gaps": [
-        "Наличие в E2E labels не подтверждает доступность в текущей лицензии/UI",
         "Нет принятого сквозного контракта",
         "Разделы Help найдены; детальные режимы и live доступность требуют проверки"
       ],
-      "next_step": "Проверить доступность в live UI; source review мастера и отдельная цепочка с данными",
+      "next_step": "Source review мастера и отдельная цепочка с настройкой, данными и save/reopen",
       "documented_sections": [
         {
           "section": "Описание",
@@ -1892,7 +2091,13 @@
           "section": "Мастер настройки",
           "line": 22
         }
-      ]
+      ],
+      "palette_observation": {
+        "source": "live-palette",
+        "tid": "MF;TF-1;ModelForm;colVendors_Компоненты>Предобработка>Сэмплинг;TreeText",
+        "observed_label": "Сэмплинг",
+        "proof_scope": "presence_only"
+      }
     },
     {
       "id": "component.dataMining.AssnRules",
@@ -1923,11 +2128,10 @@
       "unit_evidence": [],
       "live_evidence": [],
       "known_gaps": [
-        "Наличие в E2E labels не подтверждает доступность в текущей лицензии/UI",
         "Нет принятого сквозного контракта",
         "Разделы Help найдены; детальные режимы и live доступность требуют проверки"
       ],
-      "next_step": "Проверить доступность в live UI; source review мастера и отдельная цепочка с данными",
+      "next_step": "Source review мастера и отдельная цепочка с настройкой, данными и save/reopen",
       "documented_sections": [
         {
           "section": "Описание",
@@ -1937,7 +2141,13 @@
           "section": "Мастер настройки",
           "line": 56
         }
-      ]
+      ],
+      "palette_observation": {
+        "source": "live-palette",
+        "tid": "MF;TF-1;ModelForm;colVendors_Компоненты>Data_Mining>Ассоциативные_правила;TreeText",
+        "observed_label": "Ассоциативные правила",
+        "proof_scope": "presence_only"
+      }
     },
     {
       "id": "component.dataMining.Clustering",
@@ -1968,11 +2178,10 @@
       "unit_evidence": [],
       "live_evidence": [],
       "known_gaps": [
-        "Наличие в E2E labels не подтверждает доступность в текущей лицензии/UI",
         "Нет принятого сквозного контракта",
         "Разделы Help найдены; детальные режимы и live доступность требуют проверки"
       ],
-      "next_step": "Проверить доступность в live UI; source review мастера и отдельная цепочка с данными",
+      "next_step": "Source review мастера и отдельная цепочка с настройкой, данными и save/reopen",
       "documented_sections": [
         {
           "section": "Описание",
@@ -1986,7 +2195,13 @@
           "section": "Мастер настройки узла",
           "line": 49
         }
-      ]
+      ],
+      "palette_observation": {
+        "source": "live-palette",
+        "tid": "MF;TF-1;ModelForm;colVendors_Компоненты>Data_Mining>Кластеризация;TreeText",
+        "observed_label": "Кластеризация",
+        "proof_scope": "presence_only"
+      }
     },
     {
       "id": "component.dataMining.Clope",
@@ -2017,11 +2232,10 @@
       "unit_evidence": [],
       "live_evidence": [],
       "known_gaps": [
-        "Наличие в E2E labels не подтверждает доступность в текущей лицензии/UI",
         "Нет принятого сквозного контракта",
         "Разделы Help найдены; детальные режимы и live доступность требуют проверки"
       ],
-      "next_step": "Проверить доступность в live UI; source review мастера и отдельная цепочка с данными",
+      "next_step": "Source review мастера и отдельная цепочка с настройкой, данными и save/reopen",
       "documented_sections": [
         {
           "section": "Описание",
@@ -2035,7 +2249,13 @@
           "section": "Мастер настройки",
           "line": 47
         }
-      ]
+      ],
+      "palette_observation": {
+        "source": "live-palette",
+        "tid": "MF;TF-1;ModelForm;colVendors_Компоненты>Data_Mining>Кластеризация_транзакций;TreeText",
+        "observed_label": "Кластеризация транзакций",
+        "proof_scope": "presence_only"
+      }
     },
     {
       "id": "component.dataMining.LinRegression",
@@ -2066,11 +2286,10 @@
       "unit_evidence": [],
       "live_evidence": [],
       "known_gaps": [
-        "Наличие в E2E labels не подтверждает доступность в текущей лицензии/UI",
         "Нет принятого сквозного контракта",
         "Разделы Help найдены; детальные режимы и live доступность требуют проверки"
       ],
-      "next_step": "Проверить доступность в live UI; source review мастера и отдельная цепочка с данными",
+      "next_step": "Source review мастера и отдельная цепочка с настройкой, данными и save/reopen",
       "documented_sections": [
         {
           "section": "Описание",
@@ -2084,7 +2303,13 @@
           "section": "Мастер настройки узла",
           "line": 30
         }
-      ]
+      ],
+      "palette_observation": {
+        "source": "live-palette",
+        "tid": "MF;TF-1;ModelForm;colVendors_Компоненты>Data_Mining>Линейная_регрессия;TreeText",
+        "observed_label": "Линейная регрессия",
+        "proof_scope": "presence_only"
+      }
     },
     {
       "id": "component.dataMining.LogRegression",
@@ -2115,11 +2340,10 @@
       "unit_evidence": [],
       "live_evidence": [],
       "known_gaps": [
-        "Наличие в E2E labels не подтверждает доступность в текущей лицензии/UI",
         "Нет принятого сквозного контракта",
         "Разделы Help найдены; детальные режимы и live доступность требуют проверки"
       ],
-      "next_step": "Проверить доступность в live UI; source review мастера и отдельная цепочка с данными",
+      "next_step": "Source review мастера и отдельная цепочка с настройкой, данными и save/reopen",
       "documented_sections": [
         {
           "section": "Порты",
@@ -2129,7 +2353,13 @@
           "section": "Мастер настройки узла",
           "line": 28
         }
-      ]
+      ],
+      "palette_observation": {
+        "source": "live-palette",
+        "tid": "MF;TF-1;ModelForm;colVendors_Компоненты>Data_Mining>Логистическая_регрессия;TreeText",
+        "observed_label": "Логистическая регрессия",
+        "proof_scope": "presence_only"
+      }
     },
     {
       "id": "component.dataMining.NeuralnetClass",
@@ -2160,11 +2390,10 @@
       "unit_evidence": [],
       "live_evidence": [],
       "known_gaps": [
-        "Наличие в E2E labels не подтверждает доступность в текущей лицензии/UI",
         "Нет принятого сквозного контракта",
         "Разделы Help найдены; детальные режимы и live доступность требуют проверки"
       ],
-      "next_step": "Проверить доступность в live UI; source review мастера и отдельная цепочка с данными",
+      "next_step": "Source review мастера и отдельная цепочка с настройкой, данными и save/reopen",
       "documented_sections": [
         {
           "section": "Описание",
@@ -2178,7 +2407,13 @@
           "section": "Мастер настройки",
           "line": 38
         }
-      ]
+      ],
+      "palette_observation": {
+        "source": "live-palette",
+        "tid": "MF;TF-1;ModelForm;colVendors_Компоненты>Data_Mining>Нейросеть_(классификация);TreeText",
+        "observed_label": "Нейросеть (классификация)",
+        "proof_scope": "presence_only"
+      }
     },
     {
       "id": "component.dataMining.NeuralnetReg",
@@ -2209,11 +2444,10 @@
       "unit_evidence": [],
       "live_evidence": [],
       "known_gaps": [
-        "Наличие в E2E labels не подтверждает доступность в текущей лицензии/UI",
         "Нет принятого сквозного контракта",
         "Разделы Help найдены; детальные режимы и live доступность требуют проверки"
       ],
-      "next_step": "Проверить доступность в live UI; source review мастера и отдельная цепочка с данными",
+      "next_step": "Source review мастера и отдельная цепочка с настройкой, данными и save/reopen",
       "documented_sections": [
         {
           "section": "Порты",
@@ -2223,7 +2457,13 @@
           "section": "Мастер настройки",
           "line": 32
         }
-      ]
+      ],
+      "palette_observation": {
+        "source": "live-palette",
+        "tid": "MF;TF-1;ModelForm;colVendors_Компоненты>Data_Mining>Нейросеть_(регрессия);TreeText",
+        "observed_label": "Нейросеть (регрессия)",
+        "proof_scope": "presence_only"
+      }
     },
     {
       "id": "component.dataMining.Sonn",
@@ -2254,11 +2494,10 @@
       "unit_evidence": [],
       "live_evidence": [],
       "known_gaps": [
-        "Наличие в E2E labels не подтверждает доступность в текущей лицензии/UI",
         "Нет принятого сквозного контракта",
         "Разделы Help найдены; детальные режимы и live доступность требуют проверки"
       ],
-      "next_step": "Проверить доступность в live UI; source review мастера и отдельная цепочка с данными",
+      "next_step": "Source review мастера и отдельная цепочка с настройкой, данными и save/reopen",
       "documented_sections": [
         {
           "section": "Описание",
@@ -2277,7 +2516,13 @@
         "Сети Кохонена",
         "Нейронный газ",
         "Обучение до получения выходных наборов"
-      ]
+      ],
+      "palette_observation": {
+        "source": "live-palette",
+        "tid": "MF;TF-1;ModelForm;colVendors_Компоненты>Data_Mining>Самоорганизующаяся_сеть;TreeText",
+        "observed_label": "Самоорганизующаяся сеть",
+        "proof_scope": "presence_only"
+      }
     },
     {
       "id": "component.dataMining.Arimax",
@@ -2308,11 +2553,10 @@
       "unit_evidence": [],
       "live_evidence": [],
       "known_gaps": [
-        "Наличие в E2E labels не подтверждает доступность в текущей лицензии/UI",
         "Нет принятого сквозного контракта",
         "Разделы Help найдены; детальные режимы и live доступность требуют проверки"
       ],
-      "next_step": "Проверить доступность в live UI; source review мастера и отдельная цепочка с данными",
+      "next_step": "Source review мастера и отдельная цепочка с настройкой, данными и save/reopen",
       "documented_sections": [
         {
           "section": "Описание",
@@ -2326,7 +2570,13 @@
           "section": "Мастер настройки",
           "line": 55
         }
-      ]
+      ],
+      "palette_observation": {
+        "source": "live-palette",
+        "tid": "MF;TF-1;ModelForm;colVendors_Компоненты>Data_Mining>ARIMAX;TreeText",
+        "observed_label": "ARIMAX",
+        "proof_scope": "presence_only"
+      }
     },
     {
       "id": "component.dataMining.EmClust",
@@ -2357,11 +2607,10 @@
       "unit_evidence": [],
       "live_evidence": [],
       "known_gaps": [
-        "Наличие в E2E labels не подтверждает доступность в текущей лицензии/UI",
         "Нет принятого сквозного контракта",
         "Разделы Help найдены; детальные режимы и live доступность требуют проверки"
       ],
-      "next_step": "Проверить доступность в live UI; source review мастера и отдельная цепочка с данными",
+      "next_step": "Source review мастера и отдельная цепочка с настройкой, данными и save/reopen",
       "documented_sections": [
         {
           "section": "Описание",
@@ -2375,7 +2624,13 @@
           "section": "Мастер настройки",
           "line": 44
         }
-      ]
+      ],
+      "palette_observation": {
+        "source": "live-palette",
+        "tid": "MF;TF-1;ModelForm;colVendors_Компоненты>Data_Mining>EM_Кластеризация;TreeText",
+        "observed_label": "EM Кластеризация",
+        "proof_scope": "presence_only"
+      }
     },
     {
       "id": "component.programming.JavaScript",
@@ -2406,11 +2661,10 @@
       "unit_evidence": [],
       "live_evidence": [],
       "known_gaps": [
-        "Наличие в E2E labels не подтверждает доступность в текущей лицензии/UI",
         "Нет принятого сквозного контракта",
         "Разделы Help найдены; детальные режимы и live доступность требуют проверки"
       ],
-      "next_step": "Проверить доступность в live UI; source review мастера и отдельная цепочка с данными",
+      "next_step": "Source review мастера и отдельная цепочка с настройкой, данными и save/reopen",
       "documented_sections": [
         {
           "section": "Описание",
@@ -2436,7 +2690,13 @@
           "section": "Обработка ошибок",
           "line": 78
         }
-      ]
+      ],
+      "palette_observation": {
+        "source": "live-palette",
+        "tid": "MF;TF-1;ModelForm;colVendors_Компоненты>Программирование>JavaScript;TreeText",
+        "observed_label": "JavaScript",
+        "proof_scope": "presence_only"
+      }
     },
     {
       "id": "component.programming.Python",
@@ -2467,11 +2727,10 @@
       "unit_evidence": [],
       "live_evidence": [],
       "known_gaps": [
-        "Наличие в E2E labels не подтверждает доступность в текущей лицензии/UI",
         "Нет принятого сквозного контракта",
         "Разделы Help найдены; детальные режимы и live доступность требуют проверки"
       ],
-      "next_step": "Проверить доступность в live UI; source review мастера и отдельная цепочка с данными",
+      "next_step": "Source review мастера и отдельная цепочка с настройкой, данными и save/reopen",
       "documented_sections": [
         {
           "section": "Описание",
@@ -2493,7 +2752,13 @@
           "section": "Глобальные функции",
           "line": 95
         }
-      ]
+      ],
+      "palette_observation": {
+        "source": "live-palette",
+        "tid": "MF;TF-1;ModelForm;colVendors_Компоненты>Программирование>Python;TreeText",
+        "observed_label": "Python",
+        "proof_scope": "presence_only"
+      }
     },
     {
       "id": "component.variables.Replace",
@@ -2524,11 +2789,10 @@
       "unit_evidence": [],
       "live_evidence": [],
       "known_gaps": [
-        "Наличие в E2E labels не подтверждает доступность в текущей лицензии/UI",
         "Нет принятого сквозного контракта",
         "Разделы Help найдены; детальные режимы и live доступность требуют проверки"
       ],
-      "next_step": "Проверить доступность в live UI; source review мастера и отдельная цепочка с данными",
+      "next_step": "Source review мастера и отдельная цепочка с настройкой, данными и save/reopen",
       "documented_sections": [
         {
           "section": "Порты",
@@ -2538,7 +2802,13 @@
           "section": "Мастер настройки",
           "line": 24
         }
-      ]
+      ],
+      "palette_observation": {
+        "source": "live-palette",
+        "tid": "MF;TF-1;ModelForm;colVendors_Компоненты>Переменные>Замена_(переменные);TreeText",
+        "observed_label": "Замена (переменные)",
+        "proof_scope": "presence_only"
+      }
     },
     {
       "id": "component.variables.Calculator",
@@ -2569,11 +2839,10 @@
       "unit_evidence": [],
       "live_evidence": [],
       "known_gaps": [
-        "Наличие в E2E labels не подтверждает доступность в текущей лицензии/UI",
         "Нет принятого сквозного контракта",
         "Разделы Help найдены; детальные режимы и live доступность требуют проверки"
       ],
-      "next_step": "Проверить доступность в live UI; source review мастера и отдельная цепочка с данными",
+      "next_step": "Source review мастера и отдельная цепочка с настройкой, данными и save/reopen",
       "documented_sections": [
         {
           "section": "Порты",
@@ -2583,7 +2852,13 @@
           "section": "Мастер настройки",
           "line": 20
         }
-      ]
+      ],
+      "palette_observation": {
+        "source": "live-palette",
+        "tid": "MF;TF-1;ModelForm;colVendors_Компоненты>Переменные>Калькулятор_(переменные);TreeText",
+        "observed_label": "Калькулятор (переменные)",
+        "proof_scope": "presence_only"
+      }
     },
     {
       "id": "component.variables.VarToData",
@@ -2614,11 +2889,10 @@
       "unit_evidence": [],
       "live_evidence": [],
       "known_gaps": [
-        "Наличие в E2E labels не подтверждает доступность в текущей лицензии/UI",
         "Нет принятого сквозного контракта",
         "Разделы Help найдены; детальные режимы и live доступность требуют проверки"
       ],
-      "next_step": "Проверить доступность в live UI; source review мастера и отдельная цепочка с данными",
+      "next_step": "Source review мастера и отдельная цепочка с настройкой, данными и save/reopen",
       "documented_sections": [
         {
           "section": "Порты",
@@ -2628,7 +2902,13 @@
           "section": "Мастер настройки",
           "line": 18
         }
-      ]
+      ],
+      "palette_observation": {
+        "source": "live-palette",
+        "tid": "MF;TF-1;ModelForm;colVendors_Компоненты>Переменные>Переменные_в_таблицу;TreeText",
+        "observed_label": "Переменные в таблицу",
+        "proof_scope": "presence_only"
+      }
     },
     {
       "id": "component.variables.ColunionDataVar",
@@ -2659,17 +2939,22 @@
       "unit_evidence": [],
       "live_evidence": [],
       "known_gaps": [
-        "Наличие в E2E labels не подтверждает доступность в текущей лицензии/UI",
         "Нет принятого сквозного контракта",
         "Разделы Help найдены; детальные режимы и live доступность требуют проверки"
       ],
-      "next_step": "Проверить доступность в live UI; source review мастера и отдельная цепочка с данными",
+      "next_step": "Source review мастера и отдельная цепочка с настройкой, данными и save/reopen",
       "documented_sections": [
         {
           "section": "Порты",
           "line": 10
         }
-      ]
+      ],
+      "palette_observation": {
+        "source": "live-palette",
+        "tid": "MF;TF-1;ModelForm;colVendors_Компоненты>Переменные>Соединение_(переменные);TreeText",
+        "observed_label": "Соединение (переменные)",
+        "proof_scope": "presence_only"
+      }
     },
     {
       "id": "component.variables.DataToVar",
@@ -2700,11 +2985,10 @@
       "unit_evidence": [],
       "live_evidence": [],
       "known_gaps": [
-        "Наличие в E2E labels не подтверждает доступность в текущей лицензии/UI",
         "Нет принятого сквозного контракта",
         "Разделы Help найдены; детальные режимы и live доступность требуют проверки"
       ],
-      "next_step": "Проверить доступность в live UI; source review мастера и отдельная цепочка с данными",
+      "next_step": "Source review мастера и отдельная цепочка с настройкой, данными и save/reopen",
       "documented_sections": [
         {
           "section": "Порты",
@@ -2718,7 +3002,13 @@
           "section": "Содержание выходного набора",
           "line": 66
         }
-      ]
+      ],
+      "palette_observation": {
+        "source": "live-palette",
+        "tid": "MF;TF-1;ModelForm;colVendors_Компоненты>Переменные>Таблица_в_переменные;TreeText",
+        "observed_label": "Таблица в переменные",
+        "proof_scope": "presence_only"
+      }
     },
     {
       "id": "component.trees.JSONToTree",
@@ -2749,11 +3039,10 @@
       "unit_evidence": [],
       "live_evidence": [],
       "known_gaps": [
-        "Наличие в E2E labels не подтверждает доступность в текущей лицензии/UI",
         "Нет принятого сквозного контракта",
         "Разделы Help найдены; детальные режимы и live доступность требуют проверки"
       ],
-      "next_step": "Проверить доступность в live UI; source review мастера и отдельная цепочка с данными",
+      "next_step": "Source review мастера и отдельная цепочка с настройкой, данными и save/reopen",
       "documented_sections": [
         {
           "section": "Порты",
@@ -2767,7 +3056,13 @@
           "section": "Особенности работы компонента",
           "line": 112
         }
-      ]
+      ],
+      "palette_observation": {
+        "source": "live-palette",
+        "tid": "MF;TF-1;ModelForm;colVendors_Компоненты>Дерево_данных>JSON_в_дерево;TreeText",
+        "observed_label": "JSON в дерево",
+        "proof_scope": "presence_only"
+      }
     },
     {
       "id": "component.trees.TreeToData",
@@ -2798,11 +3093,10 @@
       "unit_evidence": [],
       "live_evidence": [],
       "known_gaps": [
-        "Наличие в E2E labels не подтверждает доступность в текущей лицензии/UI",
         "Нет принятого сквозного контракта",
         "Разделы Help найдены; детальные режимы и live доступность требуют проверки"
       ],
-      "next_step": "Проверить доступность в live UI; source review мастера и отдельная цепочка с данными",
+      "next_step": "Source review мастера и отдельная цепочка с настройкой, данными и save/reopen",
       "documented_sections": [
         {
           "section": "Порты",
@@ -2812,7 +3106,13 @@
           "section": "Мастер настройки",
           "line": 17
         }
-      ]
+      ],
+      "palette_observation": {
+        "source": "live-palette",
+        "tid": "MF;TF-1;ModelForm;colVendors_Компоненты>Дерево_данных>Дерево_в_таблицу;TreeText",
+        "observed_label": "Дерево в таблицу",
+        "proof_scope": "presence_only"
+      }
     },
     {
       "id": "component.trees.CalculatorTree",
@@ -2843,11 +3143,10 @@
       "unit_evidence": [],
       "live_evidence": [],
       "known_gaps": [
-        "Наличие в E2E labels не подтверждает доступность в текущей лицензии/UI",
         "Нет принятого сквозного контракта",
         "Разделы Help найдены; детальные режимы и live доступность требуют проверки"
       ],
-      "next_step": "Проверить доступность в live UI; source review мастера и отдельная цепочка с данными",
+      "next_step": "Source review мастера и отдельная цепочка с настройкой, данными и save/reopen",
       "documented_sections": [
         {
           "section": "Порты",
@@ -2857,7 +3156,13 @@
           "section": "Мастер настройки",
           "line": 19
         }
-      ]
+      ],
+      "palette_observation": {
+        "source": "live-palette",
+        "tid": "MF;TF-1;ModelForm;colVendors_Компоненты>Дерево_данных>Калькулятор_(дерево);TreeText",
+        "observed_label": "Калькулятор (дерево)",
+        "proof_scope": "presence_only"
+      }
     },
     {
       "id": "component.trees.UnionTree",
@@ -2888,11 +3193,10 @@
       "unit_evidence": [],
       "live_evidence": [],
       "known_gaps": [
-        "Наличие в E2E labels не подтверждает доступность в текущей лицензии/UI",
         "Нет принятого сквозного контракта",
         "Разделы Help найдены; детальные режимы и live доступность требуют проверки"
       ],
-      "next_step": "Проверить доступность в live UI; source review мастера и отдельная цепочка с данными",
+      "next_step": "Source review мастера и отдельная цепочка с настройкой, данными и save/reopen",
       "documented_sections": [
         {
           "section": "Мастер настройки",
@@ -2902,7 +3206,13 @@
           "section": "Описание режимов работы компонента",
           "line": 34
         }
-      ]
+      ],
+      "palette_observation": {
+        "source": "live-palette",
+        "tid": "MF;TF-1;ModelForm;colVendors_Компоненты>Дерево_данных>Объединение_(дерево);TreeText",
+        "observed_label": "Объединение (дерево)",
+        "proof_scope": "presence_only"
+      }
     },
     {
       "id": "component.trees.JoindataTree",
@@ -2933,11 +3243,10 @@
       "unit_evidence": [],
       "live_evidence": [],
       "known_gaps": [
-        "Наличие в E2E labels не подтверждает доступность в текущей лицензии/UI",
         "Нет принятого сквозного контракта",
         "Разделы Help найдены; детальные режимы и live доступность требуют проверки"
       ],
-      "next_step": "Проверить доступность в live UI; source review мастера и отдельная цепочка с данными",
+      "next_step": "Source review мастера и отдельная цепочка с настройкой, данными и save/reopen",
       "documented_sections": [
         {
           "section": "Порты",
@@ -2951,7 +3260,13 @@
           "section": "Особенности слияния в Контейнер и Массив",
           "line": 53
         }
-      ]
+      ],
+      "palette_observation": {
+        "source": "live-palette",
+        "tid": "MF;TF-1;ModelForm;colVendors_Компоненты>Дерево_данных>Слияние_(дерево);TreeText",
+        "observed_label": "Слияние (дерево)",
+        "proof_scope": "presence_only"
+      }
     },
     {
       "id": "component.trees.DataToTree",
@@ -2982,11 +3297,10 @@
       "unit_evidence": [],
       "live_evidence": [],
       "known_gaps": [
-        "Наличие в E2E labels не подтверждает доступность в текущей лицензии/UI",
         "Нет принятого сквозного контракта",
         "Разделы Help найдены; детальные режимы и live доступность требуют проверки"
       ],
-      "next_step": "Проверить доступность в live UI; source review мастера и отдельная цепочка с данными",
+      "next_step": "Source review мастера и отдельная цепочка с настройкой, данными и save/reopen",
       "documented_sections": [
         {
           "section": "Порты",
@@ -2996,7 +3310,13 @@
           "section": "Мастер настройки",
           "line": 18
         }
-      ]
+      ],
+      "palette_observation": {
+        "source": "live-palette",
+        "tid": "MF;TF-1;ModelForm;colVendors_Компоненты>Дерево_данных>Таблица_в_дерево;TreeText",
+        "observed_label": "Таблица в дерево",
+        "proof_scope": "presence_only"
+      }
     },
     {
       "id": "component.trees.TreeToJSON",
@@ -3027,11 +3347,10 @@
       "unit_evidence": [],
       "live_evidence": [],
       "known_gaps": [
-        "Наличие в E2E labels не подтверждает доступность в текущей лицензии/UI",
         "Нет принятого сквозного контракта",
         "Разделы Help найдены; детальные режимы и live доступность требуют проверки"
       ],
-      "next_step": "Проверить доступность в live UI; source review мастера и отдельная цепочка с данными",
+      "next_step": "Source review мастера и отдельная цепочка с настройкой, данными и save/reopen",
       "documented_sections": [
         {
           "section": "Порты",
@@ -3041,7 +3360,13 @@
           "section": "Мастер настройки",
           "line": 17
         }
-      ]
+      ],
+      "palette_observation": {
+        "source": "live-palette",
+        "tid": "MF;TF-1;ModelForm;colVendors_Компоненты>Дерево_данных>Дерево_в_JSON;TreeText",
+        "observed_label": "Дерево в JSON",
+        "proof_scope": "presence_only"
+      }
     },
     {
       "id": "component.integration.ExecCmd",
@@ -3072,11 +3397,10 @@
       "unit_evidence": [],
       "live_evidence": [],
       "known_gaps": [
-        "Наличие в E2E labels не подтверждает доступность в текущей лицензии/UI",
         "Нет принятого сквозного контракта",
         "Разделы Help найдены; детальные режимы и live доступность требуют проверки"
       ],
-      "next_step": "Проверить доступность в live UI; source review мастера и отдельная цепочка с данными",
+      "next_step": "Source review мастера и отдельная цепочка с настройкой, данными и save/reopen",
       "documented_sections": [
         {
           "section": "Описание",
@@ -3094,7 +3418,13 @@
           "section": "Написание команд",
           "line": 40
         }
-      ]
+      ],
+      "palette_observation": {
+        "source": "live-palette",
+        "tid": "MF;TF-1;ModelForm;colVendors_Компоненты>Интеграция>Выполнение_программы;TreeText",
+        "observed_label": "Выполнение программы",
+        "proof_scope": "presence_only"
+      }
     },
     {
       "id": "component.integration.ExtractXml",
@@ -3125,11 +3455,10 @@
       "unit_evidence": [],
       "live_evidence": [],
       "known_gaps": [
-        "Наличие в E2E labels не подтверждает доступность в текущей лицензии/UI",
         "Нет принятого сквозного контракта",
         "Разделы Help найдены; детальные режимы и live доступность требуют проверки"
       ],
-      "next_step": "Проверить доступность в live UI; source review мастера и отдельная цепочка с данными",
+      "next_step": "Source review мастера и отдельная цепочка с настройкой, данными и save/reopen",
       "documented_sections": [
         {
           "section": "Описание",
@@ -3143,7 +3472,13 @@
           "section": "Мастер настройки",
           "line": 31
         }
-      ]
+      ],
+      "palette_observation": {
+        "source": "live-palette",
+        "tid": "MF;TF-1;ModelForm;colVendors_Компоненты>Интеграция>Разбор_XML;TreeText",
+        "observed_label": "Разбор XML",
+        "proof_scope": "presence_only"
+      }
     },
     {
       "id": "component.integration.DataToXml",
@@ -3174,11 +3509,10 @@
       "unit_evidence": [],
       "live_evidence": [],
       "known_gaps": [
-        "Наличие в E2E labels не подтверждает доступность в текущей лицензии/UI",
         "Нет принятого сквозного контракта",
         "Разделы Help найдены; детальные режимы и live доступность требуют проверки"
       ],
-      "next_step": "Проверить доступность в live UI; source review мастера и отдельная цепочка с данными",
+      "next_step": "Source review мастера и отдельная цепочка с настройкой, данными и save/reopen",
       "documented_sections": [
         {
           "section": "Порты",
@@ -3188,7 +3522,13 @@
           "section": "Мастер настройки",
           "line": 22
         }
-      ]
+      ],
+      "palette_observation": {
+        "source": "live-palette",
+        "tid": "MF;TF-1;ModelForm;colVendors_Компоненты>Интеграция>Формирование_XML;TreeText",
+        "observed_label": "Формирование XML",
+        "proof_scope": "presence_only"
+      }
     },
     {
       "id": "component.integration.RestRequest",
@@ -3219,11 +3559,10 @@
       "unit_evidence": [],
       "live_evidence": [],
       "known_gaps": [
-        "Наличие в E2E labels не подтверждает доступность в текущей лицензии/UI",
         "Нет принятого сквозного контракта",
         "Разделы Help найдены; детальные режимы и live доступность требуют проверки"
       ],
-      "next_step": "Проверить доступность в live UI; source review мастера и отдельная цепочка с данными",
+      "next_step": "Source review мастера и отдельная цепочка с настройкой, данными и save/reopen",
       "documented_sections": [
         {
           "section": "Порты",
@@ -3233,7 +3572,13 @@
           "section": "Настройка",
           "line": 32
         }
-      ]
+      ],
+      "palette_observation": {
+        "source": "live-palette",
+        "tid": "MF;TF-1;ModelForm;colVendors_Компоненты>Интеграция>REST-запрос;TreeText",
+        "observed_label": "REST-запрос",
+        "proof_scope": "presence_only"
+      }
     },
     {
       "id": "component.integration.SoapRequest",
@@ -3264,11 +3609,10 @@
       "unit_evidence": [],
       "live_evidence": [],
       "known_gaps": [
-        "Наличие в E2E labels не подтверждает доступность в текущей лицензии/UI",
         "Нет принятого сквозного контракта",
         "Разделы Help найдены; детальные режимы и live доступность требуют проверки"
       ],
-      "next_step": "Проверить доступность в live UI; source review мастера и отдельная цепочка с данными",
+      "next_step": "Source review мастера и отдельная цепочка с настройкой, данными и save/reopen",
       "documented_sections": [
         {
           "section": "Порты",
@@ -3278,7 +3622,13 @@
           "section": "Настройка",
           "line": 26
         }
-      ]
+      ],
+      "palette_observation": {
+        "source": "live-palette",
+        "tid": "MF;TF-1;ModelForm;colVendors_Компоненты>Интеграция>SOAP-запрос;TreeText",
+        "observed_label": "SOAP-запрос",
+        "proof_scope": "presence_only"
+      }
     },
     {
       "id": "component.integration.SqlScript",
@@ -3309,11 +3659,10 @@
       "unit_evidence": [],
       "live_evidence": [],
       "known_gaps": [
-        "Наличие в E2E labels не подтверждает доступность в текущей лицензии/UI",
         "Нет принятого сквозного контракта",
         "Разделы Help найдены; детальные режимы и live доступность требуют проверки"
       ],
-      "next_step": "Проверить доступность в live UI; source review мастера и отдельная цепочка с данными",
+      "next_step": "Source review мастера и отдельная цепочка с настройкой, данными и save/reopen",
       "documented_sections": [
         {
           "section": "Порты",
@@ -3327,7 +3676,13 @@
           "section": "Особенности работы с транзакциями и SQL-скриптами",
           "line": 56
         }
-      ]
+      ],
+      "palette_observation": {
+        "source": "live-palette",
+        "tid": "MF;TF-1;ModelForm;colVendors_Компоненты>Интеграция>SQL-скрипт;TreeText",
+        "observed_label": "SQL-скрипт",
+        "proof_scope": "presence_only"
+      }
     },
     {
       "id": "component.exports.DataBase",
@@ -3358,17 +3713,22 @@
       "unit_evidence": [],
       "live_evidence": [],
       "known_gaps": [
-        "Наличие в E2E labels не подтверждает доступность в текущей лицензии/UI",
         "Нет принятого сквозного контракта",
         "Разделы Help найдены; детальные режимы и live доступность требуют проверки"
       ],
-      "next_step": "Проверить доступность в live UI; source review мастера и отдельная цепочка с данными",
+      "next_step": "Source review мастера и отдельная цепочка с настройкой, данными и save/reopen",
       "documented_sections": [
         {
           "section": "Мастер настройки",
           "line": 22
         }
-      ]
+      ],
+      "palette_observation": {
+        "source": "live-palette",
+        "tid": "MF;TF-1;ModelForm;colVendors_Компоненты>Экспорт>База_данных;TreeText",
+        "observed_label": "База данных",
+        "proof_scope": "presence_only"
+      }
     },
     {
       "id": "component.exports.Text",
@@ -3399,17 +3759,22 @@
       "unit_evidence": [],
       "live_evidence": [],
       "known_gaps": [
-        "Наличие в E2E labels не подтверждает доступность в текущей лицензии/UI",
         "Нет принятого сквозного контракта",
         "Разделы Help найдены; детальные режимы и live доступность требуют проверки"
       ],
-      "next_step": "Проверить доступность в live UI; source review мастера и отдельная цепочка с данными",
+      "next_step": "Source review мастера и отдельная цепочка с настройкой, данными и save/reopen",
       "documented_sections": [
         {
           "section": "Мастер настройки",
           "line": 13
         }
-      ]
+      ],
+      "palette_observation": {
+        "source": "live-palette",
+        "tid": "MF;TF-1;ModelForm;colVendors_Компоненты>Экспорт>Текстовый_файл;TreeText",
+        "observed_label": "Текстовый файл",
+        "proof_scope": "presence_only"
+      }
     },
     {
       "id": "component.exports.Warehouse",
@@ -3440,17 +3805,22 @@
       "unit_evidence": [],
       "live_evidence": [],
       "known_gaps": [
-        "Наличие в E2E labels не подтверждает доступность в текущей лицензии/UI",
         "Нет принятого сквозного контракта",
         "Разделы Help найдены; детальные режимы и live доступность требуют проверки"
       ],
-      "next_step": "Проверить доступность в live UI; source review мастера и отдельная цепочка с данными",
+      "next_step": "Source review мастера и отдельная цепочка с настройкой, данными и save/reopen",
       "documented_sections": [
         {
           "section": "Мастер настройки",
           "line": 15
         }
-      ]
+      ],
+      "palette_observation": {
+        "source": "live-palette",
+        "tid": "MF;TF-1;ModelForm;colVendors_Компоненты>Экспорт>Deductor_Warehouse;TreeText",
+        "observed_label": "Deductor Warehouse",
+        "proof_scope": "presence_only"
+      }
     },
     {
       "id": "component.exports.Excel",
@@ -3481,11 +3851,10 @@
       "unit_evidence": [],
       "live_evidence": [],
       "known_gaps": [
-        "Наличие в E2E labels не подтверждает доступность в текущей лицензии/UI",
         "Нет принятого сквозного контракта",
         "Разделы Help найдены; детальные режимы и live доступность требуют проверки"
       ],
-      "next_step": "Проверить доступность в live UI; source review мастера и отдельная цепочка с данными",
+      "next_step": "Source review мастера и отдельная цепочка с настройкой, данными и save/reopen",
       "documented_sections": [
         {
           "section": "Порты",
@@ -3495,7 +3864,13 @@
           "section": "Мастер настройки",
           "line": 18
         }
-      ]
+      ],
+      "palette_observation": {
+        "source": "live-palette",
+        "tid": "MF;TF-1;ModelForm;colVendors_Компоненты>Экспорт>Excel_файл;TreeText",
+        "observed_label": "Excel файл",
+        "proof_scope": "presence_only"
+      }
     },
     {
       "id": "component.exports.Kafka",
@@ -3526,11 +3901,10 @@
       "unit_evidence": [],
       "live_evidence": [],
       "known_gaps": [
-        "Наличие в E2E labels не подтверждает доступность в текущей лицензии/UI",
         "Нет принятого сквозного контракта",
         "Разделы Help найдены; детальные режимы и live доступность требуют проверки"
       ],
-      "next_step": "Проверить доступность в live UI; source review мастера и отдельная цепочка с данными",
+      "next_step": "Source review мастера и отдельная цепочка с настройкой, данными и save/reopen",
       "documented_sections": [
         {
           "section": "Порты",
@@ -3540,7 +3914,13 @@
           "section": "Мастер настройки",
           "line": 13
         }
-      ]
+      ],
+      "palette_observation": {
+        "source": "live-palette",
+        "tid": "MF;TF-1;ModelForm;colVendors_Компоненты>Экспорт>Kafka;TreeText",
+        "observed_label": "Kafka",
+        "proof_scope": "presence_only"
+      }
     },
     {
       "id": "component.exports.Lgd",
@@ -3571,11 +3951,10 @@
       "unit_evidence": [],
       "live_evidence": [],
       "known_gaps": [
-        "Наличие в E2E labels не подтверждает доступность в текущей лицензии/UI",
         "Нет принятого сквозного контракта",
         "Разделы Help найдены; детальные режимы и live доступность требуют проверки"
       ],
-      "next_step": "Проверить доступность в live UI; source review мастера и отдельная цепочка с данными",
+      "next_step": "Source review мастера и отдельная цепочка с настройкой, данными и save/reopen",
       "documented_sections": [
         {
           "section": "Порты",
@@ -3585,7 +3964,13 @@
           "section": "Мастер настройки",
           "line": 19
         }
-      ]
+      ],
+      "palette_observation": {
+        "source": "live-palette",
+        "tid": "MF;TF-1;ModelForm;colVendors_Компоненты>Экспорт>Loginom_Data_файл;TreeText",
+        "observed_label": "Loginom Data файл",
+        "proof_scope": "presence_only"
+      }
     },
     {
       "id": "component.exports.Tableau",
@@ -3630,7 +4015,11 @@
           "section": "Мастер настройки",
           "line": 16
         }
-      ]
+      ],
+      "palette_observation": {
+        "source": "live-palette",
+        "proof_scope": "not_observed; absence_and_license_not_established"
+      }
     },
     {
       "id": "component.exports.Xml",
@@ -3661,11 +4050,10 @@
       "unit_evidence": [],
       "live_evidence": [],
       "known_gaps": [
-        "Наличие в E2E labels не подтверждает доступность в текущей лицензии/UI",
         "Нет принятого сквозного контракта",
         "Разделы Help найдены; детальные режимы и live доступность требуют проверки"
       ],
-      "next_step": "Проверить доступность в live UI; source review мастера и отдельная цепочка с данными",
+      "next_step": "Source review мастера и отдельная цепочка с настройкой, данными и save/reopen",
       "documented_sections": [
         {
           "section": "Порты",
@@ -3675,7 +4063,13 @@
           "section": "Мастер настройки",
           "line": 18
         }
-      ]
+      ],
+      "palette_observation": {
+        "source": "live-palette",
+        "tid": "MF;TF-1;ModelForm;colVendors_Компоненты>Экспорт>XML_файл;TreeText",
+        "observed_label": "XML файл",
+        "proof_scope": "presence_only"
+      }
     },
     {
       "id": "workspace.bootstrap_observe",

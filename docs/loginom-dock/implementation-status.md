@@ -1,5 +1,30 @@
 # Выполнение плана Loginom Dock
 
+## P2 pages: реальная palette-приёмка — 5 сентября 2026
+
+Runtime `7eaebd2ef60d3c8204b5f844c674d43c337717095349e2b459f2e15abf81f9ea`,
+45 inputs, commit `3b2bb372`; independent auditor `52029fc4`.
+Hermes/ChatGPT/openai-codex/gpt-5.6-luna/medium, run
+`20260905-151931-7698def0`: **24/24 frozen PASS**. Audit SHA
+`28451c53e483ce2ebfb332f78a30861f87ae34f5166c02eb5c9fde5d85693f84`.
+Получены страницы без spillover, отдельный graph scope до/после подтвердил
+пустой наблюдаемый граф; агент использовал только наблюдаемые группы.
+Локально: 155 client / 72 Python / 10 packaging checks.
+
+Curated inventory `executor/inventory/palette-2026-09-05.json`: 12 групп,
+77 компонентов; 77 строк coverage связаны с presence-only evidence.
+Выполнение_узла из E2E связано с фактическим названием «Выполнение узла» и
+его точным tid. Tableau не наблюдался; это не доказательство отсутствия
+компонента или лицензии. Все component pipeline statuses остаются planned.
+
+Аудитор теперь требует graph evidence до и после мутаций, отвергает refs из
+будущих страниц/после предыдущей мутации и смешение revision одного ID.
+Проверка rename умеет независимо сопоставлять первую all-page с raw receipt;
+её живой regression run с новым runtime ещё предстоит. Digest страницы в этой
+проверке является correlation token, не доказанным DOM epoch.
+Следующее: rename/E2E/Help/save-reopen regression, затем bounded browser scan,
+bootstrap и остальные P2/P3 пункты. Прогон завершён, активных Hermes нет.
+
 ## P2: компактные страницы наблюдения — 5 сентября 2026
 
 Добавлен `client/lib/observation-pages.mjs`: public output до 12000 байт,
