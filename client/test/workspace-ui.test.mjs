@@ -494,6 +494,38 @@ test('right click uses the checked ref and releases the right button after a los
   assert.throws(()=>validateUiAction({verb:'right_click',ref:'ui-one',x:100}), /fields/);
 });
 
+test('selected root traverses only its small subtree while a large background and global blocker remain outside', async () => {
+  const page=new Page(),root=page.add('div','Form;btnSection','Section',{x:30,y:100,width:300,height:100});
+  page.add('input','Form;edtInside','',{x:35,y:110,width:100,height:25},root);
+  const initial=await page.observe(),ref=initial.ui.elements.find(e=>e.tid==='Form;btnSection').ref;
+  const large=page.add('div','Background');
+  for(let i=0;i<6500;i++) page.add('div',null,'',{x:600,y:500,width:1,height:1},large);
+  assert.equal((await page.execute({mode:'observe'})).error.code,'UI_SCAN_LIMIT');
+  let elementVisits=0;const original=page.document.createTreeWalker.bind(page.document);
+  page.document.createTreeWalker=(node,kind)=>{
+    const walker=original(node,kind);
+    return {nextNode:()=>{const value=walker.nextNode();if(kind===1 && value) elementVisits++;return value;}};
+  };
+  const narrow=await page.execute({mode:'observe',root_ref:ref});
+  assert.equal(narrow.status,'SUCCEEDED');assert.equal(elementVisits,1);
+  assert.equal(narrow.output.scan.detail_elements,2);
+  assert.equal(narrow.output.observation_root.global_scan,false);
+  assert.equal(narrow.output.authenticated,true);assert.deepEqual(narrow.output.workflow_ref,initial.workflow_ref);
+  assert.equal(narrow.output.ui.truncated.nodes,true);
+  const mask=page.add('div',null,'Busy',{x:0,y:0,width:1000,height:800},large);mask.attrs.class='bg-mask-message';
+  const blocked=await page.execute({mode:'observe',root_ref:ref});
+  assert.equal(blocked.output.ui.masks.length,1);
+  const target=blocked.output.ui.elements.find(e=>e.tid==='Form;edtInside');
+  assert.equal((await page.act({verb:'fill',ref:target.ref,text:'x'},blocked.output)).error.code,'UI_MASKED');
+  mask.remove();
+  page.add('input','Form;edtInside','',{x:650,y:550,width:100,height:25},large);
+  const duplicate=await page.execute({mode:'observe',root_ref:ref});
+  const ambiguous=duplicate.output.ui.elements.find(e=>e.tid==='Form;edtInside');
+  const denied=await page.act({verb:'fill',ref:ambiguous.ref,text:'x'},duplicate.output);
+  assert.equal(denied.error.code,'UI_REFERENCE_STALE');
+  assert.equal(denied.effect_possible,false);
+});
+
 test('root detail preserves global masks and rejects a detached root', async () => {
   const page=new Page(),root=page.add('div','Form;btnSection','Section',{x:30,y:100,width:300,height:100});
   const inside=page.add('input','Form;edtInside','',{x:35,y:110,width:100,height:25},root);

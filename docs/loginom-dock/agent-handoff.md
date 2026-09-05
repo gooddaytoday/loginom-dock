@@ -1,5 +1,13 @@
 # Следующему агенту: с чего начать
 
+**Последняя реализация:** scoped TreeWalker для root + fixed native global
+guard queries, bounded WeakRef root registry. 177 client / 80 Python /
+10 packaging PASS. Тест с 6500 background elements доказывает узкий обход,
+global mask и duplicate tid вне root блокируют жест. Native query cost нельзя
+прервать внутри вызова. Active Hermes нет, live root нет. Далее initial root
+discovery на УЖЕ большом DOM (сейчас нужен ранее доставленный ref), затем live
+root и остальные P2/P3–P9. Подробности — верх status/architecture.
+
 **Последнее изменение:** root_ref + observation_id / cursor binding / browser
 detail filtering controls/cells, 176 client / 80 Python / 10 packaging PASS.
 Global guards/graph сохранены, global_scan=true. Active Hermes нет, live root

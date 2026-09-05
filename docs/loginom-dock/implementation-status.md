@@ -1,5 +1,26 @@
 # Выполнение плана Loginom Dock
 
+## P2: ограничен обход выбранного subtree — 5 сентября 2026
+
+Root read теперь обходит TreeWalker только внутри ранее наблюдённого элемента.
+Global auth/active-tab/dialogs/masks/messages находятся fixed native queries;
+общий лимит элементов и проверка deadline сохраняются. Native querySelectorAll
+синхронен и не прерывается внутри вызова — это явная граница бюджета.
+WeakRef registry ограничен 4096 entries, expired root отвергается. Внешние
+подробные тексты не читаются, граф помечен неполным. UI action проверяет
+глобальную уникальность target locator, поэтому duplicate tid вне root не
+обходит guard. Счётчик dom_epoch остаётся document-wide.
+
+177 client / 80 Python / 10 packaging PASS. Serialized test: 6500 фоновых
+элементов вызывают UI_SCAN_LIMIT при полном read; root из двух элементов
+проходит с одним TreeWalker descendant visit, сохраняя auth/active workspace.
+Маска в большом внешнем subtree блокирует fill; внешний duplicate tid также
+отвергается до жеста. Live root ещё не принят, active Hermes нет.
+
+**Следующее:** initial root discovery при уже большом DOM (пока нужен ранее
+доставленный ref), затем live root acceptance и остальные P2/P3–P9. Не считать
+текущий scoped traversal решением первоначального выбора области/всего P2.
+
 ## P2: root binding и browser detail filtering — 5 сентября 2026
 
 Добавлены root_ref + observation_id к workspace.observe и bridge. Root допускается

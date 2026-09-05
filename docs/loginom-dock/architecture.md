@@ -173,10 +173,17 @@ workspace не раскрывает raw browser API. Node refs включают 
 workspace.observe принимает optional root_ref + observation_id: root должен быть
 доставленным UI ref сессии. Browser фильтрует controls/cells выбранным element/
 subtree, сохраняя глобальные auth/build/active-tab, dialogs/masks/messages и граф.
-observation_root явно указывает detail_scope=elements_and_cells, global_scan=true.
+observation_root явно указывает detail_scope=elements_and_cells, global_scan=false.
 Курсор хранит тот же root; UI action повторно читает эту область. Detached/hidden/
-inactive root отвергается. Это первая часть root contract: global TreeWalker
-пока полный; отдельное bounded global-guard/root discovery ещё нужно.
+inactive root отвергается. TreeWalker ограничен выбранным subtree; fixed native
+queries отдельно находят глобальные active tab/auth/dialogs/masks/messages.
+Их результаты ограничены общим бюджетом элементов, время проверяется сразу
+после native query; синхронная стоимость querySelectorAll не прерывается.
+Graph completeness при root read всегда false, внешние тексты не обходятся
+подробно. Root хранится в bounded Map из 4096 WeakRef; потеря записи — stale.
+Первичное обнаружение roots на уже большом документе ещё не реализовано:
+нужна ранее доставленная ссылка. Глобальный locator.count по-прежнему отвергает
+дублированную identity перед жестом, даже если дубль вне selected subtree.
 
 DOM snapshot содержит `dom_epoch`: document identity и монотонный счётчик
 MutationObserver (childList/attributes/characterData, subtree). Observer не

@@ -58,14 +58,6 @@ function workspaceUiCapability(page, task) {
         error.code = 'UI_SCAN_LIMIT'; throw error;
       }
     };
-    const dom = [], walker = document.createTreeWalker(document.documentElement, 1);
-    let next;
-    while ((next = walker.nextNode())) {
-      charge();
-      if (dom.length >= maxElements) { const error = new Error('Workspace exceeds the bounded scan size; narrower browser roots are required'); error.code = 'UI_SCAN_LIMIT'; throw error; }
-      dom.push(next);
-    }
-    const select = selector => dom.filter(element => { charge(); return element.matches(selector); });
     const stateKey = Symbol.for('loginom-dock.workspace-ui.identity.v1');
     let state = globalThis[stateKey];
     if (!state || state.document !== document) {
@@ -88,8 +80,37 @@ function workspaceUiCapability(page, task) {
     }
     const refOf = element => {
       if (!state.ids.has(element)) state.ids.set(element, `ui-${state.epoch}-${++state.sequence}`);
-      return state.ids.get(element);
+      const ref=state.ids.get(element);
+      state.refs ??= new Map();
+      if (!state.refs.has(ref)) state.refs.set(ref,new WeakRef(element));
+      while (state.refs.size>4096) state.refs.delete(state.refs.keys().next().value);
+      return ref;
     };
+    const requestedRoot = rootRef ? state.refs?.get(rootRef)?.deref() : null;
+    if (rootRef && !requestedRoot?.isConnected) {
+      const error=new Error('Observed root is detached or its reference expired');error.code='UI_ROOT_STALE';throw error;
+    }
+    const dom = [], seenElements = new Set();
+    const include = element => {
+      charge(); if (seenElements.has(element)) return;
+      if (dom.length >= maxElements) { const error=new Error('Selected region or global guards exceed the scan budget');error.code='UI_SCAN_LIMIT';throw error; }
+      seenElements.add(element);dom.push(element);
+    };
+    const walker=document.createTreeWalker(requestedRoot ?? document.documentElement,1);
+    if (requestedRoot) include(requestedRoot);
+    let next, traversed=0;while ((next=walker.nextNode())) {
+      if (++traversed>maxElements) { const error=new Error('DOM traversal exceeds the scan budget');error.code='UI_SCAN_LIMIT';throw error; }
+      include(next);
+    }
+    const detailElements=dom.length;
+    if (requestedRoot) {
+      // Native fixed queries discover global blockers/context without walking
+      // every unrelated subtree in JavaScript. Their synchronous browser cost
+      // cannot be preempted; charge immediately after each native operation.
+      const guards=document.querySelectorAll('[data-tid="MF;cntMain;tlbMainToolbar;btnAvatar"],.x-tab-active[data-tid],[role="dialog"],.x-window,.bg-dialog,.bg-mask-message,.x-mask-msg,[role="alert"],[role="status"],.bg-message,.x-message-box,.x-form-invalid-under');
+      charge();for (const element of guards) include(element);
+    }
+    const select = selector => dom.filter(element => { charge(); return element.matches(selector); });
     const all = select('[data-tid]'), tids = new Map();
     for (const element of all) { const tid = element.getAttribute('data-tid'); const list = tids.get(tid) ?? []; list.push(element); tids.set(tid, list); }
     const getTid = element => element?.getAttribute?.('data-tid') ?? null;
@@ -118,6 +139,8 @@ function workspaceUiCapability(page, task) {
     const short = (value, limit = 240) => String(value ?? '').replace(/\s+/g, ' ').trim().slice(0, limit);
     const textOf = element => {
       if (sensitive(element)) return '[REDACTED]';
+      if (requestedRoot && element!==requestedRoot && !requestedRoot.contains(element)
+          && !(getTid(element) ?? '').startsWith('MF;cntMain;cntWorkspace;Workspace;t.br;tb')) return '[outside selected root]';
       const parts = [], walker = document.createTreeWalker(element, 4);
       let textNode, length = 0;
       while ((textNode = walker.nextNode()) && length < 2000) {
@@ -313,11 +336,11 @@ function workspaceUiCapability(page, task) {
     return { origin: location.origin, authenticated: !!tids.get('MF;cntMain;tlbMainToolbar;btnAvatar')?.some(visible), loginom_build: globalThis.bg?.app?.Version ?? null,
       workflow_ref: workflow, active_identity: active ? textOf(active) : null, package_identity: packageIdentity,
       dom_epoch: {document:state.epoch,revision:state.revision},
-      ...(selectedRoot ? {observation_root:{ref:rootRef,identity:identityOf(selectedRoot),detail_scope:'elements_and_cells',global_scan:true}} : {}),
-      scan: { complete: true, visited_elements: dom.length, max_elements: maxElements, max_work: maxWork, max_ms: maxMs },
+      ...(selectedRoot ? {observation_root:{ref:rootRef,identity:identityOf(selectedRoot),detail_scope:'elements_and_cells',global_scan:false,global_guards:'fixed_native_queries'}} : {}),
+      scan: { complete: true, visited_elements: dom.length, detail_elements:detailElements, max_elements: maxElements, max_work: maxWork, max_ms: maxMs },
       nodes, links: links.slice(0, 500), workarea: workarea ? boxOf(workarea) : null,
       ui: { elements, dialogs: dialogs.slice(0, 12), messages: messages.slice(0, 30), masks: masks.slice(0, 12), table_cells: tableCells,
-        truncated: { elements: !!selectedRoot || controls.length > 240, nodes: labels.length > 200, links: links.length > 500, ports: nodes.some(node => node.ports.length === 100), dialogs: dialogs.length > 12, messages: messages.length > 30, masks: masks.length > 12, table_cells: !!selectedRoot || cells.length > 120 } } };
+        truncated: { elements: !!selectedRoot || controls.length > 240, nodes: !!selectedRoot || labels.length > 200, links: !!selectedRoot || links.length > 500, ports: !!selectedRoot || nodes.some(node => node.ports.length === 100), dialogs: dialogs.length > 12, messages: !!selectedRoot || messages.length > 30, masks: masks.length > 12, table_cells: !!selectedRoot || cells.length > 120 } } };
   },{rootRef:task.root_ref ?? task.snapshot?.observation_root?.ref ?? null});
 
   const locatorFor = identity => {
