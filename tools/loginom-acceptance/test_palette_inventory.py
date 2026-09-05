@@ -4,6 +4,18 @@ import audit
 
 
 class PaletteInventoryTest(unittest.TestCase):
+    def test_scroll_proof_rejects_invented_movement_or_missing_journal(self):
+        call={'row':1,'tool_call_id':'scroll','arguments':{'action':{'verb':'scroll','delta_y':300}}}
+        target={'allowed_actions':['scroll'],'scroll':{'ref':'owner','top':0,'max_top':200}}
+        result={'status':'SUCCEEDED','cleanup_complete':True,'operation_id':'s','output':{},
+                'trace':[{'event':'ui_scroll_applied','owner_ref':'owner','from':0,'to':200}]}
+        evidence={'tools':[{'row':2,'tool_call_id':'scroll','result':result}],
+                  'events':[{'phase':'completed','operation_id':'s','outcome':copy.deepcopy(result)}]}
+        self.assertTrue(audit.scroll_receipt_bound(call,target,evidence))
+        for mutate in [lambda e:e['events'].clear(),lambda e:e['tools'][0]['result']['trace'][0].update(to=300),
+                       lambda e:e['tools'][0]['result']['trace'][0].update(owner_ref='other')]:
+            bad=copy.deepcopy(evidence);mutate(bad);self.assertFalse(audit.scroll_receipt_bound(call,target,bad))
+
     def test_bootstrap_proof_requires_order_and_inactive_archive(self):
         data={'calls':[{'row':1,'tool':audit.PREFIX+'dock_workspace_observe','tool_call_id':'b','arguments':{'scope':'bootstrap'}},
                        {'row':5,'tool':audit.PREFIX+'dock_prepare'}],

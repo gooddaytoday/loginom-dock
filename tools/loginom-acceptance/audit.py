@@ -547,7 +547,24 @@ def bootstrap_proof(evidence, check):
         and not any(c['tool'] in MUTATIONS and c['row']<first_prepare for c in calls))
 
 
-def palette_inventory(evidence, checks):
+def scroll_receipt_bound(call, target, evidence):
+    action=call.get('arguments',{}).get('action',{});before=target.get('scroll',{})
+    delta=action.get('delta_y')
+    if type(delta) is not int or not 0<abs(delta)<=1000 or 'scroll' not in target.get('allowed_actions',[]):return False
+    if any(type(before.get(k)) not in (int,float) for k in ('top','max_top')):return False
+    expected=max(0,min(before['max_top'],before['top']+delta))
+    if expected==before['top']:return False
+    replies=[t for t in evidence['tools'] if t.get('tool_call_id')==call.get('tool_call_id') and t['row']>call['row']]
+    if len(replies)!=1:return False
+    result=replies[0].get('result',{})
+    if result.get('status')!='SUCCEEDED' or result.get('cleanup_complete') is not True:return False
+    if not any(t.get('event')=='ui_scroll_applied' and t.get('owner_ref')==before.get('ref')
+               and t.get('from')==before['top'] and t.get('to')==expected for t in result.get('trace',[])):return False
+    return any(e.get('phase')=='completed' and e.get('operation_id')==result.get('operation_id')
+               and rename_effect.journal_equal(e.get('outcome',{}),result) for e in evidence.get('events',[]))
+
+
+def palette_inventory(evidence, checks, require_scroll=False):
     def check(name, passed):checks.append({'name':name,'passed':bool(passed)})
     snapshots=[(t['row'],t['result']['output']) for t in evidence['tools']
                if isinstance(t.get('result'),dict) and isinstance(t['result'].get('output'),dict)
@@ -569,7 +586,7 @@ def palette_inventory(evidence, checks):
         if identity in revisions:consistent=consistent and revisions[identity]==rev
         revisions[identity]=rev
     check('observation_pages_have_consistent_revision',consistent)
-    groups={}; components={}; valid=True
+    groups={}; components={}; valid=True; verified_scrolls=[]
     pattern=r'^MF;TF(?:-\d+)?;ModelForm;colVendors_Компоненты>([^;]+);(TreeText|TreeExpander)$'
     for row,snapshot in snapshots:
         for item in snapshot['ui'].get('elements',[]):
@@ -588,9 +605,17 @@ def palette_inventory(evidence, checks):
                  for e in s['ui'].get('elements',[]) if e.get('ref')==action.get('ref')]
         target=targets[0] if targets and all(e==targets[0] for e in targets) else None
         match=re.fullmatch(pattern,target.get('tid') or '') if target else None
-        valid=valid and call['tool']==PREFIX+'dock_ui_action' and action.get('verb') in ('click','double_click')
-        valid=valid and bool(match) and '>' not in match[1]
+        scrolling=action.get('verb')=='scroll'
+        valid=valid and call['tool']==PREFIX+'dock_ui_action' and action.get('verb') in ('click','double_click','scroll')
+        valid=valid and bool(match) and (scrolling or '>' not in match[1])
+        if scrolling:
+            proved=bool(target) and scroll_receipt_bound(call,target,evidence)
+            valid=valid and proved
+            if proved:verified_scrolls.append(call)
     check('only_observed_palette_groups_interacted_with',valid)
+    if require_scroll:check('palette_scroll_down_and_up_bound_to_browser_receipts',
+                            any(c['arguments']['action']['delta_y']>0 for c in verified_scrolls)
+                            and any(c['arguments']['action']['delta_y']<0 for c in verified_scrolls))
     check('component_names_observed',bool(components) and all(c['label'] for c in components.values()))
     return {'schema_version':1,'kind':'independent_palette_observation_audit','assertions':checks,
             'all_assertions_passed':bool(checks) and all(c['passed'] for c in checks),
@@ -677,7 +702,7 @@ def audit(request, evidence, prompt):
             and e["session_id"] == prepared["sessionId"] for e in events))
         if goal_id=='palette-inventory':
             bootstrap_proof(evidence, check)
-            return palette_inventory(evidence, checks)
+            return palette_inventory(evidence, checks, require_scroll=True)
         successful_adds = [t for t in tools if t["tool"] == PREFIX + "dock_action_run"
                            and t["result"].get("action_key") == "node.add" and t["result"].get("status") == "SUCCEEDED"]
         components = []
