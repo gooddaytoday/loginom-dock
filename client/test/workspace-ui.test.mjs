@@ -90,7 +90,14 @@ class Page {
     this.avatar = this.add('button', 'MF;cntMain;tlbMainToolbar;btnAvatar', '', { x: 950, y: 0, width: 30, height: 20 });
     this.tab = this.add('div', 'MF;cntMain;cntWorkspace;Workspace;t.br;tb-1', 'Сценарий', { x: 10, y: 5, width: 100, height: 20 });
     this.tab.attrs.class = 'x-tab-active';
+    const page = this;
+    class MutationObserverFixture {
+      constructor(callback) { this.callback=callback; this.pending=[]; page.mutationObserver=this; }
+      observe(root, options) { this.root=root; this.options=options; }
+      takeRecords() { return this.pending.splice(0); }
+    }
     this.context = vm.createContext({ document: this.document, location: this.location, bg: { app: this.app },
+      MutationObserver: MutationObserverFixture,
       getComputedStyle: element => ({ display: 'block', visibility: 'visible', opacity: '1', ...element.style }), Date, Math });
     this.keyboard = { type: async text => {
       this.events.push('keyboard_type'); const element = this.document.activeElement;
@@ -485,6 +492,22 @@ test('right click uses the checked ref and releases the right button after a los
     else assert.ok(outcome.trace.some(e=>e.event==='ui_gesture_applied' && e.verb==='right_click'));
   }
   assert.throws(()=>validateUiAction({verb:'right_click',ref:'ui-one',x:100}), /fields/);
+});
+
+test('DOM epoch rejects ABA before any gesture and consumes pending mutation records', async () => {
+  const page = new Page(); page.add('button','Safe;btnAction','Action');
+  const before = await page.observe();
+  const target = before.ui.elements.find(e=>e.tid==='Safe;btnAction');
+  // The DOM has returned to A, but the browser queued the A→B and B→A records.
+  page.mutationObserver.pending.push({},{});
+  const outcome=await page.act({verb:'click',ref:target.ref},before);
+  assert.equal(outcome.status,'NOT_APPLIED');assert.equal(outcome.error.code,'UI_EPOCH_CHANGED');
+  assert.equal(outcome.effect_possible,false);assert.deepEqual(page.clickedPoints,[]);
+  assert.equal(page.mutationObserver.pending.length,0);
+  const fresh=await page.observe();assert.equal(fresh.dom_epoch.revision,2);
+  assert.equal((await page.act({verb:'click',ref:target.ref},fresh)).status,'SUCCEEDED');
+  page.mutationObserver.callback([{}]);
+  assert.equal((await page.observe()).dom_epoch.revision,3);
 });
 
 test('context menu wrapper keeps its E2E identity alongside the anonymous ARIA child', async () => {

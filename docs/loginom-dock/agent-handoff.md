@@ -1,5 +1,12 @@
 # Следующему агенту: с чего начать
 
+**Последняя реализация:** DOM mutation epoch в workspace-ui и страницах,
+172 client / 80 Python. Live ещё не было, active Hermes нет. Последний menu
+PASS относится к runtime до epoch. Далее проверить live совместимость нового
+epoch (изменения/анимации могут инвалидировать refs), затем root/filter и P3–P9.
+Не считать DOM observer полным semantic ABA: property-only/canvas/server вне
+его области. Подробности — верх status и architecture.
+
 **Последняя приёмка:** `20260905-171627-dab12302` — 25/25 frozen PASS:
 контекстное меню → SetupNode → Text Import → checkbox cycle с no-op/возвратом.
 Runtime `65c1e28a…`, harness `1644468e`, Luna/medium/ChatGPT. 170 client /

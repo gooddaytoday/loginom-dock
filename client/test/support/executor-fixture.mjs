@@ -215,6 +215,7 @@ class Page {
         allowed_actions: ['click', 'double_click', 'press', 'drag', ...(field ? ['fill'] : [])] };
     });
     return { origin: 'https://loginom.invalid', authenticated: true, loginom_build: build, workflow_ref: workflow,
+      dom_epoch: {document:'fixture-document',revision:0},
       active_identity: this.identity, package_identity: { path: this.packagePath, name: this.packagePath?.split('/').at(-1) ?? null },
       nodes: this.nodes.map(node => ({ node_ref: this.ref(node.label), ports: node.ports.map(port => ({
         tid: `${this.prefix};Graph;${node.label};${port}`, ui_ref: this.uiReference(`${this.prefix};Graph;${node.label};${port}`),
@@ -222,6 +223,7 @@ class Page {
       ui: { elements, dialogs: [], messages: [], masks: [], table_cells: [], truncated: {} } };
   }
   async evaluate(fn, arg) {
+    if (fn.toString().includes('return {document:state.epoch,revision:state.revision}')) return this.uiSnapshot().dom_epoch;
     if (fn.toString().includes("Symbol.for('loginom-dock.workspace-ui.identity.v1')")) return this.uiSnapshot();
     return fn(arg);
   }

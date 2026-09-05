@@ -35,6 +35,15 @@ test('pages are bounded, retain guards privately, and issue only delivered refs'
   assert.doesNotThrow(() => pages.assertIssued(id, { source_ref: 'ref-0', target_ref: 'ref-89' }));
 });
 
+test('unchanged visible values cannot revive a cursor after a DOM mutation round trip', () => {
+  const pages=createObservationPages(),source=fixture();
+  source.output.dom_epoch={document:'document-1',revision:0};
+  const first=pages.retain(structuredClone(source));
+  assert.deepEqual(first.output.dom_epoch,source.output.dom_epoch);
+  const fresh=structuredClone(source);fresh.output.dom_epoch.revision=2;
+  assert.throws(()=>pages.next(first.output.page.next_cursor,fresh),/Workspace changed/);
+});
+
 test('changed, cleared, evicted and foreign cursors cannot combine observations', () => {
   const pages = createObservationPages({ capacity: 1 }), source = fixture();
   const first = pages.retain(structuredClone(source));

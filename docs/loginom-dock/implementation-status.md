@@ -1,5 +1,22 @@
 # Выполнение плана Loginom Dock
 
+## P2: DOM mutation epoch — 5 сентября 2026
+
+Observer теперь ведёт document identity + монотонный счётчик DOM mutations,
+включая pending records до callback. `dom_epoch` передаётся в страницах и
+входит в их digest; изменённый epoch отвергает старый cursor и UI action до
+жеста, в том числе после проверки target. Никакие mutation targets/text не
+сохраняются. Независимый receipt projector сохраняет поле без преобразования.
+172 client tests: A→B→A с очередью/доставленным callback, stale cursor при
+одинаковых values; recovery fixture обновлён для отдельного epoch read.
+80 Python tests актуальны. Live epoch ещё не проверен, предыдущий menu PASS
+относится к старому runtime. Active Hermes нет.
+
+Ограничения: document-wide изменения/анимации могут требовать нового чтения;
+JS property-only/canvas/server изменения не покрыты MutationObserver. Это
+не полный semantic ABA guard и не root-scoped scan. Далее live совместимость
+epoch и root/filter с глобальными auth/active-tab/mask guards, затем P3–P9.
+
 ## Context menu + checkbox: frozen PASS — 5 сентября 2026
 
 Run `20260905-171627-dab12302` — **25/25 frozen PASS**, audit SHA

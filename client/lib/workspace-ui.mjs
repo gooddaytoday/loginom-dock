@@ -72,6 +72,20 @@ function workspaceUiCapability(page, task) {
       state = { document, ids: new WeakMap(), sequence: 0, epoch: globalThis.crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random().toString(36).slice(2)}` };
       Object.defineProperty(globalThis, stateKey, { value: state, configurable: true });
     }
+    if (!state.observer) {
+      if (typeof MutationObserver !== 'function') {
+        const error = new Error('DOM mutation tracking is unavailable'); error.code = 'UI_EPOCH_UNAVAILABLE'; throw error;
+      }
+      state.revision = 0;
+      // Count mutations without retaining their targets, text or attribute values.
+      state.observer = new MutationObserver(records => { state.revision += records.length; });
+      state.observer.observe(document.documentElement, {subtree:true,childList:true,attributes:true,characterData:true});
+    }
+    // Delivery of the observer callback may lag behind a new synchronous read.
+    state.revision += state.observer.takeRecords().length;
+    if (!Number.isSafeInteger(state.revision)) {
+      const error = new Error('DOM mutation revision overflow'); error.code = 'UI_EPOCH_UNAVAILABLE'; throw error;
+    }
     const refOf = element => {
       if (!state.ids.has(element)) state.ids.set(element, `ui-${state.epoch}-${++state.sequence}`);
       return state.ids.get(element);
@@ -288,6 +302,7 @@ function workspaceUiCapability(page, task) {
     const workarea = graphPrefix ? all.find(element => getTid(element) === workflow.prefix + ';ModelForm;pnlWorkarea') : null;
     return { origin: location.origin, authenticated: !!tids.get('MF;cntMain;tlbMainToolbar;btnAvatar')?.some(visible), loginom_build: globalThis.bg?.app?.Version ?? null,
       workflow_ref: workflow, active_identity: active ? textOf(active) : null, package_identity: packageIdentity,
+      dom_epoch: {document:state.epoch,revision:state.revision},
       scan: { complete: true, visited_elements: dom.length, max_elements: maxElements, max_work: maxWork, max_ms: maxMs },
       nodes, links: links.slice(0, 500), workarea: workarea ? boxOf(workarea) : null,
       ui: { elements, dialogs: dialogs.slice(0, 12), messages: messages.slice(0, 30), masks: masks.slice(0, 12), table_cells: tableCells,
@@ -383,6 +398,7 @@ function workspaceUiCapability(page, task) {
           || current.loginom_build !== task.expected_build || !same(task.snapshot.loginom_build, current.loginom_build)
           || !same(task.snapshot.workflow_ref, current.workflow_ref)) fail('UI_CONTEXT_CHANGED', 'Origin, build, or active workspace changed; observe the workspace again');
         if (!current.authenticated) fail('LOGIN_REQUIRED', 'Loginom authentication is required before changing the workspace');
+        if (!same(task.snapshot.dom_epoch, current.dom_epoch)) fail('UI_EPOCH_CHANGED', 'The document changed since this observation; observe again even if its visible state looks unchanged');
         if (!same(current.ui.dialogs.map(item => item.ref), task.snapshot.ui.dialogs.map(item => item.ref))) fail('UI_CONTEXT_CHANGED', 'The visible dialog changed; observe the workspace again');
         const refs = task.action.verb === 'drag' ? [task.action.source_ref, task.action.target_ref] : [task.action.ref];
         if (current.ui.masks.length) {
@@ -401,6 +417,13 @@ function workspaceUiCapability(page, task) {
           if (!before) fail('UI_REFERENCE_INVALID', 'Action reference is absent from the supplied observation');
           targets.push(await checkedHandle(before, item));
         }
+        const epochBeforeGesture = await page.evaluate(() => {
+          const state=globalThis[Symbol.for('loginom-dock.workspace-ui.identity.v1')];
+          if (!state?.observer) return null;
+          state.revision += state.observer.takeRecords().length;
+          return {document:state.epoch,revision:state.revision};
+        });
+        if (!same(current.dom_epoch,epochBeforeGesture)) fail('UI_EPOCH_CHANGED','The document changed while checking the target; observe again');
         record('ui_preconditions_verified', { verb: task.action.verb, refs });
         phase = 'applying'; effectPossible = true;
         const first = targets[0].handle;
