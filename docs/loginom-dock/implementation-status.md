@@ -1,3 +1,28 @@
+## 2026-09-06 — P3: наблюдаемый контекст редактора Калькулятора
+
+В workspace-ui добавлен calculator_editor у exact cmpExpression текущего
+workflow: режим expression/javascript по source-backed иконке btnCalcMode,
+неоднозначность/отсутствие режима и ограниченные rendered_lines (32 строки,
+2048 UTF-16 code units, без trim, hidden и sensitive text исключаются).
+Narrow read сохраняет mode context через фиксированные queries без обхода
+всего мастера. Generic gestures запрещены для wrapper и его потомков до
+реализации отдельного typed write/readback contract.
+
+Источник: e2e-tests bg/sels/transform/sCalculator.ts и calculator_helpers.ts
+check.Mode / expression.Check; Help calc/README.md и expression.md.
+В самом E2E expression.Check отмечена ненадёжность empty/multiline проверки.
+Поэтому rendered_lines НЕ полный документ: full_text_verified=false,
+syntax_validity=unverified; виртуализация, placeholder, сохранение формулы и
+принадлежность конкретному вычисляемому полю ещё требуют отдельного evidence.
+
+Проверки: 234 full client PASS, затем дополнительный line-cap case — 55 targeted
+workspace-ui PASS; 106 Python и 10 packaging PASS. Отчёты .dock/post-mvp-p0/
+calculator-context-{client,targeted,python,packaging}-tests.txt. Это локальные
+проверки, нового live запуска не было. Runtime inventory остаётся 46 inputs.
+Следующий шаг — typed editor write с подтверждением полного текста, выбранного
+поля и синтаксиса; затем execution/result contracts и новый полный data-pipeline.
+Семь domain gates пока открыты. Active Hermes/browser нет, P3–P9 продолжаются.
+
 ## 2026-09-06 — P3: независимое сравнение отображаемых таблиц
 
 Добавлен host-only auditor helper rendered_results.py и подключён к диагностике

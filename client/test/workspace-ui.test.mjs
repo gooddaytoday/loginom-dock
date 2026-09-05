@@ -950,3 +950,58 @@ test('table evidence refuses missing or ambiguous headers, marks truncation and 
   duplicate.remove();head.remove();data=(await page.observe()).ui.table_cells.find(c=>c.data_cell).data_cell;
   assert.equal(data.header_observed,false);assert.equal(data.text_complete,false);
 });
+
+test('calculator editor reports rendered lines and syntax mode without granting generic gestures',async()=>{
+  const page=new Page(),base='MF;TF-1;WizrdMCF;CalcDataWizard;';
+  const button=page.add('button',base+'btnCalcMode');
+  const icon=page.add('span',null,'',undefined,button);icon.attrs.class='bg-TBGCalcMode-cmExpression';
+  const editor=page.add('div',base+'cmpExpression');
+  page.add('pre',null,' Quantity * UnitPrice ',undefined,editor);
+  page.add('textarea',null,'',undefined,editor);
+  const output=await page.observe(),record=output.ui.elements.find(e=>e.tid===base+'cmpExpression');
+  assert.equal(record.calculator_editor.mode,'expression');
+  assert.deepEqual(record.calculator_editor.rendered_lines,[' Quantity * UnitPrice ']);
+  assert.equal(record.calculator_editor.full_text_verified,false);
+  assert.equal(record.calculator_editor.syntax_validity,'unverified');
+  assert.deepEqual(record.allowed_actions,[]);
+  assert.deepEqual(output.ui.elements.find(e=>e.signature.tag==='textarea').allowed_actions,[]);
+  icon.attrs.class='bg-TBGCalcMode-cmJavaScript';
+  const narrow=await page.execute({mode:'observe',root_ref:record.ref});
+  assert.equal(narrow.output.ui.elements.find(e=>e.tid===base+'cmpExpression').calculator_editor.mode,'javascript');
+});
+
+test('calculator rendering bounds and redaction never become a complete formula',async()=>{
+  const page=new Page(),base='MF;TF-1;WizrdMCF;CalcDataWizard;';
+  const editor=page.add('div',base+'cmpExpression');
+  const line=page.add('pre',null,'x'.repeat(3000),undefined,editor);
+  const read=async()=>(await page.observe()).ui.elements.find(e=>e.tid===base+'cmpExpression').calculator_editor;
+  let result=await read();assert.equal(result.rendered_lines[0].length,2048);
+  assert.equal(result.rendering_truncated,true);assert.equal(result.mode,null);
+  line.ownText='';
+  const secret=page.add('span',null,'secret-value',undefined,line);secret.attrs['data-tid']='password';
+  result=await read();assert.equal(result.redacted,true);assert.deepEqual(result.rendered_lines,[]);
+  assert.equal(result.full_text_verified,false);
+});
+
+test('calculator mode rejects conflicting icons and ignores inactive editor context',async()=>{
+  const page=new Page(),base='MF;TF-1;WizrdMCF;CalcDataWizard;';
+  const button=page.add('button',base+'btnCalcMode');
+  for(const mode of ['Expression','JavaScript']){
+    const icon=page.add('span',null,'',undefined,button);icon.attrs.class='bg-TBGCalcMode-cm'+mode;
+  }
+  page.add('div',base+'cmpExpression');
+  page.add('div','MF;TF-2;WizrdMCF;CalcDataWizard;cmpExpression');
+  const records=(await page.observe()).ui.elements.filter(e=>e.calculator_editor);
+  assert.equal(records.length,1);assert.equal(records[0].calculator_editor.mode,null);
+  assert.equal(records[0].calculator_editor.mode_status,'ambiguous');
+});
+
+test('calculator rendering caps line count and excludes hidden lines',async()=>{
+  const page=new Page(),base='MF;TF-1;WizrdMCF;CalcDataWizard;';
+  const editor=page.add('div',base+'cmpExpression');
+  const hidden=page.add('pre',null,'hidden',undefined,editor);hidden.style.display='none';
+  for(let i=0;i<40;i++)page.add('pre',null,String(i),undefined,editor);
+  const result=(await page.observe()).ui.elements.find(e=>e.tid===base+'cmpExpression').calculator_editor;
+  assert.equal(result.rendered_lines.length,32);assert.equal(result.rendered_lines[0],'0');
+  assert.equal(result.rendered_lines[31],'31');assert.equal(result.rendering_truncated,true);
+});

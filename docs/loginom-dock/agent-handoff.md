@@ -1,3 +1,12 @@
+**Checkpoint P3 (6 сентября):** calculator_editor observation показывает режим
+expression/javascript и bounded rendered_lines; не подтверждает полный текст,
+синтаксис или сохранение. E2E helper сам предупреждает о ненадёжном empty/
+multiline readback; его нельзя переносить как acceptance proof. Generic gestures
+для cmpExpression wrapper/children закрыты до typed driver. 234 full client +
+55 targeted /106 Python /10 packaging PASS; live не запускался. Далее typed
+write/readback/selected field, execution/results и полный data-pipeline. Семь
+domain gates открыты, цель весь P3–P9. Active Hermes/browser нет. Детали сверху status.
+
 **Текущий checkpoint P3 (6 сентября):** добавлен rendered_results.py — независимый
 comparator видимых typed cells с Decimal/явной локалью, null/empty и сохранением
 дубликатов. Встроен в diagnostic data-pipeline и frozen checks; 106 Python PASS.

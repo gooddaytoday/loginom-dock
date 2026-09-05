@@ -125,6 +125,7 @@ function workspaceUiCapability(page, task) {
     const wizardButtons=['btnPrev','btnNext','btnDone','btnExecute','btnClose','btnError'];
     const wizardSelectors=['[data-tid$=";WizrdMCF"]','[data-tid$=";WizrdMCF;cardWizardPanel;p.h;p.t"]',
       ...Object.values(wizardMarkers).map(suffix=>'[data-tid$=";WizrdMCF'+suffix+'"]'),
+      '[data-tid$=";WizrdMCF;CalcDataWizard;cmpExpression"]','[data-tid$=";WizrdMCF;CalcDataWizard;btnCalcMode"]','span.bg-TBGCalcMode-cmExpression,span.bg-TBGCalcMode-cmJavaScript',
       ...wizardButtons.map(name=>'[data-tid$=";WizrdMCF;'+name+'"]')].join(',');
     if (requestedRoot || discoverRoots) {
       // Native fixed queries discover global blockers/context without walking
@@ -192,7 +193,7 @@ function workspaceUiCapability(page, task) {
     const dangerous = element => sensitive(element) || !!element.closest('a[href],iframe,object,embed')
       || element.matches('input[type="url"],input[type="file"],input[type="hidden"]')
       || /(?:^|[;_ -])(?:script|javascript|python|codeeditor)(?:[;_ -]|$)/i.test(['name', 'id', 'data-tid'].map(key => element.getAttribute(key) ?? '').join(' '))
-      || !!element.closest('.monaco-editor,.CodeMirror,.ace_editor');
+      || !!element.closest('.monaco-editor,.CodeMirror,.ace_editor,[data-tid$=";WizrdMCF;CalcDataWizard;cmpExpression"]');
     const dialogElements = select('[role="dialog"],.x-window,.bg-dialog').filter(visible)
       .filter((element, index, items) => !items.some((other, i) => i !== index && other.contains(element)));
     const dialogs = dialogElements.map(element => ({ ref: refOf(element), title: short(element.getAttribute('aria-label') ?? select('[role="heading"],.x-title-text').find(item => element.contains(item))?.textContent),
@@ -259,6 +260,7 @@ function workspaceUiCapability(page, task) {
       // E2E bg/selectors.ts:1068 and bg/helpers/wizard.ts:29: the node
       // settings affordance can be SVG without a button role.
       || /;Graph;[^;]+;Setting$/.test(getTid(element) ?? '')
+      || (getTid(element) ?? '')===workflow?.prefix+';WizrdMCF;CalcDataWizard;cmpExpression'
       // E2E bg/selectors.ts:970: context-menu item wrappers carry stable
       // mn;mni* tids even when their inner ARIA menuitem has no test ID.
       || /^mn;mni[^;]+$/.test(getTid(element) ?? '')
@@ -313,6 +315,42 @@ function workspaceUiCapability(page, task) {
       }
       return {state:'point_not_observed',point:null};
     };
+    // E2E sCalculator.ExpressionInput/ExpressionText and check.Mode. Visible
+    // PRE nodes are a rendering, not an authoritative editor document (the E2E
+    // helper itself warns about empty/multiline checks). Never grant generic
+    // gestures or claim a complete formula from this representation.
+    const calculatorEditorOf = element => {
+      const base=workflow?.prefix+';WizrdMCF;CalcDataWizard;';
+      if(getTid(element)!==base+'cmpExpression')return null;
+      const peers=tids.get(base+'cmpExpression')??[];
+      const buttons=(tids.get(base+'btnCalcMode')??[]).filter(visible);
+      const icons=buttons.length===1 ? dom.filter(item=>{charge();return buttons[0].contains(item) &&
+        item.matches('span') && visible(item) && !sensitive(item);}) : [];
+      const modes=['Expression','JavaScript'].filter(mode=>icons.some(item=>item.classList.contains('bg-TBGCalcMode-cm'+mode)));
+      const lines=[];let remaining=2048,truncated=false,redacted=false;
+      for(const item of dom) {
+        charge();if(!element.contains(item) || !item.matches('pre') || !visible(item))continue;
+        if(lines.length>=32){truncated=true;break;}
+        let text='';const walker=document.createTreeWalker(item,4);let node;
+        while((node=walker.nextNode())) {
+          charge();const parent=node.parentElement;
+          if(!parent || !visible(parent))continue;
+          if(sensitive(parent)){redacted=true;continue;}
+          const part=node.textContent??'';
+          text+=part.slice(0,remaining);remaining-=Math.min(remaining,part.length);
+          if(remaining===0){
+            // Budget exhaustion is conservatively incomplete, even at an exact boundary.
+            truncated=true;break;
+          }
+        }
+        lines.push(text);if(truncated)break;
+      }
+      return {kind:'calculator',status:peers.filter(visible).length===1?'observed':'ambiguous',
+        mode:modes.length===1?modes[0]==='Expression'?'expression':'javascript':null,
+        mode_status:buttons.length>1 || modes.length>1?'ambiguous':modes.length===1?'observed':'unobserved',
+        rendered_lines:redacted?[]:lines,rendering_truncated:truncated,redacted,
+        full_text_verified:false,syntax_validity:'unverified'};
+    };
     const elements = controls.slice(0, 240).map(element => {
       const identity = identityOf(element), tag = element.tagName.toLowerCase(), tid = getTid(element);
       const editable = element.matches('textarea,input:not([type="button"]):not([type="submit"]):not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="color"]),[contenteditable="true"]') && !element.readOnly;
@@ -322,12 +360,14 @@ function workspaceUiCapability(page, task) {
       const scroll = scrollOf(element);
       const interaction = interactionOf(element);
       const checkState=checkStateOf(element);
+      const calculatorEditor=calculatorEditorOf(element);
       const fullValue = editable && !sensitive(element) ? String(element.value ?? (element.isContentEditable ? element.textContent : '') ?? '') : undefined;
       const value = fullValue?.slice(0, 2048), valueTruncated = fullValue !== undefined && fullValue.length > 2048;
       const fieldValue = value === undefined ? {} : {value, value_truncated:valueTruncated, value_length_utf16:fullValue.length};
       return { ref: refOf(element), tid, identity, kind, role, label, scope: scopeOf(element), ...fieldValue,
         ...(scroll ? { scroll } : {}),
         ...(checkState ? {check_state:checkState} : {}),
+        ...(calculatorEditor ? {calculator_editor:calculatorEditor} : {}),
         signature: { tag, tid, role, type: element.getAttribute('type'), name: element.getAttribute('name'), label, ...fieldValue, dialog_ref: dialogRef(element), scroll, check_state:checkState },
         enabled: isEnabled, visible: true, interaction, bounding_box: boxOf(element),
         // A bounded prefix is not a sufficient value precondition. A dedicated
