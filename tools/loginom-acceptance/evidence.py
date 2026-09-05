@@ -5,7 +5,7 @@ import sqlite3
 
 PREFIX = "mcp__loginom_dock__"
 LOCAL_TOOLS = {PREFIX + name for name in ("dock_prepare", "dock_action_describe", "dock_action_run",
-    "dock_workspace_observe", "dock_ui_action", "dock_operation_inspect", "dock_operation_recover", "dock_diagnostics", "dock_artifact_upload")}
+    "dock_workspace_observe", "dock_ui_action", "dock_operation_inspect", "dock_operation_recover", "dock_diagnostics", "dock_artifact_upload", "dock_artifact_verify")}
 KNOWLEDGE_TOOLS = {PREFIX + name for name in ("find", "search", "read", "grep", "glob", "list", "tree")}
 
 def clean(value, secrets):

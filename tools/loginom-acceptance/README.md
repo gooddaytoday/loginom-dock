@@ -1,3 +1,13 @@
+## Сверка серверной копии через Hermes
+
+`--goal file-upload-verify --loginom-user test --storage-directory /test` добавляет
+к той же однократной отправке поиск точной строки CSV, один dock_artifact_verify
+и inspect исходной операции. Аудит связывает file ref с raw observation и pending
+context, native download receipt — с host download_verified, grant и исходным
+SHA/size. Совпавшие байты не означают upload completion: исходная операция должна
+остаться pending с upload_completion_verified=false. Прогон не закрывает P3,
+reject/конфликты или download budget. Все helper/fixture inputs закреплены до run.
+
 ## Диагностика отправки файла через Hermes
 
 `--goal file-upload-probe --loginom-user test --storage-directory /test` использует
