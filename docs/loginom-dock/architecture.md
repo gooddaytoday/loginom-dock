@@ -14,19 +14,23 @@ artifact.verify outcome in download_verified. Exact metadata must match the
 original artifact, grant, path, observation and ref. Private paths/bytes/native
 errors do not enter those records. A same-size wrong file produces FAILED /
 DOWNLOADED_ARTIFACT_MISMATCH. A successful byte proof sets bytes_verified=true
-and upload_completion_verified=false. The original upload remains AMBIGUOUS and
-pending, with a server_copy_verification summary, until transfer completion has
-its own proof; matching downloaded content alone does not release that gate.
+and upload_completion_verified=false in this intermediate receipt. With confirmed
+native upload submission, browser completion, matching destination bytes and both
+leases released, the runtime writes transfer_completed and verification_completed
+before publishing SUCCEEDED and clearing pending. The final verification reply
+sets upload_completion_verified=true. Unconfirmed submission, mismatched bytes,
+cleanup failure or journal failure keeps the gate closed.
 
 Repeated verification IDs return the stored result. After a lost response,
 inspect(original upload ID) reads the existing browser receipt and hashes the
 existing private downloaded copy without another download or upload. Different
 IDs are blocked while the request/transport/cleanup is uncertain. Host journal
 failures leave the raw receipt for reconciliation, rather than resubmission.
-Completed download copies stay leased for the session; NOT_APPLIED releases its
-empty lease after browser completion. Shutdown drains retained files. Network /
-disk download limits, full upload completion and reject remain unfinished, and
-this integration has not yet passed a live download-and-hash acceptance run.
+Verified byte proof is cached before lease cleanup so journal recovery does not
+rehash a released copy. NOT_APPLIED releases its empty lease after browser
+completion; shutdown drains retained files. Network/disk download limits and
+reject remain unfinished. A live download-and-hash run passed on the earlier
+pending-only implementation; completion on the current runtime awaits live proof.
 
 ### Private CSV download primitive (2026-09-05)
 

@@ -1,3 +1,12 @@
+**Текущий checkpoint:** transfer completion реализован в a3a687d2,
+но live ещё не подтверждён. Два frozen FAIL 224356/224849 не дошли до upload:
+первый использовал tid вместо ref, второй не нашёл toolbar в discovery.
+Добавлена главная панель как bounded root + regression (46 UI /91 Python PASS).
+Следующий запуск file-upload-verify должен проверить resolved после matching
+bytes/cleanup/durable completion receipts. Прежний byte-only PASS остаётся
+действителен только для прежнего runtime. Точные pins/результаты сверху status.
+После успешной проверки переходить к CSV pipeline и всему P3–P9.
+
 **Последняя live проверка P3:** 20260905-222924-99da5577 file-upload-verify,
 46/46 frozen PASS. Audit SHA de9b6307…; runtime 296dd7aa…; harness de1364fa.
 Mac/Hermes/ChatGPT/Luna/medium, test, /test. В ОДНОЙ сессии один upload, точная

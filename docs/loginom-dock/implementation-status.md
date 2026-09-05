@@ -1,3 +1,35 @@
+## 2026-09-05 — P3: завершение transfer и доступ к главной панели
+
+В a3a687d2 реализовано завершение original upload по postcondition
+`destination_bytes_digest_and_size`: confirmed native submission + matching
+server bytes + завершение browser calls + cleanup обоих leases. Промежуточный
+`download_verified` сохраняет completion=false; отдельные `transfer_completed`
+и `verification_completed` фиксируются до снятия pending. При сбое журнала
+inspect завершает запись по сохранённому byte proof без нового download/hash;
+при неизвестном submission или неуспешной очистке guard сохраняется.
+222 client /91 Python /10 packaging PASS; дополнительные targeted проверки
+artifact verification 7 PASS, workspace UI после ref feedback 45 PASS.
+
+Два новых frozen live запуска **не дошли до upload/verify**, 23/24 FAIL каждый:
+- 20260905-224356-6232a5f0, runtime 980c900d1bbf2211118f501419fe65a70d12ab8ee52f2a48b0001e28316a62a5,
+  harness a3a687d2, audit SHA 1d8ae344ab1ad52b21a87a6c287e4997754d1293f3451f9621ad034d32a78351.
+  Агент передал tid вместо opaque ref; запрос отвергнут до действия. В dead3a6e
+  уточнены ошибка и допустимое исправление REQUEST_REJECTED без effect.
+- 20260905-224849-6b3d76f7, runtime 0077b65452c832669364217f07877637501701347b0ab8393616d27d01cf3848,
+  harness dead3a6e, audit SHA bbef8f543a646f3e2f16ed5cc4a75aef0f82bbc3128ed0b773d276ba973b1676.
+  Только чтения: агент не нашёл переход в «Файлы». Root discovery не включал
+  главную панель. Добавлена точная область MF;cntMain;tlbMainToolbar;
+  scoped detail даёт её кнопки, без обхода большого workspace. Synthetic
+  regression с 6500 фоновыми элементами и весь workspace suite: 46 PASS;
+  Python harness 91 PASS. Новый goal поясняет discovery → detail → button ref.
+
+Оба запуска: текущий Mac, Hermes, existing ChatGPT subscription,
+openai-codex / gpt-5.6-luna / medium, explicit test и /test. Frozen отчёты
+не переоценены. Completion по новой реализации ещё требует нового live run;
+прежний 46/46 PASS ниже доказывает server bytes на старом runtime. Далее
+CSV import → calculator → group, reject/conflict, download budget и весь P3–P9.
+Production/public rc2 не менялись.
+
 ## 2026-09-05 — P3: живая сверка серверного CSV с исходными байтами
 
 20260905-222924-99da5577, file-upload-verify: **46/46 frozen PASS**.

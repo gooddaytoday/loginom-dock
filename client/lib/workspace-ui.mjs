@@ -98,7 +98,7 @@ function workspaceUiCapability(page, task) {
       if (dom.length >= maxElements) { const error=new Error('Selected region or global guards exceed the scan budget');error.code='UI_SCAN_LIMIT';throw error; }
       seenElements.add(element);dom.push(element);
     };
-    const regionSelector='[role="dialog"],.x-window,.bg-dialog,[role="grid"],table,[role="form"],[data-tid$=";WizrdMCF"],[data-tid$=";cmpDiagram"],[data-tid$=";pnlWorkarea"],[data-tid$="NavigationBar;NavigationPanel"]';
+    const regionSelector='[data-tid="MF;cntMain;tlbMainToolbar"],[role="dialog"],.x-window,.bg-dialog,[role="grid"],table,[role="form"],[data-tid$=";WizrdMCF"],[data-tid$=";cmpDiagram"],[data-tid$=";pnlWorkarea"],[data-tid$="NavigationBar;NavigationPanel"]';
     // E2E utils/selectors.Format: whitespace -> underscore, comma removed.
     // This finds candidates, not filesystem identity or absence. CSS hex escapes
     // keep arbitrary filename characters data rather than selector syntax.

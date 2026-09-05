@@ -513,6 +513,24 @@ test('initial region discovery avoids a large document and only admits later det
   assert.equal(detail.status,'SUCCEEDED');assert.ok(detail.output.ui.elements.some(e=>e.tid==='Form;edtInside'));
 });
 
+test('global toolbar is discoverable and readable above a large workspace', async () => {
+  const page=new Page();
+  const toolbar=page.add('div','MF;cntMain;tlbMainToolbar');
+  page.add('button','MF;cntMain;tlbMainToolbar;btnFilestorage','Файлы',undefined,toolbar);
+  for(let i=0;i<6500;i++) page.add('div',null,'background');
+  let visits=0;const walker=page.document.createTreeWalker.bind(page.document);
+  page.document.createTreeWalker=(root,kind)=>{if(kind===1)visits++;return walker(root,kind);};
+  const discovery=await page.execute({mode:'observe',discover_roots:true});
+  assert.equal(discovery.status,'SUCCEEDED');assert.equal(visits,0);
+  const root=discovery.output.ui.elements.find(e=>e.tid==='MF;cntMain;tlbMainToolbar');
+  assert.ok(root);assert.deepEqual(root.allowed_actions,[]);
+  const detail=await page.execute({mode:'observe',root_ref:root.ref});
+  assert.equal(detail.status,'SUCCEEDED');assert.equal(visits,1);
+  const button=detail.output.ui.elements.find(e=>e.tid.endsWith(';btnFilestorage'));
+  assert.ok(button.ref.startsWith('ui-'));assert.ok(button.allowed_actions.includes('click'));
+  assert.ok(detail.output.scan.detail_elements<10);
+});
+
 test('selected root traverses only its small subtree while a large background and global blocker remain outside', async () => {
   const page=new Page(),root=page.add('div','Form;btnSection','Section',{x:30,y:100,width:300,height:100});
   page.add('input','Form;edtInside','',{x:35,y:110,width:100,height:25},root);
