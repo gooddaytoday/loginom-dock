@@ -1,5 +1,13 @@
 # Следующему агенту: с чего начать
 
+**Последняя P3 реализация:** artifacts.mjs, private session.artifactStore,
+46 runtime inputs. Host-only admit expected SHA/size → immutable local copy,
+resolve revalidates bytes; model path/API не выданы. 181 client / 81 Python /
+10 packaging PASS (+2 artifact tests после filename validation). Active Hermes
+нет. Далее admission fixture в trusted harness + browser upload по artifact_id,
+destination/no-overwrite/receipt, затем import/calculator/group execution и
+save/reopen. Сам store НЕ загружает файл, live upload ещё нет. Детали — верх status.
+
 **Текущая P3 работа:** fixture data-pipeline (sales.csv/expected.json/task.txt/
 README) зафиксирован: 6→6→3 строки, types/null/empty, точные итоговые суммы.
 Это ещё не runnable/live goal. Следующее — typed artifact admission/upload

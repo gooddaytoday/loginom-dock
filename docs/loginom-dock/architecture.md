@@ -97,6 +97,17 @@ Hermes сохраняет активный профиль `HERMES_HOME` и ли�
 
 ## Локальный исполнитель и агентский цикл
 
+Локальные входные файлы принимает host-only artifactStore сессии. Trusted caller
+передаёт sourcePath и заранее известные SHA/bytes/name; модель не получает API
+admit или filesystem path. Проверенная копия записывается exclusive/0600 в
+session artifacts/input, дескриптор содержит только artifact_id/name/bytes/SHA.
+Перед передачей upload adapter повторно проверяет staged bytes и получает Buffer,
+а не изменяемый исходный путь. Symlink/non-regular/size/hash mismatch отвергаются;
+чтение ограничено ожидаемым размером + 1, default limit 16 MiB. Registry живёт
+только в текущей сессии: restart-resume ещё не реализован. Store сам ничего не
+загружает и не выдаёт источники модели; browser upload и destination proof
+реализуются отдельно, generic file input остаётся закрытым.
+
 Новый исполнитель добавляется как изолированный режим запуска
 `executor-preview`; существующий режим клиента остаётся режимом по умолчанию для
 сценариев, ещё не покрытых каталогом. Режим выбирает пользователь или администратор

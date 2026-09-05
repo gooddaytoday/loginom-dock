@@ -1,5 +1,23 @@
 # Выполнение плана Loginom Dock
 
+## P3: host-only artifact admission — 5 сентября 2026
+
+Добавлен artifacts.mjs и artifactStore в createSession; runtime inputs 46.
+Trusted host caller допускает файл только с expected SHA/bytes/name. Bounded
+read проверяет regular file, inode/device, размер и SHA; symlink отвергается.
+Снимок записывается exclusive/0600 под UUID в artifacts/input; исходный путь
+не попадает в публичный descriptor. resolve допускает только текущий registry,
+повторно проверяет staged bytes и отдаёт Buffer для будущего upload adapter.
+Default max 16 MiB; path-like/Windows special filenames отклоняются.
+
+181 client / 81 Python / 10 packaging PASS; после уточнения имён ещё раз прошли
+2 artifact tests. Проверены source mutation после admission, staged tampering,
+неверный SHA/size, symlink, чужая сессия и отсутствие sourcePath в descriptor.
+В браузер ничего не передавалось; live upload не принят. Artifact registry
+после restart пока не восстанавливается. Active Hermes нет.
+Далее trusted admission в acceptance harness, typed upload по artifact_id с
+проверкой destination/no-overwrite/server identity, затем вся P3 цепочка/P4–P9.
+
 ## P3: зафиксирован первый набор данных и oracle — 5 сентября 2026
 
 В `tools/loginom-acceptance/fixtures/data-pipeline` добавлены sales.csv,
