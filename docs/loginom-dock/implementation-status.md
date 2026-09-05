@@ -1,5 +1,30 @@
 # Выполнение плана Loginom Dock
 
+## P1: раздельный outcome verification — 5 сентября 2026
+
+В commit `f9f80a21` добавлен отдельный `dock_outcome_verification` v1,
+связанный с неизменённой квитанцией по operation/action/SHA. Поля жеста,
+предметного эффекта, полноты наблюдения, настроек, данных и цели разделены.
+Клиент доказывает domain effect только с локальным contract/output schema,
+cleanup и postcondition trace; Save дополнительно требует reopened evidence.
+Успех UI-жеста не является domain success; bounded DOM не объявляется полным
+графом или dataset. Settings/data пока not_checked, goal not_verified.
+Недоступность записи verification не стирает исходную operation receipt.
+
+148 client / 66 Python acceptance / 10 packaging tests прошли. Экспорт
+сохраняет verification отдельным полем; --require-verification добавляет
+независимую проверку доставки, границ claims и связи с journal. Граница SHA
+проверки отдельно описана в executor-contracts.md.
+Runtime `e9027c5b8ad672c1601c35be917207e30d1aff8180c310e0af85985d47832ad0`,
+43 inputs. **Live run запущен, результат ещё не проверен:**
+`20260905-144056-ad856011`, basic-graph без fault, --require-verification,
+Hermes / ChatGPT / openai-codex / gpt-5.6-luna / medium.
+Не менять runtime/harness до завершения и не считать прошлый 34/34 новым proof.
+После завершения выполнить audit.py с новым output в каталоге этого run.
+P1 ещё требует live/Help inventory и завершения effect/расширяемого proof
+контракта перед переходом к P2. Публичная поставка не менялась.
+
+
 ## P1: registry/schema/recovery — реальная приёмка 5 сентября 2026
 
 Commit `78b0a103` добавил локальный registry action/capability/handler/effect,
