@@ -86,3 +86,7 @@ not_verified с пустыми obligations: в текущих трёх actions �
 аудитор этой проверки не переинтерпретирует JSON-number serialization для
 повторного вычисления SHA. Unit contract проверяет повторное связывание digest.
 Это доказательство заявленных границ действия, не аудит всех данных сценария.
+
+Effect contract v1 теперь реализован в effect-contracts.mjs и ABI: все семь
+kinds проходят структурную валидацию; существующие handlers дополнительно
+закрепляют resource. Новые kinds не добавляют новых handlers автоматически.

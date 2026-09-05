@@ -1,5 +1,15 @@
 # Следующему агенту: с чего начать
 
+**Актуальная очередь:** P1 effects готовы (`4743d427`), palette observer/goal
+добавлены (`3c735d01`); 151 client / 68 Python. Palette run
+`20260905-145533-e12491a5` — 18/23 FAIL: 102492-character observe ушёл в
+Hermes spillover, недоступный агенту через Dock. Это внутренний пробел.
+**Следующее действие:** P2 compact/scoped/paged observation с сохранением
+внутренних guard snapshots и revision checks, затем повтор inventory P1.
+Не включать модели read_file/execute_code и не повышать лимит Hermes вместо
+исправления наблюдения. Последний run завершён, активных Hermes нет.
+Полный разбор и SHA — в самом верхнем разделе implementation-status.
+
 **Последняя работа:** `f9f80a21`, outcome verification v1, runtime
 `e9027c5b…`, 43 inputs; 148 client / 66 Python / 10 packaging tests.
 Run `20260905-144056-ad856011` с --require-verification завершён: **30/30

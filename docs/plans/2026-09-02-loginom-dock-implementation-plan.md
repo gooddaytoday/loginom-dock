@@ -1233,7 +1233,7 @@ tool schemas в `bridge.mjs`/`catalog.mjs`, bootstrap/full skills и publisher
 - [x] Выбрать явный локальный registry capabilities с версионированными handlers
   и contracts. Убрать расхождение трёх повторённых allowlists, сохранив отказ
   неизвестным actions. Один JSON action без handler не должен стать исполняемым.
-- [ ] Определить новые effect kinds для настройки, удаления, исполнения,
+- [x] Определить новые effect kinds для настройки, удаления, исполнения,
   read-only inspection и передачи файлов. Текущий validator допускает только
   `create/save`; не подгонять все эффекты под них. Зафиксировать precondition,
   postcondition, reconciliation и ownership для каждого вида.
@@ -1277,6 +1277,12 @@ P1 остаётся незавершённым по inventory, новым effect
 journal binding, точным save/reopen. Полнота DOM не объявляется доказанной;
 settings/data и goal остаются not_checked/not_verified до профильных handlers.
 Далее P1 live/Help inventory и расширение effect contracts.
+
+Effect contracts реализованы в `4743d427` (семь kinds и binding resource).
+Реальная palette-inventory `20260905-145533-e12491a5` не принята (18/23):
+102 КБ наблюдения ушли в недоступный агенту Hermes spillover. Для завершения
+инвентаризации P1 требуется сначала часть P2 по compact/scoped/paged observation.
+Это не внешний блокер и не уменьшение объёма: P1 остаётся незавершённым.
 
 ### P2. Общие UI-драйверы и доступное наблюдение
 

@@ -1,5 +1,43 @@
 # Выполнение плана Loginom Dock
 
+## P1 effects и реальная палитра — 5 сентября 2026
+
+`4743d427`: семь effect contracts (create/save/configure/delete/execute/inspect/
+transfer), pre/postcondition/reconciliation/ownership в ABI и локальном модуле.
+Validator больше не ограничен create/save; каждый исполняемый action по-прежнему
+требует отдельного local handler и совпадения kind/resource. Неизвестный action
+с допустимым новым effect не становится исполняемым. 150 client tests и
+10 packaging checks прошли; новый runtime input effect-contracts.mjs (44 inputs).
+
+`3c735d01`: по pinned E2E selectors:272/279/286 в наблюдение добавлены palette
+TreeText/TreeExpander spans. Поддерживаемый goal palette-inventory и независимый
+аудитор принимают только работу с наблюдаемыми группами и пустым графом.
+151 client / 68 Python checks прошли. Inventory audit изначально не объявляет
+полноту скрытых/виртуализированных компонентов, даже если сбор наблюдений принят.
+
+Реальный Hermes run `20260905-145533-e12491a5` завершился: **18/23 FAIL**,
+SHA отчёта `449fb27ab63fc3e160db499ab7db2c01db11c3b6780a61a99f7af18bbb40e904`.
+Два workspace.observe дали по 102492 символа; Hermes заменил каждый результат
+persisted-output preview с путём spillover и предложением read_file. Такой
+инструмент отсутствует в разрешённом toolset Dock, и реальный агент не получил
+полного наблюдения/observation_id. Два последующих UI requests отклонены как
+stale observation. Не восстанавливать PASS чтением spillover за агента.
+Это **внутренний пробел наблюдения**, не внешний блокер и не причина менять
+Hermes/ChatGPT/Luna/medium или открывать модели raw filesystem tools.
+
+**Далее:** начать необходимую для P1 inventory часть P2: compact public observation,
+сохранение полного guard snapshot внутри клиента, scope/filter/pagination с
+проверкой revision и ограничениями работы scan. Не ограничиваться увеличением
+порога Hermes или уменьшением одного cap до удобного значения. Затем повторить
+palette-inventory и завершить реестр. P1 ещё не закрыт целиком.
+
+В coverage дополнительно привязаны 77 Help документов к конкретному commit/SHA,
+добавлены документированные разделы, пять режимов Слияния и режимы SONN.
+Для Quality Help содержит визуализатор, не доказан эквивалентный processor:
+различие сохранено явно. Это source map, а не live acceptance этих компонентов.
+Активных Hermes процессов от текущей работы нет; последний run terminal/audited.
+
+
 ## P1: раздельный outcome verification — 5 сентября 2026
 
 В commit `f9f80a21` добавлен отдельный `dock_outcome_verification` v1,
