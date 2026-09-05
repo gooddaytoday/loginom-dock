@@ -1,3 +1,21 @@
+## 2026-09-06 — чтение текущих полей формата текстового импорта
+
+В wizard.settings добавлены delimiter, text_qualifier, null_marker и
+decimal_separator (draft_ui_values, applied_verified=false). Точные ValueControl
+идентификаторы взяты из e2e-tests/bg/sels/import/sImportTxt.ts. Чтение ограничено
+уже обследованным DOM и текущим шагом text_import_format: требуется один видимый
+несекретный owner и один input/textarea. Пробелы, пустая строка и буквальный \N
+сохраняются; значения ограничены 256 UTF-16 единицами с явным truncated.
+Отсутствующий в области чтения или неоднозначный редактор не даёт значения.
+
+248 клиентских, 110 acceptance-harness и 10 packaging тестов прошли.
+Отчёты: .dock/post-mvp-p0/wizard-settings-*-tests.txt. Это проверка исходников
+и синтетического DOM; live структура ValueControl и applied settings ещё не
+приняты. Нового Hermes run нет. Продолжать typed wizard set/lifecycle с проверкой
+node/settings identity через существующий executor, затем applied readback и
+полную live цепочку. Пользователь подтвердил ChatGPT subscription /
+openai-codex /gpt-5.6-luna /medium; fallback запрещён. Полный P3–P9 открыт.
+
 ## 2026-09-06 — завершён Luna run 013610, уточнена неверная пара ref/observation
 
 Run 20260906-013610-e4e2d82e terminal, session 63819 закрыт; ChatGPT/Luna/medium,

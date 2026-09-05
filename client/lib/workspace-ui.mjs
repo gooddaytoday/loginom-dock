@@ -234,6 +234,18 @@ function workspaceUiCapability(page, task) {
         controls:Object.fromEntries(wizardButtons.map(name=>{const found=matching(';'+name);return [name,
           {status:found.length===1?'observed':found.length?'ambiguous':'unobserved',enabled:found.length===1?enabled(found[0]):null}];}))};
     }
+    if(wizard.status==='observed' && wizard.stage==='text_import_format') {
+      const base=wizard.root_tid+';ImportTextFileParamsWizard;';
+      const fields={delimiter:'edtDelimiterChar',text_qualifier:'edtTextQualifier',null_marker:'edtValueNull',decimal_separator:'edtDecimalSeparator'};
+      wizard.settings={status:'draft_ui_values',applied_verified:false,fields:Object.fromEntries(Object.entries(fields).map(([name,key])=>{
+        const owners=(tids.get(base+key+';ValueControl')??[]).filter(item=>visible(item) && !sensitive(item));
+        const inputs=owners.length===1?dom.filter(item=>{charge();return owners[0].contains(item) && item.matches('input:not([type="hidden"]),textarea') && visible(item) && !sensitive(item);}):[];
+        if(owners.length!==1 || inputs.length!==1)return [name,{status:owners.length>1 || inputs.length>1?'ambiguous':'unobserved'}];
+        const input=inputs[0],value=String(input.value??'');
+        return [name,{status:'observed',value:value.slice(0,256),value_length_utf16:value.length,truncated:value.length>256,
+          enabled:enabled(input),read_only:input.readOnly===true,source_tid:base+key+';ValueControl'}];
+      }))};
+    }
     if (discoverRoots) {
       const regions=regionElements.filter(element=>visible(element) && !sensitive(element) && scopeOf(element)!=='inactive_workflow')
         // Deliver the current wizard root before its tables, so a changing form

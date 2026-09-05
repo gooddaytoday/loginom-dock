@@ -1125,3 +1125,34 @@ test('Calculator lifecycle and expression controls are delivered before operator
   }
   assert.ok(first.output.page.next_cursor,'operator palette remains available on later pages');
 });
+
+test('text import draft settings preserve exact null marker and reject ambiguous editors',async()=>{
+  const page=new Page(),base='MF;TF-1;WizrdMCF',form=page.add('div',base);
+  page.add('div',base+';ImportTextFileParamsWizard;edtValueNull','',undefined,form);
+  const owner=page.add('div',base+';ImportTextFileParamsWizard;edtValueNull;ValueControl','',undefined,form);
+  const input=page.add('input',null,'',undefined,owner);input.value='\\N';
+  let settings=(await page.observe()).wizard.settings;
+  assert.equal(settings.applied_verified,false);assert.equal(settings.fields.null_marker.value,'\\N');
+  assert.equal(settings.fields.null_marker.value_length_utf16,2);assert.equal(settings.fields.delimiter.status,'unobserved');
+  input.value='x'.repeat(257);settings=(await page.observe()).wizard.settings;
+  assert.equal(settings.fields.null_marker.truncated,true);assert.equal(settings.fields.null_marker.value.length,256);
+  page.add('input',null,'',undefined,owner);settings=(await page.observe()).wizard.settings;
+  assert.equal(settings.fields.null_marker.status,'ambiguous');assert.equal(settings.fields.null_marker.value,undefined);
+});
+
+test('import settings preserve blank and whitespace values and exclude hidden or password inputs',async()=>{
+  const page=new Page(),base='MF;TF-1;WizrdMCF',form=page.add('div',base);
+  page.add('div',base+';ImportTextFileParamsWizard;edtValueNull','',undefined,form);
+  const owner=page.add('div',base+';ImportTextFileParamsWizard;edtDelimiterChar;ValueControl','',undefined,form);
+  const input=page.add('input',null,'',undefined,owner);
+  assert.equal((await page.observe()).wizard.settings.fields.delimiter.value,'');
+  input.value='\t ';input.readOnly=true;
+  let field=(await page.observe()).wizard.settings.fields.delimiter;
+  assert.equal(field.value,'\t ');assert.equal(field.read_only,true);
+  input.disabled=true;field=(await page.observe()).wizard.settings.fields.delimiter;
+  assert.equal(field.enabled,false);
+  input.attrs.type='password';field=(await page.observe()).wizard.settings.fields.delimiter;
+  assert.equal(field.status,'unobserved');assert.equal(field.value,undefined);
+  input.attrs.type='text';input.style.display='none';
+  assert.equal((await page.observe()).wizard.settings.fields.delimiter.status,'unobserved');
+});

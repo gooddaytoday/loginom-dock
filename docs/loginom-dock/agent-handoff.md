@@ -1,3 +1,9 @@
+**Checkpoint:** добавлено bounded draft-чтение четырёх полей формата импорта
+в wizard.settings, без applied proof. 248 client /110 Python /10 packaging PASS; live пока
+не запускался. Следующий шаг: typed set/lifecycle с identity/readback через
+существующий executor. Hermes — ChatGPT subscription/Luna/medium по последнему
+указанию пользователя. Active Hermes/browser нет; полный P3–P9 открыт.
+
 **Checkpoint:** Luna run 013610-e4e2d82e terminal, 50/58 frozen FAIL, 41 API
 calls; session 63819 закрыт. Последний отказ — неверная пара ref/observation_id.
 Добавлена подсказка только по действительно выданным refs, без alias/автодействия;
