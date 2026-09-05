@@ -136,6 +136,9 @@ function workspaceUiCapability(page, task) {
       .filter(element => visible(element) && !sensitive(element) && scopeOf(element) !== 'inactive_workflow');
     const interesting = element => element.matches('button,input,textarea,select,[contenteditable="true"],[role="button"],[role="checkbox"],[role="radio"],[role="combobox"],[role="menuitem"],[role="tab"],[role="treeitem"],[role="option"],[role="spinbutton"]')
       || /;(?:Input|Output)_[^;]+$|;Label;Label$|;Graph;[^;]+$|;btn[^;]+$|;edt[^;]+$|;mi[^;]+$|;tb(?:-\d+)?$/.test(getTid(element) ?? '')
+      // Pinned E2E bg/selectors.ts:272,279,286: palette tree labels and
+      // expanders are spans without button/treeitem roles in some UI builds.
+      || /;ModelForm;colVendors_Компоненты>[^;]+;(?:TreeText|TreeExpander)$/.test(getTid(element) ?? '')
       // Loginom message-box buttons are anchors without an ARIA button role;
       // their pinned test identifiers end with tlb;yes / tlb;no, not btn*.
       || ((getTid(element) ?? '').startsWith('msgbox') && /;tlb;(?:yes|no|ok|cancel)$/.test(getTid(element)) && !!dialogRef(element));

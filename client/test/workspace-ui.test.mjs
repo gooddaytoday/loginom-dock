@@ -450,3 +450,16 @@ test('navigation links, URL/file/password fields and code editors are not action
   assert.throws(() => validateUiAction({ verb: 'click', ref: '[data-tid="foo"]' }), /opaque/);
   assert.throws(() => validateUiAction({ verb: 'click', ref: 'ui-missing' }, snapshot), /absent/);
 });
+
+test('palette spans provide observed references for enumeration without raw selectors', async () => {
+  const page = new Page();
+  const expander = page.add('span', 'MF;TF-1;ModelForm;colVendors_Компоненты>Импорт;TreeExpander', '', { x: 30, y: 50, width: 20, height: 20 });
+  page.add('span', 'MF;TF-1;ModelForm;colVendors_Компоненты>Импорт>Текстовый_файл;TreeText', 'Текстовый файл');
+  const snapshot = await page.observe();
+  const target = snapshot.ui.elements.find(item => item.tid === expander.getAttribute('data-tid'));
+  assert.ok(target?.allowed_actions.includes('click'));
+  assert.ok(snapshot.ui.elements.some(item => item.label === 'Текстовый файл'));
+  assert.equal((await page.act({ verb: 'click', ref: target.ref }, snapshot)).status, 'SUCCEEDED');
+  expander.remove();
+  assert.equal((await page.act({ verb: 'click', ref: target.ref }, snapshot)).status, 'NOT_APPLIED');
+});

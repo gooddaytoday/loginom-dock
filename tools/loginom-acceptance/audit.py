@@ -522,6 +522,40 @@ def auto_link_proof(goal, evidence, check):
         check('automatic_link_removed_by_bound_ui_preserving_nodes_ports',proof is not None)
 
 
+def palette_inventory(evidence, checks):
+    def check(name, passed):checks.append({'name':name,'passed':bool(passed)})
+    snapshots=[(t['row'],t['result']['output']) for t in evidence['tools']
+               if isinstance(t.get('result'),dict) and isinstance(t['result'].get('output'),dict)
+               and isinstance(t['result']['output'].get('ui'),dict)]
+    check('palette_has_observation',bool(snapshots))
+    check('draft_graph_remained_empty',bool(snapshots) and all(s.get('nodes')==[] and s.get('links')==[] for _,s in snapshots))
+    groups={}; components={}; valid=True
+    pattern=r'^MF;TF(?:-\d+)?;ModelForm;colVendors_Компоненты>([^;]+);(TreeText|TreeExpander)$'
+    for row,snapshot in snapshots:
+        for item in snapshot['ui'].get('elements',[]):
+            match=re.fullmatch(pattern,item.get('tid') or '')
+            if not match:continue
+            path=match[1].split('>')
+            if len(path)==1:groups[path[0]]=item.get('label') or path[0]
+            elif match[2]=='TreeText':components[match[1]]={'group_id':path[0],'component_id':'>'.join(path[1:]),
+                'label':item.get('label'),'tid':item['tid'],'observed_at_row':row}
+    for call in evidence['calls']:
+        if call['tool'] not in MUTATIONS:continue
+        args=call.get('arguments',{});action=args.get('action',{})
+        source=next((s for row,s in snapshots if row<call['row'] and s.get('observation_id')==args.get('observation_id')),None)
+        target=next((e for e in source['ui'].get('elements',[]) if e.get('ref')==action.get('ref')),None) if source else None
+        match=re.fullmatch(pattern,target.get('tid') or '') if target else None
+        valid=valid and call['tool']==PREFIX+'dock_ui_action' and action.get('verb') in ('click','double_click')
+        valid=valid and bool(match) and '>' not in match[1]
+    check('only_observed_palette_groups_interacted_with',valid)
+    check('component_names_observed',bool(components) and all(c['label'] for c in components.values()))
+    return {'schema_version':1,'kind':'independent_palette_observation_audit','assertions':checks,
+            'all_assertions_passed':bool(checks) and all(c['passed'] for c in checks),
+            'inventory':{'groups':groups,'components':list(components.values()),'complete':False},
+            'limitations':['Observed palette entries only; hidden, virtualized or unexpanded entries may be absent.',
+                           'This proves constrained collection, not complete component/mode coverage or licensing.']}
+
+
 def audit(request, evidence, prompt):
     checks = []
     def check(name, passed):
@@ -532,7 +566,7 @@ def audit(request, evidence, prompt):
         check("run_identity_and_owned_package", bool(re.fullmatch(r"\d{8}-\d{6}-[a-f0-9]{8}", run_id))
               and evidence["run_id"] == run_id and request["package_path"] == path)
         goal_id=request.get('goal_id','basic-graph')
-        if goal_id not in ('basic-graph','auto-link-retain','auto-link-remove'):
+        if goal_id not in ('basic-graph','auto-link-retain','auto-link-remove','palette-inventory'):
             raise ValueError('Unsupported goal')
         goal=GOAL.with_name(goal_id+'.txt')
         expected=copy.deepcopy(EXPECTED)
@@ -598,6 +632,8 @@ def audit(request, evidence, prompt):
         check("actual_journal_pins", bool(re.fullmatch(r"[a-f0-9]{64}", revision)) and all(
             e["runtime_revision"] == revision and e["manifest_sha256"] == request["manifest_sha256"]
             and e["session_id"] == prepared["sessionId"] for e in events))
+        if goal_id=='palette-inventory':
+            return palette_inventory(evidence, checks)
         successful_adds = [t for t in tools if t["tool"] == PREFIX + "dock_action_run"
                            and t["result"].get("action_key") == "node.add" and t["result"].get("status") == "SUCCEEDED"]
         components = []
@@ -718,7 +754,7 @@ def audit_directory(run):
               and request.get("harness_inputs", {}).get("evidence.py") == sha(Path(__file__).with_name("evidence.py").read_bytes())
               and (request.get("fault_injection")!="rename" or request.get("harness_inputs",{}).get("rename_effect.py")==sha(Path(rename_effect.__file__).read_bytes()))
               and (not request.get("allow_manual_reopen") or request.get("harness_inputs",{}).get("manual_reopen.py")==sha(Path(manual_reopen.__file__).read_bytes()))
-              and (request.get("goal_id", "basic-graph")=="basic-graph" or request.get("harness_inputs", {}).get("auto_link_delete.py")==sha(Path(auto_link_delete.__file__).read_bytes())))
+              and (request.get("goal_id", "basic-graph") in ("basic-graph","palette-inventory") or request.get("harness_inputs", {}).get("auto_link_delete.py")==sha(Path(auto_link_delete.__file__).read_bytes())))
     report["assertions"].append({"name": "auditor_matches_predeclared_contract", "passed": frozen})
     report["all_assertions_passed"] = report["all_assertions_passed"] and frozen
     return report
