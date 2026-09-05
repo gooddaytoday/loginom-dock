@@ -45,6 +45,22 @@ function workspaceUiCapability(page, task) {
   // Loginom. Re-rendering an identical-looking control invalidates its old ref.
   // The state is document-bound; navigation invalidates every previous reference.
   const readUi = () => page.evaluate(() => {
+    const scanStarted = Date.now(), maxElements = 6000, maxWork = 250000, maxMs = 500;
+    let work = 0;
+    const charge = () => {
+      if (++work > maxWork || Date.now() - scanStarted > maxMs) {
+        const error = new Error('Workspace scan budget exceeded; no complete observation or action references were issued');
+        error.code = 'UI_SCAN_LIMIT'; throw error;
+      }
+    };
+    const dom = [], walker = document.createTreeWalker(document.documentElement, 1);
+    let next;
+    while ((next = walker.nextNode())) {
+      charge();
+      if (dom.length >= maxElements) { const error = new Error('Workspace exceeds the bounded scan size; narrower browser roots are required'); error.code = 'UI_SCAN_LIMIT'; throw error; }
+      dom.push(next);
+    }
+    const select = selector => dom.filter(element => { charge(); return element.matches(selector); });
     const stateKey = Symbol.for('loginom-dock.workspace-ui.identity.v1');
     let state = globalThis[stateKey];
     if (!state || state.document !== document) {
@@ -55,7 +71,7 @@ function workspaceUiCapability(page, task) {
       if (!state.ids.has(element)) state.ids.set(element, `ui-${state.epoch}-${++state.sequence}`);
       return state.ids.get(element);
     };
-    const all = [...document.querySelectorAll('[data-tid]')], tids = new Map();
+    const all = select('[data-tid]'), tids = new Map();
     for (const element of all) { const tid = element.getAttribute('data-tid'); const list = tids.get(tid) ?? []; list.push(element); tids.set(tid, list); }
     const getTid = element => element?.getAttribute?.('data-tid') ?? null;
     const boxOf = element => { const b = element.getBoundingClientRect(); return { x: b.x, y: b.y, width: b.width, height: b.height }; };
@@ -65,6 +81,7 @@ function workspaceUiCapability(page, task) {
       const graphLink = /^MF;TF(?:-\d+)?;Graph;[^;|]+\|[^;|]+\|[^;|]+\|[^;|]+$/.test(getTid(element) ?? '');
       if (!(box.width > 0 && box.height > 0) && !(graphLink && box.width >= 0 && box.height >= 0 && (box.width > 0 || box.height > 0))) return false;
       for (let parent = element; parent; parent = parent.parentElement) {
+        charge();
         const style = getComputedStyle(parent);
         if (style.display === 'none' || style.visibility === 'hidden' || style.visibility === 'collapse' || style.opacity === '0' || parent.hasAttribute('hidden')) return false;
       }
@@ -73,6 +90,7 @@ function workspaceUiCapability(page, task) {
     const sensitivePattern = /password|passwd|\bpwd\b|secret|token|credential|authorization|api[_ -]?key|private[_ -]?key|one[_ -]?time|\botp\b|парол|секрет|токен/i;
     const sensitive = element => {
       for (let parent = element; parent && parent !== document.body; parent = parent.parentElement) {
+        charge();
         if (parent.matches('input[type="password"],input[type="hidden"],input[type="file"]')) return true;
         if (sensitivePattern.test(['name', 'id', 'data-tid', 'autocomplete', 'aria-label'].map(name => parent.getAttribute(name) ?? '').join(' ')) || (getTid(parent) ?? '').startsWith('LoginForm;')) return true;
       }
@@ -84,6 +102,7 @@ function workspaceUiCapability(page, task) {
       const parts = [], walker = document.createTreeWalker(element, 4);
       let textNode, length = 0;
       while ((textNode = walker.nextNode()) && length < 2000) {
+        charge();
         if (textNode.parentElement && !sensitive(textNode.parentElement) && visible(textNode.parentElement)
           && !textNode.parentElement.closest('script,style,noscript,textarea')) {
           const value = textNode.textContent ?? ''; parts.push(value); length += value.length;
@@ -94,6 +113,7 @@ function workspaceUiCapability(page, task) {
     const identityOf = element => {
       const path = [];
       for (let parent = element, depth = 0; parent && depth < 64; depth++, parent = parent.parentElement) {
+        charge();
         const tid = getTid(parent);
         if (tid && tids.get(tid)?.length === 1) return { anchor_tid: tid, path };
         if (parent === document.documentElement) return { anchor_tid: null, path };
@@ -107,9 +127,9 @@ function workspaceUiCapability(page, task) {
       || element.matches('input[type="url"],input[type="file"],input[type="hidden"]')
       || /(?:^|[;_ -])(?:script|javascript|python|codeeditor)(?:[;_ -]|$)/i.test(['name', 'id', 'data-tid'].map(key => element.getAttribute(key) ?? '').join(' '))
       || !!element.closest('.monaco-editor,.CodeMirror,.ace_editor');
-    const dialogElements = [...document.querySelectorAll('[role="dialog"],.x-window,.bg-dialog')].filter(visible)
+    const dialogElements = select('[role="dialog"],.x-window,.bg-dialog').filter(visible)
       .filter((element, index, items) => !items.some((other, i) => i !== index && other.contains(element)));
-    const dialogs = dialogElements.map(element => ({ ref: refOf(element), title: short(element.getAttribute('aria-label') ?? element.querySelector('[role="heading"],.x-title-text')?.textContent),
+    const dialogs = dialogElements.map(element => ({ ref: refOf(element), title: short(element.getAttribute('aria-label') ?? select('[role="heading"],.x-title-text').find(item => element.contains(item))?.textContent),
         text: textOf(element), bounding_box: boxOf(element), z_index: Number(getComputedStyle(element).zIndex) || 0, identity: identityOf(element) }));
     const dialogRef = element => {
       const owner = dialogElements.find(dialog => dialog === element || dialog.contains(element));
@@ -123,6 +143,7 @@ function workspaceUiCapability(page, task) {
       if (dialogRef(element)) return 'dialog';
       let workflowAncestor = false, graphAncestor = false;
       for (let parent = element; parent && parent !== document.body; parent = parent.parentElement) {
+        charge();
         const tid = getTid(parent) ?? '', owner = /^(MF;TF(?:-\d+)?);/.exec(tid)?.[1];
         if (owner && owner !== workflow?.prefix) return 'inactive_workflow';
         if (owner) workflowAncestor = true;
@@ -132,7 +153,7 @@ function workspaceUiCapability(page, task) {
       if ((getTid(element) ?? '').startsWith(workflow?.prefix + ';Graph;')) return 'graph';
       return workflowAncestor ? 'workflow' : 'global';
     };
-    const candidates = [...document.querySelectorAll('button,input,textarea,select,[contenteditable="true"],[role="button"],[role="checkbox"],[role="radio"],[role="combobox"],[role="menuitem"],[role="tab"],[role="treeitem"],[role="option"],[role="spinbutton"],[data-tid]')]
+    const candidates = select('button,input,textarea,select,[contenteditable="true"],[role="button"],[role="checkbox"],[role="radio"],[role="combobox"],[role="menuitem"],[role="tab"],[role="treeitem"],[role="option"],[role="spinbutton"],[data-tid]')
       .filter(element => visible(element) && !sensitive(element) && scopeOf(element) !== 'inactive_workflow');
     const interesting = element => element.matches('button,input,textarea,select,[contenteditable="true"],[role="button"],[role="checkbox"],[role="radio"],[role="combobox"],[role="menuitem"],[role="tab"],[role="treeitem"],[role="option"],[role="spinbutton"]')
       || /;(?:Input|Output)_[^;]+$|;Label;Label$|;Graph;[^;]+$|;btn[^;]+$|;edt[^;]+$|;mi[^;]+$|;tb(?:-\d+)?$/.test(getTid(element) ?? '')
@@ -181,10 +202,10 @@ function workspaceUiCapability(page, task) {
         }
       }
     } catch { /* A dialog or non-workflow tab may have no cached package node. */ }
-    const readTexts = selector => [...document.querySelectorAll(selector)].filter(visible).map(element => ({ ref: refOf(element), text: textOf(element), bounding_box: boxOf(element) }));
+    const readTexts = selector => select(selector).filter(visible).map(element => ({ ref: refOf(element), text: textOf(element), bounding_box: boxOf(element) }));
     const foregroundDialog = dialogs.reduce((top, dialog) => !top || dialog.z_index >= top.z_index ? dialog : top, null);
     const foregroundElement = foregroundDialog ? dialogElements.find(element => refOf(element) === foregroundDialog.ref) : null;
-    const masks = [...document.querySelectorAll('.bg-mask-message,.x-mask-msg')].filter(visible).map(element => {
+    const masks = select('.bg-mask-message,.x-mask-msg').filter(visible).map(element => {
       // Mask.js applies bg-mask-message to the whole target and renders its
       // bg-mask-text attribute. Descendant text is the underlying workspace,
       // not the mask message. Loginom also uses "Загрузка" while waiting for a
@@ -196,12 +217,12 @@ function workspaceUiCapability(page, task) {
       return { ref: refOf(element), kind, dialog_ref: owner, text: ownText === null ? textOf(element) : short(ownText), bounding_box: boxOf(element) };
     });
     const messages = readTexts('[role="alert"],[role="status"],.bg-message,.x-message-box,.x-form-invalid-under');
-    const cells = [...document.querySelectorAll('td,th,[role="gridcell"],[role="columnheader"],.x-grid-cell-inner')].filter(visible)
-      .filter(element => !element.querySelector('td,th,[role="gridcell"],[role="columnheader"],.x-grid-cell-inner'));
+    const allCells = select('td,th,[role="gridcell"],[role="columnheader"],.x-grid-cell-inner');
+    const cells = allCells.filter(visible).filter(element => !allCells.some(other => { charge(); return other !== element && element.contains(other); }));
     const tableCells = cells.slice(0, 120).map(element => {
       const column = element.getAttribute('aria-colindex');
       const table = element.closest('table,[role="grid"]');
-      const headers = table ? [...table.querySelectorAll('th,[role="columnheader"]')] : [];
+      const headers = table ? allCells.filter(item => { charge(); return item.matches('th,[role="columnheader"]') && table.contains(item); }) : [];
       const index = element.cellIndex ?? (column ? Number(column) - 1 : -1);
       const header = index >= 0 ? textOf(headers[index] ?? element) : '';
       return { text: sensitivePattern.test(header) ? '[REDACTED]' : textOf(element), row: element.parentElement?.getAttribute('aria-rowindex') ?? null, column };
@@ -209,6 +230,7 @@ function workspaceUiCapability(page, task) {
     const workarea = graphPrefix ? all.find(element => getTid(element) === workflow.prefix + ';ModelForm;pnlWorkarea') : null;
     return { origin: location.origin, authenticated: !!tids.get('MF;cntMain;tlbMainToolbar;btnAvatar')?.some(visible), loginom_build: globalThis.bg?.app?.Version ?? null,
       workflow_ref: workflow, active_identity: active ? textOf(active) : null, package_identity: packageIdentity,
+      scan: { complete: true, visited_elements: dom.length, max_elements: maxElements, max_work: maxWork, max_ms: maxMs },
       nodes, links: links.slice(0, 500), workarea: workarea ? boxOf(workarea) : null,
       ui: { elements, dialogs: dialogs.slice(0, 12), messages: messages.slice(0, 30), masks: masks.slice(0, 12), table_cells: tableCells,
         truncated: { elements: controls.length > 240, nodes: labels.length > 200, links: links.length > 500, ports: nodes.some(node => node.ports.length === 100), dialogs: dialogs.length > 12, messages: messages.length > 30, masks: masks.length > 12, table_cells: cells.length > 120 } } };
@@ -359,7 +381,8 @@ function workspaceUiCapability(page, task) {
     } catch (error) {
       record('ui_action_failed', { code: error?.code ?? 'UI_BROWSER_CALL_FAILED' });
       let observed = {};
-      try { observed = await readUi(); } catch { /* Never replace uncertainty with a fabricated observation. */ }
+      if (error?.code === 'UI_SCAN_LIMIT') observed = { observation_required: true, scan: { complete: false, limit_exceeded: true } };
+      else try { observed = await readUi(); } catch { /* Never replace uncertainty with a fabricated observation. */ }
       outcome = result(effectPossible ? 'AMBIGUOUS' : 'NOT_APPLIED', observed,
         { code: error?.code ?? 'UI_BROWSER_CALL_FAILED', message: error?.code ? error.message : 'The browser did not confirm the UI operation; inspect the workspace before recovery' });
     } finally {

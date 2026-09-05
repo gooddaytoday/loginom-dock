@@ -1,5 +1,27 @@
 # Выполнение плана Loginom Dock
 
+## P2: ограничение подробного browser scan — 5 сентября 2026
+
+readUi обходит DOM через TreeWalker с пределом 6000 элементов, 250000
+учитываемых шагов и проверкой времени 500 мс. Повторные document-wide queries
+заменены выборками из ограниченного списка; учтены обходы предков/текста и
+сопоставление ячеек. Это cooperative budget, не прерывание отдельного синхронного
+DOM API. Сведения scan доставляются в compact page и учитываются receipt audit.
+scan.complete означает завершённый обход, не полноту возвращённых UI/данных.
+
+UI_SCAN_LIMIT не возвращает пустой граф или refs: output содержит
+observation_required и scan.complete=false. Повторный бесполезный scan в catch
+пропускается. Если лимит встретился до жеста, действие NOT_APPLIED; прежний
+успешный snapshot не позволяет обойти этот отказ. После возможного жеста
+сохраняется неопределённость эффекта.
+
+160 client / 72 Python / 10 packaging checks прошли. Тест бесконечного внешнего
+DOM iterator остановился после 6001 обращения, не выполнил input и не выдал
+nodes/ui. **Live нового scan/bootstrap ещё нет.** Пределы требуют реального
+прогона, browser root/filter и виртуализация остаются открытыми: большой UI
+пока явно отклоняется, а не читается по областям. Далее live bootstrap/palette,
+root-scoped readUi и дальнейшие P2/P3. Активных Hermes нет.
+
 ## P2: read-only bootstrap — 5 сентября 2026
 
 В workspace.observe добавлен scope=bootstrap до dock_prepare. Runtime читает

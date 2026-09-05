@@ -1315,6 +1315,8 @@ bridge и session/build input lists. Новые driver modules сначала п
   работу scan, а не только длину ответа. Отличать offscreen от доступного target.
   Связать страницы одним snapshot revision/epoch графа или результата: при
   изменении между страницами отвергать объединение и начинать новое чтение.
+  Реализованы host paging/digest и cooperative browser scan budget с явным
+  UI_SCAN_LIMIT; browser root/filter, epoch/ABA и live приёмка scan ещё открыты.
 - [ ] Реализовать scroll и новое observe после него для виртуализированных
   списков/таблиц; устаревшие incarnations должны отклоняться даже при одинаковом
   data-tid. Нельзя строить proof полного графа из ограниченной viewport-выборки.

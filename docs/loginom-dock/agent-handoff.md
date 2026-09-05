@@ -1,5 +1,12 @@
 # Следующему агенту: с чего начать
 
+**Текущая точка:** подробный readUi получил cooperative scan budget
+(6000 DOM elements/250000 steps/500ms), UI_SCAN_LIMIT без пустого графа/refs
+и без жеста при неполном pre-read. 160 client / 72 Python / 10 packaging.
+Live scan/bootstrap ещё не было; active Hermes нет. Далее live bootstrap/palette,
+browser root/filter для больших UI, virtualized scroll и оставшиеся P2/P3–P9.
+Не считать bounded rejection реализацией чтения большого UI по областям.
+
 **Последняя реализация:** scope=bootstrap у workspace.observe доступен до
 prepare, без навигации/login/draft/archive и без чтения values/text; bounded
 walk 4000/75ms, неполное наблюдение indeterminate. 159 client tests, включая MCP

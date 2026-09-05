@@ -54,7 +54,8 @@ class Document {
   }
   all() { return [this.documentElement, ...this.documentElement.descendants()]; }
   querySelectorAll(selector) { return this.all().filter(element => element.matches(selector)); }
-  createTreeWalker(element) {
+  createTreeWalker(element, kind) {
+    if (kind === 1) { const items = element.descendants(); let index=0; return { nextNode: () => items[index++] ?? null }; }
     const text = [element, ...element.descendants()].filter(item => item.ownText).map(item => ({ parentElement: item, textContent: item.ownText }));
     let index = 0; return { nextNode: () => text[index++] ?? null };
   }
@@ -462,4 +463,21 @@ test('palette spans provide observed references for enumeration without raw sele
   assert.equal((await page.act({ verb: 'click', ref: target.ref }, snapshot)).status, 'SUCCEEDED');
   expander.remove();
   assert.equal((await page.act({ verb: 'click', ref: target.ref }, snapshot)).status, 'NOT_APPLIED');
+});
+
+test('oversized DOM stops observation and rejects a gesture before input without an empty graph claim', async () => {
+  const page=new Page();page.add('button','Safe;btnAction','Action');
+  const snapshot=await page.observe();
+  assert.equal(snapshot.scan.complete,true);
+  const ref=snapshot.ui.elements.find(item=>item.tid==='Safe;btnAction').ref;
+  let visits=0;
+  const original=page.document.createTreeWalker.bind(page.document);
+  page.document.createTreeWalker=(root,kind)=>kind===1 ? {nextNode:()=>{visits++;return page.document.body;}} : original(root,kind);
+  const observed=await page.execute({mode:'observe'});
+  assert.equal(observed.error.code,'UI_SCAN_LIMIT');assert.equal(visits,6001);
+  assert.equal(observed.output.scan.complete,false);assert.equal(observed.output.nodes,undefined);
+  assert.equal(observed.output.ui,undefined);
+  const acted=await page.act({verb:'click',ref},snapshot);
+  assert.equal(acted.status,'NOT_APPLIED');assert.equal(acted.effect_possible,false);
+  assert.equal(acted.error.code,'UI_SCAN_LIMIT');assert.deepEqual(page.events,[]);
 });
