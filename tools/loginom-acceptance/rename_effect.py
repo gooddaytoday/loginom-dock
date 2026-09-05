@@ -3,6 +3,55 @@ import copy
 import re
 
 
+def compact_receipt_equal(record, reply):
+    """Bind every delivered value to the immutable receipt, without erasing data.
+
+    This verifies the first all-scope projection of a UI receipt. Revision is
+    an opaque correlation token here, not an independently proven DOM epoch.
+    Unknown projection versions/fields fail closed.
+    """
+    source=record.get('output',{}); actual=reply.get('output',{})
+    page=actual.get('page',{})
+    if (set(page)!={'schema_version','scope','offset','returned','total_records','next_cursor',
+                    'captured_snapshot_complete','full_dom_complete'}
+        or page.get('schema_version')!=1 or page.get('scope')!='all' or page.get('offset')!=0
+        or page.get('full_dom_complete') is not False
+        or not re.fullmatch(r'[a-f0-9]{64}',actual.get('observation_revision',''))):return False
+    if {k:v for k,v in record.items() if k!='output'}!={k:v for k,v in reply.items() if k!='output'}:return False
+    metadata=('origin','authenticated','loginom_build','workflow_ref','active_identity','package_identity',
+              'workarea','verification_required','gesture_applied')
+    if set(source)-set(metadata)-{'nodes','links','ui'}:return False
+    expected={k:copy.deepcopy(source[k]) for k in metadata if k in source}
+    ui=source.get('ui',{});rows=[]
+    for node in source.get('nodes',[]):
+        ports=node.get('ports',[])
+        for offset in range(0,max(len(ports),1),8):
+            value={**node,'ports':ports[offset:offset+8]}
+            if len(ports)>8:value['ports_page']={'offset':offset,'total':len(ports),'complete':False}
+            rows.append(('nodes',value))
+    rows.extend(('links',link) for link in source.get('links',[]))
+    for item in ui.get('elements',[]):
+        value={k:v for k,v in item.items() if k not in ('signature','bounding_box')}
+        if item.get('signature') is not None:value['signature']={k:v for k,v in item['signature'].items() if k=='tag'}
+        rows.append(('elements',value))
+    collections=('elements','dialogs','masks','messages','table_cells')
+    for key in collections[1:]:rows.extend((key,item) for item in ui.get(key,[]))
+    count=page.get('returned')
+    if type(count) is not int or not 0<=count<=min(len(rows),32) or (rows and not count):return False
+    if page.get('total_records')!=len(rows) or page['captured_snapshot_complete'] is not (count==len(rows)):return False
+    cursor=page['next_cursor']
+    if count<len(rows):
+        if not isinstance(cursor,str) or not re.fullmatch(r'[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}',cursor):return False
+    elif cursor is not None:return False
+    expected.update(nodes=[],links=[],ui={key:[] for key in collections})
+    expected['ui']['truncated']=copy.deepcopy(ui.get('truncated',{}))
+    for key,item in rows[:count]:
+        (expected[key] if key in ('nodes','links') else expected['ui'][key]).append(item)
+    for key,_ in rows[count:]:expected['ui']['truncated'][key]=True
+    if any('ports_page' in node for node in expected['nodes']):expected['ui']['truncated']['ports']=True
+    return expected=={k:v for k,v in actual.items() if k not in ('page','observation_revision')}
+
+
 def journal_equal(record, reply):
     # retainObservation adds an opaque observation ID and canonicalizes origin
     # after the immutable UI receipt is journaled. No graph/effect is rewritten.
@@ -14,17 +63,21 @@ def journal_equal(record, reply):
         if isinstance(origin,str) and re.fullmatch(r'https?://[^/?#]+/?',origin):
             output['origin']=origin.rstrip('/')
         return value
-    return normalized(record)==normalized(reply)
+    left,right=normalized(record),normalized(reply)
+    if 'page' in right.get('output',{}):return compact_receipt_equal(left,right)
+    return left==right
 
 
 def prove(tools, calls, events, after_row, expected):
-    observations={t.get('result',{}).get('output',{}).get('observation_id'):t
-                  for t in tools if isinstance(t.get('result'),dict)}
+    observations=[t for t in tools if isinstance(t.get('result'),dict)]
     replies={t['tool_call_id']:t for t in tools}
     def bound(call):
         reply=replies.get(call['tool_call_id'],{});r=reply.get('result',{})
         args=call.get('arguments',{});action=args.get('action',{})
-        observed=observations.get(args.get('observation_id'),{});s=observed.get('result',{}).get('output',{})
+        candidates=[t for t in observations if t.get('row',10**12)<call['row']
+                    and t['result'].get('output',{}).get('observation_id')==args.get('observation_id')
+                    and any(e.get('ref')==action.get('ref') for e in t['result'].get('output',{}).get('ui',{}).get('elements',[]))]
+        observed=max(candidates,key=lambda t:t['row'],default={});s=observed.get('result',{}).get('output',{})
         elements=[e for e in s.get('ui',{}).get('elements',[]) if e.get('ref')==action.get('ref')]
         if (len(elements)!=1 or observed.get('row',10**12)>=call['row'] or r.get('status')!='SUCCEEDED'
             or r.get('cleanup_complete') is not True

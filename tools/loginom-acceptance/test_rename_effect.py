@@ -1,6 +1,9 @@
 import copy
 import unittest
 import rename_effect
+import json
+from pathlib import Path
+import subprocess
 
 
 def fixture():
@@ -60,5 +63,28 @@ class RenameEffect(unittest.TestCase):
             else:out['ui']['truncated']['nodes']=True
             data[2][-1]['outcome']=copy.deepcopy(data[0][-1]['result'])
             self.assertIsNone(self.proof(data))
+
+    def test_actual_runtime_projection_matches_journal_but_changed_effects_do_not(self):
+        data=fixture()
+        root=Path(__file__).resolve().parents[2]
+        # Exercise actual JS serialization; the verifier is independent Python.
+        script="""import { createObservationPages } from './client/lib/observation-pages.mjs';
+let text=''; for await (const part of process.stdin) text+=part;
+const values=JSON.parse(text); console.log(JSON.stringify(values.map(value=>createObservationPages().retain(value))));"""
+        raw=[copy.deepcopy(t['result']) for t in data[0]]
+        for value in raw:
+            value['output'].pop('observation_id',None)
+            value['output']['ui']['elements'][0]['signature']['large']='x'*1000
+        result=subprocess.run(['node','--input-type=module','-e',script],cwd=root,input=json.dumps(raw),text=True,capture_output=True,check=True)
+        projected=json.loads(result.stdout)
+        for source,reply in zip(raw,projected):self.assertTrue(rename_effect.journal_equal(source,reply))
+        for mutate in [lambda r:r['output']['nodes'][0]['node_ref'].update(node_label='Different'),
+                       lambda r:r['output']['ui']['elements'][0].update(value='Different'),
+                       lambda r:r['output']['ui']['truncated'].update(nodes=True),
+                       lambda r:r['output']['page'].update(total_records=999),
+                       lambda r:r['output']['page'].update(full_dom_complete=True),
+                       lambda r:r.update(status='AMBIGUOUS')]:
+            bad=copy.deepcopy(projected[-1]);mutate(bad)
+            self.assertFalse(rename_effect.journal_equal(raw[-1],bad))
 
 if __name__=='__main__':unittest.main()

@@ -528,7 +528,22 @@ def palette_inventory(evidence, checks):
                if isinstance(t.get('result'),dict) and isinstance(t['result'].get('output'),dict)
                and isinstance(t['result']['output'].get('ui'),dict)]
     check('palette_has_observation',bool(snapshots))
-    check('draft_graph_remained_empty',bool(snapshots) and all(s.get('nodes')==[] and s.get('links')==[] for _,s in snapshots))
+    mutations=[c for c in evidence['calls'] if c['tool'] in MUTATIONS]
+    graph_reads=[row for row,s in snapshots if s.get('nodes')==[] and s.get('links')==[]
+                 and all(s.get('ui',{}).get('truncated',{}).get(k) is False for k in ('nodes','ports','links'))
+                 and s.get('page',{}).get('scope','all') in ('all','graph')]
+    check('draft_graph_remained_empty',bool(graph_reads)
+          and all(s.get('nodes')==[] and s.get('links')==[] for _,s in snapshots)
+          and (not mutations or min(graph_reads)<min(c['row'] for c in mutations)
+               and max(graph_reads)>max(c['row'] for c in mutations)))
+    revisions={}; consistent=True
+    for _,s in snapshots:
+        if 'page' not in s:continue
+        identity=s.get('observation_id'); rev=s.get('observation_revision')
+        consistent=consistent and isinstance(rev,str) and bool(re.fullmatch(r'[a-f0-9]{64}',rev))
+        if identity in revisions:consistent=consistent and revisions[identity]==rev
+        revisions[identity]=rev
+    check('observation_pages_have_consistent_revision',consistent)
     groups={}; components={}; valid=True
     pattern=r'^MF;TF(?:-\d+)?;ModelForm;colVendors_Компоненты>([^;]+);(TreeText|TreeExpander)$'
     for row,snapshot in snapshots:
@@ -542,8 +557,11 @@ def palette_inventory(evidence, checks):
     for call in evidence['calls']:
         if call['tool'] not in MUTATIONS:continue
         args=call.get('arguments',{});action=args.get('action',{})
-        source=next((s for row,s in snapshots if row<call['row'] and s.get('observation_id')==args.get('observation_id')),None)
-        target=next((e for e in source['ui'].get('elements',[]) if e.get('ref')==action.get('ref')),None) if source else None
+        previous_mutation=max((c['row'] for c in mutations if c['row']<call['row']),default=-1)
+        targets=[e for row,s in snapshots if previous_mutation<row<call['row']
+                 and s.get('observation_id')==args.get('observation_id')
+                 for e in s['ui'].get('elements',[]) if e.get('ref')==action.get('ref')]
+        target=targets[0] if targets and all(e==targets[0] for e in targets) else None
         match=re.fullmatch(pattern,target.get('tid') or '') if target else None
         valid=valid and call['tool']==PREFIX+'dock_ui_action' and action.get('verb') in ('click','double_click')
         valid=valid and bool(match) and '>' not in match[1]
