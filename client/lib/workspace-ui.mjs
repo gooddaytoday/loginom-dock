@@ -364,16 +364,20 @@ function workspaceUiCapability(page, task) {
     // E2E navigation.GetCurrentTabPath reads the visible breadcrumb labels.
     // This is destination evidence only: virtualized rows cannot prove absence
     // of a conflicting filename, nor do labels establish server byte identity.
-    let fileStorage = {status:'unobserved',directory:null,listing_complete:false};
+    let fileStorage = {status:'unobserved',directory:null,listing_complete:false,reason:'storage_container_not_observed'};
     const storagePrefix = workflow?.prefix + ';FileStorageForm;';
     if (workflow && all.some(element => (getTid(element) ?? '').startsWith(storagePrefix + 'pnlFileStorage;tbl') && visible(element))) {
       const bars = all.filter(element => (getTid(element) ?? '').startsWith(workflow.prefix + ';')
         && (getTid(element) ?? '').endsWith('NavigationBar;NavigationPanel') && visible(element) && !sensitive(element));
+      fileStorage.reason='navigation_not_unique';
       if (bars.length === 1) {
-        const bar=bars[0], buttons=all.filter(element => bar.contains(element)
+        const bar=bars[0], buttonParts=all.filter(element => bar.contains(element)
           && (getTid(element) ?? '').includes('cnrNaviMode;b.s'));
+        const buttons=buttonParts.filter(element=>!buttonParts.some(other=>{charge();return other!==element && other.contains(element);}));
         const labels=select('.x-btn-inner-default-toolbar-small').filter(element => bar.contains(element)
           && buttons.some(button => {charge();return button.contains(element);}));
+        fileStorage.reason='navigation_segments_incomplete';
+        fileStorage.segment_counts={buttons:buttons.length,labels:labels.length};
         const segments=[];let valid=labels.length>0 && labels.length<=32 && labels.length===buttons.length
           && buttons.every(button => labels.filter(label => {charge();return button.contains(label);}).length===1);
         for (const label of labels.slice(0,32)) {

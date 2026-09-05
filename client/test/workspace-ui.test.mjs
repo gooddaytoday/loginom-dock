@@ -814,3 +814,15 @@ test('storage-name discovery uses escaped fixed lookup and no table traversal', 
   assert.equal(detail.status,'SUCCEEDED');assert.equal(walks,1);
   assert.equal(detail.output.ui.elements[0].label,name);
 });
+
+test('nested breadcrumb button parts are one segment and incomplete paths explain refusal', async () => {
+  const page=new Page();page.add('div','MF;TF-1;FileStorageForm;pnlFileStorage;tbl');
+  const bar=page.add('div','MF;TF-1;NavigationBar;NavigationPanel');
+  const outer=page.add('div','MF;TF-1;cnrNaviMode;b.s-1','',undefined,bar);
+  const inner=page.add('span','MF;TF-1;cnrNaviMode;b.s-1;inner','',undefined,outer);
+  const label=page.add('span',null,'user',undefined,inner);label.attrs.class='x-btn-inner-default-toolbar-small';
+  assert.equal((await page.observe()).file_storage.directory,'/user');
+  label.remove();const failed=(await page.observe()).file_storage;
+  assert.equal(failed.reason,'navigation_segments_incomplete');
+  assert.deepEqual(failed.segment_counts,{buttons:1,labels:0});
+});
