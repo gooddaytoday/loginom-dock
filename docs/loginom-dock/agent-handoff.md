@@ -1,5 +1,13 @@
 # Следующему агенту: с чего начать
 
+**Текущая точка:** rename run `20260905-152418-34f63a02` завершён, 35/39 FAIL.
+E2E/Help delivery и rename proof прошли; весь граф/порядок операций не принят
+(лишние входы, неправильная итоговая связь, mutations после save).
+Активных Hermes нет. Затем исправлены scope truncation flags, 156 client tests.
+**Продолжение:** bounded browser scan и прочие P2 UI-драйверы, далее P3–P9;
+полный regression ещё открыт. Не пересчитывать старый FAIL. Детали/SHA — сверху
+implementation-status. Нижние записи исторические.
+
 **Последний результат:** `20260905-151931-7698def0` palette inventory —
 24/24 frozen PASS, runtime `7eaebd2e…`, 45 inputs. 77 компонентов/12 групп
 в executor/inventory; 77 coverage rows presence-only, statuses planned.

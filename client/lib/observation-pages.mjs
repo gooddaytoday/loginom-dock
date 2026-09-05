@@ -62,6 +62,11 @@ export function createObservationPages({ maxBytes = 12000, maxRecords = 32, capa
     output.observation_revision = entry.revision;
     output.nodes = []; output.links = [];
     output.ui = { elements: [], dialogs: [], masks: [], messages: [], table_cells: [], truncated: { ...snapshot.ui.truncated } };
+    if (entry.scope !== 'all') {
+      // Scope omission is not evidence of absence in the workspace.
+      if (entry.rows.filter(([key]) => key === 'elements').length < (snapshot.ui.elements?.length ?? 0)) output.ui.truncated.elements = true;
+      if (entry.scope !== 'dialogs') for (const key of ['dialogs', 'masks', 'messages', 'table_cells']) output.ui.truncated[key] = true;
+    }
     output.page = { schema_version: 1, scope: entry.scope, offset, returned: 0, total_records: entry.rows.length,
       next_cursor: null, captured_snapshot_complete: false, full_dom_complete: false };
     if (bytes(output) > maxBytes - 700) throw new Error('Observation metadata exceeds the page budget; inspect a narrower context');

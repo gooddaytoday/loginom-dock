@@ -72,3 +72,17 @@ test('oversized records fail explicitly and graph port chunks never claim comple
   const huge = fixture(1); huge.output.ui.elements[0].label = 'x'.repeat(20000);
   assert.throws(() => createObservationPages().retain(huge), /record exceeds/);
 });
+
+test('scoped omissions cannot masquerade as empty dialogs, masks or controls', () => {
+  const source=fixture(2);
+  source.output.ui.dialogs=[{ref:'dialog'}]; source.output.ui.masks=[{ref:'busy-mask'}];
+  for (const scope of ['graph','palette']) {
+    const result=createObservationPages().retain(structuredClone(source),{scope});
+    for (const key of ['dialogs','masks','messages','table_cells']) assert.equal(result.output.ui.truncated[key],true);
+    if (scope==='graph') assert.equal(result.output.ui.truncated.elements,true);
+  }
+  const dialog=createObservationPages().retain(structuredClone(source),{scope:'dialogs'});
+  assert.equal(dialog.output.ui.truncated.elements,true);
+  assert.equal(dialog.output.ui.truncated.nodes,true);
+  assert.deepEqual(dialog.output.ui.masks,source.output.ui.masks);
+});
