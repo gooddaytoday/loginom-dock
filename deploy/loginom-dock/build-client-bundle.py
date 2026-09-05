@@ -3,6 +3,7 @@
 
 import argparse
 import hashlib
+import importlib.util
 import json
 import os
 import shutil
@@ -11,21 +12,8 @@ import zipfile
 from pathlib import Path
 
 
-def main():
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--source", type=Path, required=True)
-    parser.add_argument("--node", type=Path, required=True)
-    parser.add_argument("--node-license", type=Path, required=True)
-    parser.add_argument("--dependencies", type=Path, required=True)
-    parser.add_argument("--platform", choices=["darwin-arm64", "linux-x64", "win32-x64"], required=True)
-    parser.add_argument("--output", type=Path, required=True)
-    parser.add_argument("--source-commit", required=True)
-    parser.add_argument("--source-clean", action="store_true")
-    args = parser.parse_args()
-    source = args.source.resolve()
-    target = args.output.resolve()
-    windows = args.platform == "win32-x64"
-    target.mkdir(parents=True, exist_ok=False)
+def copy_client_sources(source, target, *, windows=False):
+    """Stage source inputs separately from producing a release artifact."""
     for relative in [
         "client/bin",
         "client/lib",
@@ -38,7 +26,9 @@ def main():
         shutil.copytree(
             source / relative,
             target / relative,
-            ignore=shutil.ignore_patterns("__pycache__", "*.pyc", ".DS_Store"),
+            ignore=shutil.ignore_patterns(
+                "__pycache__", "*.pyc", ".DS_Store", ".env*", ".git", "node_modules"
+            ),
             symlinks=not windows,
         )
     for relative in [
@@ -50,12 +40,57 @@ def main():
         ".agents/plugins/marketplace.json",
         "LICENSE",
         "README_UPSTREAM.md",
+        "deploy/loginom-dock/build-action-catalog.mjs",
+        "deploy/loginom-dock/publish-action-catalog.py",
+        "executor/capability-abi.json",
+        "executor/catalog/actions.json",
+        "executor/catalog/selectors.json",
+        "executor/catalog/source-index.json",
+        "executor/catalog/compatibility.json",
+        "executor/schemas/action-catalog.schema.json",
+        "executor/schemas/selector-catalog.schema.json",
+        "executor/schemas/catalog-manifest.schema.json",
+        "executor/schemas/session-manifest.schema.json",
+        "executor/schemas/replay-acceptance.schema.json",
         "landing/instructions.mjs",
         "landing/release.json",
     ]:
         destination = target / relative
         destination.parent.mkdir(parents=True, exist_ok=True)
-        shutil.copyfile(source / relative, destination)
+        shutil.copy2(source / relative, destination)
+
+
+def source_verifier():
+    spec = importlib.util.spec_from_file_location("dock_source_inventory", Path(__file__).with_name("client-source-inventory.py"))
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def main():
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--source", type=Path, required=True)
+    parser.add_argument("--node", type=Path, required=True)
+    parser.add_argument("--node-license", type=Path, required=True)
+    parser.add_argument("--dependencies", type=Path, required=True)
+    parser.add_argument("--platform", choices=["darwin-arm64", "linux-x64", "win32-x64"], required=True)
+    parser.add_argument("--output", type=Path, required=True)
+    parser.add_argument("--source-commit", required=True)
+    parser.add_argument("--source-clean", action="store_true")
+    parser.add_argument("--source-repository", type=Path,
+                        help="Trusted Git object database for --source-clean (defaults to --source)")
+    args = parser.parse_args()
+    source = args.source.resolve()
+    target = args.output.resolve()
+    windows = args.platform == "win32-x64"
+    proof = None
+    if args.source_clean:
+        verifier = source_verifier()
+        proof = verifier.verify_clean_source(source, args.source_repository or source, args.source_commit)
+    target.mkdir(parents=True, exist_ok=False)
+    copy_client_sources(source, target, windows=windows)
+    if proof:
+        verifier.verify_staged_source(target, proof)
     shutil.copytree(args.dependencies, target / "client/node_modules", symlinks=not windows)
     (target / "runtime").mkdir()
     node_name = "node.exe" if windows else "node"
@@ -89,6 +124,7 @@ def main():
         "platform": args.platform,
         "sourceCommit": args.source_commit,
         "sourceDirty": not args.source_clean,
+        "sourceInventorySha256": proof["inventory_sha256"] if proof else None,
         "agents": {"codex": {"minimum": "0.149.1"}, "hermes": {"minimum": "0.21.0"}},
         "files": [],
     }

@@ -65,16 +65,37 @@
 
 ```sh
 python3 deploy/loginom-dock/package-client-source.py \
-  --root "$PWD" --output .dock/client-source.tar.gz
+  --root "$PWD" --output .dock/client-source.tar.gz --require-clean
+python3 deploy/loginom-dock/client-source-inventory.py \
+  --archive .dock/client-source.tar.gz \
+  --manifest .dock/client-source.tar.gz.manifest.json
 ```
 
 Это небольшой клиентский архив, не полный серверный снимок. На VPS после распаковки
 использовать `build-client-bundle.py --source <каталог-исходников> --node <бинарник-Node>
 --node-license <LICENSE> --dependencies <node_modules> --platform darwin-arm64|linux-x64|win32-x64
---output <новый-каталог-комплекта> --source-commit <полный-SHA> --source-clean`.
+--output <новый-каталог-комплекта> --source-commit <полный-SHA> --source-clean
+--source-repository <доверенный-Git-репозиторий-на-VPS>`.
 Бинарник Node выбирается для целевой платформы, зависимости — из закреплённого lock.
 Каталог output должен отсутствовать; в tar.gz или Windows ZIP верхний каталог будет `loginom-dock`.
-`--source-clean` не проверяет Git автоматически: оператор обязан сверить снимок.
+Упаковщик создаёт рядом `<archive>.manifest.json`: точный commit, пофайловые
+SHA-256/size/mode, inventory digest, различия с commit и SHA самого архива.
+`--commit` выбирает ревизию (по умолчанию HEAD); `--require-clean` отклоняет
+расхождения до создания output. Архив и manifest должны иметь новые пути.
+Во время упаковки прочитанные байты повторно сверяются с исходным inventory.
+Команда проверки не распаковывает архив и не доверяет одной только его SHA:
+сверяются все entries, содержимое, режимы и отсутствие дубликатов/ссылок.
+
+`--source-clean` теперь требует побайтного равенства реальных распакованных
+build inputs дереву **точного полного commit SHA** в доверенном Git-репозитории.
+`--source-repository` указывает этот репозиторий отдельно от распакованных файлов;
+без него Git objects ищутся в `--source`. Недоступный commit, неполный/изменённый
+состав или symlink останавливают сборку до создания каталога output. После staging
+файлы сверяются ещё раз. В release manifest записывается `sourceInventorySha256`.
+Git-репозиторий на VPS должен уже содержать нужный commit; builder сам ничего
+не скачивает и не переключает. Sidecar из источников не служит доказательством
+чистоты сам по себе: его флаг можно подделать, поэтому builder сверяется с Git.
+Без `--source-clean` внутренние dirty-сборки по-прежнему явно имеют `sourceDirty=true`.
 Проверенные входные файлы прежнего выпуска находятся в серверном `client-build/`;
 их версии и суммы перепроверяются перед повторным использованием.
 
@@ -86,3 +107,9 @@ upstream Python-публикацию тегом `v...` для выпуска п�
 Изменения CI в этом выпуске не требуются. При будущих изменениях CI действуют
 правила синхронизации канонической документации и согласованных копий OpenViking
 из `AGENTS.md`.
+
+Допуск executor-каталога требует в acceptance.agent точные `name=hermes`,
+`provider=openai-codex`, `model=gpt-5.6-luna`, `reasoning_effort=medium`.
+Это конфигурация запуска по решению пользователя от 5 сентября; она не
+означает, что провайдер возвращает effort в usage. Старые MiMo evidence
+сохраняются исторически и не допускают новый runtime.

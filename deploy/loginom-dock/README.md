@@ -18,6 +18,13 @@
   с краткой остановкой сервисов. Файлы содержат credentials и доступны только root.
 - `catalog.yaml` — канонические GitLab locator, ветки и фиксированные URI ресурсов.
 - `sources.yaml` — выбор всех трёх источников через штатный OpenViking Assets.
+- `build-action-catalog.mjs` — детерминированная сборка action/selector catalog,
+  проверка dependency graph и формирование replay-кандидата по умолчанию;
+  при изменении E2E evidence затронутые действия получают статус `stale`.
+- `publish-action-catalog.py` — fail-closed размещение immutable candidate через
+  `--stage` без изменения `current.json` либо публикация production через
+  `--activate --attestation <файл>` с проверкой отчёта точного manifest/runtime/UI
+  build, readback неизменяемых файлов и отдельным переключением указателя.
 
 Канонический catalog фиксирует существующие HTTP-адреса GitLab. Он не является
 готовым сетевым маршрутом с VPS. До первого импорта:

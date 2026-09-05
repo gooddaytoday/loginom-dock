@@ -46,6 +46,13 @@
   (confirmed by the user on 2026-09-03). Use that existing Hermes connection;
   do not replace it with the Dock OpenRouter key or the server's model. This
   exception does not change the configured models for Dock server functions.
+- For Hermes debugging, replay and testing, including the active E2E-executor
+  acceptance iteration on this Mac, use the existing ChatGPT subscription:
+  provider `openai-codex`, model `gpt-5.6-luna`, reasoning `medium` (user instruction
+  of 2026-09-05). This supersedes the Xiaomi/MiMo rule of 2026-09-04.
+  Verify effective identifiers without printing credentials. Do not fall back to
+  another provider/model on failure, timeout or limits. Dock server models remain
+  unchanged; Hermes remains the executor.
 - Codex/Hermes run the task and local browser. The Dock server supplies knowledge;
   it does not become the Loginom task executor.
 - Activate archive capture only after successful `dock_prepare`, from its triggering
