@@ -1,5 +1,5 @@
 // Host-only admission. Never expose sourcePath or this API as a model tool.
-import {mkdir, open, lstat, realpath, unlink} from 'node:fs/promises';
+import {mkdir, open, lstat, realpath, unlink, chmod, rmdir} from 'node:fs/promises';
 import {constants} from 'node:fs';
 import {join, resolve, isAbsolute} from 'node:path';
 import {createHash, randomUUID} from 'node:crypto';
@@ -59,7 +59,47 @@ export async function createArtifactStore({directory,maxBytes=16*1024*1024}) {
   await mkdir(directory,{recursive:true,mode:0o700});
   const info=await lstat(directory);
   if (!info.isDirectory() || info.isSymbolicLink()) throw new Error('Artifact directory must be a real directory');
-  const root=await realpath(resolve(directory)),entries=new Map();
+  const root=await realpath(resolve(directory)),entries=new Map(),transfers=new Set();
+  const pendingStages=new Set();let closing=false;
+  const stageUpload=async artifactId => {
+      const descriptor=entries.get(artifactId);
+      if (!descriptor) throw new Error('Artifact was not admitted in this session');
+      const buffer=await readVerified(join(root,artifactId),descriptor,maxBytes);
+      const directory=join(root,'transfer-'+randomUUID()),path=join(directory,descriptor.name);
+      await mkdir(directory,{mode:0o700});
+      const owner=await lstat(directory);
+      let file;
+      try {
+        file=await open(path,'wx',0o600);
+        await file.writeFile(buffer);await file.sync();await file.close();file=null;
+        await chmod(path,0o400);await chmod(directory,0o500);
+      } catch(error) {
+        await file?.close();await chmod(directory,0o700);
+        await unlink(path).catch(()=>{});await rmdir(directory);throw error;
+      }
+      let released=false,releasing;
+      const assertOwner=async()=>{
+        if (released) throw new Error('Upload transfer was released');
+        const current=await lstat(directory);
+        if (!current.isDirectory() || current.isSymbolicLink() || current.dev!==owner.dev || current.ino!==owner.ino)
+          throw new Error('Upload transfer directory was replaced');
+      };
+      const lease=Object.freeze({
+        path,descriptor:Object.freeze(structuredClone(descriptor)),
+        async verify() {await assertOwner();await readVerified(path,descriptor,maxBytes);return structuredClone(descriptor);},
+        async release() {
+          if (released) return;
+          releasing ??= (async()=>{
+            await assertOwner();await chmod(directory,0o700);
+            await chmod(path,0o600);await unlink(path);await rmdir(directory);
+            released=true;transfers.delete(lease);
+          })();
+          return releasing;
+        },
+      });
+      transfers.add(lease);
+      return lease;
+  };
   return {
     async admit({sourcePath,name,bytes,sha256}) {
       if (!validName(name)) throw new Error('Invalid artifact display name');
@@ -80,6 +120,23 @@ export async function createArtifactStore({directory,maxBytes=16*1024*1024}) {
       const buffer=await readVerified(join(root,artifactId),descriptor,maxBytes);
       // Private upload adapter gets the verified bytes, never a mutable source path.
       return {descriptor:structuredClone(descriptor),buffer};
+    },
+    // Private browser adapter only. Native setInputFiles accepts a path and
+    // preserves its basename; no payload needs to be embedded in browser code.
+    // A transport timeout does NOT release this lease. The adapter must confirm
+    // completion (or close the browser) before releasing it.
+    async stageUpload(artifactId) {
+      if (closing) throw new Error('Upload staging is closed');
+      if (transfers.size+pendingStages.size>=8) throw new Error('Too many unresolved upload transfers');
+      const pending=stageUpload(artifactId);pendingStages.add(pending);
+      pending.then(()=>pendingStages.delete(pending),()=>pendingStages.delete(pending));
+      return pending;
+    },
+    // Call only after the browser transport has confirmed shutdown.
+    async releaseUploads() {
+      closing=true;
+      await Promise.allSettled([...pendingStages]);
+      return Promise.allSettled([...transfers].map(lease=>lease.release()));
     },
   };
 }

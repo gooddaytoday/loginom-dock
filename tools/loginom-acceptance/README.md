@@ -1,3 +1,13 @@
+## Локальная проверка file-input транспорта
+
+`artifact-transport-check.mjs BROWSER_RUNTIME_DIR NEW_REPORT_PATH` запускается
+закреплённым Node и проверяет private staging через настоящий MCP/Chromium на
+синтетическом HTML input[type=file]. Не использует Loginom, модель или исходные
+файлы пользователя и не является Loginom upload acceptance. Успех подтверждает
+только basename/size/bytes SHA и передачу path вместо встроенного payload.
+Нужен новый report path; повторное использование отвергается до browser connect.
+Закреплённые зависимости проверяются runtime-check.mjs перед браузером.
+
 ## Имена Loginom и destination (schema 2, 2026-09-05)
 
 Каждый новый `--run` требует `--loginom-user ACCOUNT --storage-directory /PATH`.

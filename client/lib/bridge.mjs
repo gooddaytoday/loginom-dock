@@ -218,7 +218,8 @@ export async function createBridge(config, session) {
     let closing;
     return { server, catalog, close() {
       closing ??= (async () => {
-        await server.close(); await closeClients();
+        await server.close(); const closed=await closeClients();
+        if (closed[1].status==='fulfilled') await session.artifactStore.releaseUploads();
         await Promise.allSettled([...heldLeases].map(lease => lease.release()));
       })();
       return closing;

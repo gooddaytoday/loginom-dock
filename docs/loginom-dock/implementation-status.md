@@ -1,3 +1,40 @@
+## 2026-09-05 — P3: передача admitted bytes через локальный browser input
+
+artifactStore.stageUpload(artifact_id) создаёт private transfer-UUID/<name> из
+повторно проверенной admitted копии. Имя сохраняется для native setInputFiles;
+содержимое не встраивается в browser code. Path/descriptor lease immutable,
+файл read-only, каталог закрыт для записи до cleanup. verify повторяет SHA/size
+и проверяет directory identity. Timeout сам по себе не освобождает lease.
+До 8 concurrent/pending transfers; releaseUploads закрывает admission новых
+transfers, дожидается staging и возвращает результаты cleanup. Bridge вызывает
+его после fulfilled browser close, не при неизвестном результате транспорта.
+Original admitted snapshot сохраняется для дальнейшего чтения/доказательств.
+
+Operator check tools/loginom-acceptance/artifact-transport-check.mjs запускает
+закреплённый MCP/Chromium только на локальном синтетическом input[type=file].
+Loginom, Dock server, модель и пользовательские файлы не используются. Проверяет
+selected file name/size/bytes SHA и отсутствие payload в code, затем закрывает
+browser и удаляет private scratch. Output резервируется wx до browser connect;
+повторный запуск с прежним output отвергнут до браузера, report bytes сохранены.
+
+Последний native-local report .dock/post-mvp-p0/artifact-transport-20260905-3.json:
+PASS, report SHA 893556daa6dd3b934fb76071b316ffb106d2eaf46b9b751fdfc2c9141a4d2d2c;
+artifacts.mjs SHA 7d5ea15e288a0030e65f92b4836221e8b3c03f86cdb74d7380210ed70235aed0;
+check SHA 88502b713fe5d8995289067f55744394006a69104efd6ec4ce0e4dfddc1c3004.
+Синтетический Продажи.csv, 14 bytes, SHA
+a752aa59079d524457104bfde6ab4abbfd77542ccf9cc84009df1ac8356ef3d2.
+Node 24.19.0 / MCP 0.0.80 / Chromium 1243 (153.0.8010.12).
+Предшествующие local reports -1/-2 сохранены, source changes не переоценены.
+
+196 client / 86 Python / 10 packaging PASS; после заморозки lease дополнительно
+5 artifact tests PASS и native-local -3 PASS. Active browser/Hermes нет.
+Нет model upload tool, Loginom upload, no-overwrite/conflict/reconciliation или
+server byte proof. Следующее: связать stage lease с typed upload dispatcher,
+наблюдаемым destination /test и ownership/conflict policy; перед отправкой
+проверить lease, после — server bytes, неопределённость не повторять вслепую.
+Затем полный data-pipeline/P3 и P4–P9. Последний Loginom live PASS остаётся
+20260905-211038-3cd006d8 (navigation only), production/public rc2 не изменены.
+
 ## 2026-09-05 — P3: storage navigation принята на отдельном аккаунте
 
 **20260905-211038-3cd006d8: 24/24 frozen PASS.** Audit SHA

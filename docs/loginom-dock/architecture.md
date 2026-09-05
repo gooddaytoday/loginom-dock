@@ -1,3 +1,20 @@
+### Private file-transfer leases (2026-09-05)
+
+stageUpload validates an admitted artifact again and creates a private named copy
+for native browser setInputFiles. The immutable lease exposes path only to trusted
+host code, not the model. File/directory permissions prevent routine accidental
+writes; verify still checks bytes/SHA and directory identity. This is not protection
+against a hostile same-user process with permission to change those modes.
+A timeout retains the source; release is explicit after confirmed completion.
+Shutdown drains pending staging and attempts cleanup only after browser closure.
+The original admitted snapshot is retained. Concurrent/pending transfer count is
+bounded to eight; model callers have no file path or staging API.
+
+The pinned MCP/Chromium transport was tested on a synthetic local file input,
+including filename/size/SHA. No payload is embedded in browser code. No Loginom
+upload dispatcher, no-overwrite contract or server postcondition is established
+by this local transport test. These remain the next P3 integration requirements.
+
 ### Explicit accounts and bounded storage reads (2026-09-05)
 
 Replay bootstrap requires an explicit replayLoginUser; no Loginom/OS/SSH

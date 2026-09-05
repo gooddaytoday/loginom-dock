@@ -1,8 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {mkdtemp,writeFile,readFile,symlink,rm} from 'node:fs/promises';
+import {mkdtemp,writeFile,readFile,symlink,rm,chmod,stat} from 'node:fs/promises';
 import {tmpdir} from 'node:os';
-import {join} from 'node:path';
+import {join,basename} from 'node:path';
 import {createHash} from 'node:crypto';
 import {createArtifactStore,admitStartupArtifacts} from '../lib/artifacts.mjs';
 
@@ -56,5 +56,46 @@ test('startup admission validates the whole batch before file access and exposes
     assert.deepEqual(Object.keys(admitted[0]).sort(),['artifact_id','bytes','name','sha256']);
     assert.equal((await store.resolve(admitted[0].artifact_id)).buffer.toString(),'abc');
     admitted[0].name='mutated';assert.equal(store.list()[0].name,'Sales.csv');
+  } finally {await rm(directory,{recursive:true,force:true});}
+});
+
+test('browser upload staging preserves basename and verified bytes until explicit release',async()=>{
+  const directory=await mkdtemp(join(tmpdir(),'dock-upload-stage-'));
+  try {
+    const sourcePath=join(directory,'source');await writeFile(sourcePath,'abc');
+    const store=await createArtifactStore({directory:join(directory,'store')});
+    const descriptor=await store.admit({sourcePath,name:'Продажи.csv',bytes:3,sha256:createHash('sha256').update('abc').digest('hex')});
+    const lease=await store.stageUpload(descriptor.artifact_id);
+    assert.throws(()=>{lease.path=sourcePath;},TypeError);
+    assert.throws(()=>{lease.descriptor.name='other.csv';},TypeError);
+    assert.equal(basename(lease.path),'Продажи.csv');assert.deepEqual(await lease.verify(),descriptor);
+    await writeFile(sourcePath,'new input');assert.equal((await readFile(lease.path)).toString(),'abc');
+    if(process.platform!=='win32')assert.equal((await stat(lease.path)).mode&0o777,0o400);
+    assert.equal(JSON.stringify(store.list()).includes(lease.path),false);
+    // An unconfirmed browser call must leave its source available for recovery.
+    await Promise.reject(new Error('transport timeout')).catch(()=>{});
+    assert.equal((await readFile(lease.path)).toString(),'abc');
+    await Promise.all([lease.release(),lease.release()]);
+    await assert.rejects(()=>readFile(lease.path),/ENOENT/);
+    await assert.rejects(()=>lease.verify(),/released/);
+    assert.equal((await store.resolve(descriptor.artifact_id)).buffer.toString(),'abc');
+  } finally {await rm(directory,{recursive:true,force:true});}
+});
+
+test('upload staging detects tampering and shutdown drains in-progress staging',async()=>{
+  const directory=await mkdtemp(join(tmpdir(),'dock-upload-close-'));
+  try {
+    const sourcePath=join(directory,'source');await writeFile(sourcePath,'abc');
+    const store=await createArtifactStore({directory:join(directory,'store')});
+    const descriptor=await store.admit({sourcePath,name:'data.csv',bytes:3,sha256:createHash('sha256').update('abc').digest('hex')});
+    const lease=await store.stageUpload(descriptor.artifact_id);
+    await chmod(lease.path,0o600);await writeFile(lease.path,'bad');
+    await assert.rejects(()=>lease.verify(),/match/);await lease.release();
+    const pending=Array.from({length:8},()=>store.stageUpload(descriptor.artifact_id));
+    await assert.rejects(()=>store.stageUpload(descriptor.artifact_id),/Too many/);
+    const shutdown=store.releaseUploads();
+    const leases=await Promise.all(pending);assert.ok((await shutdown).every(r=>r.status==='fulfilled'));
+    for(const item of leases)await assert.rejects(()=>readFile(item.path),/ENOENT/);
+    await assert.rejects(()=>store.stageUpload(descriptor.artifact_id),/closed/);
   } finally {await rm(directory,{recursive:true,force:true});}
 });

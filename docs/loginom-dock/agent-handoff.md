@@ -1,3 +1,13 @@
+**Последняя P3 работа:** artifactStore.stageUpload → private named readonly
+copy/immutable lease/verify/release; bridge cleanup только после browser close.
+Проверен native MCP/Chromium local synthetic file input без Loginom/model: report
+artifact-transport-20260905-3.json PASS, SHA 893556da…; 196/86/10 +5 targeted PASS.
+Это механизм доставки локальному input, НЕ Loginom upload acceptance. Active
+browser/Hermes нет. Далее typed upload dispatcher, destination/ownership/conflict,
+no-overwrite/reconciliation/server bytes, затем весь P3–P9. Для live использовать
+явные --loginom-user test --storage-directory /test; имя user не предполагать.
+Точные ограничения и SHA сверху implementation-status.
+
 **Последняя приёмка P3:** 20260905-211038-3cd006d8 file-storage-inspect,
 24/24 frozen PASS на Loginom test и destination /test. Runtime f6146b47…,
 harness 901aa23f. ChatGPT/Luna/medium. Directory /test отделён от display_path
