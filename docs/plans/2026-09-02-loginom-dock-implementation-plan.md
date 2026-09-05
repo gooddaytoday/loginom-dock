@@ -1286,6 +1286,12 @@ Effect contracts реализованы в `4743d427` (семь kinds и binding
 
 ### P2. Общие UI-драйверы и доступное наблюдение
 
+5 сентября добавлена первая host-часть observation paging: компактные ответы,
+scopes, cursors с проверкой свежего snapshot digest и admission только выданных
+refs. Это не закрывает пункт ниже: browser scan/root filters/virtualization и
+epoch ещё предстоят. Live acceptance нового формата пока не проводилась;
+сначала требуется строгая адаптация независимого аудитора receipt projection.
+
 **Менять:** `workspace-ui.mjs`, `workspace.mjs`, browser/host части `executor.mjs`,
 bridge и session/build input lists. Новые driver modules сначала проектируются,
 их имена не означают уже существующую инфраструктуру.

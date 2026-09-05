@@ -161,7 +161,7 @@ export async function createBridge(config, session) {
             extra.signal.throwIfAborted();
             requirePreparedWorkspace(session.metadata);
             const args = request.params.arguments ?? {};
-            const outcome = request.params.name === 'dock_workspace_observe' ? await actionRuntime.observe({ signal: extra.signal })
+            const outcome = request.params.name === 'dock_workspace_observe' ? await actionRuntime.observe({ signal: extra.signal, scope: args.scope, cursor: args.cursor })
               : request.params.name === 'dock_operation_inspect' ? await actionRuntime.inspect({ operationId: args.operation_id, signal: extra.signal })
                 : request.params.name === 'dock_operation_recover' ? await actionRuntime.recover(args.operation_id,
                   { strategy: args.strategy, recoveryOperationId: args.recovery_operation_id, observationId: args.observation_id, signal: extra.signal })

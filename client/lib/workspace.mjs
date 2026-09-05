@@ -132,7 +132,10 @@ export async function prepareWorkspaceSession({ metadata, assertAllowed, prepare
 
 export const workspaceObserveTool = {
   name: 'dock_workspace_observe',
-  description: 'Read the prepared Loginom workspace: logical workflow/node refs, ports, links and geometry. Does not change the UI or expose raw browser access.',
-  inputSchema: { type: 'object', properties: {}, additionalProperties: false },
+  description: 'Read a compact page of the prepared Loginom workspace. Choose scope all (default), palette, graph or dialogs. Continue with cursor=page.next_cursor alone; pages share observation_id and revision. If the workspace changes, start a new observation. Only delivered UI refs can be used. Truncation and full_dom_complete=false mean this is not proof of the whole workspace. Read-only.',
+  inputSchema: { type: 'object', properties: {
+    scope: { type: 'string', enum: ['all', 'palette', 'graph', 'dialogs'] },
+    cursor: { type: 'string', minLength: 1, maxLength: 128 },
+  }, additionalProperties: false },
   annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: false },
 };

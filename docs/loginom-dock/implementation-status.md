@@ -1,5 +1,29 @@
 # Выполнение плана Loginom Dock
 
+## P2: компактные страницы наблюдения — 5 сентября 2026
+
+Добавлен `client/lib/observation-pages.mjs`: public output до 12000 байт,
+до 32 записей на страницу; scopes all/palette/graph/dialogs, opaque cursors,
+проверка digest свежего снимка перед продолжением. Полные guard snapshots
+остаются внутри runtime; uiAct принимает только refs, выданные на прочитанных
+страницах. Изменение снимка, eviction и clear делают cursor недействительным.
+UI signature/geometry сокращены только в ответе, внутренние проверки сохранены.
+Recovery содержит outcome_summary с указанием dock_operation_inspect;
+gesture_applied/verification_required сохранены. Ошибка упаковки после жеста
+не превращается в ложный pre-action rejection. Runtime inputs: 45.
+Локально прошли 155 client tests, 68 Python acceptance tests и 10 packaging
+checks, включая полный клиентский suite из изолированного staged source.
+
+Это **часть P2**, без live acceptance: существующий browser scan пока не
+ограничен по работе, root/type filters, virtualization/scroll и epoch для ABA
+ещё не реализованы. Hash проверяет совпадение захваченного состояния, а не
+отсутствие любых промежуточных изменений. full_dom_complete всегда false.
+Перед следующим Hermes запуском необходимо адаптировать независимый аудитор:
+строго связать compact projection с неизменённой исходной UI-квитанцией,
+учесть несколько страниц одного observation_id и требовать отдельное полное
+наблюдение пустого графа для palette goal. Не менять старые отчёты FAIL.
+Hermes не запускался; публичный клиент и серверная сборка не менялись.
+
 ## P1 effects и реальная палитра — 5 сентября 2026
 
 `4743d427`: семь effect contracts (create/save/configure/delete/execute/inspect/

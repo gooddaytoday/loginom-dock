@@ -1,5 +1,13 @@
 # Следующему агенту: с чего начать
 
+**Актуальная очередь после добавления страниц:** observation-pages.mjs подключён
+к runtime/bridge: 12000 bytes/32 records, scopes, cursors, fresh snapshot digest,
+private full guards и issued-ref admission. 45 runtime inputs. Live ещё не было.
+Далее: строгий independent audit compact projection исходной квитанции,
+multi-page observation_id и empty graph proof для palette inventory; затем
+реальный Hermes повтор на Luna/medium/ChatGPT. Browser scan пока не ограничен,
+остальные пункты P2 остаются открыты. Подробности — верх implementation-status.
+
 **Актуальная очередь:** P1 effects готовы (`4743d427`), palette observer/goal
 добавлены (`3c735d01`); 151 client / 68 Python. Palette run
 `20260905-145533-e12491a5` — 18/23 FAIL: 102492-character observe ушёл в

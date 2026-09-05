@@ -2,6 +2,7 @@ import { randomUUID, createHash } from 'node:crypto';
 import { requireCapability } from './capability-registry.mjs';
 import { actionDescribeTool, actionRunTool, assertActionOutcome, validateActionParameters } from './action-catalog.mjs';
 import { makeWorkspaceUiCode, validateUiAction, uiActionSchema } from './workspace-ui.mjs';
+import { createObservationPages } from './observation-pages.mjs';
 
 const identifier = { type: 'string', minLength: 1, maxLength: 128, pattern: '^[A-Za-z0-9._:-]+$' };
 const operationInspectTool = { name: 'dock_operation_inspect',
@@ -748,7 +749,7 @@ export function createActionRuntime({ pinned, execute, allowCandidate = false, o
   let running = false;
   const operations = new Map();
   const auxiliary = new Map();
-  const observations = new Map();
+  const observations = createObservationPages();
   const receiptNamespace = randomUUID();
   const checkId = id => { if (typeof id !== 'string' || !/^[A-Za-z0-9_.:-]{1,128}$/.test(id)) throw new Error('A stable operation identifier is required'); };
   const fingerprint = (actionKey, parameters) => {
@@ -888,12 +889,14 @@ export function createActionRuntime({ pinned, execute, allowCandidate = false, o
       ...recoveryAdvice(operation),
     } });
   const retainObservation = outcome => {
-    if (outcome?.output?.ui) {
-      const id = randomUUID(); outcome.output.observation_id = id;
-      observations.set(id, structuredClone(outcome.output));
-      while (observations.size > 8) observations.delete(observations.keys().next().value);
+    try { return observations.retain(outcome); }
+    catch {
+      // Delivery failure after a gesture must not become a pre-action rejection.
+      // The immutable browser receipt remains in the journal/operation record.
+      return { ...outcome, output: { observation_required: true, verification_required: true,
+        ...(outcome.output?.gesture_applied === undefined ? {} : { gesture_applied: outcome.output.gesture_applied }),
+        observation_error: 'Observation could not fit a page; request a narrower workspace scope and inspect the operation.' } };
     }
-    return outcome;
   };
   const inspect = async ({ operationId, signal } = {}) => {
     signal?.throwIfAborted();
@@ -995,11 +998,13 @@ export function createActionRuntime({ pinned, execute, allowCandidate = false, o
         return returned;
       } finally { running = false; }
     },
-    async observe({ signal } = {}) {
+    async observe({ signal, scope, cursor } = {}) {
       signal?.throwIfAborted();
+      if (scope !== undefined && !['all', 'palette', 'graph', 'dialogs'].includes(scope)) throw new Error('Unknown observation scope');
+      if (cursor !== undefined && (typeof cursor !== 'string' || !cursor || scope !== undefined)) throw new Error('Use cursor alone to continue the original observation scope');
       const outcome = await execute(makeWorkspaceUiCode({ mode: 'observe', expected_build: targetBuild, expected_origin: targetOrigin }), { signal, timeout: 35000 });
       outcome.output.operation = view(pending).output;
-      return retainObservation(outcome);
+      return cursor === undefined ? observations.retain(outcome, { scope }) : observations.next(cursor, outcome);
     },
     async uiAct(action, { observationId, operationId, recoveryOperationId, signal } = {}) {
       signal?.throwIfAborted(); checkId(operationId);
@@ -1013,6 +1018,7 @@ export function createActionRuntime({ pinned, execute, allowCandidate = false, o
       const snapshot = observations.get(observationId);
       if (!snapshot) throw new Error('Observation is stale or belongs to another session; observe again');
       validateUiAction(action, snapshot);
+      observations.assertIssued(observationId, action);
       if (running) throw new Error('Another Dock action is still running');
       if (recoveryOperationId && pending?.id !== recoveryOperationId) throw new Error('Recovery binding does not match the pending operation');
       if (pending && (!recoveryOperationId || pending.transportUncertain || !pending.cleanupConfirmed)) {
@@ -1073,7 +1079,7 @@ export function createActionRuntime({ pinned, execute, allowCandidate = false, o
           const resolved = await reconcilePending();
           outcome.output.recovery = view(original, resolved).output;
         } else if (!original && !owner.transportUncertain && owner.cleanupConfirmed && outcome.status !== 'AMBIGUOUS') pending = null;
-        retainObservation(outcome);
+        outcome = retainObservation(outcome);
         auxiliary.set(operationId, { signature, outcome: structuredClone(outcome) });
         return outcome;
       } finally { running = false; }

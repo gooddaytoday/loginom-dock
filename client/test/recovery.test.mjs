@@ -181,7 +181,8 @@ test('a completed node with an unfinished rename is repaired through observed UI
   });
   assert.equal(opened.status, 'SUCCEEDED');
   assert.equal(opened.output.recovery.state, 'pending');
-  assert.match(opened.output.recovery.outcome.output.reason, /editor is still open/);
+  assert.equal(opened.output.recovery.outcome_summary.detail_tool, 'dock_operation_inspect');
+  assert.match((await engine.inspect({ operationId: 'rename-pending' })).output.outcome.output.reason, /editor is still open/);
   const blocked = await engine.run('node.add', nodeParameters, { operationId: 'cannot-create-during-edit' });
   assert.equal(blocked.status, 'AMBIGUOUS');
   assert.equal(page.drops, 1);
@@ -200,7 +201,7 @@ test('a completed node with an unfinished rename is repaired through observed UI
   });
   assert.equal(committed.status, 'SUCCEEDED');
   assert.equal(committed.output.recovery.state, 'resolved');
-  assert.equal(committed.output.recovery.outcome.status, 'SUCCEEDED');
+  assert.equal(committed.output.recovery.outcome_summary.status, 'SUCCEEDED');
   assert.deepEqual(page.nodes.map(node => node.label), ['Источник']);
   assert.equal(page.drops, 1);
   assert.doesNotThrow(() => engine.assertPreparationAllowed());
@@ -654,7 +655,7 @@ test('a pending link that landed on the wrong existing input can remove only tha
   });
   assert.equal(removed.status, 'SUCCEEDED');
   assert.equal(removed.output.recovery.state, 'resolved');
-  assert.equal(removed.output.recovery.outcome.status, 'NOT_APPLIED');
+  assert.equal(removed.output.recovery.outcome_summary.status, 'NOT_APPLIED');
   assert.deepEqual(page.edges, ['Другой_источник|Output_Data-0|Другой_приёмник|Input_Data-0']);
   assert.equal(page.drops, 1);
   const corrected = await engine.run('link.create', parameters, { operationId: 'correct-second-input' });
@@ -703,8 +704,8 @@ test('removing a newly added node does not hide an auto-added port left on a pre
   assert.deepEqual(page.edges, []);
   assert.deepEqual(page.nodes[0].ports, ['Input_Add', 'Input_Data-0', 'Input_Data-1']);
   assert.equal(removed.output.recovery.state, 'pending');
-  assert.equal(removed.output.recovery.outcome.status, 'AMBIGUOUS');
-  assert.equal(removed.output.recovery.outcome.output.reason, 'unrelated graph changed');
+  assert.equal(removed.output.recovery.outcome_summary.status, 'AMBIGUOUS');
+  assert.equal((await engine.inspect({ operationId: 'node-with-extra-target-port' })).output.outcome.output.reason, 'unrelated graph changed');
   assert.throws(() => engine.assertPreparationAllowed(), /preparation cannot run/);
   // An independently observed restoration of the remaining port is necessary
   // before node.add can truthfully report that its effect was not applied.
