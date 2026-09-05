@@ -1,5 +1,12 @@
 # Следующему агенту: с чего начать
 
+**Последняя реализация:** scope=roots для первичного discovery на большом DOM,
+region refs без gestures → detailed root_ref read, cursor сохраняет read mode.
+179 client / 80 Python. Тест с 6500 background elements: 0 TreeWalker calls на
+discovery, затем успешное чтение поля формы. Active Hermes нет, live root пока
+нет. Далее live goal/auditor roots → root details → действие; затем весь
+оставшийся P2/P3–P9. Граница native query budget — сверху architecture/status.
+
 **Последняя реализация:** scoped TreeWalker для root + fixed native global
 guard queries, bounded WeakRef root registry. 177 client / 80 Python /
 10 packaging PASS. Тест с 6500 background elements доказывает узкий обход,

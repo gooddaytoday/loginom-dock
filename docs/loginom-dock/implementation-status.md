@@ -1,5 +1,23 @@
 # Выполнение плана Loginom Dock
 
+## P2: первоначальный поиск областей — 5 сентября 2026
+
+workspace.observe scope=roots обнаруживает region refs на уже большом DOM через
+fixed native selectors окон/форм/tables/grids/WizrdMCF/graph containers.
+Потомки и содержимое не читаются; roots имеют allowed_actions=[] и служат
+только входом root_ref + observation_id для последующего detailed read.
+Метаданные observation_kind=roots сохраняются в страницах и cursor resume;
+bootstrap и root selection одновременно с roots не допускаются. Discovery
+не доказывает отсутствие masks/dialogs/graph: соответствующие truncated=true.
+
+179 client / 80 Python tests. Serialized test начинает с 6500 фоновых элементов
+без предварительного полного observe: roots read делает 0 TreeWalker calls,
+возвращает форму; detailed root read получает поле. Root gesture отклоняется.
+Сохраняется ограничение непрерываемой стоимости native querySelectorAll.
+Live discovery/root ещё не принято, active Hermes нет. Далее отдельный live goal
+roots → root details → штатная операция с независимой проверкой evidence,
+затем остальные P2/P3–P9. Не объявлять всё P2 завершённым по этим unit tests.
+
 ## P2: ограничен обход выбранного subtree — 5 сентября 2026
 
 Root read теперь обходит TreeWalker только внутри ранее наблюдённого элемента.

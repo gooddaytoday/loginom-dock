@@ -494,6 +494,25 @@ test('right click uses the checked ref and releases the right button after a los
   assert.throws(()=>validateUiAction({verb:'right_click',ref:'ui-one',x:100}), /fields/);
 });
 
+test('initial region discovery avoids a large document and only admits later detailed reads', async () => {
+  const page=new Page();
+  const form=page.add('div','Form;Main','',{x:30,y:100,width:300,height:100});form.attrs.role='form';form.attrs['aria-label']='Import settings';
+  page.add('input','Form;edtInside','',{x:35,y:110,width:100,height:25},form);
+  const background=page.add('div','Background');
+  for(let i=0;i<6500;i++) page.add('div',null,'',{x:600,y:500,width:1,height:1},background);
+  let visits=0;const original=page.document.createTreeWalker.bind(page.document);
+  page.document.createTreeWalker=(node,kind)=>{visits++;return original(node,kind);};
+  const discovered=await page.execute({mode:'observe',discover_roots:true});
+  assert.equal(discovered.status,'SUCCEEDED');assert.equal(visits,0);
+  assert.equal(discovered.output.observation_kind,'roots');
+  const root=discovered.output.ui.elements.find(e=>e.tid==='Form;Main');
+  assert.ok(root);assert.deepEqual(root.allowed_actions,[]);
+  assert.equal(discovered.output.ui.truncated.masks,true);
+  assert.throws(()=>validateUiAction({verb:'click',ref:root.ref},discovered.output),/does not support/);
+  const detail=await page.execute({mode:'observe',root_ref:root.ref});
+  assert.equal(detail.status,'SUCCEEDED');assert.ok(detail.output.ui.elements.some(e=>e.tid==='Form;edtInside'));
+});
+
 test('selected root traverses only its small subtree while a large background and global blocker remain outside', async () => {
   const page=new Page(),root=page.add('div','Form;btnSection','Section',{x:30,y:100,width:300,height:100});
   page.add('input','Form;edtInside','',{x:35,y:110,width:100,height:25},root);

@@ -1,6 +1,6 @@
 import { randomUUID, createHash } from 'node:crypto';
 
-const scopes = new Set(['all', 'palette', 'graph', 'dialogs']);
+const scopes = new Set(['all', 'palette', 'graph', 'dialogs', 'roots']);
 const bytes = value => Buffer.byteLength(JSON.stringify(value));
 const canonical = value => value && typeof value === 'object'
   ? Array.isArray(value) ? value.map(canonical) : Object.fromEntries(Object.keys(value).sort().map(key => [key, canonical(value[key])])) : value;
@@ -58,7 +58,7 @@ export function createObservationPages({ maxBytes = 12000, maxRecords = 32, capa
   };
   const render = (entry, offset) => {
     const snapshot = entry.snapshot;
-    const output = Object.fromEntries(['origin', 'authenticated', 'loginom_build', 'workflow_ref', 'active_identity', 'package_identity', 'workarea', 'verification_required', 'gesture_applied', 'scan', 'dom_epoch', 'observation_root']
+    const output = Object.fromEntries(['origin', 'authenticated', 'loginom_build', 'workflow_ref', 'active_identity', 'package_identity', 'workarea', 'verification_required', 'gesture_applied', 'scan', 'dom_epoch', 'observation_root', 'observation_kind']
       .filter(key => key in snapshot).map(key => [key, structuredClone(snapshot[key])]));
     output.operation = compactOperation(snapshot.operation);
     if (snapshot.recovery) output.recovery = compactOperation(snapshot.recovery);
@@ -101,6 +101,11 @@ export function createObservationPages({ maxBytes = 12000, maxRecords = 32, capa
   };
   return {
     clear,
+    kindForCursor(cursor) {
+      const page=cursors.get(cursor),entry=page && entries.get(page.id);
+      if (!entry) throw new Error('Observation cursor is stale or belongs to another session');
+      return entry.snapshot.observation_kind;
+    },
     rootForCursor(cursor) {
       const page=cursors.get(cursor),entry=page && entries.get(page.id);
       if (!entry) throw new Error('Observation cursor is stale or belongs to another session');

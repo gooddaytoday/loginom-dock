@@ -44,6 +44,16 @@ test('unchanged visible values cannot revive a cursor after a DOM mutation round
   assert.throws(()=>pages.next(first.output.page.next_cursor,fresh),/Workspace changed/);
 });
 
+test('region discovery cursors preserve their read mode and region refs remain non-actionable', () => {
+  const pages=createObservationPages(),source=fixture();source.output.observation_kind='roots';
+  for(const e of source.output.ui.elements){e.kind='region';e.allowed_actions=[];}
+  const first=pages.retain(structuredClone(source),{scope:'roots'});
+  assert.equal(first.output.observation_kind,'roots');
+  assert.equal(pages.kindForCursor(first.output.page.next_cursor),'roots');
+  assert.deepEqual(first.output.ui.elements[0].allowed_actions,[]);
+  assert.doesNotThrow(()=>pages.assertIssued(first.output.observation_id,{ref:first.output.ui.elements[0].ref}));
+});
+
 test('cursor retains the selected root and cannot switch to an unscoped snapshot', () => {
   const pages=createObservationPages(),source=fixture();
   source.output.observation_root={ref:'ui-root',identity:{anchor_tid:'root',path:[]},global_scan:true,detail_scope:'elements_and_cells'};

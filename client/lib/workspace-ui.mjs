@@ -49,7 +49,7 @@ function workspaceUiCapability(page, task) {
   // A WeakMap records DOM incarnations, without adding attributes or mutating
   // Loginom. Re-rendering an identical-looking control invalidates its old ref.
   // The state is document-bound; navigation invalidates every previous reference.
-  const readUi = () => page.evaluate(({rootRef}) => {
+  const readUi = () => page.evaluate(({rootRef,discoverRoots}) => {
     const scanStarted = Date.now(), maxElements = 6000, maxWork = 250000, maxMs = 500;
     let work = 0;
     const charge = () => {
@@ -96,14 +96,18 @@ function workspaceUiCapability(page, task) {
       if (dom.length >= maxElements) { const error=new Error('Selected region or global guards exceed the scan budget');error.code='UI_SCAN_LIMIT';throw error; }
       seenElements.add(element);dom.push(element);
     };
-    const walker=document.createTreeWalker(requestedRoot ?? document.documentElement,1);
+    const regionSelector='[role="dialog"],.x-window,.bg-dialog,[role="grid"],table,[role="form"],[data-tid$=";WizrdMCF"],[data-tid$=";cmpDiagram"],[data-tid$=";pnlWorkarea"]';
+    const regionElements=discoverRoots ? [...document.querySelectorAll(regionSelector)] : [];
+    charge();
+    if (discoverRoots) for (const element of regionElements) include(element);
+    const walker=discoverRoots ? null : document.createTreeWalker(requestedRoot ?? document.documentElement,1);
     if (requestedRoot) include(requestedRoot);
-    let next, traversed=0;while ((next=walker.nextNode())) {
+    let next, traversed=0;while (walker && (next=walker.nextNode())) {
       if (++traversed>maxElements) { const error=new Error('DOM traversal exceeds the scan budget');error.code='UI_SCAN_LIMIT';throw error; }
       include(next);
     }
     const detailElements=dom.length;
-    if (requestedRoot) {
+    if (requestedRoot || discoverRoots) {
       // Native fixed queries discover global blockers/context without walking
       // every unrelated subtree in JavaScript. Their synchronous browser cost
       // cannot be preempted; charge immediately after each native operation.
@@ -139,6 +143,7 @@ function workspaceUiCapability(page, task) {
     const short = (value, limit = 240) => String(value ?? '').replace(/\s+/g, ' ').trim().slice(0, limit);
     const textOf = element => {
       if (sensitive(element)) return '[REDACTED]';
+      if (discoverRoots) return short(element.getAttribute('aria-label') || element.getAttribute('title') || '');
       if (requestedRoot && element!==requestedRoot && !requestedRoot.contains(element)
           && !(getTid(element) ?? '').startsWith('MF;cntMain;cntWorkspace;Workspace;t.br;tb')) return '[outside selected root]';
       const parts = [], walker = document.createTreeWalker(element, 4);
@@ -195,6 +200,18 @@ function workspaceUiCapability(page, task) {
       if ((getTid(element) ?? '').startsWith(workflow?.prefix + ';Graph;')) return 'graph';
       return workflowAncestor ? 'workflow' : 'global';
     };
+    if (discoverRoots) {
+      const regions=regionElements.filter(element=>visible(element) && !sensitive(element) && scopeOf(element)!=='inactive_workflow');
+      const elements=regions.slice(0,240).map(element=>({ref:refOf(element),tid:getTid(element),identity:identityOf(element),
+        kind:'region',label:textOf(element),scope:scopeOf(element),visible:true,enabled:enabled(element),allowed_actions:[],
+        signature:{tag:element.tagName.toLowerCase()},bounding_box:boxOf(element)}));
+      return {origin:location.origin,authenticated:!!tids.get('MF;cntMain;tlbMainToolbar;btnAvatar')?.some(visible),
+        loginom_build:globalThis.bg?.app?.Version ?? null,workflow_ref:workflow,active_identity:active ? textOf(active) : null,
+        dom_epoch:{document:state.epoch,revision:state.revision},observation_kind:'roots',
+        scan:{complete:true,visited_elements:dom.length,detail_elements:0,max_elements:maxElements,max_work:maxWork,max_ms:maxMs},
+        nodes:[],links:[],ui:{elements,dialogs:[],messages:[],masks:[],table_cells:[],
+          truncated:{elements:regions.length>240,nodes:true,links:true,ports:true,dialogs:true,messages:true,masks:true,table_cells:true}}};
+    }
     const candidates = select('button,input,textarea,select,[contenteditable="true"],[role="button"],[role="checkbox"],[role="radio"],[role="combobox"],[role="menuitem"],[role="tab"],[role="treeitem"],[role="option"],[role="spinbutton"],[data-tid]')
       .filter(element => visible(element) && !sensitive(element) && scopeOf(element) !== 'inactive_workflow');
     const selectedRoot = rootRef ? dom.find(element=>state.ids.get(element)===rootRef) : null;
@@ -341,7 +358,7 @@ function workspaceUiCapability(page, task) {
       nodes, links: links.slice(0, 500), workarea: workarea ? boxOf(workarea) : null,
       ui: { elements, dialogs: dialogs.slice(0, 12), messages: messages.slice(0, 30), masks: masks.slice(0, 12), table_cells: tableCells,
         truncated: { elements: !!selectedRoot || controls.length > 240, nodes: !!selectedRoot || labels.length > 200, links: !!selectedRoot || links.length > 500, ports: !!selectedRoot || nodes.some(node => node.ports.length === 100), dialogs: dialogs.length > 12, messages: !!selectedRoot || messages.length > 30, masks: masks.length > 12, table_cells: !!selectedRoot || cells.length > 120 } } };
-  },{rootRef:task.root_ref ?? task.snapshot?.observation_root?.ref ?? null});
+  },{rootRef:task.root_ref ?? task.snapshot?.observation_root?.ref ?? null,discoverRoots:task.discover_roots===true});
 
   const locatorFor = identity => {
     if (!identity || !Array.isArray(identity.path) || identity.path.some(index => !Number.isInteger(index) || index < 0) || identity.path.length > 64) fail('UI_REFERENCE_INVALID', 'Observed control identity is invalid');

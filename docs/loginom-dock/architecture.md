@@ -181,8 +181,13 @@ queries отдельно находят глобальные active tab/auth/dia
 после native query; синхронная стоимость querySelectorAll не прерывается.
 Graph completeness при root read всегда false, внешние тексты не обходятся
 подробно. Root хранится в bounded Map из 4096 WeakRef; потеря записи — stale.
-Первичное обнаружение roots на уже большом документе ещё не реализовано:
-нужна ранее доставленная ссылка. Глобальный locator.count по-прежнему отвергает
+Первичное обнаружение выполняет scope=roots: fixed native queries возвращают
+видимые nonsensitive окна, формы, таблицы/grids, WizrdMCF и основные контейнеры
+графа без обхода потомков и чтения содержимого. Region refs имеют пустой
+allowed_actions: сначала нужен detailed root read. Roots-mode сохраняется в
+cursor; пустые masks/dialogs/graph помечены неполными и не доказывают отсутствие
+блокировки. Native query cost проверяется после вызова, но не прерывается внутри.
+Глобальный locator.count по-прежнему отвергает
 дублированную identity перед жестом, даже если дубль вне selected subtree.
 
 DOM snapshot содержит `dom_epoch`: document identity и монотонный счётчик

@@ -1001,17 +1001,17 @@ export function createActionRuntime({ pinned, execute, allowCandidate = false, o
     },
     async observe({ signal, scope, cursor, rootRef, observationId } = {}) {
       signal?.throwIfAborted();
-      if (scope !== undefined && !['bootstrap', 'all', 'palette', 'graph', 'dialogs'].includes(scope)) throw new Error('Unknown observation scope');
+      if (scope !== undefined && !['bootstrap', 'all', 'palette', 'graph', 'dialogs', 'roots'].includes(scope)) throw new Error('Unknown observation scope');
       if (cursor !== undefined && (typeof cursor !== 'string' || !cursor || scope !== undefined)) throw new Error('Use cursor alone to continue the original observation scope');
       if (cursor !== undefined && (rootRef !== undefined || observationId !== undefined)) throw new Error('Use cursor alone to continue the original root');
-      if ((rootRef===undefined)!==(observationId===undefined) || (scope==='bootstrap' && rootRef!==undefined)) throw new Error('Root requires root_ref and observation_id in a prepared workspace');
+      if ((rootRef===undefined)!==(observationId===undefined) || (['bootstrap','roots'].includes(scope) && rootRef!==undefined)) throw new Error('Root requires root_ref and observation_id in a prepared workspace');
       if (rootRef!==undefined) {
         if (typeof rootRef!=='string' || !/^ui-[a-zA-Z0-9-]{1,124}$/.test(rootRef)) throw new Error('Root requires an observed opaque reference');
         observations.assertIssued(observationId,{ref:rootRef});
       }
       const selectedRoot = cursor===undefined ? rootRef : observations.rootForCursor(cursor);
       if (scope === 'bootstrap') return execute(makeWorkspaceBootstrapCode({ origin: targetOrigin, build: targetBuild }), { signal, timeout: 5000 });
-      const outcome = await execute(makeWorkspaceUiCode({ mode: 'observe', root_ref:selectedRoot, expected_build: targetBuild, expected_origin: targetOrigin }), { signal, timeout: 35000 });
+      const outcome = await execute(makeWorkspaceUiCode({ mode: 'observe', root_ref:selectedRoot, discover_roots:scope==='roots' || (cursor!==undefined && observations.kindForCursor(cursor)==='roots'), expected_build: targetBuild, expected_origin: targetOrigin }), { signal, timeout: 35000 });
       outcome.output.operation = view(pending).output;
       return cursor === undefined ? observations.retain(outcome, { scope }) : observations.next(cursor, outcome);
     },
