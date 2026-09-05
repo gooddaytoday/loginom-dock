@@ -1,3 +1,11 @@
+**Checkpoint:** run 015813-875f450b terminal, 49/58 frozen FAIL, 80 API calls;
+session5853 закрыт. Live wizard_step file→format подтверждён (reply155).
+set_wizard_field получил название пункта 'Точка с запятой', UI оставил 'Т',
+exact readback корректно дал AMBIGUOUS (reply163). Далее реализовать observed
+combo option selection и native input limits; не печатать название пункта как
+разделитель. После этого node binding/apply и полный P3–P9. Модель остаётся
+ChatGPT subscription/Luna/medium. Active Hermes/browser нет; детали сверху status.
+
 **Checkpoint:** wizard_step (Next/Previous ref + expected_stage) подтверждает
 переход в том же wizard root после одного click, с bounded wait и AMBIGUOUS при
 неподтверждённом результате. 256 client /110 Python /10 packaging PASS. Applied/syntax proof

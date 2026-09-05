@@ -1,3 +1,36 @@
+## 2026-09-06 — live переход мастера подтверждён, выявлен неверный ввод варианта списка
+
+Run 20260906-015813-875f450b завершён, session 5853 terminal. Hermes использовал
+ChatGPT subscription / openai-codex / gpt-5.6-luna / medium; 80 API calls,
+returncode=0, timeout=false. Исходники были заморожены на cf09124e, runtime pin
+510bf9c3aef779ca1fc8a4302afbc90a51ff9940bca41da56427cc0b5b674395.
+Frozen audit 49/58 FAIL, SHA
+799421c525dcefdda80c9f9458ab01df002424a376578888523911c0b9593865.
+Не пройдены knowledge scope, delivered upload destination и семь domain gates.
+Ответы upload/verify успешны, но это не снимает независимый destination FAIL.
+
+Live подтверждён wizard_step: call154/reply155, один click, переход
+text_import_file → text_import_format в том же root, readback через 2141 ms.
+Первый call148 был отклонён по UI_EPOCH_CHANGED без воздействия. Это принимает
+только переход, не настройки/результаты. Чтение четырёх ValueControl input
+также сработало в реальном мастере (reply161).
+
+Попытка set_wizard_field с ';' (call156) отклонена по stale epoch без ввода.
+После свежего наблюдения Hermes вместо буквального символа передал
+'Точка с запятой' (call162). В том же поле осталась только 'Т'; reply163 корректно
+вернул AMBIGUOUS/WIZARD_FIELD_NOT_CONFIRMED, далее inspect и завершение.
+Не считать это успешной настройкой или доказанным дефектом Loginom. Причина
+усечения (например maxlength) пока не подтверждена атрибутами live DOM.
+
+E2E tests/toreview/helpers/wizards/textimport.ts явно определяет 'Точка с запятой'
+как вариант списка Delimiter; input может отображать подпись выбранного пункта,
+а не буквальный разделитель. Следующий шаг — source-backed выбор наблюдаемого
+пункта combo с проверкой принадлежности полю и результата, плюс чтение native
+ограничений ввода. Не вводить подпись списка как сырые символы. Далее остаются
+node/settings binding, apply/cancel, applied readback и весь P3–P9. Заголовок
+мастера обозначает страницу и сам по себе не доказывает принадлежность узлу.
+Нового активного Hermes/browser нет. Старый аудит не пересчитывать.
+
 ## 2026-09-06 — подтверждаемый одиночный переход мастера
 
 Добавлен wizard_step в существующий dock_ui_action: observed Next/Previous ref
