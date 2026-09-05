@@ -1,3 +1,35 @@
+## 2026-09-05 — P3: живая сверка серверного CSV с исходными байтами
+
+20260905-222924-99da5577, file-upload-verify: **46/46 frozen PASS**.
+Audit SHA de9b6307e390163ae0c2ed104ee48e3e7de74773894fd669d3d2183721a7f3d8.
+Runtime 296dd7aa12345afbcc46030da0dd34e6940a39ed9c02b5724dd236dbb213c9e8;
+harness de1364fa. Current Mac / Hermes 0.21.0 / existing ChatGPT subscription /
+openai-codex / gpt-5.6-luna / medium. Explicit Loginom test и directory /test.
+
+В одной сессии выполнены upload native input, inspect pending, exact CSV root
+lookup/detailed read, native download и host stageDownload.verify. Destination:
+/test/Dock-upload-20260905-222924-99da5577.csv. Скачанные 230 bytes совпали с
+admitted SHA f628434c20873f7dd9a8ee142c17af7c0b99f447114fcf60e983f6ed6b357eb3.
+dock_artifact_verify вернул SUCCEEDED/bytes_verified=true; original upload
+по текущей реализации сохранил pending и upload_completion_verified=false.
+Имена, grant, directory, delivered file ref/observation и native download receipt
+связаны с host download_verified journal. Следующих mutations не было.
+
+Новый harness goal/auditor upload_verify.py проверяет эту цепочку независимо,
+включая pending context из inspect, raw observation, exact SHA/size и отсутствие
+ложного completion claim. Export теперь поддерживает dock_artifact_verify;
+другие goals его не допускают. 91 Python PASS (wrong bytes/ref/receipt/context,
+подмена artifact checkpoint, повтор и false resolved — negative cases).
+Исходники во время model run не менялись, старые frozen reports не переоценены.
+
+Это подтверждённый server-copy byte proof, не полная приёмка P3. Следующий
+шаг — связать browser completion и достигнутый postcondition transfer
+(destination_bytes_digest_and_size в effect-contracts.mjs) с завершением
+original operation, чтобы продолжить import/calculator/group; не освобождать
+guard на одном имени/наличии строки или неопределённом browser call. По-прежнему
+нужны reject/conflict и download budget, затем весь P3–P9. Active Hermes/browser
+нет; production/public rc2 не менялись.
+
 ## 2026-09-05 — P3: runtime связывает download receipt с host SHA
 
 Подключён candidate dock_artifact_verify: original operation_id, verification_id,

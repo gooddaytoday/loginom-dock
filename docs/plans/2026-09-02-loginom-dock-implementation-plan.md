@@ -1414,6 +1414,10 @@ Candidate dock_artifact_verify теперь связывает exact observed CS
 download и host SHA/size, включая lost-reply recovery без повторного скачивания.
 Проверены локальные runtime/FS tests; live upload→verify ещё требуется. Даже
 bytes_verified=true пока оставляет upload pending до transfer completion proof.
+Живая цепочка upload→download→host SHA/size 20260905-222924-99da5577 прошла
+46/46: серверная копия CSV на /test совпала с исходными 230 bytes. Это server-copy
+proof. Следующее — завершение original transfer по browser receipt и этому
+postcondition для продолжения pipeline; reject/budget и весь пункт ещё открыты.
 
 **Зависит от:** P1/P2. Сначала одна цель от файла до проверенного результата;
 по ней выделить устойчивые lifecycle мастера и исполнения.

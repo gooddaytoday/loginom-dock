@@ -1,3 +1,14 @@
+**Последняя live проверка P3:** 20260905-222924-99da5577 file-upload-verify,
+46/46 frozen PASS. Audit SHA de9b6307…; runtime 296dd7aa…; harness de1364fa.
+Mac/Hermes/ChatGPT/Luna/medium, test, /test. В ОДНОЙ сессии один upload, точная
+строка CSV, download и host SHA/size совпали: 230 bytes, f628434c…; исходная
+операция пока остаётся pending по текущей реализации. Это реальный server-copy
+proof, но НЕ полная P3 приёмка. Далее завершать transfer по подтверждённому
+browser completion + postcondition destination bytes/digest/size (см. effect
+contract), чтобы продолжить pipeline; учитывать late effects/cleanup, не снимать
+guard только по строке файла. Reject/conflict и download budget ещё открыты.
+Затем весь P3–P9. 91 Python PASS. Active Hermes/browser нет; точные SHA в status.
+
 **Последняя P3 реализация:** dock_artifact_verify подключён в candidate runtime.
 Original upload ID + new verification ID + delivered observation/file_ref →
 assertIssued/exact CSV → stageDownload → browserReceipt → host SHA/size. Native
