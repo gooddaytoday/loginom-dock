@@ -1,3 +1,15 @@
+**Последняя P3 реализация:** makeArtifactDownloadCode (executor.mjs), PRIVATE,
+пока не подключён к runtime/model tool. Exact CSV label/tid → fresh storage
+root context/epoch → register Page download event → existing checked UI double
+click → expected suggestedFilename/same origin → private saveAs → reread directory.
+Результат требует host SHA/size; upload pending не снимается. Wrong file/origin
+или failed gesture с event отменяет download; missing event остаётся uncertain.
+215 client /10 packaging PASS, live не запускался. Далее runtime caller должен
+assertIssued, stageDownload, bind original upload operation и отдельный verify ID,
+browserReceipt recovery без повторного download, host verify; также server
+completion/budget/reject, затем полный P3–P9. Event timeout 15s не ограничивает
+saveAs/network/disk. Точные границы сверху status. Active browser/Hermes нет.
+
 **Последняя live диагностика P3:** 20260905-215859-f2878b83 file-upload-probe,
 36/36 frozen PASS. Audit SHA 10a973d4…; runtime ed30bddc…; harness 594efa2e.
 Hermes ChatGPT/Luna/medium на Mac, test и /test. Один dock_artifact_upload

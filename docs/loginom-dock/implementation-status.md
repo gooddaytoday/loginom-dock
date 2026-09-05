@@ -1,3 +1,32 @@
+## 2026-09-05 — P3: привязка CSV download к наблюдаемому файлу
+
+Добавлен private makeArtifactDownloadCode в executor.mjs. Только exact CSV
+label и tid FileStorageForm;colName_<Format(name)>; LGP и другой label/ref
+отвергаются до браузера. Свежий read NavigationBar root проверяет authenticated
+origin/build/workflow, directory, DOM epoch и отсутствие dialogs/masks.
+Page download listener регистрируется ДО existing checked UI double-click,
+поэтому сохранены incarnation/geometry/hit проверки и быстрый event не теряется.
+Скачивание требует expected suggestedFilename и same-origin URL (включая blob);
+raw URL с возможными token/query не возвращается. saveAs получает private path
+от host adapter, затем storage context читается снова. Результат содержит
+bytes_verification_required=true, НЕ утверждает SHA или upload completion.
+
+Wrong filename/origin и event после failed gesture отменяются. Missing event
+после жеста остаётся AMBIGUOUS/cleanup unconfirmed. Exception не выводит native
+messages/paths, дожидается bounded event и пытается cancel. Event timeout 15s
+не ограничивает saveAs/network/disk; этот лимит и receipt recovery остаются
+обязанностью следующего runtime integration. Новый primitive ещё НЕ public tool.
+
+215 client /10 packaging PASS. Шесть новых тестов исполняют сериализованный
+production driver с внешними Page/download doubles: event-before-click,
+exact file/ref/type, directory/epoch change, wrong name/origin, failed gesture,
+missing event и context change после saveAs. Python/native/live не запускались:
+нет ещё вызова через реальный upload operation и host stageDownload.verify.
+Далее связать primitive с assertIssued, original upload ID/verify ID, private
+download lease и browserReceipt; после host SHA/size proof отдельно установить
+server transfer completion и reject/conflict contract. Затем полный P3–P9.
+Активных Hermes/browser нет; production/public rc2 не менялись.
+
 ## 2026-09-05 — P3: первая живая отправка синтетического CSV
 
 20260905-215859-f2878b83, file-upload-probe: **36/36 frozen PASS**.

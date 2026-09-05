@@ -78,6 +78,81 @@ export function makeArtifactUploadCode(options) {
   return `async (page) => (${browserArtifactUpload.toString()})(page,${JSON.stringify(options)},${observe})`;
 }
 
+async function browserArtifactDownload(page,task,observe,act) {
+  let phase='preconditions',gesture=false,download=null,completed=false,event;
+  const result=(status,code,output={})=>({status,action_key:'artifact.download',action_revision:'1',operation_id:task.operation_id,
+    phase,effect_possible:gesture,cleanup_complete:!gesture || completed,output,
+    error:code?{code,message:code}:null,trace:[]});
+  const same=(a,b)=>JSON.stringify(a)===JSON.stringify(b);
+  const contextMatches=current=>current.authenticated && current.origin===task.expected_origin
+    && current.loginom_build===task.expected_build && same(current.workflow_ref,task.snapshot.workflow_ref)
+    && current.file_storage?.status==='observed' && current.file_storage.directory===task.artifact.upload.directory
+    && current.ui.dialogs.length===0 && current.ui.masks.length===0;
+  try {
+    const before=await observe(page);
+    if(before.status!=='SUCCEEDED' || !contextMatches(before.output)
+      || !same(before.output.dom_epoch,task.snapshot.dom_epoch))return result('NOT_APPLIED','DOWNLOAD_CONTEXT_CHANGED');
+    // Register BEFORE the checked gesture; native download may fire before
+    // the click promise settles. Only this Page's event is eligible.
+    event=page.waitForEvent('download',{timeout:15000}).then(value=>value,()=>null);
+    phase='requesting';gesture=true;
+    const action=await act(page);
+    gesture=action.effect_possible===true;
+    download=await event;
+    if(action.status!=='SUCCEEDED' || action.output?.gesture_applied!==true) {
+      if(download) {gesture=true;await download.cancel();completed=true;}
+      return result(gesture?'AMBIGUOUS':'NOT_APPLIED','DOWNLOAD_GESTURE_NOT_CONFIRMED');
+    }
+    gesture=true;
+    if(!download)return result('AMBIGUOUS','DOWNLOAD_EVENT_MISSING');
+    // Do not persist the URL (it may carry credentials); compare only origin.
+    const url=download.url(),originPrefix=task.expected_origin+'/';
+    if(typeof url!=='string' || !(url.startsWith(originPrefix) || url.startsWith('blob:'+originPrefix))) {
+      await download.cancel();completed=true;
+      return result('AMBIGUOUS','DOWNLOAD_ORIGIN_MISMATCH');
+    }
+    const name=download.suggestedFilename();
+    if(name!==task.artifact.name) {
+      await download.cancel();completed=true;
+      return result('AMBIGUOUS','DOWNLOAD_FILENAME_MISMATCH');
+    }
+    phase='downloading';
+    await download.saveAs(task.download_path);
+    if(await download.failure()!==null)return result('AMBIGUOUS','DOWNLOAD_FAILED');
+    completed=true;
+    const after=await observe(page);
+    if(after.status!=='SUCCEEDED' || !contextMatches(after.output))return result('AMBIGUOUS','DOWNLOAD_CONTEXT_CHANGED');
+    phase='downloaded';
+    return result('SUCCEEDED',null,{artifact_id:task.artifact.artifact_id,upload_grant_id:task.artifact.upload.grant_id,
+      upload_operation_id:task.upload_operation_id,destination:task.artifact.upload.destination,
+      suggested_name:name,download_completed:true,bytes_verification_required:true,
+      file_ref:task.file_ref,observation_id:task.observation_id});
+  } catch {
+    // An unexpected gesture exception may have emitted a download already.
+    // Drain the bounded listener and cancel any captured transfer before exit.
+    if(event && !download)try{download=await event;}catch{}
+    if(download && !completed)try{await download.cancel();completed=true;}catch{}
+    return result(gesture || event?'AMBIGUOUS':'NOT_APPLIED','DOWNLOAD_BROWSER_CALL_FAILED');
+  }
+}
+
+// Trusted adapter only: every public reference must additionally be checked
+// against createObservationPages.assertIssued before this code is constructed.
+// This candidate covers CSV double-click downloads only; package files require
+// an explicit download command instead of opening their scenario.
+export function makeArtifactDownloadCode(options) {
+  const artifact=options?.artifact,snapshot=options?.snapshot;
+  const matches=snapshot?.ui?.elements?.filter(item=>item.ref===options.file_ref) ?? [];
+  const suffix=artifact?.name?.replace(/\s/g,'_').replace(/,/g,'');
+  if(!artifact?.upload || !/\.csv$/i.test(artifact.name) || matches.length!==1
+    || matches[0].label!==artifact.name || matches[0].tid!==snapshot.workflow_ref?.prefix+';FileStorageForm;colName_'+suffix)
+    throw new Error('Download requires the exact observed authorized CSV file');
+  const shared={expected_build:options.expected_build,expected_origin:options.expected_origin};
+  const observe=makeWorkspaceUiCode({mode:'observe',root_ref:options.storage_root_ref,...shared});
+  const act=makeWorkspaceUiCode({mode:'act',snapshot,action:{verb:'double_click',ref:options.file_ref},...shared});
+  return `async (page) => (${browserArtifactDownload.toString()})(page,${JSON.stringify(options)},${observe},${act})`;
+}
+
 function browserCapability(page, task) {
   const started = Date.now();
   const deadline = task.deadline_at ?? started + task.action.timeout_ms;

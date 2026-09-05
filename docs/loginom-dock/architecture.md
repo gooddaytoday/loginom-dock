@@ -1,3 +1,30 @@
+### Private CSV download primitive (2026-09-05)
+
+makeArtifactDownloadCode is a host-only browser primitive, not yet a public tool.
+It requires an exact CSV label and FileStorageForm;colName_<Format(name)> tid
+from the supplied detailed observation. Its future runtime caller must also
+assertIssued for the file_ref. Package files are rejected: double-clicking an
+LGP would open a scenario, so those need a separate explicit download command.
+
+The primitive rereads the storage navigation region and verifies origin/build,
+authenticated workflow, directory, DOM epoch and absence of dialogs/masks.
+It registers this Page's download listener before running the existing checked
+UI double-click capability, preserving ref/incarnation/geometry/hit guards.
+It requires the expected suggested filename and a URL at the expected origin
+(including same-origin blob URLs); the raw URL is never returned or journaled.
+Download.saveAs writes only the private adapter-supplied path. A second storage
+read binds the completed download to the same destination/context. The result
+explicitly requires host byte verification and does not resolve an upload.
+
+Unexpected filenames/origins and captured downloads after a failed gesture are
+cancelled. A missing event after a gesture remains ambiguous with unconfirmed
+cleanup. Exceptions drain the bounded event listener and attempt cancellation;
+native errors and paths are omitted. The 15-second event wait does not bound
+Download.saveAs or browser network/disk usage. The future runtime must retain its
+lease and reconcile the browser receipt after transport uncertainty, validate
+host bytes with stageDownload.verify, and establish upload transfer completion.
+No live download acceptance is claimed for this primitive yet.
+
 ### Candidate upload submission (2026-09-05)
 
 Replay sessions with an artifact store expose dock_artifact_upload. Its strict
