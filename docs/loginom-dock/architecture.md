@@ -1,3 +1,15 @@
+### Current wizard observation context (2026-09-05)
+
+Workspace observations include a read-only wizard summary: visible form identity,
+bounded title, known P3 page marker and lifecycle button visibility/enablement.
+Fixed native queries retain this context in root discovery and narrow reads;
+hidden/inactive forms are excluded, multiple forms/pages are ambiguous. Input
+mapping may precede a component page, and does not establish node ownership.
+The summary is carried across observation pages and included in their revision.
+It does not prove applied settings, execution or typed results. Source-backed
+opening uses one click on the node's Setting affordance; the current full P3
+run remains diagnostic until independent domain verifiers are implemented.
+
 ### Candidate server-copy verification (2026-09-05)
 
 dock_artifact_verify is available alongside upload in candidate sessions. Its

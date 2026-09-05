@@ -149,3 +149,15 @@ test('storage discovery filter is delivered and retained by its cursor', () => {
   const changed=structuredClone(source);changed.output.observation_filter.storage_name='other';
   assert.throws(()=>pages.next(first.output.page.next_cursor,changed),/Workspace changed/);
 });
+
+test('wizard state is carried across pages and a step change invalidates continuation',()=>{
+  const pages=createObservationPages({maxRecords:1}),source=fixture(3);
+  source.output.wizard={status:'observed',title:'Сопоставление полей',stage:'input_mapping',controls:{btnNext:{status:'observed',enabled:false}}};
+  const first=pages.retain(structuredClone(source));
+  assert.deepEqual(first.output.wizard,source.output.wizard);
+  first.output.wizard.title='changed by caller';
+  const next=pages.next(first.output.page.next_cursor,structuredClone(source));
+  assert.deepEqual(next.output.wizard,source.output.wizard);
+  source.output.wizard.stage='calculator';
+  assert.throws(()=>pages.next(next.output.page.next_cursor,source),/Workspace changed/);
+});

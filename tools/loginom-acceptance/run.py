@@ -84,7 +84,8 @@ def exported_events(dock_home, secrets):
 def validate_inputs(args):
     if sys.platform != "darwin":
         raise ValueError("This active acceptance iteration is approved only on the current Mac")
-    if not 30 <= args.timeout <= 3600 or not 1 <= args.max_turns <= 100:
+    max_turns_limit=300 if getattr(args,'goal','basic-graph')=='data-pipeline' else 100
+    if not 30 <= args.timeout <= 3600 or not 1 <= args.max_turns <= max_turns_limit:
         raise ValueError("Invalid acceptance budget")
     if args.manifest_uri is not None and not re.fullmatch(re.escape(MANIFEST_ROOT) + r"[0-9A-Za-z.+-]+/manifest\.json", args.manifest_uri):
         raise ValueError("Invalid candidate manifest URI")

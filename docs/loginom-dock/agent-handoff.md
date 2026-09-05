@@ -1,3 +1,13 @@
+**Текущий checkpoint P3:** полный run 231342-cb9aaa6c закончен, 50/58 frozen FAIL.
+Transfer подтверждён в полном goal, три узла созданы, настройки/результаты ещё не
+приняты. Добавлены wizard title/stage/lifecycle button states в observe/root/pages
+и source-backed подсказка click Setting. Input mapping — возможный шаг мастера,
+не доказательство чужого узла. 228 client /98 Python /10 packaging PASS.
+Следующий run data-pipeline: можно 240 turns/3600s, Hermes ChatGPT/Luna/medium,
+test,/test; проверить metadata живого мастера, затем expression/result/execution
+contracts и весь P3–P9. Все семь domain verifiers пока missing/FAIL. Active
+Hermes/browser нет; точные pins и границы сверху status.
+
 **Текущий P3:** runnable diagnostic goal data-pipeline запрашивает полный сценарий,
 но семь независимых domain verifiers ещё открыты, P3 PASS пока невозможен.
 Первый run 230333-1c9cfc15 (24/32 FAIL) не отправил CSV: typo grant → повторный

@@ -18,9 +18,14 @@ function matches(element, selector) {
   if (selector === ':disabled') return !!element.disabled;
   const tag = selector.match(/^[a-z]+/i)?.[0];
   if (tag && element.tagName !== tag.toUpperCase()) return false;
-  for (const [, name, value] of selector.matchAll(/\[([^=\]]+)(?:="([^"]*)")?\]/g)) {
-    if (!element.hasAttribute(name) || (value !== undefined && element.getAttribute(name) !== value)) return false;
+  const attributes=/\[([^\s=\]$^*]+)(?:([$^*]?=)"([^"]*)")?\]/g;
+  for (const [,name,operator,value] of selector.matchAll(attributes)) {
+    const actual=element.getAttribute(name);
+    if (actual===null) return false;
+    if (operator==='=' && actual!==value || operator==='$=' && !actual.endsWith(value)
+      || operator==='^=' && !actual.startsWith(value) || operator==='*=' && !actual.includes(value)) return false;
   }
+  selector=selector.replace(attributes,'');
   for (const [, name] of selector.matchAll(/\.([\w-]+)/g)) if (!element.classList.contains(name)) return false;
   return true;
 }
@@ -860,4 +865,39 @@ test('empty navigation decorations are skipped without accepting an empty direct
   assert.equal((await page.observe()).file_storage.directory,'/user/data');
   for(const label of labels)label.ownText='';
   assert.equal((await page.observe()).file_storage.status,'unobserved');
+});
+
+test('wizard context exposes the current step and lifecycle states on a narrow read',async()=>{
+  const page=new Page(),base='MF;TF-1;WizrdMCF';
+  const form=page.add('div',base);
+  const title=page.add('div',base+';cardWizardPanel;p.h;p.t','Сопоставление входных полей',undefined,form);
+  page.add('button',base+';TuneDataSourceInputPortWizard;btnAddMappingColumn','',undefined,form);
+  const hidden=page.add('button',base+';CalcDataWizard;btnAddExpr','',undefined,form);hidden.style.display='none';
+  const next=page.add('button',base+';btnNext','Далее',undefined,form);next.attrs.disabled='';next.disabled=true;
+  const input=page.add('input',base+';edtSmall','',undefined,form);
+  const first=await page.observe(),ref=first.ui.elements.find(e=>e.tid===input.getAttribute('data-tid')).ref;
+  assert.equal(first.wizard.stage,'input_mapping');assert.equal(first.wizard.controls.btnNext.enabled,false);
+  for(let i=0;i<6500;i++)page.add('div',null,'background');
+  const narrow=await page.execute({mode:'observe',root_ref:ref});
+  assert.equal(narrow.status,'SUCCEEDED');assert.deepEqual(narrow.output.wizard,first.wizard);
+  assert.equal(narrow.output.scan.detail_elements,1);
+  const roots=await page.execute({mode:'observe',discover_roots:true});
+  assert.equal(roots.output.wizard.title,title.ownText);assert.equal(roots.output.wizard.stage,'input_mapping');
+  // A transition is observed, not inferred from the previous requested action.
+  hidden.style.display='';
+  const mixed=await page.execute({mode:'observe',root_ref:ref});
+  assert.equal(mixed.output.wizard.stage,null);assert.equal(mixed.output.wizard.stage_status,'ambiguous');
+});
+
+test('wizard metadata excludes hidden and inactive forms and redacts sensitive title children',async()=>{
+  const page=new Page(),base='MF;TF-1;WizrdMCF';
+  const inactive=page.add('div','MF;TF-2;WizrdMCF');
+  page.add('div','MF;TF-2;WizrdMCF;cardWizardPanel;p.h;p.t','Wrong title',undefined,inactive);
+  assert.equal((await page.observe()).wizard.status,'absent');
+  const form=page.add('div',base),title=page.add('div',base+';cardWizardPanel;p.h;p.t','Visible title',undefined,form);
+  page.add('span','secret-token','never expose',undefined,title);
+  const output=await page.observe();assert.equal(output.wizard.title,'Visible title');
+  assert.equal(output.wizard.stage_status,'unrecognized');
+  assert.ok(!JSON.stringify(output.wizard).includes('never expose'));
+  page.add('div',base);assert.equal((await page.observe()).wizard.status,'ambiguous');
 });

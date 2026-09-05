@@ -114,11 +114,22 @@ function workspaceUiCapability(page, task) {
       include(next);
     }
     const detailElements=dom.length;
+    // E2E bg/selectors.ts wizard lifecycle and P3 wizard selectors. These
+    // fixed markers expose the current page without scanning its whole tree.
+    const wizardMarkers={text_import_file:';ImportTextFilePreviewWizard;edtFileName',
+      text_import_format:';ImportTextFileParamsWizard;edtValueNull',
+      input_mapping:';TuneDataSourceInputPortWizard;btnAddMappingColumn',
+      calculator:';CalcDataWizard;btnAddExpr',grouping:';GroupDataWizard;grdUsedFields;tbl',
+      done:';DoneWizard;edtDisplayName'};
+    const wizardButtons=['btnPrev','btnNext','btnDone','btnExecute','btnClose','btnError'];
+    const wizardSelectors=['[data-tid$=";WizrdMCF"]','[data-tid$=";WizrdMCF;cardWizardPanel;p.h;p.t"]',
+      ...Object.values(wizardMarkers).map(suffix=>'[data-tid$=";WizrdMCF'+suffix+'"]'),
+      ...wizardButtons.map(name=>'[data-tid$=";WizrdMCF;'+name+'"]')].join(',');
     if (requestedRoot || discoverRoots) {
       // Native fixed queries discover global blockers/context without walking
       // every unrelated subtree in JavaScript. Their synchronous browser cost
       // cannot be preempted; charge immediately after each native operation.
-      const guards=document.querySelectorAll('[data-tid="MF;cntMain;tlbMainToolbar;btnAvatar"],.x-tab-active[data-tid],[role="dialog"],.x-window,.bg-dialog,.bg-mask-message,.x-mask-msg,[role="alert"],[role="status"],.bg-message,.x-message-box,.x-form-invalid-under,[data-tid$="FileStorageForm;pnlFileStorage;tbl"]');
+      const guards=document.querySelectorAll(wizardSelectors+',[data-tid="MF;cntMain;tlbMainToolbar;btnAvatar"],.x-tab-active[data-tid],[role="dialog"],.x-window,.bg-dialog,.bg-mask-message,.x-mask-msg,[role="alert"],[role="status"],.bg-message,.x-message-box,.x-form-invalid-under,[data-tid$="FileStorageForm;pnlFileStorage;tbl"]');
       charge();for (const element of guards) include(element);
     }
     const select = selector => dom.filter(element => { charge(); return element.matches(selector); });
@@ -148,10 +159,10 @@ function workspaceUiCapability(page, task) {
       return false;
     };
     const short = (value, limit = 240) => String(value ?? '').replace(/\s+/g, ' ').trim().slice(0, limit);
-    const textOf = element => {
+    const textOf = (element, fixedContext=false) => {
       if (sensitive(element)) return '[REDACTED]';
-      if (discoverRoots) return short(element.getAttribute('aria-label') || element.getAttribute('title') || '');
-      if (requestedRoot && element!==requestedRoot && !requestedRoot.contains(element)
+      if (discoverRoots && !fixedContext) return short(element.getAttribute('aria-label') || element.getAttribute('title') || '');
+      if (!fixedContext && requestedRoot && element!==requestedRoot && !requestedRoot.contains(element)
           && !(getTid(element) ?? '').startsWith('MF;cntMain;cntWorkspace;Workspace;t.br;tb')) return '[outside selected root]';
       const parts = [], walker = document.createTreeWalker(element, 4);
       let textNode, length = 0;
@@ -207,6 +218,19 @@ function workspaceUiCapability(page, task) {
       if ((getTid(element) ?? '').startsWith(workflow?.prefix + ';Graph;')) return 'graph';
       return workflowAncestor ? 'workflow' : 'global';
     };
+    const wizardForms=all.filter(element=>getTid(element)===workflow?.prefix+';WizrdMCF' && visible(element) && !sensitive(element));
+    let wizard={status:wizardForms.length?'ambiguous':'absent'};
+    if (wizardForms.length===1) {
+      const form=wizardForms[0],base=getTid(form);
+      const matching=suffix=>(tids.get(base+suffix)??[]).filter(element=>form.contains(element) && visible(element) && !sensitive(element));
+      const titles=matching(';cardWizardPanel;p.h;p.t');
+      const stages=Object.entries(wizardMarkers).filter(([,suffix])=>matching(suffix).length===1).map(([key])=>key);
+      wizard={status:'observed',root_tid:base,title:titles.length===1?textOf(titles[0],true):null,
+        title_status:titles.length===1?'observed':titles.length?'ambiguous':'unobserved',
+        stage:stages.length===1?stages[0]:null,stage_status:stages.length===1?'observed':stages.length?'ambiguous':'unrecognized',
+        controls:Object.fromEntries(wizardButtons.map(name=>{const found=matching(';'+name);return [name,
+          {status:found.length===1?'observed':found.length?'ambiguous':'unobserved',enabled:found.length===1?enabled(found[0]):null}];}))};
+    }
     if (discoverRoots) {
       const regions=regionElements.filter(element=>visible(element) && !sensitive(element) && scopeOf(element)!=='inactive_workflow');
       const elements=regions.slice(0,240).map(element=>({ref:refOf(element),tid:getTid(element),identity:identityOf(element),
@@ -214,7 +238,7 @@ function workspaceUiCapability(page, task) {
         signature:{tag:element.tagName.toLowerCase()},bounding_box:boxOf(element)}));
       return {origin:location.origin,authenticated:!!tids.get('MF;cntMain;tlbMainToolbar;btnAvatar')?.some(visible),
         loginom_build:globalThis.bg?.app?.Version ?? null,workflow_ref:workflow,active_identity:active ? textOf(active) : null,
-        dom_epoch:{document:state.epoch,revision:state.revision},observation_kind:'roots',
+        dom_epoch:{document:state.epoch,revision:state.revision},observation_kind:'roots',wizard,
         ...(storageName===null?{}:{observation_filter:{storage_name:storageName}}),
         scan:{complete:true,visited_elements:dom.length,detail_elements:0,max_elements:maxElements,max_work:maxWork,max_ms:maxMs},
         nodes:[],links:[],ui:{elements,dialogs:[],messages:[],masks:[],table_cells:[],
@@ -406,7 +430,7 @@ function workspaceUiCapability(page, task) {
     }
     return { origin: location.origin, authenticated: !!tids.get('MF;cntMain;tlbMainToolbar;btnAvatar')?.some(visible), loginom_build: globalThis.bg?.app?.Version ?? null,
       workflow_ref: workflow, active_identity: active ? textOf(active) : null, package_identity: packageIdentity,
-      file_storage:fileStorage,
+      file_storage:fileStorage,wizard,
       dom_epoch: {document:state.epoch,revision:state.revision},
       ...(selectedRoot ? {observation_root:{ref:rootRef,identity:identityOf(selectedRoot),detail_scope:'elements_and_cells',global_scan:false,global_guards:'fixed_native_queries'}} : {}),
       scan: { complete: true, visited_elements: dom.length, detail_elements:detailElements, max_elements: maxElements, max_work: maxWork, max_ms: maxMs },

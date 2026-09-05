@@ -1,3 +1,39 @@
+## 2026-09-05 — P3: полный прогон дошёл до мастеров; добавлен контекст шага
+
+20260905-231342-cb9aaa6c, data-pipeline, harness acd5c423,
+runtime 12468a779aad238620b50feef26fa58a428233e32d7f41bf13a4754fdbee0efa:
+**50/58 frozen FAIL**, audit SHA 16d6df0e6fba897dcc8ff1745f1fbf9e7596b6b5e18021fce842b78e78916975.
+Current Mac / Hermes / ChatGPT / openai-codex / gpt-5.6-luna / medium, test,/test.
+Transfer prefix прошёл: CSV upload/download/SHA/cleanup/resolved. Созданы
+«Источник», «Расчёт», «Итог»; агент работал с мастером текстового импорта,
+введённый null marker совпал с fixture. Настройки/вычисленные строки/save/reopen
+не подтверждены. FAIL включает семь missing domain verifiers и один malformed
+вызов dispatcher (only_supported_dock_tools); транспорт процесса завершён,
+returncode=0, timed_out=false. Это не P3 acceptance и не реальный блокер.
+
+В ходе открытия Калькулятора были double_click по Graph;Vertex/Label/Setting,
+перекрытия/смены epoch; наблюдался TuneDataSourceInputPortWizard. Он может быть
+обычным шагом входного сопоставления перед страницей компонента: без title/
+stage нельзя заключать, что был открыт чужой узел. E2E OpenNodeSettings использует
+один click по Setting. Goal теперь ссылается на этот helper и точные Calc источники.
+
+Добавлен read-only wizard metadata: видимый root/title, распознанный stage по
+фиксированным P3 markers, состояния btnPrev/Next/Done/Execute/Close/Error.
+Сопоставление входных полей названо input_mapping, без вывода о владении узлом
+или применённых настройках. Невидимые/неактивные forms исключаются, несколько
+видимых stages дают ambiguous. Fixed native queries работают при roots/narrow
+reads без обхода всей формы; title читается ограниченно с redaction. Metadata
+передаётся на всех страницах, изменение шага инвалидирует cursor. Это основа
+inspect мастера, не доказательство применения/выполнения/typed results.
+Проверки: **228 client /98 Python /10 packaging PASS**. Тест DOM double расширен
+для стандартных CSS attribute suffix/prefix/contains и точек внутри attr values.
+Для полного data-pipeline разрешён операторский предел до 300 model turns
+(прочие goals по-прежнему до 100), общий timeout до 3600s. Следующий полный run
+можно выполнять с 240 turns /3600s, текущей подпиской/моделью и явными test,/test.
+Сначала проверить live wizard metadata и нормальное прохождение мастера, затем
+typed expression/result/execution и остальные P3–P9. Active Hermes/browser нет;
+production/public rc2 не менялись, frozen audit не переоценён.
+
 ## 2026-09-05 — P3: полная задача и исправление восстановления после отказа
 
 Подключён diagnostic goal data-pipeline (3bbaa3bd): полная цепочка CSV → импорт →
