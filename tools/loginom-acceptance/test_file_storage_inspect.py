@@ -90,6 +90,7 @@ class FileStorageInspectTest(unittest.TestCase):
             lambda d:after(d)['ui']['elements'][0]['storage_entry'].update(row_ref='replacement'),
             lambda d:after(d)['ui']['elements'].append(copy.deepcopy(after(d)['ui']['elements'][0])),
             lambda d:d['tools'][0]['result']['output']['file_storage'].update(status='unobserved'),
+            lambda d:d['tools'][0]['result']['output']['file_storage'].update(status='unobserved',directory=None),
             lambda d:d['tools'][0]['result']['output']['ui']['elements'][0]['storage_entry'].update(kind='unknown'),
         ]
         for mutate in mutations:

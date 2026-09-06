@@ -706,12 +706,13 @@ def file_storage_inspect(evidence, checks, destination):
             after=post.get('file_storage',{})
             matched=[t for t in post.get('ui',{}).get('elements',[]) if t.get('ref')==target.get('ref')]
             entry=target.get('storage_entry',{})
-            folder_path=before.get('directory','').rstrip('/')+'/'+str(target.get('label',''))
+            directory=before.get('directory')
+            folder_path=directory.rstrip('/')+'/'+str(target.get('label','')) if isinstance(directory,str) else ''
             allowed=(len(pre_pages)==1 and bound(pre_pages[0])
                      and bool(re.fullmatch(r'MF;TF(?:-\d+)?;FileStorageForm;colName_.+',tid or ''))
                      and tid.split(';FileStorageForm;colName_',1)[1] in path_tids
                      and target.get('label') in path_names
-                     and (destination==folder_path or destination.startswith(folder_path+'/'))
+                     and bool(folder_path) and (destination==folder_path or destination.startswith(folder_path+'/'))
                      and before.get('status')=='observed' and before.get('source')=='visible_breadcrumbs'
                      and bool(before.get('navigation_identity')) and before==after
                      and all(pre.get(k) is not None and pre.get(k)==post.get(k)

@@ -755,8 +755,8 @@ function workspaceUiCapability(page, task) {
       // E2E filestorage: click selects a row; doubleClick opens the folder.
       // Read the type from the same row, never infer it from a filename.
       const storageRow=/^MF;TF(?:-\d+)?;FileStorageForm;colName_.+$/.test(tid ?? '') ? element.closest('.x-grid-item') : null;
-      const storageTypes=storageRow ? all.filter(other=>{charge();return storageRow.contains(other)
-        && getTid(other)===tid.replace(';colName_',';colFileType_') && visible(other) && !sensitive(other);}) : [];
+      const storageTypes=storageRow ? (tids.get(tid.replace(';colName_',';colFileType_')) ?? []).filter(other=>{charge();return storageRow.contains(other)
+        && visible(other) && !sensitive(other);}) : [];
       const storageEntry=storageRow ? {row_ref:refOf(storageRow),selected:storageRow.classList.contains('x-grid-item-selected'),
         kind:storageTypes.length===1 && textOf(storageTypes[0])==='Папка' ? 'folder':'unknown'} : null;
       return { ref: refOf(element), tid, identity, kind, role, label, scope: scopeOf(element), ...fieldValue,

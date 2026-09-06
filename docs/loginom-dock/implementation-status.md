@@ -1,3 +1,32 @@
+**2026-09-06 — terminal083616, воспроизведён сбой null при смене разделителя.**
+Проверки изменений: 290 client / 118 Python / 10 packaging PASS.
+Hermes run20260906-083616-f670d535 (source9e462a72, session18465) завершён:
+95 API calls, returncode0, no timeout, runtime/harness unchanged. Единственный
+замороженный audit25/27 FAIL, SHA
+cc017b4a572d89ec2d3b5a8b7b9d49a4a0efdec67bec9e23e23d60ed70febbb8.
+Не переписывать: knowledge_scope FAIL и ошибка структуры аудита; полная ветка
+P3 не была досчитана. В новом коде исправлено directory=None перед rstrip в
+selection verifier; missing destination остаётся непринятым. Чтение типа строки
+хранилища использует существующий tids index, избегая полного обхода на каждую
+строку. Проверка файла и operation_inspect были SUCCEEDED. После null failure
+WIZARD_FIELD_NOT_CONFIRMED row220 восстановление row225 SUCCEEDED: прежний
+scope recovery дефект больше не воспроизвёлся в этом прогоне.
+
+Ключевое новое UI evidence: прежняя ручная проба меняла только отображаемый
+текст разделителя, фактический разделитель уже был semicolon. Теперь в отдельной
+сессии выбран native dropdown «Символ табуляции», null=?; точная последовательность
+serialized Dock set delimiter ; → set null воспроизвела AMBIGUOUS167ms, null
+остался ?. Decimal dot в ручной пробе, unset в Hermes: ошибка не зависит только
+от этого различия. Tab после delimiter запускает обновление предпросмотра;
+следующий null action NOT_APPLIED/UI_REFERENCE_OBSCURED. Даже однократная
+проверка hit-test перед новым observe не устранила гонку. Нужно завершение ввода
+import_format и подтверждённое ожидание готовности/стабильности того же мастера;
+исправление null ещё НЕ реализовано. Не запускать неизменённый полный прогон.
+Private generators: generate-null-sequence-probe.mjs (исходное воспроизведение),
+generate-null-commit-probe.mjs (Tab + один hit-test, недостаточно).
+Manual UI оставлен ImportTextFileParamsWizard, delimiter ;, null ?, decimal dot;
+Package1 не сохранён, активного Hermes нет. Все P3–P9 gates остаются открытыми.
+
 **2026-09-06 — выбор папки в хранилище, UI-first.** В отдельной диагностической
 сессии Loginom build49202 проверены click по `colName_test` (строка получает
 `x-grid-item-selected`, каталог остаётся `/`) и double-click (переход `/test`).

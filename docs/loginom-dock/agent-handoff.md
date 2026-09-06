@@ -1,3 +1,14 @@
+**Checkpoint:** Hermes083616/session18465 TERMINAL, audit25/27FAIL frozen SHA
+cc017b4a572d89ec2d3b5a8b7b9d49a4a0efdec67bec9e23e23d60ed70febbb8.
+Null failure повторился, recovery SUCCEEDED. Реальная причина найдена для repro:
+нужен исходный delimiter tab, а не уже semicolon. Native dropdown tab → Dock ;
+→ null воспроизводит AMBIGUOUS167ms. Tab завершает delimiter input и запускает
+preview; следующий input obscured, одного hit-test недостаточно. Далее import
+commit + bounded same-wizard readiness/readback; до этого полный replay не повторять.
+Manual import format ; / ? / decimal dot, Package1 не сохранён, Hermes нет.
+Audit directory=None exception исправлен fail-closed + indexed storage type lookup;
+old audit не переписывать. Подробности сверху status. P3–P9 открыты.
+
 **Checkpoint:** folder selection UI-first: single click выделяет test при `/`,
 doubleclick открывает `/test`. Runtime storage_entry читает row_ref/selected и
 same-row folder type. Audit singleclick требует bound pre/post, неизменный
