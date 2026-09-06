@@ -2093,3 +2093,98 @@ test('import floating editor binds selected type/kind and rejects ambiguous sele
     owner.remove();assert.equal((await page.observe()).wizard.import_column_editor,undefined);
   }
 });
+
+
+function importChoiceFixture(page, property='type') {
+  const c=importFormatField(page),col=importColumnFixture(page,c.form,2);
+  const row=property==='type'?2:3;
+  col.cells[row].attrs.class='x-grid-cell-selected';col.cells[row].ownText='';
+  const hidden=col.cells[row].append(new Element('div',{},row===2?'Целый':'Непрерывный',col.cells[row].box));
+  hidden.style.visibility='hidden';
+  const tid='MF;TF-1;WizrdMCF;ImportTextFileParamsWizard;ColumnDefsTuning;grdSettings;grd-1;tbl;celleditor-1;cbx';
+  const owner=page.add('div',tid,'',col.cells[row].box,c.form);
+  const input=owner.append(new Element('input',{},'',col.cells[row].box));input.value=row===2?'Целый':'Непрерывный';
+  const list=page.add('div',tid+';boundlist','',{x:700,y:400,width:160,height:90});
+  const label=row===2?'Строковый':'Дискретный';
+  const option=page.add('div',tid+';boundlist;'+label,label,{x:705,y:405,width:140,height:25},list);
+  return {...c,...col,owner,input,list,option,row,label,hidden};
+}
+
+test('import column choices bind unique cells and expose only supported labels',async()=>{
+  for(const mode of ['valid','duplicate_header','duplicate_cell','duplicate_editor','duplicate_selected','unknown_option','hidden_used']) {
+    const page=new Page(),c=importChoiceFixture(page);
+    if(mode==='duplicate_header')page.add('div',c.prefix,'Quantity',c.cells[0].box,c.form);
+    if(mode==='duplicate_cell')page.add('td',c.prefix+'_2','Целый',c.cells[2].box,c.form);
+    if(mode==='duplicate_editor')page.add('div',c.owner.attrs['data-tid'],'',c.owner.box,c.form);
+    if(mode==='duplicate_selected')c.cells[3].attrs.class='x-grid-cell-selected';
+    if(mode==='unknown_option'){c.option.ownText='Other';c.option.attrs['data-tid']=c.owner.attrs['data-tid']+';boundlist;Other';}
+    if(mode==='hidden_used')c.check.style.display='none';
+    const read=await page.observe(),option=read.ui.elements.find(e=>e.wizard_combo?.kind==='option');
+    assert.equal(!!option,mode==='valid',mode);
+    if(option){assert.equal(option.wizard_combo.field.scope,'import_column');assert.ok(option.allowed_actions.includes('select_wizard_option'));}
+  }
+});
+
+test('import column choice closes editor and settles both type and kind without replay',async()=>{
+  for(const mode of ['type','kind','late_kind','late_mask','stuck','replacement','header_replaced','label_changed','used_changed','wrong_type','kind_changes_type','context','editor_reopened','lost_reply']) {
+    const page=new Page(),c=importChoiceFixture(page,mode==='kind'||mode==='kind_changes_type'?'data_kind':'type');
+    const snapshot=await page.observe(),option=snapshot.ui.elements.find(e=>e.wizard_combo?.kind==='option');assert.ok(option);
+    let waits=0,mask;
+    const click=page.mouse.click;
+    page.mouse.click=async(...args)=>{
+      await click(...args);c.owner.remove();c.list.remove();c.hidden.remove();c.cells[c.row].ownText=c.label;
+      if(mode==='type')c.cells[3].ownText='Дискретный';
+      if(mode==='wrong_type')c.cells[2].ownText='Целый';
+      if(mode==='kind_changes_type')c.cells[2].ownText='Строковый';
+      if(mode==='replacement'){c.cells[2].remove();page.add('td',c.prefix+'_2',c.label,c.cells[2].box,c.form);}
+      if(mode==='header_replaced'){const h=c.form.querySelector('[data-tid="'+c.prefix+'"]');h.remove();page.add('div',c.prefix,'Quantity',c.cells[0].box,c.form);}
+      if(mode==='label_changed')c.cells[1].ownText='Changed';
+      if(mode==='used_changed')c.check.attrs.class='x-grid-checkcolumn';
+      if(mode==='context')page.app.Version='changed';
+      if(mode==='editor_reopened')c.form.append(c.owner);
+      if(mode==='lost_reply')throw new Error('lost reply');
+    };
+    page.waitForTimeout=async()=>{
+      waits++;
+      if(mode==='late_kind' && waits===3)c.cells[3].ownText='Дискретный';
+      if(['late_mask','stuck'].includes(mode) && waits===1){mask=page.add('div',null,'Loading');mask.attrs.class='x-mask-msg';}
+      if(mode==='late_mask' && waits===4){mask.remove();c.cells[3].ownText='Дискретный';}
+    };
+    const result=await page.act({verb:'select_wizard_option',ref:option.ref},snapshot);
+    const success=['type','kind','late_kind','late_mask'].includes(mode);
+    assert.equal(result.status,success?'SUCCEEDED':'AMBIGUOUS',mode+JSON.stringify(result.error));
+    assert.equal(page.events.filter(e=>e==='click').length,1,mode);
+    assert.equal(result.trace.some(e=>e.event==='import_column_option_verified'),success,mode);
+    if(success){
+      const column=result.output.wizard.import_columns.fields[0];
+      assert.equal(column.type,mode==='kind'?'integer':'string');assert.equal(column.data_kind,'Дискретный');
+      assert.equal(result.output.wizard.import_columns.settings_applied,false);assert.ok(waits>=5);
+      if(mode==='late_kind')assert.ok(waits>=8);
+    }
+  }
+});
+
+test('closed import type and kind cells are delivered as actionable observed controls',async()=>{
+  const page=new Page(),c=importFormatField(page);importColumnFixture(page,c.form,2);
+  const snapshot=await page.observe(),column=snapshot.wizard.import_columns.fields[0];
+  for(const property of ['type','data_kind']) {
+    const control=snapshot.ui.elements.find(e=>e.ref===column.cell_refs[property]);
+    assert.ok(control);assert.ok(control.allowed_actions.includes('click'));
+  }
+});
+
+
+test('import option rejects changed editor input or selection before any click',async()=>{
+  for(const mode of ['input_replaced','selection_changed','editor_replaced']) {
+    const page=new Page(),c=importChoiceFixture(page),snapshot=await page.observe();
+    const option=snapshot.ui.elements.find(e=>e.wizard_combo?.kind==='option');
+    if(mode==='input_replaced'){c.input.remove();c.owner.append(new Element('input',{},'',c.input.box)).value='Целый';}
+    if(mode==='selection_changed')c.cells[3].attrs.class='x-grid-cell-selected';
+    if(mode==='editor_replaced'){
+      c.owner.remove();const owner=page.add('div',c.owner.attrs['data-tid'],'',c.owner.box,c.form);
+      owner.append(new Element('input',{},'',c.input.box)).value='Целый';
+    }
+    const result=await page.act({verb:'select_wizard_option',ref:option.ref},snapshot);
+    assert.equal(result.status,'NOT_APPLIED',mode);assert.equal(page.events.filter(e=>e==='click').length,0);
+  }
+});

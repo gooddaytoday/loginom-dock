@@ -530,12 +530,12 @@ function workspaceUiCapability(page, task) {
         const used=checks.length===1 && visible(checks[0]) && !sensitive(checks[0]) ? checks[0].classList.contains('x-grid-checkcolumn-checked'):null;
         if(values.some(v=>!v || v.length>120) || !types[values[2]] || used===null)
           return {index:Number(index),status:'unobserved_or_ambiguous'};
-        return {index:Number(index),status:'observed',name:values[0],label:values[1],type:types[values[2]],data_kind:values[3],used,
+        return {index:Number(index),status:'observed',header_ref:refOf(headers.find(e=>getTid(e)===columnBase+index)),name:values[0],label:values[1],type:types[values[2]],data_kind:values[3],used,
           cell_refs:Object.fromEntries(['name','label','type','data_kind','used'].map((key,i)=>[key,refOf(cells[i][0])]))};
       });
       // The cell's old text is hidden while the floating editor is open.
       // Bind the draft input to one selected property; never promote it to an
-      // applied column value or advertise a choice action before its guard exists.
+      // applied column value. Choice actions require the whole column binding.
       const editorBase=base+'ColumnDefsTuning;grdSettings;grd-1;tbl;';
       const editors=all.filter(e=>{charge();const tid=getTid(e);return tid?.startsWith(editorBase)
         && /^celleditor(?:-\d+)?;cbx$/.test(tid.slice(editorBase.length)) && visible(e) && !sensitive(e) && wizardForms[0].contains(e);});
@@ -548,14 +548,27 @@ function workspaceUiCapability(page, task) {
           const [index,row]=getTid(selected[0]).slice(columnBase.length).split('_');
           const nativeInputs=editors[0].querySelectorAll('input:not([type="hidden"])');charge();
           const inputs=[...nativeInputs].filter(e=>{charge();return visible(e) && !sensitive(e);});
-          const names=[0,1].map(r=>(tids.get(columnBase+index+'_'+r)??[]).filter(e=>visible(e) && !sensitive(e) && wizardForms[0].contains(e)));
+          const boundCells=[0,1,2,3,4].map(r=>(tids.get(columnBase+index+'_'+r)??[]).filter(e=>visible(e) && !sensitive(e) && wizardForms[0].contains(e)));
           const value=inputs.length===1?String(inputs[0].value??''):'';
-          const name=names[0].length===1?textOf(names[0][0],true):'',label=names[1].length===1?textOf(names[1][0],true):'';
+          const name=boundCells[0].length===1?textOf(boundCells[0][0],true):'',label=boundCells[1].length===1?textOf(boundCells[1][0],true):'';
           const canonical=row==='2'?types[value]:row==='3' && ['Неопределенное','Непрерывный','Дискретный'].includes(value)?value:null;
           if(canonical && name && name.length<=120 && label && label.length<=120 && inputs.length===1)
             wizard.import_column_editor={status:'observed',index:Number(index),name,label,property:row==='2'?'type':'data_kind',
               value,canonical_value:canonical,input_ref:refOf(inputs[0]),owner_ref:refOf(editors[0]),cell_ref:refOf(selected[0]),
               enabled:enabled(inputs[0]),settings_applied:false};
+          const checks=boundCells[4].length===1?boundCells[4][0].querySelectorAll('.x-grid-checkcolumn'):[];charge();
+          const used=checks.length===1 && visible(checks[0]) && !sensitive(checks[0])?checks[0].classList.contains('x-grid-checkcolumn-checked'):null;
+          const otherRow=row==='2'?3:2,otherValue=boundCells[otherRow]?.length===1?textOf(boundCells[otherRow][0],true):'';
+          const otherCanonical=row==='2'?['Неопределенное','Непрерывный','Дискретный'].includes(otherValue)?otherValue:null:types[otherValue];
+          if(wizard.import_column_editor.status==='observed' && boundCells.every(es=>es.length===1)
+            && headers.filter(e=>getTid(e)===columnBase+index).length===1 && used!==null && otherCanonical) {
+            Object.assign(wizard.import_column_editor,{used,header_ref:refOf(headers.find(e=>getTid(e)===columnBase+index)),
+              other_property:row==='2'?'data_kind':'type',other_value:otherCanonical,
+              cell_refs:Object.fromEntries(['name','label','type','data_kind','used'].map((key,i)=>[key,refOf(boundCells[i][0])]))});
+            if(enabled(inputs[0]))wizardCombos.set(getTid(editors[0]),{name:wizard.import_column_editor.property,scope:'import_column',
+              root_ref:wizard.root_ref,owner_ref:refOf(editors[0]),input_ref:refOf(inputs[0]),value});
+          }
+
         }
       }
       wizard.import_columns={status:columns.length?'rendered_draft_columns':'unobserved',fields:columns,
@@ -593,11 +606,16 @@ function workspaceUiCapability(page, task) {
         if(lists.length!==1 || !lists[0].contains(element) || sensitive(lists[0]))return null;
         const label=textOf(element,true),formatted=label.replace(/\s/g,'_').replace(/,/g,'');
         if(!label || label.length>=240 || tid!==prefix+formatted)return null;
+        if(field.scope==='import_column' && !(field.name==='type'
+          ? ['Целый','Вещественный','Строковый','Логический','Дата/Время','Переменный']
+          : ['Неопределенное','Непрерывный','Дискретный']).includes(label))return null;
         return {kind:'option',field,list_ref:refOf(lists[0]),label};
       }
       return null;
     };
-    const interesting = element => !!comboPart(element) || element.matches('button,input,textarea,select,[contenteditable="true"],[role="button"],[role="checkbox"],[role="radio"],[role="combobox"],[role="menuitem"],[role="tab"],[role="treeitem"],[role="option"],[role="spinbutton"]')
+    const importColumnCellRefs=new Set((wizard.import_columns?.fields??[]).filter(column=>column.status==='observed')
+      .flatMap(column=>[column.cell_refs.type,column.cell_refs.data_kind]));
+    const interesting = element => !!comboPart(element) || importColumnCellRefs.has(state.ids.get(element)) || element.matches('button,input,textarea,select,[contenteditable="true"],[role="button"],[role="checkbox"],[role="radio"],[role="combobox"],[role="menuitem"],[role="tab"],[role="treeitem"],[role="option"],[role="spinbutton"]')
       || /;(?:Input|Output)_[^;]+$|;Label;Label$|;Graph;[^;]+$|;btn[^;]+$|;edt[^;]+$|;mi[^;]+$|;tb(?:-\d+)?$/.test(getTid(element) ?? '')
       // Pinned E2E bg/selectors.ts:272,279,286: palette tree labels and
       // expanders are spans without button/treeitem roles in some UI builds.
@@ -1332,6 +1350,34 @@ function workspaceUiCapability(page, task) {
         }
         if(task.action.verb==='select_wizard_option') {
           const choice=current.ui.elements.find(item=>item.ref===task.action.ref).wizard_combo;
+          if(choice.field.scope==='import_column') {
+            const editor=current.wizard.import_column_editor;
+            const desired=editor.property==='type'?({'Целый':'integer','Вещественный':'real','Строковый':'string','Логический':'boolean','Дата/Время':'datetime','Переменный':'variant'})[choice.label]:choice.label;
+            const sameContext=fresh=>fresh.authenticated && fresh.origin===current.origin && fresh.loginom_build===current.loginom_build
+              && same(fresh.workflow_ref,current.workflow_ref) && same(fresh.package_identity,current.package_identity)
+              && same(fresh.active_identity,current.active_identity) && fresh.active_tab_ref===current.active_tab_ref
+              && fresh.dom_epoch.document===current.dom_epoch.document && fresh.wizard.status==='observed'
+              && fresh.wizard.root_ref===current.wizard.root_ref && fresh.wizard.stage===current.wizard.stage
+              && same(fresh.wizard.owner_context,current.wizard.owner_context) && same(fresh.ui.dialogs,current.ui.dialogs)
+              && same(fresh.wizard.settings,current.wizard.settings);
+            let stable=0,previous=null,column;
+            for(let attempt=0;attempt<40 && sameContext(observed);attempt++) {
+              column=observed.wizard.import_columns?.fields?.find(e=>e.index===editor.index);
+              const ready=!observed.wizard.import_column_editor && !observed.ui.masks.length
+                && column?.status==='observed' && column.name===editor.name && column.label===editor.label
+                && column.used===editor.used && column.header_ref===editor.header_ref && same(column.cell_refs,editor.cell_refs) && column[editor.property]===desired
+                && ['Неопределенное','Непрерывный','Дискретный'].includes(column.data_kind)
+                && (editor.property==='type' || column.type===editor.other_value);
+              const stamp={epoch:observed.dom_epoch,wizard:observed.wizard};
+              stable=ready && previous && same(stamp,previous)?stable+1:0;
+              if(stable>=5)break;
+              previous=ready?stamp:null;
+              timeout();await page.waitForTimeout(Math.min(100,timeout()));observed=await readUi();
+            }
+            if(stable<5)fail('WIZARD_OPTION_NOT_CONFIRMED','Import column did not settle after the editor closed; inspect before retry');
+            record('import_column_option_verified',{index:column.index,name:column.name,property:editor.property,
+              type:column.type,data_kind:column.data_kind,settings_applied:false});
+          } else {
           const parameterKey=choice.field.scope==='expression_parameter'?'expression_parameters':choice.field.scope==='output_column'?'column_parameters':choice.field.scope==='reform_column'?'reform_parameters':null;
           const expressionParameter=parameterKey!==null;
           const field=observed.wizard[parameterKey??'settings']?.fields?.[choice.field.name];
@@ -1348,6 +1394,7 @@ function workspaceUiCapability(page, task) {
             || field.input_ref!==choice.field.input_ref || field.owner_ref!==choice.field.owner_ref)
             fail('WIZARD_OPTION_NOT_CONFIRMED','The selected option label was not read back in its original wizard field; inspect before retry');
           record('wizard_option_verified',{field:choice.field.name,label:choice.label,settings_applied:false});
+          }
         }
         if(task.action.verb==='wizard_step') {
           const unchangedContext=fresh=>fresh.authenticated && fresh.origin===current.origin && fresh.loginom_build===current.loginom_build

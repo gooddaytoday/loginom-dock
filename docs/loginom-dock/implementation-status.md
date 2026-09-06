@@ -1,3 +1,35 @@
+**2026-09-06 — возобновление: цельные участки P3 и параллельная работа.**
+Пользователь одобрил UI-first разбор всей оставшейся цепочки, короткие проверки
+отдельных возможностей, завершение связных участков до полного Hermes replay
+и параллельных агентов, когда это ускоряет работу. Браузером владеет основной
+агент, независимые задачи разделены по файлам. Старый запрос остановки снят.
+
+Live readback import_column_editor из394bd25c проверен: roots/narrow SUCCEEDED,
+полностью equal, Quantity/index2/type integer; скрытое старое значение в columns
+остаётся ambiguous. Затем Escape → Next (output mapping) → Next (Описание узла)
+→ Done вернули сценарий. Независимый агент реализовал scope import_column для
+select_wizard_option: уникальные editor/header/5cells, auto-close, bounded stable
+post-read type+kind, сохранение context/refs/name/label/used; no repeat on lost
+reply. Клиентские тесты300/300, Python118/118; live нового выбора ещё впереди.
+Обзор независимой приёмки: p3-verification-gap-review.md. Все domain gates
+по-прежнему открыты; новые заглушки не заменены утверждениями успешности.
+
+Live UI-first результатов: у node Изменение hover показывает Visualizers;
+click открыл TF-4 ViewsForm. Выбран vendor Таблица, ViewerAddCard плюс,
+ViewerCard doubleclick открыл BrowseView. Native headers Region string,
+AmountSum real, RowCount integer, QuantitySum integer. Видимые строки:
+Север52/2/5, Юг10/2/4, Запад0/2/1. Это ручной ранее выполненный пакет,
+не свежая execution acceptance. btnDataGridShowNulls без pressed class;
+btnDataGridFormat/Sort/Filter доступны. Полнота/формат/null и новый execution
+ещё не подтверждены. Старый quick preview не использовать как доказательство
+полной точности real. При locator.hover SVG node 30s timeout: NodesControls
+перехватывает pointer; читать/кликать наблюдённые child controls.
+
+UI оставлен в Таблице TF-4, новый visualizer в несохранённом Package1.
+Hermes не запускался, production не менялся. Далее live typed import выбора,
+import apply/reopen verifier, общий execution/result proof, package roundtrip.
+Полный охват P0–P9 сохраняется; audit091427 не переписывать.
+
 **Остановка по запросу пользователя — 6 сентября 2026, редактор типов импорта.**
 Работа остановлена до реализации действия выбора типа/вида данных. Добавлено
 только структурированное чтение `wizard.import_column_editor`: единственный
