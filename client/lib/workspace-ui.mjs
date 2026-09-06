@@ -164,8 +164,12 @@ function workspaceUiCapability(page, task) {
       ...Object.values(wizardMarkers).flat().map(suffix=>'[data-tid$=";WizrdMCF'+suffix+'"]'),
       '[data-tid*=";WizrdMCF;CalcDataWizard;colExpressionName_"]','[data-tid*=";WizrdMCF;CalcDataWizard;colExpressionDisplayName_"]','[data-tid$=";WizrdMCF;CalcDataWizard;cmpExpression"]','[data-tid$=";WizrdMCF;CalcDataWizard;btnCalcMode"]','span.bg-TBGCalcMode-cmExpression,span.bg-TBGCalcMode-cmJavaScript',
       ...['edtDelimiterChar','edtTextQualifier','edtValueNull','edtDecimalSeparator'].flatMap(name=>{const owner='[data-tid$=";WizrdMCF;ImportTextFileParamsWizard;'+name+';ValueControl"]';return [owner,owner+' input',owner+' textarea'];}),
+      ...['edtConnection','edtFileName;ValueControl','edtCodePage;ValueControl','edtRowsToSkip;ValueControl'].flatMap(name=>{
+        const owner='[data-tid$=";WizrdMCF;ImportTextFilePreviewWizard;'+name+'"]';return [owner,owner+' input',owner+' textarea'];}),
+      '[data-tid$=";WizrdMCF;ImportTextFilePreviewWizard;edtFirstLineAsTitle;ValueControl"]',
+      '[data-tid$=";WizrdMCF;ImportTextFilePreviewWizard;edtFirstLineAsTitle;ValueControl;DisplayEl"]',
       ...['edtDisplayName','cbxNodeTitleMode'].flatMap(name=>{const owner='[data-tid$=";WizrdMCF;DoneWizard;'+name+'"]';return [owner,owner+' input'];}),
-      ...['DerivedDataSourceOutputSocketWizard','DerivedDataSourceMappingEngineOutputPortWizard','ReformColumnsWizard'].flatMap(form=>
+      ...['ColumnsMappingEngineOutputPortWizard','DerivedDataSourceOutputSocketWizard','DerivedDataSourceMappingEngineOutputPortWizard','ReformColumnsWizard'].flatMap(form=>
         ['colName_','colDisplayName_','colDataKind_','colDefaultUsageType_','colSourceDisplayName_','colCachingMethod_','colExcluded_'].map(key=>'[data-tid*=";WizrdMCF;'+form+';'+key+'"]')),
       '[data-tid$=";WizrdMCF;EditReformColumnDefForm"]',
       '[data-tid*=";WizrdMCF;ImportTextFileParamsWizard;ColumnDefsTuning;grdSettings;grd-1;normalHeaderCt;"]',
@@ -330,7 +334,7 @@ function workspaceUiCapability(page, task) {
     }
     if(wizard.status==='observed' && ['output_mapping','field_parameters'].includes(wizard.stage)) {
       const reform=wizard.stage==='field_parameters',columnsKey=reform?'reform_columns':'output_columns';
-      const mappingForms=['DerivedDataSourceOutputSocketWizard','DerivedDataSourceMappingEngineOutputPortWizard'].filter(name=>
+      const mappingForms=['ColumnsMappingEngineOutputPortWizard','DerivedDataSourceOutputSocketWizard','DerivedDataSourceMappingEngineOutputPortWizard'].filter(name=>
         (tids.get(wizard.root_tid+';'+name+';btnAddMappingColumn')??[]).filter(visible).length===1);
       const base=wizard.root_tid+';'+(reform?'ReformColumnsWizard':mappingForms.length===1?mappingForms[0]:'__unobserved__')+';';
       const cells=all.filter(e=>{charge();return (getTid(e)??'').startsWith(base+'colName_') && wizardForms[0].contains(e)
@@ -422,6 +426,34 @@ function workspaceUiCapability(page, task) {
           Object.assign(wizard.reform_parameters,{root_ref:refOf(form),selected_column:selected.length===1?selected[0]:null,fields});
         }
       }
+    }
+    if(wizard.status==='observed' && wizard.stage==='text_import_file') {
+      // E2E sImportTxt.previewWizard and Help: property wrappers also contain
+      // variable inputs. Only the exact ValueControl owns the displayed value.
+      const base=wizard.root_tid+';ImportTextFilePreviewWizard;';
+      const fields=Object.fromEntries(Object.entries({source_path:'edtFileName;ValueControl',connection:'edtConnection',
+        encoding:'edtCodePage;ValueControl',rows_to_skip:'edtRowsToSkip;ValueControl'}).map(([name,key])=>{
+        const owners=(tids.get(base+key)??[]).filter(e=>wizardForms[0].contains(e) && visible(e) && !sensitive(e));
+        const inputs=owners.length===1?dom.filter(e=>{charge();return owners[0].contains(e)
+          && e.matches('input:not([type="hidden"]),textarea') && visible(e) && !sensitive(e);}):[];
+        if(owners.length!==1 || inputs.length!==1)return [name,{status:owners.length>1 || inputs.length>1?'ambiguous':'unobserved'}];
+        const input=inputs[0],value=String(input.value??'');
+        // URLs can embed basic-auth credentials or query tokens. The local
+        // source readback never persists such URLs as a newly structured value.
+        if(name==='source_path' && /[a-z][a-z0-9+.-]*:\/\//i.test(value))return [name,{status:'redacted',value_kind:'url'}];
+        const limit=name==='source_path'?2048:256;
+        return [name,{status:'observed',value:value.slice(0,limit),value_length_utf16:value.length,truncated:value.length>limit,
+          input_ref:refOf(input),owner_ref:refOf(owners[0]),enabled:enabled(input),read_only:input.readOnly===true,
+          value_kind:'displayed_input_text'}];
+      }));
+      const ownerTid=base+'edtFirstLineAsTitle;ValueControl';
+      const owners=(tids.get(ownerTid)??[]).filter(e=>wizardForms[0].contains(e) && visible(e) && !sensitive(e));
+      const displays=(tids.get(ownerTid+';DisplayEl')??[]).filter(e=>owners.length===1 && owners[0].contains(e) && visible(e) && !sensitive(e));
+      fields.first_line_as_title=owners.length===1 && displays.length===1 && displays[0].matches('.x-form-checkbox')
+        ?{status:'observed',value:owners[0].classList.contains('x-form-cb-checked'),owner_ref:refOf(owners[0]),
+          display_ref:refOf(displays[0]),enabled:enabled(displays[0]),value_kind:'loginom_ext_checkbox'}
+        :{status:owners.length>1 || displays.length>1?'ambiguous':'unobserved'};
+      wizard.import_source={status:'draft_ui_values',settings_applied:false,file_bytes_verified:false,schema_complete:false,fields};
     }
     const wizardFields=new Map(),wizardCombos=new Map();
     const reformParams=wizard.reform_parameters;

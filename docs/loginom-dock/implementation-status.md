@@ -1,3 +1,35 @@
+**2026-09-06 — источники и соответствия импорта читаются структурированно.**
+UI-first в TF-4 ImportTextFilePreviewWizard подтвердил exact ValueControl:
+/test/Dock-upload-20260906-033638-57049220.csv, connection Локальное,
+UTF-8 (65001), rows_to_skip0, first_line_as_title=true. Checkbox подтверждается
+x-form-cb-checked на owner и DisplayEl; InputEl.checked=false. PropContainer
+содержит лишние variable inputs, не использовать его как owner. Новый
+wizard.import_source читает эти5 полей с refs/ambiguity/truncation, URLs
+редактирует, file_bytes_verified/schema_complete/settings_applied=false.
+Live roots/narrow SUCCEEDED и весь wizard equal.
+
+Выявлена и добавлена в общее чтение mapping форма импорта
+ColumnsMappingEngineOutputPortWizard. Live5 rows Id/Region/Quantity/UnitPrice/
+Comment: входные и выходные label/type совпали, integer/string/integer/real/string;
+TargetFilter пуст. Roots/narrow SUCCEEDED, wizard equal. Источник строки остаётся
+rendered_source/identity_verified=false; complete/settings_applied=false.
+Новых действий для source/mapping не добавлено. Тесты302client/10packaging PASS.
+
+Добавлена diagnostic import_settings_evidence с bound_receipts и сравнением
+формата/типов с expected.json; подключается отдельно в data_pipeline, все семь
+domain gates остаются закрытыми. Проверяются наблюдаемые draft settings, не
+full schema/apply/package persistence. При live проверке выявлен icon-only
+root breadcrumb Сервер с label=''; допустимо только для exact native root,
+остальные пустые path labels остаются ошибкой. После reopen delimiter отображается «Точка с запятой»: добавлен только этот
+exact alias к ;. Fresh native compare rendered_import_settings_match=true
+для5 columns; complete/node/package persistence остаются false, missing proofs
+сохранены. 127/127 Python tests PASS; итого439 tests (302+127+10).
+
+UI оставлен TF-4 text_import_format того же source Package1. Пакет не сохранён,
+узел неактивен после открытия настроек. Hermes/prod не запускались/не менялись.
+Далее source→format→mapping→apply/reopen independent binding и полнота схемы,
+execution/result и package roundtrip; полный P3–P9 по-прежнему открыт.
+
 **2026-09-06 — live выбор типа/вида импорта и повторное открытие.**
 Runtime ab19b698 проверен напрямую через serialized workspace UI capability,
 в отдельном ручном Loginom Package1. В TF-4 format Quantity/index2:

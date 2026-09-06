@@ -1846,7 +1846,7 @@ test('output-port context binds distinct node and port breadcrumbs and rejects w
 });
 
 test('node and socket output mapping read source cells without inventing source identity',async()=>{
-  for(const formName of ['DerivedDataSourceOutputSocketWizard','DerivedDataSourceMappingEngineOutputPortWizard']) {
+  for(const formName of ['ColumnsMappingEngineOutputPortWizard','DerivedDataSourceOutputSocketWizard','DerivedDataSourceMappingEngineOutputPortWizard']) {
     for(const mode of ['mapped','unmapped','missing','blank','duplicate','wrong_row','contradiction','unknown_type','long_label']) {
       const page=new Page(),base='MF;TF-1;WizrdMCF;',form=page.add('div',base.slice(0,-1)),stem=base+formName+';';
       page.add('button',stem+'btnAddMappingColumn','',undefined,form);
@@ -2186,5 +2186,59 @@ test('import option rejects changed editor input or selection before any click',
     }
     const result=await page.act({verb:'select_wizard_option',ref:option.ref},snapshot);
     assert.equal(result.status,'NOT_APPLIED',mode);assert.equal(page.events.filter(e=>e==='click').length,0);
+  }
+});
+
+function importSourceFixture(page) {
+  const base='MF;TF-1;WizrdMCF;ImportTextFilePreviewWizard;';
+  const form=page.add('div','MF;TF-1;WizrdMCF'),inputs={},owners={};
+  for(const [name,key,value] of [['source_path','edtFileName','/test/source.csv'],['connection','edtConnection','Локальное'],
+    ['encoding','edtCodePage','UTF-8 (65001)'],['rows_to_skip','edtRowsToSkip','0']]) {
+    const property=page.add('div',base+key,'',undefined,form);
+    const owner=name==='connection'?property:page.add('div',base+key+';ValueControl','',undefined,property);
+    const input=owner.append(new Element('input'));input.value=value;input.readOnly=name==='connection';
+    if(name!=='connection')property.append(new Element('input')).value='unrelated variable';
+    inputs[name]=input;owners[name]=owner;
+  }
+  const header=page.add('div',base+'edtFirstLineAsTitle;ValueControl','',undefined,form);header.attrs.class='x-form-cb-checked';
+  const native=header.append(new Element('input'));native.checked=false;
+  const display=page.add('span',base+'edtFirstLineAsTitle;ValueControl;DisplayEl','',undefined,header);display.attrs.class='x-form-checkbox';
+  return {base,form,inputs,owners,header,native,display};
+}
+
+test('import source reads exact controls and Ext checkbox equally in full roots and narrow views',async()=>{
+  const page=new Page(),c=importSourceFixture(page);
+  const snapshot=await page.observe(),source=snapshot.wizard.import_source;
+  assert.equal(snapshot.wizard.stage,'text_import_file');assert.ok(source);
+  assert.deepEqual(Object.fromEntries(Object.entries(source.fields).map(([k,v])=>[k,v.value])),{
+    source_path:'/test/source.csv',connection:'Локальное',encoding:'UTF-8 (65001)',rows_to_skip:'0',first_line_as_title:true});
+  assert.equal(source.fields.connection.read_only,true);assert.equal(c.native.checked,false);
+  for(const options of [{discover_roots:true},{root_ref:snapshot.wizard.root_ref}]) {
+    const read=await page.execute({mode:'observe',...options});assert.deepEqual(read.output.wizard.import_source,source);
+  }
+  assert.equal(source.settings_applied,false);assert.equal(source.file_bytes_verified,false);assert.equal(source.schema_complete,false);
+  assert.ok(!snapshot.ui.elements.some(e=>e.wizard_field?.scope==='import_source' || e.wizard_combo?.field?.scope==='import_source'));
+  c.header.attrs.class='';assert.equal((await page.observe()).wizard.import_source.fields.first_line_as_title.value,false);
+});
+
+test('import source fails closed for duplicate hidden missing controls and redacts URL values',async()=>{
+  for(const mode of ['duplicate_owner','duplicate_input','hidden_input','missing_input','hidden_owner','long','url','duplicate_header','duplicate_display','hidden_display']) {
+    const page=new Page(),c=importSourceFixture(page);
+    if(mode==='duplicate_owner')page.add('div',c.owners.source_path.attrs['data-tid'],'',undefined,c.form);
+    if(mode==='duplicate_input')c.owners.source_path.append(new Element('input')).value='other';
+    if(mode==='hidden_input')c.inputs.source_path.style.display='none';
+    if(mode==='missing_input')c.inputs.source_path.remove();
+    if(mode==='hidden_owner')c.owners.source_path.style.display='none';
+    if(mode==='long')c.inputs.source_path.value='/test/'+'x'.repeat(2048);
+    if(mode==='url')c.inputs.source_path.value='https://name:credential@example.test/input.csv?token=hidden';
+    if(mode==='duplicate_header')page.add('div',c.header.attrs['data-tid'],'',undefined,c.form);
+    if(mode==='duplicate_display')page.add('span',c.display.attrs['data-tid'],'',undefined,c.header).attrs.class='x-form-checkbox';
+    if(mode==='hidden_display')c.display.style.display='none';
+    const snapshot=await page.observe(),source=snapshot.wizard.import_source;
+    const field=['duplicate_header','duplicate_display','hidden_display'].includes(mode)?source.fields.first_line_as_title:source.fields.source_path;
+    if(mode==='long'){assert.equal(field.truncated,true);assert.equal(field.value.length,2048);}
+    else if(mode==='url'){assert.equal(field.status,'redacted');assert.equal(field.value,undefined);assert.ok(!JSON.stringify(source).includes('credential'));}
+    else assert.equal(field.status,mode.startsWith('duplicate')?'ambiguous':'unobserved',mode);
+    const roots=await page.execute({mode:'observe',discover_roots:true});assert.deepEqual(roots.output.wizard.import_source,source,mode);
   }
 });
