@@ -1,3 +1,34 @@
+## 2026-09-06 — на VPS собран и staged каталог для /test/packages
+
+Из чистого source11f696c5 подготовлен ограниченный исходный архив, SHA
+25872dec4315f7bec5872b3b73db00f39c769c756aad24340bca835c478978a3;
+эта сумма подтверждена на VPS. Сборка выполнена на VPS в Docker
+node:24.19.0-bookworm-slim с --network none, не на Mac. Каталог:
+/opt/loginom-dock/releases/20260906-catalog-agent3-11f696c5/build.
+Параметры: --version2026.09.06-agent.3-candidate и --package-root /test/packages.
+Builder/publisher validation прошли, stale_actions=[]; после stage все четыре
+immutable файла прочитаны обратно и побайтно сверены publisher-ом.
+
+Manifest URI:
+viking://resources/loginom-dock/catalogs/executor-preview/releases/2026.09.06-agent.3-candidate/manifest.json
+Manifest SHA256:
+007465bf4d8fee5f238ef790db4584313d61373d27f92715f01388edfe413ae6
+Actions SHA256:3a293cd8b981a36409bb2f93b0d6b3ac8a057b09cc9373e31090fc969d8ca0b5.
+E2E commit2cad5602158fd2e4836d821d644a2b8d92f571a2 сверён с импортированным source.
+node.add revision2, link.create revision1, package.save_as revision2 с
+allowed_roots=['/test/packages']. Отчёт .dock/post-mvp-p0/catalog-agent3-stage.json.
+
+staged=true, activated=false. Серверный current release остаётся
+/opt/loginom-dock/releases/20260904-landing-7b711846; production API/Studio/landing
+не пересобирались. Read-only verify-server подтвердил HTTPS/readiness/auth,
+role user и15 MCP tools. Один повторный SSH вход был отклонён, следующая проверка
+с тем же password профилем успешна; способ аутентификации не менялся.
+
+Далее полный data-pipeline на Hermes ChatGPT subscription/Luna/medium с НОВЫМИ
+URI/SHA выше. Stage/readback не является live save/reopen acceptance; необходимо
+проверить фактическое сохранение в /test/packages. Cursor fix live, node/settings
+binding, applied/results и весь P3–P9 остаются открытыми.
+
 ## 2026-09-06 — найден корень /user в каталоге сохранения; подготовлена явная настройка
 
 Run20260906-031541-528cd48f terminal, session89188 закрыт. Source417a2ab7,

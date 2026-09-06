@@ -1,3 +1,12 @@
+**Checkpoint:** новый2026.09.06-agent.3-candidate собран НА VPS и staged/readback.
+URI viking://resources/loginom-dock/catalogs/executor-preview/releases/2026.09.06-agent.3-candidate/manifest.json
+SHA007465bf4d8fee5f238ef790db4584313d61373d27f92715f01388edfe413ae6.
+Save revision2 разрешает /test/packages; production не активирован.
+Следующий полный Hermes run — только эти URI/SHA, ChatGPT subscription/Luna/medium,
+explicit test и /test. Stage не доказывает live save/reopen; cursor fix/P3–P9 открыты.
+Перед возобновлением проверить .dock/post-mvp-p0/monitor-checkpoint.json и живой
+handle: в текущем продолжении может быть запущен новый run после этого checkpoint.
+
 **Checkpoint:** run031541-528cd48f terminal, session89188 закрыт,50/58 FAIL,
 64 API calls. Save_as /test/packages отклонён: старый catalog allowed_roots
 только /user/data/packages. Сборщик теперь принимает --package-root, требует

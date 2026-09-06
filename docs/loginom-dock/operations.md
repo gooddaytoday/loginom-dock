@@ -382,5 +382,9 @@ production DNS или публичные порты. Подробности — 
 не выводите их из OS/SSH/Loginom username. Без параметра действуют корни исходного
 каталога. Изменение политики требует новой версии и отдельного stage/readback,
 а replay — новых manifest URI/SHA. Production activation по-прежнему требует
-полной приёмки. На момент добавления этой инструкции новый каталог ещё не
-собран и не опубликован.
+полной приёмки. Кандидат `2026.09.06-agent.3-candidate` собран на VPS и staged/readback 6 сентября:
+manifest SHA `007465bf4d8fee5f238ef790db4584313d61373d27f92715f01388edfe413ae6`,
+URI `viking://resources/loginom-dock/catalogs/executor-preview/releases/2026.09.06-agent.3-candidate/manifest.json`.
+Серверный build/report: `/opt/loginom-dock/releases/20260906-catalog-agent3-11f696c5/`.
+Save revision 2 ограничен `/test/packages`. Production не активирован; live
+сохранение и повторное открытие ещё должны пройти приёмку.
