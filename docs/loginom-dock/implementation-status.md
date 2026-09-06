@@ -1,3 +1,36 @@
+**Checkpoint 2026-09-06 — ручной полный расчёт после явного преобразования типа.**
+В диагностическом Package1 исправлено сопоставление Grouping: удалено пустое
+QuantitySum integer, существующая Quantity real переименована в QuantitySum
+(name+label), source Quantity|Сумма сохранился. Остальные Region/AmountSum/RowCount
+не менялись. Next→Done сохранил node mapping. Это устранило пустое поле без
+ослабления конечного требования QuantitySum integer.
+
+Из палитры добавлен drag узел Параметры полей (ReformColumns), автосвязь от
+Quantity_Сумма_по_Region Output_Data-0 к Input_Data-0 подтверждена native graph TID.
+ReformColumnsWizard;colName_QuantitySum doubleclick → EditReformColumnDefForm,
+cbxDataType picker → boundlist;Целый → btnApply (текст «Изменить»).
+Row icon стал dtInteger. Next→Done; автоматическая метка узла отложенно меняется
+с Параметры полей на Изменение, поэтому после закрытия нужно новое наблюдение.
+Help processors/transformation/fields-features.md подтверждает преобразование
+типов этим узлом; E2E bg/sels/sReformColumns.ts и sDataMapping.editor дают селекторы.
+
+Ручной запуск Изменение;Launch выполнил всю цепь import→Сумма→Grouping→Изменение.
+Начальный warning порта сменился active; повторного запуска не делалось.
+Через output-port menu mn;mniShowDataPreview открыт быстрый просмотр:
+Region / AmountSum / RowCount / QuantitySum, типы String / Float / Integer / Integer.
+Видимые строки: Север /52,00 /2 /5; Юг /10,00 /2 /4; Запад /0,00 /2 /1.
+Native header TIDs подтверждают имена, классы dt*-before — типы; row TIDs _0.._2
+связывают значения. Screenshot .dock/post-mvp-p0/integer-conversion-results.png.
+Это ручное rendered evidence: НЕ независимая полнота/точность/receipt chain,
+НЕ Hermes acceptance и НЕ package save/reopen. Конечные ожидаемые типы и значения
+соблюдены в наблюдаемом результате; все семь P3 gates пока открыты.
+
+Current UI: граф, Изменение active, быстрый просмотр открыт; Package1 НЕ сохранён.
+Hermes не запущен. Следующий шаг — поддержать ReformColumnsWizard/редактор и
+сохранение источников при изменениях в bounded runtime, затем выполнить полный
+Luna/ChatGPT/medium data-pipeline с независимыми gates и продолжить P3–P9.
+Runtime в этом checkpoint не менялся, повтор тестов не требовался.
+
 **Checkpoint 2026-09-06 — источники выходных полей и mapping внутри узла.**
 Runtime распознаёт DerivedDataSourceMappingEngineOutputPortWizard как output_mapping
 наряду с socket/import markers. Output columns читаются из единственной видимой

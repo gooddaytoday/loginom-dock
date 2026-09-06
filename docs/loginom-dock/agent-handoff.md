@@ -1,3 +1,12 @@
+**Checkpoint:** ручная цепь import→Сумма→Grouping→ReformColumns успешно выполнена.
+В Grouping QuantitySum восстановлен как real с source Quantity|Сумма. Отдельный
+ReformColumns преобразует его в integer; после Done auto label узла Изменение.
+Быстрый просмотр Изменение открыт: Север52/2/5, Юг10/2/4, Запад0/2/1
+(AmountSum/RowCount/QuantitySum); header types Float/Integer/Integer, Region String.
+Package1 НЕ сохранён; active Hermes нет. Ручное подтверждение не закрывает P3 gates.
+Далее runtime ReformColumnsWizard/EditReformColumnDefForm, correlated settings/results,
+full Luna acceptance + P3–P9. Подробный UI маршрут сверху implementation-status.
+
 **Checkpoint:** поддержан DerivedDataSourceMappingEngineOutputPortWizard;
 output_columns.source читает rendered_source label/type либо explicit unmapped,
 identity_verified=false. Live QuantitySum source unmapped, остальные 4 source
