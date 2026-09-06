@@ -1,3 +1,31 @@
+## 2026-09-06 — прогон остановился на перекрытой вкладке; добавлена диагностика слоя
+
+Run20260906-030443-0696fd47 terminal, session52276 закрыт; source7109eeb0,
+runtime4734e818ea48f1e69f6a4ce13cd891b7580e241d8363b4c58a4617adeae7a926.
+ChatGPT subscription/openai-codex/gpt-5.6-luna/medium,42 API calls,
+completed=true/failed=false,exit0/timeout=false. Frozen audit51/58 FAIL, SHA
+11cd18c874b385ed86b79065b948e0b5ca2673877c9c175ed345df0fbf5d6341;
+семь domain gates остаются открыты. До мастеров и Calculator не дошёл,
+исправление мигания курсора в live НЕ принято.
+
+Последний call91 переключал вкладку сценария по свежему доставленному ref.
+Raw journal показывает tab-1 anchor at x49/y0/w125.3359375/h35; ранее он имел
+point_observed, затем point_not_observed при прежней геометрии. Последний reply92
+корректно вернул NOT_APPLIED/UI_REFERENCE_OBSCURED. Диалоги/маски в выданных
+наблюдениях пусты; что именно перекрывало вкладку, старый runtime не записал.
+Не делать вывода о неисправности hit-test или включать force click.
+
+В interaction.point_not_observed добавлено covering: до трёх уникальных
+перекрывающих DOM элементов из существующих девяти hit-test точек. Только tag,
+tid/anchor_tid/role; без текста/значений и без новых actionable refs. Sensitive
+элемент даёт только redacted=true. Диагностика должна помочь найти текущий слой
+через новое наблюдение, не разрешает произвольные selectors/действия.
+267 client /110 Python /10 packaging PASS; описание наблюдения обновлено.
+
+Далее новый полный Luna run для диагностики перекрытия и приёмки исправления
+курсора, затем node/settings binding, apply/results и полный P3–P9.
+Active Hermes/browser нет, production не менялся.
+
 ## 2026-09-06 — установлена причина Calculator epoch отказов; узкое исключение мигания
 
 Run 20260906-024410-296ed587 terminal, session71725 закрыт. Существующая

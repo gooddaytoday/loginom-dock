@@ -1388,3 +1388,19 @@ test('cursor exemption rejects geometry ABA, individual cursor styles and unowne
     assert.ok((await page.observe()).dom_epoch.revision>before.dom_epoch.revision,mode);
   }
 });
+
+
+test('covered control reports only bounded blocker identities, without text or new refs',async()=>{
+  const page=new Page();page.context.innerWidth=1000;page.context.innerHeight=800;
+  const button=page.add('button','Safe;btnAction','Act');
+  const overlay=page.add('div','Overlay;Panel','private unrelated content',button.box);
+  const input=page.add('input',null,'',button.box,overlay);input.value='private value';
+  const snapshot=await page.observe(),record=snapshot.ui.elements.find(e=>e.tid==='Safe;btnAction');
+  assert.equal(record.interaction.state,'point_not_observed');
+  assert.deepEqual(record.interaction.covering,[{tag:'input',tid:null,anchor_tid:'Overlay;Panel',role:null}]);
+  assert.ok(!JSON.stringify(record.interaction).includes('private'));
+  input.attrs.type='password';
+  const redacted=(await page.observe()).ui.elements.find(e=>e.tid==='Safe;btnAction').interaction;
+  assert.deepEqual(redacted.covering,[{redacted:true}]);
+  overlay.remove();assert.equal((await page.observe()).ui.elements.find(e=>e.tid==='Safe;btnAction').interaction.state,'point_observed');
+});

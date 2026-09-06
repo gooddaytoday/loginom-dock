@@ -394,12 +394,20 @@ function workspaceUiCapability(page, task) {
       if (![width,height].every(Number.isFinite)) return { state:'unverified', point:null };
       if (box.x>=width || box.y>=height || box.x+box.width<=0 || box.y+box.height<=0) return {state:'outside_viewport',point:null};
       const left=Math.max(0,box.x),right=Math.min(width,box.x+box.width),top=Math.max(0,box.y),bottom=Math.min(height,box.y+box.height);
+      const covering=[],seenCovering=new Set();
       for (const y of [0.5,0.25,0.75]) for (const x of [0.5,0.25,0.75]) {
         charge();
         const point={x:left+(right-left)*x,y:top+(bottom-top)*y},hit=document.elementFromPoint(point.x,point.y);
         if (hit && (hit===element || element.contains(hit))) return {state:'point_observed',point};
+        if(hit && !seenCovering.has(hit) && covering.length<3) {
+          seenCovering.add(hit);
+          // No text or values: identify the covering layer without reading its
+          // potentially unrelated content or granting a new action reference.
+          covering.push(sensitive(hit)?{redacted:true}:{tag:hit.tagName.toLowerCase(),tid:getTid(hit),
+            anchor_tid:identityOf(hit)?.anchor_tid??null,role:hit.getAttribute('role')});
+        }
       }
-      return {state:'point_not_observed',point:null};
+      return {state:'point_not_observed',point:null,covering};
     };
     // E2E sCalculator.ExpressionInput/ExpressionText and check.Mode. Visible
     // PRE nodes are a rendering, not an authoritative editor document (the E2E

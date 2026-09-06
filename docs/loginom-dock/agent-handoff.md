@@ -1,3 +1,10 @@
+**Checkpoint:** run030443-0696fd47 terminal, session52276 закрыт,51/58 FAIL,
+42 API calls. Calculator не достигнут: call91 на вкладку сценария отклонён
+из-за перекрытия при нормальной геометрии. Cursor fix live ещё не принят.
+Добавлено bounded interaction.covering без текста/значений/action refs;
+267 client /110 Python /10 packaging PASS. Далее полный Luna/ChatGPT/medium run, проверить
+перекрывающий слой и cursor fix; весь P3–P9 открыт. Active Hermes/browser нет.
+
 **Checkpoint:** run024410-296ed587 terminal, session71725 закрыт,49/58 FAIL,
 127 API calls. В пяти Calculator epoch refusals только cursor_style delta9–13.
 Добавлено узкое исключение visibility blink для owned CodeMirror-cursors со
