@@ -51,3 +51,17 @@ class DataPipelineTest(unittest.TestCase):
             self.assertEqual(report['pre_action_rejections'],0 if effect else 1)
             self.assertEqual(report['transfer_verified'],not effect)
             self.assertFalse(report['all_assertions_passed'])
+
+    def test_source_path_comes_only_from_pinned_request(self):
+        _, request = UploadVerifyTest().fixture()
+        path = data_pipeline.declared_source_path(request)
+        self.assertEqual(path, request['storage_directory']+'/'+request['input_artifact']['name'])
+        for mutate in (
+            lambda r: r['input_artifact'].update(name='other.csv'),
+            lambda r: r['harness_inputs'].update({data_pipeline.upload_probe.FIXTURE:'forged'}),
+            lambda r: r.update(storage_directory='/../test'),
+            lambda r: r.update(run_id='foreign'),
+        ):
+            changed=copy.deepcopy(request);mutate(changed)
+            self.assertIsNone(data_pipeline.declared_source_path(changed))
+        self.assertIsNone(data_pipeline.declared_source_path({}))

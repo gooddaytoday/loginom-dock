@@ -23,6 +23,18 @@ def prompt(template, package, directory, run_id):
     return upload_probe.prompt(template,package,directory,run_id).replace('__PIPELINE_TASK__',task.strip())
 
 
+def declared_source_path(request):
+    """Resolve only the fixture declared before execution, never a model path."""
+    try:
+        descriptor = upload_probe.descriptor(request['run_id'], request['storage_directory'])
+        if (request.get('input_artifact') != descriptor
+                or request.get('harness_inputs', {}).get(upload_probe.FIXTURE) != upload_probe.FIXTURE_SHA):
+            return None
+        return descriptor['upload']['directory'] + '/' + descriptor['name']
+    except (KeyError, TypeError, ValueError, AttributeError):
+        return None
+
+
 def audit(evidence, checks, request, prefix, mutations, storage_audit, rejected_before_browser):
     def check(name,value):checks.append({'name':name,'passed':bool(value)})
     calls,tools=evidence['calls'],evidence['tools']
@@ -61,7 +73,7 @@ def audit(evidence, checks, request, prefix, mutations, storage_audit, rejected_
     return {'all_assertions_passed':False,'assertions':checks,'goal':'data-pipeline',
             'acceptance_status':'diagnostic_only_domain_verifiers_incomplete',
             'rendered_result_diagnostics':rendered_results.diagnose(evidence,json.loads(Path(__file__).with_name('fixtures').joinpath('data-pipeline/expected.json').read_text()),prefix),
-            'import_settings_diagnostics':import_settings_evidence.diagnose(evidence,json.loads(Path(__file__).with_name('fixtures').joinpath('data-pipeline/expected.json').read_text()),prefix),
+            'import_settings_diagnostics':import_settings_evidence.diagnose(evidence,json.loads(Path(__file__).with_name('fixtures').joinpath('data-pipeline/expected.json').read_text()),prefix,expected_source_path=declared_source_path(request)),
             'settings_roundtrip_diagnostics':settings_evidence.diagnose(evidence,json.loads(Path(__file__).with_name('fixtures').joinpath('data-pipeline/expected.json').read_text())['calculator'],prefix),
             'transfer_verified':transfer_passed,'pre_action_rejections':len(rejected),'missing_domain_verifiers':list(DOMAIN_GATES),
             'limitations':['Full P3 task requested; typed domain evidence audit is not implemented. No P3 acceptance claim is possible.']}

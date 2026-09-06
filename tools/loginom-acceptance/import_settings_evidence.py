@@ -21,12 +21,12 @@ class Unverifiable(ValueError):
     pass
 
 
-def _context(snapshot):
+def _context(snapshot, stage='text_import_format'):
     if snapshot.get('authenticated') is not True:
         raise Unverifiable('unauthenticated')
     wizard = snapshot['wizard']
-    if wizard.get('status') != 'observed' or wizard.get('stage') != 'text_import_format':
-        raise Unverifiable('import_format_not_observed')
+    if wizard.get('status') != 'observed' or wizard.get('stage') != stage:
+        raise Unverifiable(stage + '_not_observed')
     prefix = snapshot['workflow_ref']['prefix']
     if not isinstance(prefix, str) or not re.fullmatch(r'MF;TF(?:-\d+)?', prefix):
         raise Unverifiable('workflow_context_missing')
@@ -126,17 +126,136 @@ def compare(snapshot, expected, expected_context=None):
         return {**result, 'reason': str(error) if isinstance(error, Unverifiable) else 'malformed_evidence_or_fixture'}
 
 
-def diagnose(evidence, expected, prefix):
+def _diagnostic_result(verdict):
+    return {verdict: False, 'complete': False, 'node_persistence_verified': False,
+            'package_persistence_verified': False, 'file_bytes_verified': False,
+            'source_identity_verified': False,
+            'missing_proofs': ['source_artifact_binding', 'complete_source_schema',
+                               'source_field_identity', 'apply_reopen_readback', 'package_persistence']}
+
+
+def _ready_context(snapshot, stage, expected_context):
+    context = _context(snapshot, stage)
+    if expected_context is not None and context != expected_context:
+        raise Unverifiable('context_changed')
+    if snapshot['ui'].get('dialogs') != [] or snapshot['ui'].get('masks') != []:
+        raise Unverifiable('dialog_or_mask_present_or_unobserved')
+    if any(key in snapshot['wizard'] for key in ('import_column_editor', 'column_parameters')):
+        raise Unverifiable('column_editor_present')
+    return context
+
+
+def source_compare(snapshot, expected, expected_source_path, expected_context=None):
+    """Match UI source settings to an explicit storage file; no byte identity."""
+    verdict = 'rendered_import_source_match'
+    result = _diagnostic_result(verdict)
+    try:
+        # Caller supplies an exact Loginom path. Never derive it from account,
+        # local OS, basename or fixture; do not normalize traversal/URL inputs.
+        if (not isinstance(expected_source_path, str) or not expected_source_path.startswith('/')
+                or len(expected_source_path) > 2048
+                or any(part in ('', '.', '..') for part in expected_source_path[1:].split('/'))
+                or any(c in expected_source_path for c in ('\\', '\0', '\r', '\n', ':', '?', '#'))):
+            raise Unverifiable('invalid_expected_source_path')
+        context = _ready_context(snapshot, 'text_import_file', expected_context)
+        source = snapshot['wizard']['import_source']
+        if (source.get('status') != 'draft_ui_values' or source.get('settings_applied') is not False
+                or source.get('file_bytes_verified') is not False or source.get('schema_complete') is not False):
+            raise Unverifiable('source_settings_unobserved')
+        wanted = expected['input']
+        if wanted.get('encoding') != 'UTF-8' or type(wanted.get('header')) is not bool:
+            raise Unverifiable('unsupported_expected_source_settings')
+        # Current pinned fixture has no skipped data lines. Explicit nonzero
+        # fixture settings are supported only as integer counts.
+        skip = wanted.get('rows_to_skip', 0)
+        if type(skip) is not int or not 0 <= skip <= 1000000:
+            raise Unverifiable('invalid_expected_skip')
+        expected_values = {'source_path': expected_source_path, 'connection': 'Локальное',
+                           'encoding': 'UTF-8 (65001)', 'rows_to_skip': str(skip)}
+        refs = set(); values = {}
+        for name, value in expected_values.items():
+            field = source['fields'][name]; actual = field.get('value')
+            if (field.get('status') != 'observed' or field.get('truncated') is not False
+                    or field.get('value_kind') != 'displayed_input_text' or not isinstance(actual, str)
+                    or len(actual) > (2048 if name == 'source_path' else 256)
+                    or field.get('value_length_utf16') != len(actual.encode('utf-16-le')) // 2
+                    or not field.get('input_ref') or not field.get('owner_ref')):
+                raise Unverifiable('source_field_unobserved:' + name)
+            if field['input_ref'] in refs:
+                raise Unverifiable('duplicate_source_input')
+            refs.add(field['input_ref'])
+            if actual != value:
+                raise Unverifiable('source_field_mismatch:' + name)
+            values[name] = actual
+        header = source['fields']['first_line_as_title']
+        if (header.get('status') != 'observed' or header.get('value_kind') != 'loginom_ext_checkbox'
+                or type(header.get('value')) is not bool or not header.get('owner_ref') or not header.get('display_ref')):
+            raise Unverifiable('header_unobserved')
+        if header['value'] != wanted['header']:
+            raise Unverifiable('header_mismatch')
+        values['first_line_as_title'] = header['value']
+        return {**result, verdict: True, 'reason': 'rendered_source_settings_match', 'context': context, 'values': values}
+    except (KeyError, TypeError, AttributeError, ValueError, UnicodeError) as error:
+        return {**result, 'reason': str(error) if isinstance(error, Unverifiable) else 'malformed_evidence_or_fixture'}
+
+
+def mapping_compare(snapshot, expected, expected_context=None):
+    """Match rendered import targets and source labels/types, not source identity."""
+    verdict = 'rendered_import_mapping_match'
+    result = _diagnostic_result(verdict)
+    try:
+        context = _ready_context(snapshot, 'output_mapping', expected_context)
+        mapping = snapshot['wizard']['output_columns']
+        if (mapping.get('status') != 'rendered_rows' or mapping.get('complete') is not False
+                or mapping.get('settings_applied') is not False or mapping.get('truncated', False) is not False):
+            raise Unverifiable('mapping_unobserved_or_truncated')
+        fields = mapping['fields']; schema = expected['schema']
+        if (not isinstance(fields, list) or not isinstance(schema, list)
+                or not 1 <= len(fields) == len(schema) <= 64):
+            raise Unverifiable('mapping_count_mismatch')
+        wanted = {column['name']: column['type'] for column in schema}
+        if len(wanted) != len(schema):
+            raise Unverifiable('expected_schema_ambiguous')
+        names = set(); rows = set(); source_refs = set()
+        for field in fields:
+            name = field.get('name'); row = field.get('row_ref')
+            if (field.get('status') != 'observed' or field.get('truncated', False) is not False
+                    or field.get('redacted', False) is not False or not isinstance(name, str)
+                    or name in names or not row or row in rows or not field.get('name_ref') or not field.get('label_ref')):
+                raise Unverifiable('mapping_ambiguous_or_duplicate')
+            names.add(name); rows.add(row)
+            if name not in wanted or field.get('type') != wanted[name]:
+                raise Unverifiable('mapping_target_mismatch')
+            source = field['source']
+            if (source.get('status') != 'rendered_source' or source.get('identity_verified') is not False
+                    or source.get('truncated', False) is not False or source.get('redacted', False) is not False
+                    or not source.get('cell_ref') or source['cell_ref'] in source_refs):
+                raise Unverifiable('mapping_source_unobserved_or_duplicate')
+            source_refs.add(source['cell_ref'])
+            if source.get('label') != name or source.get('type') != wanted[name]:
+                raise Unverifiable('mapping_source_mismatch:' + name)
+        return {**result, verdict: True, 'reason': 'rendered_mapping_match', 'context': context,
+                'rendered_column_count': len(fields)}
+    except (KeyError, TypeError, AttributeError, ValueError, UnicodeError) as error:
+        return {**result, 'reason': str(error) if isinstance(error, Unverifiable) else 'malformed_evidence_or_fixture'}
+
+
+def diagnose(evidence, expected, prefix, *, expected_source_path=None):
     observations = []
     for receipt in settings_evidence.bound_receipts(evidence, prefix):
         snapshot = receipt['outcome'].get('output', {})
         if (not isinstance(snapshot, dict) or not isinstance(snapshot.get('wizard'), dict)
-                or snapshot['wizard'].get('stage') != 'text_import_format'):
+                or snapshot['wizard'].get('stage') not in ('text_import_file', 'text_import_format', 'output_mapping')):
             continue
+        stage = snapshot['wizard']['stage']
+        proof = (source_compare(snapshot, expected, expected_source_path) if stage == 'text_import_file'
+                 else mapping_compare(snapshot, expected) if stage == 'output_mapping'
+                 else compare(snapshot, expected))
         observations.append({'session_id': receipt['call'].get('session_id'),
                              'tool_call_id': receipt['call'].get('tool_call_id'),
+                             'stage': stage,
                              'operation_id': receipt['outcome']['operation_id'],
-                             **compare(snapshot, expected)})
+                             **proof})
         if len(observations) >= 60:
             return {'observations': observations, 'truncated': True, 'complete': False}
     return {'observations': observations, 'truncated': False, 'complete': False}

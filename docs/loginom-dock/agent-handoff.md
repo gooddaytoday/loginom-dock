@@ -1,3 +1,29 @@
+**2026-09-06 — independent source/mapping diagnostics.**
+import_settings_evidence теперь сравнивает все3 страницы отдельно через
+bound_receipts: source_compare с explicit expected_source_path, compare format,
+mapping_compare rendered targets/source labels/types. Контекст проверяется по
+stage, owner/path/workflow/package/tab/document; optional expected_context
+позволяет связать отдельные reads. Не считать отдельные matches последовательностью
+apply/reopen: journal sequence verifier ещё предстоит. Полнота/байты/source
+identity/node/package persistence намеренно не подтверждаются.
+
+data_pipeline.declared_source_path берёт destination только из predeclared
+request: valid run_id/storage_directory, exact input_artifact descriptor,
+pinned CSV SHA в harness_inputs. Forged filename/hash/path/run отвергаются.
+Этот путь передан в diagnose, путь из ответа модели не используется.
+
+Свежие manual snapshots .dock/post-mvp-p0/import-source-snapshot.json и
+import-mapping-snapshot.json проверены: source=true для explicit
+/test/Dock-upload-20260906-033638-57049220.csv с UTF8/headertrue/skip0;
+mapping=true для5 expected targets и source labels/types. Это direct native
+UI diagnostic, не immutable executor run proof. Mapping DOM имеет data-recordindex
+0..4, но не aria-rowcount/aria-colcount; число rendered rows не считать полным
+счётчиком набора. 133/133 Python tests PASS (клиент302/packaging10 без изменений).
+UI оставлен TF-4 output_mapping, source wizard Package1 открыт, не сохранён.
+Hermes не запускался, production не менялся. Далее journal-bound sequence
+source→format→mapping→apply/reopen плюс full schema/execution/results/package
+roundtrip. P3–P9 открыты; старые audits не переписаны.
+
 **2026-09-06 — источники и соответствия импорта читаются структурированно.**
 UI-first в TF-4 ImportTextFilePreviewWizard подтвердил exact ValueControl:
 /test/Dock-upload-20260906-033638-57049220.csv, connection Локальное,

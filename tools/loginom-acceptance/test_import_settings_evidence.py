@@ -34,7 +34,103 @@ def snapshot():
                                                      for i, column in enumerate(EXPECTED['schema'])]}}}
 
 
+def source_snapshot():
+    state = snapshot(); wizard = state['wizard']; wizard['stage'] = 'text_import_file'
+    values = {'source_path': '/test/source.csv', 'connection': 'Локальное',
+              'encoding': 'UTF-8 (65001)', 'rows_to_skip': '0'}
+    fields = {key: {'status': 'observed', 'value': value, 'value_length_utf16': len(value),
+                    'truncated': False, 'value_kind': 'displayed_input_text',
+                    'input_ref': key, 'owner_ref': key + '-owner'} for key, value in values.items()}
+    fields['first_line_as_title'] = {'status': 'observed', 'value': True,
+                                    'value_kind': 'loginom_ext_checkbox', 'owner_ref': 'header', 'display_ref': 'header-display'}
+    wizard['import_source'] = {'status': 'draft_ui_values', 'settings_applied': False,
+                               'file_bytes_verified': False, 'schema_complete': False, 'fields': fields}
+    return state
+
+
+def mapping_snapshot():
+    state = snapshot(); wizard = state['wizard']; wizard['stage'] = 'output_mapping'
+    fields = [{**column, 'status': 'observed', 'label': column['name'], 'row_ref': 'row-' + str(i),
+               'name_ref': 'name-' + str(i), 'label_ref': 'label-' + str(i),
+               'source': {'status': 'rendered_source', 'identity_verified': False,
+                          'label': column['name'], 'type': column['type'], 'cell_ref': 'source-' + str(i)}}
+              for i, column in enumerate(EXPECTED['schema'])]
+    wizard['output_columns'] = {'status': 'rendered_rows', 'complete': False,
+                                'settings_applied': False, 'fields': fields}
+    return state
+
+
 class ImportSettingsEvidenceTests(unittest.TestCase):
+    def test_source_is_ui_only_with_explicit_path(self):
+        report = ise.source_compare(source_snapshot(), EXPECTED, '/test/source.csv')
+        self.assertTrue(report['rendered_import_source_match'])
+        self.assertFalse(report['file_bytes_verified']); self.assertFalse(report['complete'])
+        for path in (None, 'source.csv', '/test/../source.csv', '//test/source.csv', '/test/',
+                     '/test/./source.csv', '/test\\source.csv', 'https://server/source.csv', '/test/a?token=b'):
+            self.assertEqual(ise.source_compare(source_snapshot(), EXPECTED, path)['reason'], 'invalid_expected_source_path')
+        self.assertEqual(ise.source_compare(source_snapshot(), EXPECTED, '/other/source.csv')['reason'], 'source_field_mismatch:source_path')
+
+    def test_source_fields_and_context_fail_closed(self):
+        context = ise.source_compare(source_snapshot(), EXPECTED, '/test/source.csv')['context']
+        for key in ('source_path', 'connection', 'encoding', 'rows_to_skip'):
+            for change in ({'value': 'wrong'}, {'status': 'redacted'}, {'status': 'ambiguous'},
+                           {'truncated': True}, {'value_length_utf16': 999}, {'input_ref': None}):
+                state = source_snapshot(); state['wizard']['import_source']['fields'][key].update(change)
+                self.assertFalse(ise.source_compare(state, EXPECTED, '/test/source.csv')['rendered_import_source_match'])
+        for mode in ('header', 'duplicate', 'context', 'mask', 'editor'):
+            state = source_snapshot(); fields = state['wizard']['import_source']['fields']
+            if mode == 'header': fields['first_line_as_title']['value'] = False
+            if mode == 'duplicate': fields['encoding']['input_ref'] = fields['source_path']['input_ref']
+            if mode == 'context': state['active_tab_ref'] = 'other'
+            if mode == 'mask': state['ui']['masks'] = [{}]
+            if mode == 'editor': state['wizard']['import_column_editor'] = {}
+            self.assertFalse(ise.source_compare(state, EXPECTED, '/test/source.csv', context)['rendered_import_source_match'])
+
+    def test_mapping_is_rendered_only(self):
+        report = ise.mapping_compare(mapping_snapshot(), EXPECTED)
+        self.assertTrue(report['rendered_import_mapping_match'])
+        self.assertFalse(report['source_identity_verified']); self.assertFalse(report['complete'])
+        state = mapping_snapshot(); state['wizard']['output_columns']['fields'].reverse()
+        self.assertTrue(ise.mapping_compare(state, EXPECTED)['rendered_import_mapping_match'])
+
+    def test_mapping_rejects_wrong_source_schema_and_ambiguity(self):
+        for mode in ('name', 'type', 'source_label', 'source_type', 'ambiguous', 'redacted', 'truncated',
+                     'source_ambiguous', 'source_redacted', 'source_truncated', 'duplicate_name',
+                     'duplicate_row', 'duplicate_source', 'missing', 'bounded', 'editor', 'context'):
+            with self.subTest(mode=mode):
+                state = mapping_snapshot(); mapping = state['wizard']['output_columns']; fields = mapping['fields']
+                context = ise.mapping_compare(state, EXPECTED)['context']
+                if mode == 'name': fields[0]['name'] = 'Other'
+                if mode == 'type': fields[0]['type'] = 'string'
+                if mode == 'source_label': fields[0]['source']['label'] = 'Other'
+                if mode == 'source_type': fields[0]['source']['type'] = 'string'
+                if mode == 'ambiguous': fields[0]['status'] = 'ambiguous'
+                if mode == 'redacted': fields[0]['redacted'] = True
+                if mode == 'truncated': fields[0]['truncated'] = True
+                if mode == 'source_ambiguous': fields[0]['source']['status'] = 'ambiguous'
+                if mode == 'source_redacted': fields[0]['source']['redacted'] = True
+                if mode == 'source_truncated': fields[0]['source']['truncated'] = True
+                if mode == 'duplicate_name': fields[1]['name'] = fields[0]['name']
+                if mode == 'duplicate_row': fields[1]['row_ref'] = fields[0]['row_ref']
+                if mode == 'duplicate_source': fields[1]['source']['cell_ref'] = fields[0]['source']['cell_ref']
+                if mode == 'missing': fields.pop()
+                if mode == 'bounded': mapping['status'] = 'bounded'
+                if mode == 'editor': state['wizard']['column_parameters'] = {}
+                if mode == 'context': state['active_tab_ref'] = 'other'
+                self.assertFalse(ise.mapping_compare(state, EXPECTED, context)['rendered_import_mapping_match'])
+
+    def test_diagnose_dispatches_source_and_mapping_without_inference(self):
+        for state, verdict in ((source_snapshot(), 'rendered_import_source_match'),
+                               (mapping_snapshot(), 'rendered_import_mapping_match')):
+            call = {'session_id': 's', 'tool_call_id': 'c', 'tool': 'dock_workspace_observe', 'row': 1}
+            outcome = {'status': 'SUCCEEDED', 'operation_id': 'op', 'output': state}
+            evidence = {'calls': [call], 'tools': [{**call, 'row': 2, 'result': outcome}],
+                        'events': [{'phase': 'observation_completed', 'operation_id': 'op', 'outcome': copy.deepcopy(outcome)}]}
+            report = ise.diagnose(evidence, EXPECTED, '', expected_source_path='/test/source.csv')
+            self.assertTrue(report['observations'][0][verdict])
+            if state['wizard']['stage'] == 'text_import_file':
+                self.assertFalse(ise.diagnose(evidence, EXPECTED, '')['observations'][0][verdict])
+
     def test_fixture_match_stays_incomplete(self):
         state = snapshot(); report = ise.compare(state, EXPECTED)
         self.assertTrue(report['rendered_import_settings_match'])
