@@ -39,6 +39,47 @@ class DataPipelineTest(unittest.TestCase):
         self.assertTrue(next(c['passed'] for c in report['assertions'] if c['name']=='pipeline_exactly_one_upload_and_verify'))
         self.assertFalse(report['all_assertions_passed'])
 
+    def multiple_refusals_fixture(self, count=2):
+        evidence,request,first=self.same_id_refusal_fixture()
+        reply=copy.deepcopy(next(t for t in evidence['tools'] if t['tool_call_id']==first['tool_call_id']))
+        for record in evidence['calls']+evidence['tools']:
+            if record['row']>=3:record['row']+=2*(count-1)
+        refusals=[first]
+        for i in range(1,count):
+            call={**copy.deepcopy(first),'row':1+2*i,'tool_call_id':'refused-'+str(i)}
+            evidence['calls'].append(call);refusals.append(call)
+            evidence['tools'].append({**copy.deepcopy(reply),'tool_call_id':call['tool_call_id'],'row':call['row']+1})
+        return evidence,request,refusals
+
+    def test_multiple_proven_refusals_before_one_upload(self):
+        for count in (2,4):
+            evidence,request,calls=self.multiple_refusals_fixture(count)
+            self.assertTrue(all(rejected_before_browser(call,evidence) for call in calls))
+            report=data_pipeline.audit(evidence,[],request,PREFIX,MUTATIONS,file_storage_inspect,rejected_before_browser)
+            self.assertEqual(report['pre_action_rejections'],count)
+            self.assertTrue(next(c['passed'] for c in report['assertions'] if c['name']=='pipeline_exactly_one_upload_and_verify'))
+            self.assertFalse(report['all_assertions_passed'])
+
+    def test_multiple_refusals_do_not_hide_second_effect_or_uncertain_attempt(self):
+        for mode in ('second_actual','pending','possible_effect','duplicate_call','duplicate_reply','foreign',
+                     'overlap','boundary_before_last_refusal','wrong_tool','unknown_error'):
+            with self.subTest(mode=mode):
+                evidence,_,calls=self.multiple_refusals_fixture()
+                middle=next(t for t in evidence['tools'] if t['tool_call_id']==calls[1]['tool_call_id'])
+                if mode=='second_actual':middle['result']=copy.deepcopy(next(t['result'] for t in evidence['tools'] if t['tool']==PREFIX+'dock_artifact_upload' and t['row']>10))
+                if mode=='pending':middle['result']['output']['operation']['state']='pending'
+                if mode=='possible_effect':middle['result']['effect_possible']=True
+                if mode=='duplicate_call':evidence['calls'].append(copy.deepcopy(calls[1]))
+                if mode=='duplicate_reply':evidence['tools'].append(copy.deepcopy(middle))
+                if mode=='foreign':calls[1]['session_id']='foreign';middle['session_id']='foreign'
+                if mode=='overlap':calls[1]['row']=2
+                if mode=='boundary_before_last_refusal':
+                    next(c for c in evidence['calls'] if c['tool_call_id']=='boundary')['row']=2
+                    next(t for t in evidence['tools'] if t['tool_call_id']=='boundary')['row']=3
+                if mode=='wrong_tool':middle['tool']=PREFIX+'dock_ui_action'
+                if mode=='unknown_error':middle['result']['error']=None
+                self.assertFalse(rejected_before_browser(calls[0],evidence))
+
     def test_same_id_exception_requires_new_idle_boundary_and_unique_effect(self):
         for mode in ('prior_event','missing_timestamp','foreign_journal','missing_boundary','pending_boundary',
                      'duplicate_reply','duplicate_effect','changed_journal','overlap','foreign_retry','possible_effect'):

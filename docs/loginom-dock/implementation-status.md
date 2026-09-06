@@ -1,3 +1,27 @@
+**2026-09-06 — picker импорта явно доступен, несколько отказов upload учтены строго.**
+UI-first после terminal122247: click по input редактора UnitPrice не открывает
+список; отдельный exact cbx;trg_picker открывает6 options. Runtime теперь
+выдаёт import_column_editor.picker_status/picker_ref только для unique visible
+owned enabled nonsensitive кнопки. Реальный control с понятной подписью
+«Открыть список: Тип данных» приоритетен перед type cells. Native snapshot
+manual TF-4 + реальный createObservationPages подтвердили page1/offset0,
+point_observed и click allowed. Metadata сама не разрешает жест. Tool description
+объясняет picker/input и чтение floating boundlist. Hidden/duplicate/foreign/
+disabled/sensitive и roots-only недоставленные refs покрыты негативами.
+
+Audit upload допускает N строго доказанных последовательных pre-dispatch
+отказов перед ровно одной реальной отправкой: unique same-session call/reply,
+idle/effectfalse для каждого отказа, общий bound idle observation ПОСЛЕ
+последнего отказа, все события операции позже его timestamp в той же session.
+Второй эффект/pending/ambiguity/foreign/overlap сохраняют FAIL. Helper на
+frozen122247: rows28/81 rejected=true, actual91=false; audit не пересчитывался.
+305client/144Python/10packaging PASS; diff check чистый.
+
+Hermes отсутствует. Manual TF-4 format оставлен без редактора (Escape), UnitPrice
+real; Package1 не сохранён. Production без изменений. Следующий шаг — новый
+короткий import-roundtrip на ChatGPT/openai-codex/gpt-5.6-luna/medium с frozen
+runtime/harness. Автономный type→finish→reopen ещё не подтверждён; P3–P9 открыты.
+
 **2026-09-06 — UnitPrice type доставляется на первой странице.**
 После terminal120105 UI-first в отдельном manual TF-4 text_import_format:
 UnitPrice real, cell3_2 видима. Serialized native snapshot + реальный

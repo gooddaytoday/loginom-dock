@@ -1,3 +1,53 @@
+**2026-09-06 — picker импорта явно доступен, несколько отказов upload учтены строго.**
+UI-first после terminal122247: click по input редактора UnitPrice не открывает
+список; отдельный exact cbx;trg_picker открывает6 options. Runtime теперь
+выдаёт import_column_editor.picker_status/picker_ref только для unique visible
+owned enabled nonsensitive кнопки. Реальный control с понятной подписью
+«Открыть список: Тип данных» приоритетен перед type cells. Native snapshot
+manual TF-4 + реальный createObservationPages подтвердили page1/offset0,
+point_observed и click allowed. Metadata сама не разрешает жест. Tool description
+объясняет picker/input и чтение floating boundlist. Hidden/duplicate/foreign/
+disabled/sensitive и roots-only недоставленные refs покрыты негативами.
+
+Audit upload допускает N строго доказанных последовательных pre-dispatch
+отказов перед ровно одной реальной отправкой: unique same-session call/reply,
+idle/effectfalse для каждого отказа, общий bound idle observation ПОСЛЕ
+последнего отказа, все события операции позже его timestamp в той же session.
+Второй эффект/pending/ambiguity/foreign/overlap сохраняют FAIL. Helper на
+frozen122247: rows28/81 rejected=true, actual91=false; audit не пересчитывался.
+305client/144Python/10packaging PASS; diff check чистый.
+
+Hermes отсутствует. Manual TF-4 format оставлен без редактора (Escape), UnitPrice
+real; Package1 не сохранён. Production без изменений. Следующий шаг — новый
+короткий import-roundtrip на ChatGPT/openai-codex/gpt-5.6-luna/medium с frozen
+runtime/harness. Автономный type→finish→reopen ещё не подтверждён; P3–P9 открыты.
+
+**2026-09-06 — короткий import run122247 завершён; найден отсутствующий picker ref.**
+Run `20260906-122247-3da2f659` / session74792 TERMINAL, source9bd1153d,
+ChatGPT/openai-codex/gpt-5.6-luna/medium, 139 API calls, returncode0, без timeout.
+Runtime/harness unchanged. Один frozen audit24/32, SHA
+`388f1f7ce71124bfd85bc5c858b199628b81c7b145a81fd811f4e5b4f2c282b4`.
+Knowledge scope PASS; upload count и семь domain gates FAIL. Не пересчитывать.
+
+Type cell теперь достигнута: row276 открывает editor UnitPrice/string.
+Но metadata содержит input_ref744/owner745 без picker_ref; rows288/300
+кликают input, список не открыт. select_wizard_option, finish/reopen proof нет.
+После terminal root лично подтвердил в manual TF-4: click type cell открывает
+редактор, click input не раскрывает список, exact `cbx;trg_picker` открывает
+шесть native options. Manual UnitPrice остаётся real; это другой пакет,
+не доказательство настройки Hermes. Beforeunload отклонён, draft сохранён в UI.
+Далее: выдавать exact picker_ref и control на первой странице плюс понятную
+семантику; проверить native pager, затем новый короткий replay.
+
+Upload фактически один: row91 submit, row107 verify bytes230/SHA/completion.
+Rows28/81 — два pre-dispatch отказа без эффекта. Текущий verifier допускает
+только один такой отказ перед отправкой; обобщить строго на N доказанных
+отказов с unique receipts/idle boundary/journal ordering, не разрешая второй
+реальный эффект. Независимый агент работает над audit.py/test_data_pipeline.py;
+другой — workspace-ui.mjs/тестом. Root владеет браузером/workspace description.
+На момент этой записи изменения в работе, новый Hermes не запущен;
+production без изменений. Полный P3–P9 остаётся открытым.
+
 **2026-09-06 — UnitPrice type доставляется на первой странице.**
 После terminal120105 UI-first в отдельном manual TF-4 text_import_format:
 UnitPrice real, cell3_2 видима. Serialized native snapshot + реальный

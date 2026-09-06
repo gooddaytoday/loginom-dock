@@ -174,6 +174,7 @@ function workspaceUiCapability(page, task) {
       '[data-tid$=";WizrdMCF;EditReformColumnDefForm"]',
       '[data-tid*=";WizrdMCF;ImportTextFileParamsWizard;ColumnDefsTuning;grdSettings;grd-1;normalHeaderCt;"]',
       '[data-tid*=";WizrdMCF;ImportTextFileParamsWizard;ColumnDefsTuning;grdSettings;grd-1;tbl;celleditor"][data-tid$=";cbx"]',
+      '[data-tid*=";WizrdMCF;ImportTextFileParamsWizard;ColumnDefsTuning;grdSettings;grd-1;tbl;celleditor"][data-tid$=";cbx;trg_picker"]',
       ...['edtName','edtDisplayName','cbxDataType','cbxDataKind','cbxUsageType','cntMain;cbxCachingMethod'].flatMap(name=>{const owner='[data-tid$=";WizrdMCF;EditReformColumnDefForm;'+name+'"]';return [owner,owner+' input'];}),
       '[data-tid$=";WizrdMCF;EditReformColumnDefForm;cntMain;chbExcluded"]','[data-tid$=";WizrdMCF;EditReformColumnDefForm;cntMain;chbExcluded;DisplayEl"]',
       '[data-tid$=";WizrdMCF;EditColumnDefForm"]',
@@ -597,6 +598,10 @@ function workspaceUiCapability(page, task) {
             Object.assign(wizard.import_column_editor,{used,header_ref:refOf(headers.find(e=>getTid(e)===columnBase+index)),
               other_property:row==='2'?'data_kind':'type',other_value:otherCanonical,
               cell_refs:Object.fromEntries(['name','label','type','data_kind','used'].map((key,i)=>[key,refOf(boundCells[i][0])]))});
+            const pickers=(tids.get(getTid(editors[0])+';trg_picker')??[]).filter(e=>visible(e) && !sensitive(e));
+            const pickerReady=pickers.length===1 && editors[0].contains(pickers[0]) && enabled(pickers[0]) && enabled(inputs[0]);
+            wizard.import_column_editor.picker_status=pickerReady?'observed':pickers.length>1?'ambiguous':'unobserved';
+            if(pickerReady)wizard.import_column_editor.picker_ref=refOf(pickers[0]);
             if(enabled(inputs[0]))wizardCombos.set(getTid(editors[0]),{name:wizard.import_column_editor.property,scope:'import_column',
               root_ref:wizard.root_ref,owner_ref:refOf(editors[0]),input_ref:refOf(inputs[0]),value});
           }
@@ -631,7 +636,8 @@ function workspaceUiCapability(page, task) {
     const comboPart=element=>{
       const tid=getTid(element)??'';
       for(const [ownerTid,field] of wizardCombos) {
-        if(tid===ownerTid+';trg_picker')return {kind:'picker',field};
+        if(tid===ownerTid+';trg_picker')return field.scope!=='import_column' || wizard.import_column_editor?.picker_status==='observed' && wizard.import_column_editor.picker_ref===state.ids.get(element)
+          ? {kind:'picker',field}:null;
         const prefix=ownerTid+';boundlist;';
         if(!tid.startsWith(prefix) || !tid.slice(prefix.length) || tid.slice(prefix.length).includes(';'))continue;
         const lists=(tids.get(ownerTid+';boundlist')??[]).filter(visible);
@@ -688,6 +694,7 @@ function workspaceUiCapability(page, task) {
       const tid=getTid(element)??'',base=workflow?.prefix+';WizrdMCF;';
       if(/^mn;mni[^;]+$/.test(tid) || element.getAttribute('role')==='menuitem')return -30;
       if(comboPart(element)?.kind==='option')return -25;
+      if(comboPart(element)?.kind==='picker' && comboPart(element).field.scope==='import_column')return -24;
       if(dialogRef(element))return -20;
       // Keep lifecycle and selected-expression controls on the first compact
       // page, ahead of Calculator operator palettes and rendered preview cells.
@@ -862,7 +869,8 @@ function workspaceUiCapability(page, task) {
         && visible(other) && !sensitive(other);}) : [];
       const storageEntry=storageRow ? {row_ref:refOf(storageRow),selected:storageRow.classList.contains('x-grid-item-selected'),
         kind:storageTypes.length===1 && textOf(storageTypes[0])==='Папка' ? 'folder':'unknown'} : null;
-      return { ref: refOf(element), tid, identity, kind, role, label, scope: scopeOf(element), ...fieldValue,
+      return { ref: refOf(element), tid, identity, kind, role, label:label || (combo?.kind==='picker' && combo.field.scope==='import_column'
+        ? 'Открыть список: '+(combo.field.name==='type'?'Тип данных':'Вид данных'):''), scope: scopeOf(element), ...fieldValue,
         ...(storageEntry ? {storage_entry:storageEntry} : {}),
         ...(graphNodeOf(element) ? {graph_node:graphNodeOf(element)} : {}),
         ...(scroll ? { scroll } : {}),

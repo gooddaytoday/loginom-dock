@@ -2255,3 +2255,39 @@ test('import type controls are delivered before format inputs in compact observa
   const unused=first.output.wizard.import_columns.fields[3].cell_refs.name;
   assert.throws(()=>pager.assertIssued(first.output.observation_id,{verb:'click',ref:unused}),/not been delivered/);
 });
+
+test('import editor exposes only a unique enabled owned picker with equivalent roots readback',async()=>{
+  for(const mode of ['valid','hidden','duplicate','foreign','disabled','sensitive']) {
+    const page=new Page(),c=importChoiceFixture(page);c.list.remove();
+    const picker=page.add('div',c.owner.attrs['data-tid']+';trg_picker','',
+      {x:600,y:320,width:20,height:20},mode==='foreign'?c.form:c.owner);
+    if(mode==='hidden')picker.style.display='none';
+    if(mode==='disabled')picker.disabled=true;
+    if(mode==='sensitive')picker.attrs['aria-label']='password';
+    if(mode==='duplicate')page.add('div',picker.attrs['data-tid'],'',picker.box,c.owner);
+    const raw=await page.execute({mode:'observe'}),editor=raw.output.wizard.import_column_editor;
+    assert.equal(editor.picker_status,mode==='valid'?'observed':mode==='duplicate'?'ambiguous':'unobserved',mode);
+    const controls=raw.output.ui.elements.filter(e=>e.wizard_combo?.kind==='picker');
+    if(mode==='valid'){
+      assert.equal(controls.length,1);assert.equal(controls[0].ref,editor.picker_ref);
+      assert.equal(controls[0].label,'Открыть список: Тип данных');assert.ok(controls[0].allowed_actions.includes('click'));
+    }else {assert.equal(editor.picker_ref,undefined);assert.equal(controls.length,0,mode);}
+    const roots=await page.execute({mode:'observe',discover_roots:true});
+    assert.deepEqual(roots.output.wizard.import_column_editor,editor,mode);
+  }
+});
+
+test('import picker leads compact page and is issued only through its delivered control',async()=>{
+  const page=new Page(),c=importChoiceFixture(page,'data_kind');c.list.remove();
+  for(let i=0;i<8;i++)if(i!==2)importColumnFixture(page,c.form,i,'Field'+i);
+  for(let i=0;i<40;i++)page.add('input','MF;TF-1;WizrdMCF;ImportTextFileParamsWizard;extra'+i,'',undefined,c.form);
+  page.add('div',c.owner.attrs['data-tid']+';trg_picker','',{x:600,y:340,width:20,height:20},c.owner);
+  const raw=await page.execute({mode:'observe'}),ref=raw.output.wizard.import_column_editor.picker_ref;
+  const pager=createObservationPages(),first=pager.retain(raw);
+  assert.equal(first.output.ui.elements[0].ref,ref);
+  assert.equal(first.output.ui.elements[0].label,'Открыть список: Вид данных');
+  assert.doesNotThrow(()=>pager.assertIssued(first.output.observation_id,{verb:'click',ref}));
+  const roots=await page.execute({mode:'observe',discover_roots:true}),rootPage=pager.retain(roots);
+  assert.equal(rootPage.output.wizard.import_column_editor.picker_ref,ref);
+  assert.throws(()=>pager.assertIssued(rootPage.output.observation_id,{verb:'click',ref}),/not been delivered/);
+});

@@ -581,22 +581,43 @@ def scroll_receipt_bound(call, target, evidence):
                and rename_effect.journal_equal(e.get('outcome',{}),result) for e in evidence.get('events',[]))
 
 
+def _idle_request_refusal(r):
+    if not isinstance(r,dict) or not isinstance(r.get('output'),dict) or not isinstance(r['output'].get('operation'),dict):return False
+    operation=r['output']['operation']
+    return (r.get('request_rejected') is True and r.get('effect_possible') is False
+            and r.get('status')=='FAILED' and r.get('phase')=='request_rejected' and r.get('action_key')=='request.validate'
+            and r.get('operation_id') is None and r.get('trace')==[] and isinstance(r.get('error'),dict)
+            and r['error'].get('code')=='REQUEST_REJECTED' and operation.get('operation_id') is None
+            and operation.get('state')=='idle' and operation.get('cleanup_confirmed') is True
+            and operation.get('effect_state')=='none')
+
+
 def _later_upload_journal(call, rejected_reply, evidence, operation_id, records):
     """A rejected ID can be used later; prove a fresh idle boundary first.
 
-    This narrow exception covers one actual upload after one pre-dispatch
-    refusal. Unknown, earlier or duplicate operation effects remain rejected.
+    This narrow exception covers one actual upload after ordered pre-dispatch
+    refusals. Unknown, earlier or duplicate operation effects remain rejected.
     """
     if call.get('tool') != PREFIX+'dock_artifact_upload':return False
     peers=[c for c in evidence.get('calls',[]) if c.get('tool')==call['tool']
            and c.get('arguments',{}).get('operation_id')==operation_id]
-    if len(peers)!=2 or sum(c==call for c in peers)!=1:return False
-    later=next(c for c in peers if c!=call)
-    if later.get('session_id')!=call.get('session_id') or later.get('row',-1)<=rejected_reply['row']:return False
-    replies=[t for t in evidence['tools'] if (t.get('session_id'),t.get('tool_call_id'))
-             ==(later.get('session_id'),later.get('tool_call_id'))]
-    if len(replies)!=1 or replies[0].get('tool')!=later['tool'] or replies[0].get('row',-1)<=later['row']:return False
-    outcome=replies[0].get('result',{})
+    if len(peers)<2 or sum(c==call for c in peers)!=1:return False
+    if any(c.get('session_id')!=call.get('session_id') or type(c.get('row')) is not int for c in peers):return False
+    peers=sorted(peers,key=lambda c:c['row'])
+    if len({c.get('tool_call_id') for c in peers})!=len(peers):return False
+    previous_reply=-1;bound=[]
+    for peer in peers:
+        replies=[t for t in evidence['tools'] if (t.get('session_id'),t.get('tool_call_id'))
+                 ==(peer.get('session_id'),peer.get('tool_call_id'))]
+        if (len(replies)!=1 or replies[0].get('tool')!=peer['tool'] or type(replies[0].get('row')) is not int
+                or not previous_reply<peer['row']<replies[0]['row']):return False
+        bound.append(replies[0]);previous_reply=replies[0]['row']
+    if any(not _idle_request_refusal(reply.get('result')) for reply in bound[:-1]):return False
+    # Every attempted request before the sole effect is independently refused.
+    # The common idle boundary must follow the final refusal, not just this one.
+    later=peers[-1];outcome=bound[-1].get('result',{})
+    last_refusal_row=bound[-2]['row']
+    if call==later or later['row']<=rejected_reply['row']:return False
     completed=[e for e in records if e.get('phase')=='completed']
     if (not isinstance(outcome,dict) or outcome.get('operation_id')!=operation_id
             or outcome.get('action_key')!='artifact.upload' or outcome.get('request_rejected')
@@ -606,7 +627,7 @@ def _later_upload_journal(call, rejected_reply, evidence, operation_id, records)
     for receipt in bound_receipts(evidence,PREFIX):
         boundary=receipt['call']
         if (boundary.get('tool')!=PREFIX+'dock_workspace_observe' or boundary.get('session_id')!=call.get('session_id')
-                or not rejected_reply['row']<boundary['row']<receipt['reply_row']<later['row']):continue
+                or not last_refusal_row<boundary['row']<receipt['reply_row']<later['row']):continue
         state=receipt['delivered'].get('output',{}).get('operation',{})
         if (state.get('state')!='idle' or state.get('operation_id') is not None
                 or state.get('cleanup_confirmed') is not True or state.get('effect_state')!='none'):continue
@@ -628,15 +649,7 @@ def rejected_before_browser(call, evidence):
     replies=[t for t in evidence['tools'] if (t.get('session_id'),t.get('tool_call_id'))
              ==(call.get('session_id'),call.get('tool_call_id'))]
     if len(replies)!=1 or replies[0].get('row',-1)<=call.get('row',-1) or replies[0].get('tool')!=call.get('tool'):return False
-    r=replies[0].get('result',{})
-    if not isinstance(r,dict) or not isinstance(r.get('output'),dict) or not isinstance(r['output'].get('operation'),dict):return False
-    operation=r['output']['operation']
-    rejected=(r.get('request_rejected') is True and r.get('effect_possible') is False
-            and r.get('status')=='FAILED' and r.get('phase')=='request_rejected' and r.get('action_key')=='request.validate'
-            and r.get('operation_id') is None and r.get('trace')==[] and r.get('error',{}).get('code')=='REQUEST_REJECTED'
-            and operation.get('operation_id') is None and operation.get('state')=='idle'
-            and operation.get('cleanup_confirmed') is True and operation.get('effect_state')=='none')
-    if not rejected:return False
+    if not _idle_request_refusal(replies[0].get('result')):return False
     records=[e for e in evidence.get('events',[]) if e.get('operation_id')==operation_id]
     return not records or _later_upload_journal(call,replies[0],evidence,operation_id,records)
 
