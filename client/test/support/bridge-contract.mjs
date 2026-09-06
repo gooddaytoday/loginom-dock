@@ -129,6 +129,18 @@ test('MCP application refusals remain typed normal content and the same connecti
     assert.equal(verification.goal.state, 'not_verified');
     assert.equal(page.drops, 1);
     assert.deepEqual(page.nodes.map(node => node.label), ['Источник']);
+    const observed = await client.callTool({ name: 'dock_workspace_observe', arguments: { scope: 'roots' } });
+    const observedReceipt = JSON.parse(observed.content[0].text);
+    const observedUsage = JSON.parse(observed.content[1].text);
+    assert.equal(observedReceipt.status, 'SUCCEEDED');
+    assert.equal(observedUsage.kind, 'dock_observation_usage');
+    assert.equal(observedUsage.observation_id, observedReceipt.output.observation_id);
+    assert.notEqual(observedUsage.observation_id, observedReceipt.operation_id);
+    assert.equal(JSON.parse(observed.content[2].text).kind, 'dock_outcome_verification');
+    for (const args of observedUsage.root_read_arguments ?? []) {
+      assert.ok(observedReceipt.output.ui.elements.some(e => e.ref === args.root_ref && e.kind === 'region' && e.allowed_actions.length === 0));
+      assert.equal(args.observation_id, observedReceipt.output.observation_id);
+    }
   } finally {
     await client?.close();
     await bridge?.close();

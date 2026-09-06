@@ -1,3 +1,47 @@
+**2026-09-06 — Hermes import-roundtrip 134110 завершён, выявлены потери на наблюдениях.**
+
+Run `20260906-134110-6aab052d`, handle70864, source1569bf80:
+ChatGPT/openai-codex/gpt-5.6-luna/medium,136 API calls,returncode0,
+completed=true/failed=false/timed_out=false. Runtime и harness не менялись.
+Единственный frozen audit25/33 SHA
+`2f1e7aff9948507c7020df9f03a4b537b77de86a6b590bbc507265b8b6d8cc3d`.
+Exactly-one-upload-and-verify PASS, scoped knowledge PASS.
+transfer_inspected_before_pipeline_mutation FAIL; семь domain gates не реализованы.
+Агент дошёл до output_mapping (последний ui.act row304), но finish/reopen
+не выполнил. Import settings/roundtrip diagnostics пусты. Не считать это приёмкой
+импорта и не пересчитывать старый audit после следующих изменений.
+
+Разбор только sanitized tool calls/replies подтвердил три случая подстановки
+верхнего operation_id вместо output.observation_id (rows99/135/153), несколько
+попыток использовать metadata refs до выдачи их ui.elements страницы, cursor
+вместе с observation_id и stale ref после изменения UI. Отдельно подтверждено
+pager invalidation после отложенного изменения DOM после wizard_step; конкретный
+DOM источник ещё не доказан. Guards сработали корректно, ослаблять их нельзя.
+
+После terminal добавлен отдельный MCP блок dock_observation_usage для успешных
+workspace.observe: точный observation_id, cursor-only continuation, до трёх
+read-only root arguments. Первый JSON receipt, journal и guards не менялись;
+metadata refs не предоставляют разрешений. Реальный MCP contract test проверил
+сохранность первого блока и recovery, client suite314/314 PASS; packaging10/10 PASS.
+
+Также исправлен пропуск graph_identity в независимом проверяющем коде проекции
+rename_effect.journal_equal. Пропуск заставлял отвергать новые корректные snapshots;
+теперь graph_identity копируется и сравнивается строго, удаления/подмены отклоняются.
+158 Python tests PASS. Все13 страниц свежего manual snapshot прошли сопоставление
+с native исходником через настоящий JS pager и независимый Python comparator.
+Это новая диагностическая проверка, frozen audit134110 не пересчитан.
+Сокращение самого payload пока не выполнено: удаление identity требует сохранить
+контракты rename/recovery и согласовать независимую проекцию.
+
+Root после terminal открыл свой manual TF4 import и перешёл на format через
+native driver. Snapshot `.dock/post-mvp-p0/format-pager-diagnostic-native.json`:
+53 controls, около6KB wizard metadata. Приоритет type cells помогает выбору
+типов, но отодвигает format inputs. Далее улучшить компактный agent-facing
+response и явную связь observation_id с выданными refs, не менять journal/receipts
+и не выдавать metadata refs автоматически. Затем проверить live и цельный replay.
+UI manual TF4format; пакет не сохранён. Hermes остановлен; production без изменений.
+Полный P3–P9 по-прежнему открыт, реального внешнего блокера нет.
+
 **2026-09-06 — mapping coverage и ручная проверка завершения импорта.**
 
 Добавлено доказательство границ настроенного output mapping для малого полностью

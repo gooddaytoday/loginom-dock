@@ -74,6 +74,7 @@ const values=JSON.parse(text); console.log(JSON.stringify(values.map(value=>crea
         raw=[copy.deepcopy(t['result']) for t in data[0]]
         for value in raw:
             value['output'].pop('observation_id',None)
+            value['output']['graph_identity']={'status':'observed','container_ref':'diagram-ref','container_tid':'MF;TF-1;ModelForm;cmpDiagram','native_prefix':'MF;TF-7;Graph;'}
             value['output']['wizard']={'status':'observed','title':'Настройка форматов импорта','stage':'text_import_format','controls':{'btnNext':{'status':'observed','enabled':True}}}
             value['output']['ui']['elements'][0]['signature']['large']='x'*1000
             value['output']['ui']['table_cells']=[{'text':'  value  ','data_cell':{'view_key':'v','column_key':'Comment','row_index':0,'display_text':'  value  ','text_complete':True,'null_marker_present':False,'header_observed':True,'redacted':False}}]
@@ -90,6 +91,9 @@ const values=JSON.parse(text); console.log(JSON.stringify(values.map(value=>crea
                        lambda r:r['output']['wizard'].update(title='Wrong title'),
                        lambda r:r['output']['wizard'].update(stage='done'),
                        lambda r:r['output'].pop('wizard'),
+                       lambda r:r['output'].pop('graph_identity'),
+                       lambda r:r['output']['graph_identity'].update(native_prefix='MF;TF-9;Graph;'),
+                       lambda r:r['output']['graph_identity'].update(container_tid='MF;TF-9;ModelForm;cmpDiagram'),
                        lambda r:r.update(status='AMBIGUOUS')]:
             bad=copy.deepcopy(projected[-1]);mutate(bad)
             self.assertFalse(rename_effect.journal_equal(raw[-1],bad))
@@ -100,7 +104,7 @@ class ContinuationProjection(unittest.TestCase):
     def test_all_pages_match_their_native_receipt_and_reject_changed_offset_content(self):
         root=Path(__file__).resolve().parents[2]
         raw={'status':'SUCCEEDED','operation_id':'read','output':{'nodes':[],'links':[],
-          'active_tab_ref':'tab-incarnation-1','navigation_context':{'status':'observed','kind':'workflow','path':[{'tid':'path','label':'Scenario'}]},
+          'graph_identity':{'status':'unobserved'},'active_tab_ref':'tab-incarnation-1','navigation_context':{'status':'observed','kind':'workflow','path':[{'tid':'path','label':'Scenario'}]},
           'file_storage':{'status':'observed','directory':'/test'},
           'ui':{'elements':[{'ref':f'ui-{i}','label':f'cell {i}','signature':{'tag':'td','private':'hidden'}} for i in range(70)],
                 'dialogs':[],'masks':[],'messages':[],'table_cells':[], 'truncated':{}}}}

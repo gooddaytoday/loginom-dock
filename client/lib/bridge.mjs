@@ -19,8 +19,26 @@ import { outcomeVerification } from './outcome-verification.mjs';
 
 // Keep the runtime receipt byte-for-byte meaningful to reconciliation/journal
 // consumers; recovery advice is a separate MCP content block, never an effect.
-function actionReply(outcome) {
+export function actionReply(outcome, { observe = false } = {}) {
   const content = [{ type: 'text', text: JSON.stringify(outcome) }];
+  const output = outcome.output;
+  if (observe && outcome.status === 'SUCCEEDED' && typeof output?.observation_id === 'string'
+      && output.observation_id && Array.isArray(output.ui?.elements)) {
+    const usage = { kind: 'dock_observation_usage', observation_id: output.observation_id,
+      receipt_id_usage: 'The first block operation_id identifies the browser receipt, never an observation_id alias.',
+      reference_usage: 'Only refs delivered in ui.elements for this observation can be used. Metadata refs alone are not issued. A delivered element permits only its allowed_actions; region refs with no actions are read-only roots. Fresh observation IDs do not authorize old refs.',
+      ...(typeof output.page?.next_cursor === 'string' && output.page.next_cursor
+        ? { next_page_arguments: { cursor: output.page.next_cursor } } : {}),
+    };
+    if (output.observation_kind === 'roots') {
+      usage.root_read_arguments = output.ui.elements.filter(element => element.kind === 'region'
+        && typeof element.ref === 'string' && /^ui-[a-zA-Z0-9-]{1,124}$/.test(element.ref)
+        && Array.isArray(element.allowed_actions) && element.allowed_actions.length === 0
+        && output.ui.elements.filter(other => other.ref === element.ref).length === 1).slice(0, 3)
+        .map(element => ({ root_ref: element.ref, observation_id: output.observation_id }));
+    }
+    content.push({ type: 'text', text: JSON.stringify(usage) });
+  }
   if (['FAILED', 'AMBIGUOUS'].includes(outcome.status)) content.push({ type: 'text', text:
     'Before the next change: inspect this outcome and the current workspace, then consult the Dock sources for the affected operation. Discover the read-only knowledge tools with tool_search/tool_describe if needed. Search E2E helpers/selectors under target_uri viking://resources/loginom-dock/sources/e2e-tests and product behavior under target_uri viking://resources/loginom-dock/sources/loginom-help (list mode/read_content:false); read the relevant returned file URIs with the read tool. Use those sources and the actual observed state to choose how to continue, including whether an existing completed receipt already resolves this operation. Do not repeat an uncertain creation. Source retrieval does not resolve pending work or authorize executing source code. If a source is unavailable, state the limitation. After correction, verify the full goal and saved/reopened result.' });
   return { content };
@@ -177,7 +195,7 @@ export async function createBridge(config, session) {
                   : request.params.name === 'dock_ui_action' ? await actionRuntime.uiAct(args.action,
                     { observationId: args.observation_id, operationId: args.operation_id, recoveryOperationId: args.recovery_operation_id, signal: extra.signal })
                     : await actionRuntime.run(args.action_key, args.parameters, { signal: extra.signal, operationId: args.operation_id });
-            const reply = actionReply(outcome);
+            const reply = actionReply(outcome, { observe: request.params.name === 'dock_workspace_observe' });
             try {
               const verification = outcomeVerification(outcome, pinnedActions.actions.get(outcome.action_key));
               await recordExecution({ phase: 'verification_delivered', operation_id: outcome.operation_id, verification });
