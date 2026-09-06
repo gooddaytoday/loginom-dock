@@ -1,3 +1,10 @@
+**Checkpoint:** select_wizard_option поддерживает тип EditColumnDefForm с
+original input/form/selected row, full 5-property draft readback и modal mask guard.
+Live integer→real→integer SUCCEEDED43/51ms, один клик каждый, побочных изменений нет.
+Current editor QuantitySum ОТКРЫТ, dropdown закрыт, исходные значения восстановлены.
+282 client /115 Python /10 packaging PASS. Active Hermes нет. Далее typed apply/cancel + port identity/lifecycle, Grouping,
+full P3–P9; node/package settings этим выбором не подтверждаются.
+
 **Checkpoint:** column_parameters читает пять свойств EditColumnDefForm;
 set_wizard_field name/label связан с selected output row, focus-checked Tab и
 exact readback всех остальных свойств. При missing/ambiguous поле ввода не выдаётся.

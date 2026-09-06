@@ -1,3 +1,24 @@
+**Checkpoint 2026-09-06 — typed выбор типа output-column editor.**
+Existing select_wizard_option расширен на EditColumnDefForm;cbxDataType.
+Observed option/list связаны с original input, parameter form, wizard и selected
+output row. После закрытия floating списка читается исходный wizard; сравниваются
+все пять свойств column_parameters с единственным ожидаемым изменением type_label.
+Missing/ambiguous/truncated parameter не даёт typed option. Background mask мастера
+допускается только для опции, связанной с foreground editor; busy mask блокирует.
+Тесты покрывают narrow floating list, неожиданное изменение data_kind и busy mask.
+
+Direct live QuantitySum: Целый→Вещественный SUCCEEDED43ms, обратно Целый
+SUCCEEDED51ms, по одному клику, остальные значения и selected row неизменны.
+Ни type change, ни ввод name/label не считаются BtnApply или сохранением порта.
+Для типов, меняющих data_kind автоматически, точное ожидаемое поведение ещё нужно
+исследовать; текущий contract не подтверждает побочное изменение другого свойства.
+Private evidence .dock/post-mvp-p0/output-type-live-result.txt и
+output-type-{client,python,packaging,unit}-tests.txt. 282 client /115 Python /10 packaging PASS. Active Hermes нет.
+Далее typed apply/cancel выбранного output column с полным row readback,
+затем port owner/lifecycle/reopen и Grouping drivers, full P3–P9.
+Current EditColumnDefForm QuantitySum ОТКРЫТ, dropdown закрыт, исходный тип Целый,
+имя QuantitySum, метка Quantity|Сумма; изменений draft относительно original нет.
+
 **Checkpoint 2026-09-06 — подтверждаемый ввод в EditColumnDefForm.**
 Добавлены bounded wizard.column_parameters: name/label/type_label/data_kind/usage,
 форма и selected_column исходной output row. Native fixed queries читают sibling

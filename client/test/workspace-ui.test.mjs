@@ -1750,7 +1750,7 @@ test('output columns bind names labels and types to real rows, excluding summary
 });
 
 test('output column typed editing preserves the selected row and all other parameters',async()=>{
-  for(const mode of ['name','label','type_changed','selection_changed','missing_type']) {
+  for(const mode of ['name','label','type_changed','selection_changed','missing_type','combo','combo_kind_changed','combo_busy']) {
     const page=new Page(),base='MF;TF-1;WizrdMCF;',form=page.add('div',base.slice(0,-1));
     page.add('button',base+'DerivedDataSourceOutputSocketWizard;btnAddMappingColumn','',undefined,form);
     const table=page.add('table',null,'',undefined,form);table.attrs.class='x-grid-item-selected';
@@ -1761,6 +1761,23 @@ test('output column typed editing preserves the selected row and all other param
     for(const [key,value] of [['edtName','Quantity'],['edtDisplayName','Quantity|Сумма'],['cbxDataType','Целый'],['cbxDataKind','Непрерывный'],['cbxUsageType','Не задано']]) {
       const owner=page.add('div',base+'EditColumnDefForm;'+key,'',undefined,dialog),input=page.add('input',null,'',undefined,owner);
       input.value=value;input.box={x:300,y:200+Object.keys(inputs).length*40,width:120,height:25};inputs[key]=input;
+    }
+    if(mode.startsWith('combo')) {
+      const stem=base+'EditColumnDefForm;cbxDataType;';
+      const list=page.add('div',stem+'boundlist','',{x:600,y:300,width:140,height:40});
+      page.add('div',stem+'boundlist;Вещественный','Вещественный',{x:605,y:305,width:130,height:25},list);
+      if(mode==='combo_busy')dialog.attrs.class='x-window bg-mask-message';
+      else {form.attrs.class='bg-mask-message';form.attrs['bg-mask-text']='Загрузка';}
+      const snapshot=await page.observe(),first=snapshot.ui.elements.find(e=>e.wizard_combo?.kind==='option');
+      assert.ok(first);
+      const read=await page.execute({mode:'observe',root_ref:first.wizard_combo.list_ref});
+      const option=read.output.ui.elements.find(e=>e.wizard_combo?.kind==='option');
+      const click=page.mouse.click;page.mouse.click=async(...args)=>{await click(...args);list.remove();inputs.cbxDataType.value='Вещественный';
+        if(mode==='combo_kind_changed')inputs.cbxDataKind.value='Дискретный';};
+      const result=await page.act({verb:'select_wizard_option',ref:option.ref},read.output);
+      assert.equal(result.status,mode==='combo'?'SUCCEEDED':mode==='combo_busy'?'NOT_APPLIED':'AMBIGUOUS',mode+JSON.stringify(result.error));
+      assert.equal(page.events.filter(e=>e==='click').length,mode==='combo_busy'?0:1);
+      continue;
     }
     if(mode==='missing_type')inputs.cbxDataType.remove();
     const full=await page.observe(),read=await page.execute({mode:'observe',root_ref:full.wizard.column_parameters.root_ref});

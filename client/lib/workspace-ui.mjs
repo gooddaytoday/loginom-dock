@@ -379,6 +379,9 @@ function workspaceUiCapability(page, task) {
             if(['name','label'].includes(name) && selection && value.length<=256 && enabled(input) && !input.readOnly)
               wizardFields.set(input,{name,scope:'output_column',max_length_utf16:Math.min(nativeMax,256),stage:wizard.stage,
                 root_ref:refOf(forms[0]),wizard_root_ref:wizard.root_ref,owner_ref:refOf(owners[0]),selected_column:selection});
+            if(name==='type_label' && selection && value.length<=256 && enabled(input))
+              wizardCombos.set(base+';'+key,{name,scope:'output_column',owner_ref:refOf(owners[0]),input_ref:refOf(input),
+                root_ref:wizard.root_ref,parameter_root_ref:refOf(forms[0]),selected_column:selection,value});
             return [name,{status:'observed',value:value.slice(0,256),value_length_utf16:value.length,truncated:value.length>256,
               input_ref:refOf(input),owner_ref:refOf(owners[0]),enabled:enabled(input),read_only:input.readOnly===true}];
           }));
@@ -389,6 +392,7 @@ function workspaceUiCapability(page, task) {
     if(wizard.column_parameters && (Object.values(wizard.column_parameters.fields??{}).length!==5
       || Object.values(wizard.column_parameters.fields??{}).some(f=>f.status!=='observed' || f.truncated))) {
       for(const [input,field] of wizardFields)if(field.scope==='output_column')wizardFields.delete(input);
+      for(const [owner,field] of wizardCombos)if(field.scope==='output_column')wizardCombos.delete(owner);
     }
     if(wizard.status==='observed' && wizard.stage==='calculator') {
       // This native dialog is a sibling of the wizard, not its descendant.
@@ -959,7 +963,7 @@ function workspaceUiCapability(page, task) {
           const targetsForeground = foreground && refs.every(ref => {
             const element=current.ui.elements.find(element=>element.ref===ref);
             return element?.signature.dialog_ref===foreground.ref || task.action.verb==='select_wizard_option'
-              && element?.wizard_combo?.kind==='option' && element.wizard_combo.field.scope==='expression_parameter'
+              && element?.wizard_combo?.kind==='option' && ['expression_parameter','output_column'].includes(element.wizard_combo.field.scope)
               && element.wizard_combo.field.parameter_root_ref===foreground.ref;
           });
           const dialogBlocked = !foreground || current.ui.masks.some(mask => mask.dialog_ref === foreground.ref || mask.kind !== 'modal_background');
@@ -1166,11 +1170,12 @@ function workspaceUiCapability(page, task) {
         }
         if(task.action.verb==='select_wizard_option') {
           const choice=current.ui.elements.find(item=>item.ref===task.action.ref).wizard_combo;
-          const expressionParameter=choice.field.scope==='expression_parameter';
-          const field=(expressionParameter?observed.wizard.expression_parameters:observed.wizard.settings)?.fields?.[choice.field.name];
+          const parameterKey=choice.field.scope==='expression_parameter'?'expression_parameters':choice.field.scope==='output_column'?'column_parameters':null;
+          const expressionParameter=parameterKey!==null;
+          const field=observed.wizard[parameterKey??'settings']?.fields?.[choice.field.name];
           const expected=JSON.parse(JSON.stringify(current.wizard));
-          if(expressionParameter)expected.expression_parameters.fields[choice.field.name].value=choice.label;
-          if(expressionParameter)expected.expression_parameters.fields[choice.field.name].value_length_utf16=choice.label.length;
+          if(expressionParameter)expected[parameterKey].fields[choice.field.name].value=choice.label;
+          if(expressionParameter)expected[parameterKey].fields[choice.field.name].value_length_utf16=choice.label.length;
           if(!observed.authenticated || observed.origin!==current.origin || observed.loginom_build!==current.loginom_build
             || !same(observed.workflow_ref,current.workflow_ref) || !same(observed.package_identity,current.package_identity)
             || !same(observed.active_identity,current.active_identity) || observed.wizard.root_ref!==choice.field.root_ref
