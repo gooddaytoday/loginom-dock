@@ -2,11 +2,103 @@ import copy
 import unittest
 from pathlib import Path
 import data_pipeline
+import hashlib
+import json
+import test_import_roundtrip_evidence as import_roundtrip_tests
+import test_import_settings_evidence as import_settings_tests
 from test_upload_verify import UploadVerifyTest
 from audit import PREFIX, MUTATIONS, file_storage_inspect, rejected_before_browser
 
 
 class DataPipelineTest(unittest.TestCase):
+    def wizard_fixture(self):
+        evidence,request=UploadVerifyTest().fixture()
+        expected_path=Path(data_pipeline.__file__).with_name('fixtures')/'data-pipeline'/'expected.json'
+        request['harness_inputs']['fixtures/data-pipeline/expected.json']=hashlib.sha256(expected_path.read_bytes()).hexdigest()
+        imported=import_roundtrip_tests.fixture()
+        settings=import_settings_tests.ImportSettingsEvidenceTests()
+        for index in (1,7):
+            for out in (imported['tools'][index]['result'],imported['events'][index]['outcome']):
+                out['output']['wizard']['import_columns']=copy.deepcopy(settings.configured_snapshot()['wizard']['import_columns'])
+        for index in (2,8):
+            for out in (imported['tools'][index]['result'],imported['events'][index]['outcome']):
+                out['output']['wizard']['output_columns']=copy.deepcopy(settings.configured_mapping_snapshot()['wizard']['output_columns'])
+        destination=data_pipeline.declared_source_path(request)
+        for out in [t['result'] for t in imported['tools']]+[e['outcome'] for e in imported['events']]:
+            field=out['output'].get('wizard',{}).get('import_source',{}).get('fields',{}).get('source_path')
+            if field:field.update(value=destination,value_length_utf16=len(destination))
+        context=imported['tools'][0]['result']['output']
+        for out in (next(t for t in evidence['tools'] if t['tool_call_id']=='file-read')['result'],
+                    next(e for e in evidence['events'] if e['operation_id']=='file-read')['outcome']):
+            for key in ('origin','loginom_build','dom_epoch','authenticated'):out['output'][key]=copy.deepcopy(context[key])
+        next(t for t in evidence['tools'] if t['tool_call_id']=='after')['result'].update(status='SUCCEEDED',action_key='operation.inspect')
+        evidence['calls'].extend([
+            {'session_id':'s','tool_call_id':'file-read','tool':PREFIX+'dock_workspace_observe','row':10,'arguments':{}},
+            {'session_id':'s','tool_call_id':'after','tool':PREFIX+'dock_operation_inspect','row':14,'arguments':{'operation_id':'up'}}])
+        for record in imported['calls']+imported['tools']:
+            record['row']+=20;record['tool']=PREFIX+record['tool'];record['tool_call_id']='import-'+record['tool_call_id']
+        for key in ('calls','tools','events'):evidence[key].extend(imported[key])
+        return evidence,request
+
+    def test_bound_fixture_import_readback_passes_only_its_gate(self):
+        evidence,request=self.wizard_fixture()
+        report=data_pipeline.audit(evidence,[],request,PREFIX,MUTATIONS,file_storage_inspect,rejected_before_browser)
+        self.assertTrue(report['transfer_verified'],report)
+        proof=report['wizard_settings_readback_diagnostics']
+        self.assertTrue(proof['wizard_settings_readback'],proof)
+        self.assertFalse(proof['source_identity_verified']);self.assertFalse(proof['package_persistence_verified'])
+        self.assertEqual(report['missing_domain_verifiers'],list(data_pipeline.DOMAIN_GATES[1:]))
+        self.assertFalse(report['all_assertions_passed'])
+
+    def test_wizard_gate_rejects_unbound_or_incomplete_roundtrip(self):
+        modes=('foreign_session','foreign_document','foreign_origin','foreign_build','before_verify','before_inspect',
+               'duplicate_inspect','duplicate_verify','duplicate_upload','duplicate_source','wrong_destination','wrong_sha',
+               'expected_hash','csv_hash','partial_schema','partial_mapping','auto_sync','other_owner','missing_file_call',
+               'failed_inspect','wrong_inspect_action','unauthenticated_file')
+        for mode in modes:
+            with self.subTest(mode=mode):
+                evidence,request=self.wizard_fixture()
+                call=lambda name:next(c for c in evidence['calls'] if c['tool_call_id']==name)
+                tool=lambda name:next(t for t in evidence['tools'] if t['tool_call_id']==name)
+                def both(index,fn):
+                    result=tool('import-'+str(index))['result'];fn(result['output'])
+                    next(e for e in evidence['events'] if e['operation_id']==result['operation_id'])['outcome']=copy.deepcopy(result)
+                if mode=='foreign_session':
+                    for r in evidence['calls']+evidence['tools']:
+                        if r['tool_call_id'].startswith('import-'):r['session_id']='foreign'
+                if mode in ('foreign_document','foreign_origin','foreign_build'):
+                    for index in range(9):
+                        if mode=='foreign_document':both(index,lambda s:s['dom_epoch'].update(document='foreign'))
+                        else:both(index,lambda s:s.update({('origin' if mode=='foreign_origin' else 'loginom_build'):'foreign'}))
+                if mode=='before_verify':call('import-0')['row']=12
+                if mode=='before_inspect':call('import-0')['row']=15
+                if mode.startswith('duplicate_'):
+                    name={'duplicate_inspect':'after','duplicate_verify':'verify','duplicate_upload':'upload','duplicate_source':'import-0'}[mode]
+                    evidence['tools'].append(copy.deepcopy(tool(name)))
+                if mode=='wrong_destination':tool('verify')['result']['output']['destination']='/other/'+request['input_artifact']['name']
+                if mode=='wrong_sha':tool('verify')['result']['output']['sha256']='0'*64
+                if mode=='expected_hash':request['harness_inputs']['fixtures/data-pipeline/expected.json']='0'*64
+                if mode=='csv_hash':request['harness_inputs'][data_pipeline.upload_probe.FIXTURE]='0'*64
+                if mode=='partial_schema':both(7,lambda s:s['wizard']['import_columns']['definition_coverage'].update(status='partial'))
+                if mode=='partial_mapping':both(8,lambda s:s['wizard']['output_columns']['definition_coverage'].update(status='partial'))
+                if mode=='auto_sync':both(8,lambda s:s['wizard']['output_columns']['auto_sync'].update(value=True))
+                if mode=='other_owner':both(8,lambda s:s['wizard']['owner_context']['node'].update(label='Other'))
+                if mode=='missing_file_call':evidence['calls'].remove(call('file-read'))
+                if mode=='failed_inspect':tool('after')['result']['status']='FAILED'
+                if mode=='wrong_inspect_action':tool('after')['result']['action_key']='other'
+                if mode=='unauthenticated_file':
+                    tool('file-read')['result']['output']['authenticated']=False
+                    next(e for e in evidence['events'] if e['operation_id']=='file-read')['outcome']['output']['authenticated']=False
+                report=data_pipeline.audit(evidence,[],request,PREFIX,MUTATIONS,file_storage_inspect,rejected_before_browser)
+                self.assertFalse(report['wizard_settings_readback_diagnostics']['wizard_settings_readback'],report)
+
+    def test_fixture_requires_declared_header_order(self):
+        _,request=self.wizard_fixture()
+        expected=json.loads((Path(data_pipeline.__file__).with_name('fixtures')/'data-pipeline'/'expected.json').read_text())
+        self.assertTrue(data_pipeline.fixture_schema(request,expected))
+        expected['schema'][0],expected['schema'][1]=expected['schema'][1],expected['schema'][0]
+        self.assertFalse(data_pipeline.fixture_schema(request,expected))
+
     def same_id_refusal_fixture(self):
         evidence,request=UploadVerifyTest().fixture()
         for record in evidence['calls']+evidence['tools']:record['row']+=10
@@ -106,7 +198,7 @@ class DataPipelineTest(unittest.TestCase):
         report=data_pipeline.audit(evidence,[],request,PREFIX,MUTATIONS,file_storage_inspect,rejected_before_browser)
         self.assertTrue(report['transfer_verified'],report)
         self.assertFalse(report['all_assertions_passed'])
-        self.assertEqual(report['missing_domain_verifiers'],list(data_pipeline.DOMAIN_GATES))
+        self.assertEqual(report['missing_domain_verifiers'],list(data_pipeline.DOMAIN_GATES[1:]))
 
     def test_mutation_before_resolved_inspection_does_not_prove_transfer(self):
         evidence,request=UploadVerifyTest().fixture()
@@ -169,4 +261,4 @@ class DataPipelineTest(unittest.TestCase):
         report=data_pipeline.audit(evidence,[],request,PREFIX,MUTATIONS,file_storage_inspect,rejected_before_browser)
         self.assertEqual(report['goal'],'import-roundtrip')
         self.assertFalse(report['all_assertions_passed'])
-        self.assertEqual(report['missing_domain_verifiers'],list(data_pipeline.DOMAIN_GATES))
+        self.assertEqual(report['missing_domain_verifiers'],list(data_pipeline.DOMAIN_GATES[1:]))

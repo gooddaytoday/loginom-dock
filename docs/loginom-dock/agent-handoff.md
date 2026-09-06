@@ -1,3 +1,29 @@
+**2026-09-06 — реализована независимая проверка настроек импорта P3.**
+
+`wizard_settings_readback` больше не hardcoded false. Она требует закреплённые
+CSV bytes/SHA и expected.json SHA, полный разбор уникальных заголовков/ширины
+строк, успешный полный upload_verify audit, один upload/verify и связанные replies.
+Точная выданная страница файла привязана к immutable journal. Источник импорта
+должен иметь тот же session/origin/build/document и точный verified destination.
+Порядок строгий: verify reply → успешный operation.inspect исходной загрузки →
+resolved reply → первый source-read. Затем нужны rendered roundtrip и полные
+configured schema/mapping bounds до/после finish/open того же узла.
+
+Это доказательство прочитанных настроек, не machine identity исходного поля,
+не результат выполнения и не сохранность пакета. source_identity_verified и
+package_persistence_verified остаются false. Остальные6 verifier не реализованы,
+overall P3 PASS по-прежнему невозможен. Никакой прошлый run не переоценивался;
+живой успех нового gate ещё не получен.
+
+163Python tests PASS. Positive составлен из настоящих transfer/roundtrip receipt
+fixtures без mock успешного verifier; negatives проверяют foreign session/document,
+контекст/путь/hash, порядок, duplicates, отсутствие bounds, auto_sync, owner,
+FAILED inspect с тем же output и unauthenticated file snapshot.
+Client code не менялся с ad8b92f6 (317client/10packaging ранее PASS).
+Следующий шаг: один целевой Hermes import-roundtrip на ChatGPT/Luna/medium;
+после подтверждения первого gate — Calculator/Group/execution/result/persistence.
+Hermes нет; manual UI TF2Files/test, package не сохранён, production unchanged.
+
 **2026-09-06 — исправлен контекст каталога при узком чтении файлов.**
 
 Run143840-1fc30c8f / handle31054 TERMINAL: source7ebd2849,

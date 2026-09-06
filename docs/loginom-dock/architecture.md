@@ -1,3 +1,14 @@
+### Import settings acceptance binding (2026-09-06)
+
+The independent P3 `wizard_settings_readback` verifier binds the pinned CSV and
+its verified destination bytes to the same-session/document import source read.
+A successful resolved upload inspection must precede that read. Admission of this
+one gate requires journal-bound finish/open readback with complete configured
+column and mapping bounds on both sides. It does not prove source-field machine
+identity, execution results or package persistence. Six remaining domain verifiers
+are still unimplemented, and full P3 acceptance remains disabled. Live acceptance
+of this first implemented gate is still pending.
+
 ### Rendered table evidence (2026-09-05)
 
 Existing table_cells records may carry data_column (view/field key and observed
