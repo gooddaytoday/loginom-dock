@@ -1,3 +1,29 @@
+**Checkpoint 2026-09-06 — подтверждаемое открытие настроек узла.**
+Добавлен `open_wizard` на observed graph settings control при отсутствии
+мастера и полном bounded workflow navigation_context. Действие выполняет один
+клик, заново находит текущий root и читает мастер; сравнивает исходный tab ref,
+workflow_ref, package identity, путь сценария и node label в owner_context.
+Ожидание ограничено 24 наблюдениями, без повторного клика. Dialog, wrong node,
+wrong path, replacement tab и потерянный ответ не дают wizard_open_verified.
+Подтверждение хранится в trace исходного действия с wizard_root_ref и owner_node;
+обычное наблюдение по-прежнему имеет opening_verified=false. Публикации нового
+каталога или отдельного журнала действий не было. Guidance направляет Hermes
+на open_wizard, когда действие предложено доставленным settings control.
+
+Прямая UI-диагностика выявила смену подписи текущей вкладки Сценарий→Настройка.
+Первая попытка корректно отклонила прежнее сравнение active_identity после клика.
+Для этого перехода теперь проверяется DOM-incarnation active_tab_ref; путь
+сценария и узел проверяются отдельно. Live повтор: open_wizard SUCCEEDED1091ms,
+один settings click, путь Package1/Модуль1/Сценарий/Сумма, wizard_open_verified.
+Это прямой capability smoke, не автономная Hermes acceptance, node apply или save.
+Ручное закрытие между пробами требовало отдельного подтверждения «Да»;
+open_wizard не принимает такие подтверждения автоматически.
+
+Private evidence .dock/post-mvp-p0/wizard-open-live-result.txt и
+wizard-open-{client,python,packaging}-tests.txt. Active Hermes нет; диагностический
+Calculator Сумма открыт, внешнее окно параметров закрыто. Далее typed wizard
+apply/readback/reopen и семь независимых domain gates data-pipeline; P3–P9 открыты.
+
 **Checkpoint 2026-09-06 — навигационный контекст мастера и ручное apply/reopen.**
 Codex изучил NavigationPanel: кнопки cnrNaviMode;b.s_ содержат последовательный
 путь, penultimate item с bg-vendor-icon-* представляет узел, последний с
@@ -44,7 +70,7 @@ Live: Amount / Сумма, Вещественный → Целый (SUCCEEDED58m
 Help data/processors/transformation/calc/README.md:51; direct DOM/typed action.
 Проверки: 276 client /110 Python /10 packaging PASS.
 Private evidence: .dock/post-mvp-p0/expression-type-live-result.txt,
-expression-type-{client,python,packaging}-tests.txt. Active Hermes нет.
+expression-type-{client,python,packaging}-tests.txt. 278 client /110 Python /10 packaging PASS. Active Hermes нет.
 Далее wizard/node ownership, применение и повторное открытие настроек,
 независимые domain proofs полного data-pipeline; P3–P9 остаются открытыми.
 

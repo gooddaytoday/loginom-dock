@@ -3,7 +3,7 @@
 export const uiActionSchema = {
   type: 'object', additionalProperties: false, required: ['verb'],
   properties: {
-    verb: { type: 'string', enum: ['click', 'double_click', 'right_click', 'fill', 'press', 'drag', 'scroll', 'set_checked', 'replace_expression', 'set_wizard_field', 'wizard_step', 'select_wizard_option', 'apply_expression_parameters', 'cancel_expression_parameters'] },
+    verb: { type: 'string', enum: ['click', 'double_click', 'right_click', 'fill', 'press', 'drag', 'scroll', 'set_checked', 'replace_expression', 'set_wizard_field', 'wizard_step', 'select_wizard_option', 'apply_expression_parameters', 'cancel_expression_parameters', 'open_wizard'] },
     expected_stage: { type: 'string', enum: ['text_import_file','text_import_format','input_mapping','output_mapping','calculator','grouping','done'] },
     checked: { type: 'boolean' },
     delta_y: { type: 'integer', minimum: -1000, maximum: 1000 },
@@ -273,33 +273,39 @@ function workspaceUiCapability(page, task) {
         controls:Object.fromEntries(wizardButtons.map(name=>{const found=matching(';'+name);return [name,
           {status:found.length===1?'observed':found.length?'ambiguous':'unobserved',enabled:found.length===1?enabled(found[0]):null}];}))};
     }
-    if(wizard.status==='observed') {
+    let navigationContext={status:'unobserved'};
+    if(workflow) {
       // E2E navigation.GetCurrentTabPath: inspect the current tab's visible
       // breadcrumb buttons, not document.title. This is observed context only;
       // proving which graph click opened the wizard requires an action receipt.
       const panels=(tids.get(workflow.prefix+';NavigationBar;NavigationPanel')??[]).filter(e=>visible(e) && !sensitive(e));
-      wizard.owner_context={status:panels.length>1?'ambiguous':'unobserved',opening_verified:false};
+      let ownerContext={status:panels.length>1?'ambiguous':'unobserved',opening_verified:false};
       if(panels.length===1) {
         const prefix=workflow.prefix+';cnrNaviMode;b.s_';
         const crumbs=all.filter(e=>{charge();return (getTid(e)??'').startsWith(prefix) && panels[0].contains(e) && visible(e) && !sensitive(e);});
-        if(crumbs.length>32)wizard.owner_context.status='bounded';
+        if(crumbs.length>32)ownerContext.status='bounded';
         else if(crumbs.length) {
           const items=crumbs.map(e=>({ref:refOf(e),tid:getTid(e),label:textOf(e,true),
             wizard_icon:e.querySelectorAll('.maptree-icon-wizard').length===1,
+            workflow_icon:e.querySelectorAll('.maptree-icon-workflow').length===1,
             vendor_icon:e.querySelectorAll('[class*="bg-vendor-icon-"]').length===1}));
           const unique=new Set(items.map(i=>i.tid)).size===items.length;
           const chain=items.every((item,index)=>item.tid.length<=2048 && item.label.length<240
             && (!index || item.tid.startsWith(items[index-1].tid+'>')));
           const last=items.at(-1),node=items.at(-2);
-          if(items.reduce((size,item)=>size+item.tid.length+item.label.length,0)>4096)wizard.owner_context.status='bounded';
-          else if(!unique || !chain)wizard.owner_context.status='ambiguous';
+          if(items.reduce((size,item)=>size+item.tid.length+item.label.length,0)>4096)ownerContext.status='bounded';
+          else if(!unique || !chain)ownerContext.status='ambiguous';
+          else if(last.workflow_icon) {
+            navigationContext={status:'observed',kind:'workflow',path:items.map(({tid,label})=>({tid,label}))};
+          }
           else if(last.wizard_icon && items.filter(i=>i.wizard_icon).length===1 && node?.vendor_icon && node.label) {
-            wizard.owner_context={status:'observed',opening_verified:false,panel_ref:refOf(panels[0]),
+            ownerContext={status:'observed',opening_verified:false,panel_ref:refOf(panels[0]),
               node:{ref:node.ref,tid:node.tid,label:node.label},
               path:items.map(({ref,tid,label})=>({ref,tid,label}))};
           }
         }
       }
+      if(wizard.status==='observed')wizard.owner_context=ownerContext;
     }
     if(wizard.status==='observed' && wizard.stage==='calculator') {
       const base=wizard.root_tid+';CalcDataWizard;';
@@ -581,6 +587,8 @@ function workspaceUiCapability(page, task) {
       const wizardStep=wizard.status==='observed' && wizard.stage && ['btnNext','btnPrev'].some(name=>tid===wizard.root_tid+';'+name)
         && wizard.controls[tid.split(';').at(-1)]?.status==='observed'
         ? {direction:tid.endsWith(';btnNext')?'next':'previous',root_ref:wizard.root_ref,stage:wizard.stage}:null;
+      const openWizard=wizard.status==='absent' && navigationContext.status==='observed' && graphNodeOf(element)?.part==='settings'
+        ? {node:graphNodeOf(element),workflow_path:navigationContext.path}:null;
       const params=wizard.expression_parameters;
       const expressionParametersReady=params?.status==='observed' && wizard.expression_selection?.status==='observed' && params.selected_expression
         && Object.values(params.fields??{}).length===3 && Object.values(params.fields).every(f=>f.status==='observed' && !f.truncated);
@@ -600,6 +608,7 @@ function workspaceUiCapability(page, task) {
         ...(calculatorEditor ? {calculator_editor:calculatorEditor} : {}),
         ...(combo ? {wizard_combo:combo} : {}),
         ...(wizardStep ? {wizard_step:wizardStep} : {}),
+        ...(openWizard ? {wizard_open:openWizard} : {}),
         ...(expressionApply ? {expression_apply:expressionApply} : {}),
         ...(expressionCancel ? {expression_cancel:expressionCancel} : {}),
         ...(wizardFields.has(element) ? {wizard_field:wizardFields.get(element)} : {}),
@@ -607,7 +616,7 @@ function workspaceUiCapability(page, task) {
         enabled: isEnabled, visible: true, interaction, bounding_box: boxOf(element),
         // A bounded prefix is not a sufficient value precondition. A dedicated
         // large-field driver must establish its own complete read/write contract.
-        allowed_actions: expressionWritable ? ['replace_expression'] : allowed && !valueTruncated ? ['click', 'double_click', 'right_click', 'press', 'drag', ...(editable ? ['fill',...(wizardFields.has(element)?['set_wizard_field']:[])] : []), ...(checkState ? ['set_checked'] : []), ...(wizardStep?['wizard_step']:[]), ...(expressionApply?['apply_expression_parameters']:[]), ...(expressionCancel?['cancel_expression_parameters']:[]), ...(combo?.kind==='option'?['select_wizard_option']:[]), ...(scroll && interaction.state === 'point_observed' ? ['scroll'] : [])] : [] };
+        allowed_actions: expressionWritable ? ['replace_expression'] : allowed && !valueTruncated ? ['click', 'double_click', 'right_click', 'press', 'drag', ...(editable ? ['fill',...(wizardFields.has(element)?['set_wizard_field']:[])] : []), ...(checkState ? ['set_checked'] : []), ...(wizardStep?['wizard_step']:[]), ...(openWizard?['open_wizard']:[]), ...(expressionApply?['apply_expression_parameters']:[]), ...(expressionCancel?['cancel_expression_parameters']:[]), ...(combo?.kind==='option'?['select_wizard_option']:[]), ...(scroll && interaction.state === 'point_observed' ? ['scroll'] : [])] : [] };
     });
     const nodes = labels.slice(0, 200).map(label => {
       const nodeTid = graphPrefix + label, node = tids.get(nodeTid)?.[0];
@@ -745,8 +754,8 @@ function workspaceUiCapability(page, task) {
       }
     }
     return { origin: location.origin, authenticated: !!tids.get('MF;cntMain;tlbMainToolbar;btnAvatar')?.some(visible), loginom_build: globalThis.bg?.app?.Version ?? null,
-      workflow_ref: workflow, active_identity: active ? textOf(active) : null, package_identity: packageIdentity,
-      file_storage:fileStorage,wizard,
+      workflow_ref: workflow, active_tab_ref:active?refOf(active):null, active_identity: active ? textOf(active) : null, package_identity: packageIdentity,
+      file_storage:fileStorage,wizard,navigation_context:navigationContext,
       dom_epoch: {document:state.epoch,revision:state.revision},
       ...(selectedRoot ? {observation_root:{ref:rootRef,identity:identityOf(selectedRoot),detail_scope:'elements_and_cells',global_scan:false,global_guards:'fixed_native_queries'}} : {}),
       scan: { complete: true, mutation_counts:{...state.mutations}, visited_elements: dom.length, detail_elements:detailElements, max_elements: maxElements, max_work: maxWork, max_ms: maxMs },
@@ -785,6 +794,7 @@ function workspaceUiCapability(page, task) {
       || task.action.verb==='set_wizard_field' && !same(before.wizard_field,current.wizard_field)
       || task.action.verb==='cancel_expression_parameters' && !same(before.expression_cancel,current.expression_cancel)
       || task.action.verb==='apply_expression_parameters' && !same(before.expression_apply,current.expression_apply)
+      || task.action.verb==='open_wizard' && !same(before.wizard_open,current.wizard_open)
       || task.action.verb==='wizard_step' && !same(before.wizard_step,current.wizard_step)
       || task.action.verb==='select_wizard_option' && !same(before.wizard_combo,current.wizard_combo)) fail('UI_REFERENCE_STALE', 'The observed control changed; observe the workspace again');
     const locator = locatorFor(current.identity);
@@ -869,7 +879,7 @@ function workspaceUiCapability(page, task) {
         if (!current.authenticated) fail('LOGIN_REQUIRED', 'Loginom authentication is required before changing the workspace');
         if (!same(task.snapshot.dom_epoch, current.dom_epoch)) fail('UI_EPOCH_CHANGED', 'The document changed since this observation; observe again even if its visible state looks unchanged');
         if (!same(current.ui.dialogs.map(item => item.ref), task.snapshot.ui.dialogs.map(item => item.ref))) fail('UI_CONTEXT_CHANGED', 'The visible dialog changed; observe the workspace again');
-        if(['set_wizard_field','wizard_step','select_wizard_option','apply_expression_parameters','cancel_expression_parameters'].includes(task.action.verb) && (!same(task.snapshot.wizard,current.wizard)
+        if(['set_wizard_field','wizard_step','select_wizard_option','apply_expression_parameters','cancel_expression_parameters','open_wizard'].includes(task.action.verb) && (!same(task.snapshot.wizard,current.wizard)
           || !same(task.snapshot.active_identity,current.active_identity) || !same(task.snapshot.package_identity,current.package_identity)))
           fail('WIZARD_CONTEXT_CHANGED','Wizard settings or package changed; observe again');
         const refs = task.action.verb === 'drag' ? [task.action.source_ref, task.action.target_ref] : [task.action.ref];
@@ -909,7 +919,7 @@ function workspaceUiCapability(page, task) {
           await page.mouse.click(targets[0].point.x, targets[0].point.y, { clickCount, button });
           mouseHeld = false;
         };
-        if (task.action.verb === 'click' || ['wizard_step','select_wizard_option','apply_expression_parameters','cancel_expression_parameters'].includes(task.action.verb)) await clickTarget(1);
+        if (task.action.verb === 'click' || ['wizard_step','select_wizard_option','apply_expression_parameters','cancel_expression_parameters','open_wizard'].includes(task.action.verb)) await clickTarget(1);
         else if (task.action.verb === 'double_click') await clickTarget(2);
         else if (task.action.verb === 'right_click') await clickTarget(1, 'right');
         else if (task.action.verb === 'press') await first.press(task.action.key, { timeout: timeout() });
@@ -1011,8 +1021,14 @@ function workspaceUiCapability(page, task) {
         if (effectPossible) record('ui_gesture_applied', { verb: task.action.verb });
         phase = 'observing'; timeout();
         if(['apply_expression_parameters','cancel_expression_parameters','select_wizard_option'].includes(task.action.verb))postActionRoot=current.wizard.root_ref;
+        const readOpeningUi=async()=>{
+          const roots=await readUi(true);
+          postActionRoot=roots.wizard?.root_ref ?? roots.ui.elements.find(e=>e.scope==='dialog')?.ref ?? roots.ui.elements[0]?.ref;
+          if(!postActionRoot)fail('WIZARD_OPEN_NOT_CONFIRMED','No current region was available after opening settings');
+          return readUi();
+        };
         let observed;
-        try { observed = await readUi(); }
+        try { observed = await (task.action.verb==='open_wizard'?readOpeningUi():readUi()); }
         catch(error) {
           // A generic click can legitimately close its popup/tree. Rediscover
           // regions only after the completed gesture, never for preconditions
@@ -1020,6 +1036,22 @@ function workspaceUiCapability(page, task) {
           if(error?.code!=='UI_ROOT_STALE' || !effectPossible || !['click','double_click','right_click','press'].includes(task.action.verb))throw error;
           observed=await readUi(true);
           record('ui_root_closed_after_gesture',{verification_required:true});
+        }
+        if(task.action.verb==='open_wizard') {
+          const opening=current.ui.elements.find(e=>e.ref===task.action.ref).wizard_open;
+          const contextMatches=fresh=>fresh.authenticated && fresh.origin===current.origin && fresh.loginom_build===current.loginom_build
+            && same(fresh.workflow_ref,current.workflow_ref) && same(fresh.package_identity,current.package_identity)
+            && fresh.active_tab_ref===current.active_tab_ref && !!current.active_tab_ref && fresh.ui.dialogs.length===0;
+          for(let attempt=0;attempt<24 && contextMatches(observed) && (observed.wizard?.owner_context?.status!=='observed' || observed.ui.masks.length);attempt++) {
+            timeout();await page.waitForTimeout(Math.min(200,timeout()));observed=await readOpeningUi();
+          }
+          const owner=observed.wizard?.owner_context;
+          if(!contextMatches(observed) || observed.ui.masks.length || observed.wizard?.status!=='observed'
+            || owner?.status!=='observed' || owner.node.label!==opening.node.node_label
+            || !same(owner.path.slice(0,-2).map(({tid,label})=>({tid,label})),opening.workflow_path))
+            fail('WIZARD_OPEN_NOT_CONFIRMED','The intended node wizard was not confirmed after one click; inspect the current view before retry');
+          record('wizard_open_verified',{node:opening.node,workflow_path:opening.workflow_path,wizard_root_ref:observed.wizard.root_ref,
+            owner_node:owner.node,settings_applied:false});
         }
         if(['apply_expression_parameters','cancel_expression_parameters'].includes(task.action.verb)) {
           const cancelling=task.action.verb==='cancel_expression_parameters';

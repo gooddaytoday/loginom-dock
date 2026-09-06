@@ -1,3 +1,10 @@
+**Checkpoint:** open_wizard выполняет один observed settings click, проверяет
+исходный tab ref + workflow/package/path и owner node; trace wizard_open_verified.
+Live SUCCEEDED1091ms Сумма. Подпись tab меняется Сценарий→Настройка, поэтому
+для перехода проверяется incarnation вкладки; замена tab отклоняется.
+278 client /110 Python /10 packaging PASS. Active Hermes нет. Calculator Сумма открыт, ExprDataEditForm закрыт.
+Далее typed wizard apply/readback/reopen, независимые domain gates и P3–P9.
+
 **Checkpoint:** wizard.owner_context читает bounded breadcrumbs текущей вкладки;
 opening_verified=false до typed opening receipt. Live manual Done переименовал
 AmountAmount→Сумма; graph ready позже wizard close. Body Сумма→Setting reopen
