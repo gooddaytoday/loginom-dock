@@ -1,5 +1,7 @@
 """Journal-bound rendered import roundtrip; not schema or persistence admission."""
 import import_settings_evidence as settings
+import copy
+import rename_effect
 from settings_evidence import bound_receipts
 
 
@@ -13,7 +15,7 @@ def _verb(receipt):
     return receipt['call'].get('arguments', {}).get('action', {}).get('verb')
 
 
-def _issued(receipt, receipts):
+def _delivered_element(receipt, receipts):
     call = receipt['call']; args = call.get('arguments', {}); action = args.get('action', {})
     ref = action.get('ref'); verb = action.get('verb'); observation = args.get('observation_id')
     prior = [r for r in receipts if r['reply_row'] < call['row']
@@ -27,19 +29,31 @@ def _issued(receipt, receipts):
     # different elements. Paging repeats are not silently used as new proof.
     if not elements or any(e != elements[0] for e in elements):
         return None
+    return elements[0]
+
+
+def _issued(receipt, receipts):
+    element = _delivered_element(receipt, receipts)
+    if element is None:return None
+    action=receipt['call'].get('arguments',{}).get('action',{});ref=action.get('ref');verb=action.get('verb')
     trace = receipt['outcome'].get('trace', [])
     if (sum(t.get('event') == 'ui_preconditions_verified' and t.get('refs') == [ref]
             and t.get('verb') == verb for t in trace) != 1
             or sum(t.get('event') == 'ui_gesture_applied' and t.get('verb') == verb for t in trace) != 1):
         return None
-    return elements[0]
+    return element
 
 
 def _semantic_owner(snapshot):
     owner = snapshot['wizard']['owner_context']
     if owner.get('status') != 'observed':
         return None
-    return {'node': {k: owner['node'][k] for k in ('tid', 'label')},
+    parent=owner['path'][-3]['tid']+'>'
+    tid=owner['node']['tid']
+    if not tid.startswith(parent):return None
+    graph_key=tid[len(parent):]
+    if not graph_key or '>' in graph_key or ';' in graph_key:return None
+    return {'graph_key':graph_key,'node': {k: owner['node'][k] for k in ('tid', 'label')},
             'path': [{k: p[k] for k in ('tid', 'label')} for p in owner['path']]}
 
 
@@ -57,7 +71,7 @@ def _graph(snapshot, owner):
             or snapshot['navigation_context'].get('path') != owner['path'][:-2]):
         return False
     bodies = [e for e in snapshot['ui'].get('elements', [])
-              if e.get('graph_node') == {'node_label': owner['node']['label'], 'part': 'body'}]
+              if e.get('graph_node') == {'node_label': owner['graph_key'], 'part': 'body'}]
     return len(bodies) == 1
 
 
@@ -90,14 +104,65 @@ def _transition_trace(receipt, before, after, owner):
         bodies = [e for e in after['ui'].get('elements', []) if e.get('graph_node') == record.get('node')
                   and e.get('ref') == record.get('node_ref')]
         return (record.get('previous_owner') == before['wizard']['owner_context']['node']
-                and record.get('node') == {'node_label':owner['node']['label'], 'part':'body'}
+                and record.get('node') == {'node_label':owner['graph_key'], 'part':'body'}
                 and len(bodies) == 1 and record.get('reopen_required') is True
                 and record.get('settings_readback_verified') is False and record.get('package_saved') is False)
-    return (record.get('node') == {'node_label':owner['node']['label'], 'part':'settings'}
+    return (record.get('node') == {'node_label':owner['graph_key'], 'part':'settings'}
             and record.get('workflow_path') == owner['path'][:-2]
             and record.get('wizard_root_ref') == after['wizard']['root_ref']
             and record.get('owner_node') == after['wizard']['owner_context']['node']
             and record.get('settings_applied') is False)
+
+
+def _no_effect_reply(call,evidence):
+    """Unique native no-effect outcome or an idle validation refusal only."""
+    key=(call.get('session_id'),call.get('tool_call_id'))
+    calls=[c for c in evidence.get('calls',[]) if (c.get('session_id'),c.get('tool_call_id'))==key]
+    replies=[t for t in evidence.get('tools',[]) if (t.get('session_id'),t.get('tool_call_id'))==key]
+    if len(calls)!=1 or len(replies)!=1 or replies[0].get('tool')!=call.get('tool') or replies[0].get('row',-1)<=call['row']:return None
+    reply=replies[0];result=reply.get('result',{})
+    if not isinstance(result,dict) or result.get('effect_possible') is not False:return None
+    op=call.get('arguments',{}).get('operation_id')
+    if not isinstance(op,str) or not op:return None
+    if result.get('status')=='NOT_APPLIED' and result.get('phase')=='preconditions' and result.get('cleanup_complete') is True:
+        if result.get('operation_id')!=op or result.get('action_key')!='ui.act':return None
+        trace=result.get('trace',[])
+        if result.get('error',{}).get('code')!='UI_EPOCH_CHANGED':return None
+        if any(t.get('event') not in ('ui_observation_started','ui_action_failed') for t in trace):return None
+        if sum(t.get('event')=='ui_action_failed' and t.get('code')=='UI_EPOCH_CHANGED' for t in trace)!=1:return None
+        events=[e for e in evidence.get('events',[]) if e.get('operation_id')==op and e.get('phase')=='completed']
+        raw=copy.deepcopy(result);raw.get('output',{}).pop('operation',None)
+        if len(events)!=1 or not rename_effect.journal_equal(events[0].get('outcome',{}),raw):return None
+        peers=[c for c in evidence.get('calls',[]) if c.get('arguments',{}).get('operation_id')==op
+               and c.get('tool','').endswith('dock_ui_action') and c!=call]
+        # Later validation refusals can reference this immutable operation;
+        # no second dispatched action may share its identity.
+        for peer in peers:
+            if peer.get('session_id')!=call.get('session_id') or peer.get('row',-1)<=reply['row']:return None
+            twins=[t for t in evidence.get('tools',[]) if (t.get('session_id'),t.get('tool_call_id'))==(peer.get('session_id'),peer.get('tool_call_id'))]
+            if len(twins)!=1 or not _idle_refusal(twins[0].get('result',{})):return None
+        return reply
+    if _idle_refusal(result):
+        events=[e for e in evidence.get('events',[]) if e.get('operation_id')==op]
+        if not events:return reply
+        previous=[c for c in evidence.get('calls',[]) if c.get('tool')==call.get('tool')
+                  and c.get('session_id')==call.get('session_id') and c.get('arguments',{}).get('operation_id')==op and c['row']<call['row']]
+        # Recursion only into an earlier NOT_APPLIED receipt, never refusals.
+        for prev in previous:
+            rr=[t for t in evidence.get('tools',[]) if (t.get('session_id'),t.get('tool_call_id'))==(prev.get('session_id'),prev.get('tool_call_id'))]
+            if len(rr)==1 and rr[0].get('result',{}).get('status')=='NOT_APPLIED' and rr[0]['row']<call['row'] and _no_effect_reply(prev,evidence):return reply
+    return None
+
+
+def _idle_refusal(result):
+    if not isinstance(result,dict):return False
+    operation=result.get('output',{}).get('operation',{})
+    return (result.get('status')=='FAILED' and result.get('phase')=='request_rejected'
+            and result.get('action_key')=='request.validate' and result.get('request_rejected') is True
+            and result.get('operation_id') is None and result.get('effect_possible') is False
+            and result.get('trace')==[] and result.get('error',{}).get('code')=='REQUEST_REJECTED'
+            and operation.get('state')=='idle' and operation.get('operation_id') is None
+            and operation.get('cleanup_confirmed') is True and operation.get('effect_state')=='none')
 
 
 def _attempt(start, receipts, evidence, expected, source_path):
@@ -110,7 +175,7 @@ def _attempt(start, receipts, evidence, expected, source_path):
                    ('open_wizard', 'text_import_file'), ('wizard_step', 'text_import_format'),
                    ('wizard_step', 'output_mapping')]
     current = 'text_import_file'; cursor = 0; selected = False
-    accepted = [start]; last = start; finish_bodies = []
+    accepted = [start]; last = start; rejected_calls=[]
     for receipt in receipts:
         if receipt['call']['row'] <= start['call']['row']:
             continue
@@ -118,8 +183,17 @@ def _attempt(start, receipts, evidence, expected, source_path):
         # including calls overlapping an unfinished response.
         intervening = [c for c in evidence.get('calls', []) if _mutation(c)
                        and last['call']['row'] < c.get('row', -1) <= receipt['reply_row']]
-        if any(c != receipt['call'] or c['row'] <= last['reply_row'] for c in intervening):
-            return None
+        fence=last['reply_row']
+        for call in sorted(intervening,key=lambda c:c.get('row',-1)):
+            if call==receipt['call']:
+                if call['row']<=fence:return None
+                continue
+            if current!='graph' or call.get('session_id')!=session or not call.get('tool','').endswith('dock_ui_action') or call.get('arguments',{}).get('action',{}).get('verb')!='click':return None
+            rejected=_no_effect_reply(call,evidence)
+            if not rejected or not fence<call['row']<rejected['row']<receipt['call']['row']:return None
+            element=_delivered_element({'call':call},receipts)
+            if not element or element.get('graph_node')!={'node_label':owner['graph_key'],'part':'body'}:return None
+            fence=rejected['row'];rejected_calls.append(call['tool_call_id'])
         if receipt['call'].get('session_id') != session:
             continue
         snapshot = receipt['outcome'].get('output', {})
@@ -136,7 +210,9 @@ def _attempt(start, receipts, evidence, expected, source_path):
                 return None
             if current == 'graph' and verb == 'click' and not selected:
                 target = element.get('graph_node', {})
-                if target != {'node_label': owner['node']['label'], 'part': 'body'} or element.get('ref') not in finish_bodies:
+                prior=last['outcome']['output']
+                fresh_bodies=[e.get('ref') for e in prior['ui'].get('elements',[]) if e.get('graph_node')=={'node_label':owner['graph_key'],'part':'body'}]
+                if target != {'node_label': owner['graph_key'], 'part': 'body'} or element.get('ref') not in fresh_bodies or not _graph(prior,owner):
                     return None
                 selected = True
                 if stage != 'graph':
@@ -144,15 +220,12 @@ def _attempt(start, receipts, evidence, expected, source_path):
             else:
                 if (verb, stage) != transitions[cursor]:
                     return None
-                if verb == 'open_wizard' and element.get('graph_node') != {'node_label': owner['node']['label'], 'part': 'settings'}:
+                if verb == 'open_wizard' and element.get('graph_node') != {'node_label': owner['graph_key'], 'part': 'settings'}:
                     return None
                 cursor += 1; current = stage
         if stage == 'graph':
             if not _graph(snapshot, owner):
                 return None
-            if verb == 'finish_wizard':
-                finish_bodies = [e.get('ref') for e in snapshot['ui'].get('elements', [])
-                                 if e.get('graph_node') == {'node_label': owner['node']['label'], 'part': 'body'}]
         else:
             if _semantic_owner(snapshot) != owner:
                 return None
@@ -170,6 +243,7 @@ def _attempt(start, receipts, evidence, expected, source_path):
                     'node_persistence_verified': False, 'package_persistence_verified': False,
                     'source_identity_verified': False, 'session_id': session,
                     'operations': [r['outcome']['operation_id'] for r in accepted],
+                    'pre_effect_rejections':rejected_calls,
                     'reason': 'journal_bound_rendered_import_roundtrip',
                     'missing_proofs': ['complete_source_schema', 'source_field_identity',
                                        'package_save_close_reopen', 'execution_results']}

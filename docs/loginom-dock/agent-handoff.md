@@ -1,3 +1,43 @@
+**2026-09-06 — upload navigation, graph owner и обновление типов импорта.**
+Run `20260906-124648-4dd1a15b` / session19830 TERMINAL: source205dae6d,
+ChatGPT/openai-codex/gpt-5.6-luna/medium,30 API calls,returncode0,no timeout,
+runtime/harness unchanged. Единственный frozen audit24/32 SHA
+`c8e7812ccfd40b8fefd4132e7637f75156c40608c96c27decfd8d70000a67b63`.
+Upload count +7 domain gates FAIL; knowledge scope PASS. Agent создал импорт
+до загрузки и пытался upload из OpenDialogForm; rows48/62 refused before effect,
+файл не отправлен. Picker/type/finish/reopen этим run не проверены. Не пересчитывать.
+
+Root UI-first: file picker открывает OpenDialogForm для существующих файлов.
+Cancel → главный btnFilestorage → test row dblclick → native narrow read
+NavigationPanel подтверждает file_storage.status=observed,directory=/test.
+Описание upload, отказ и short goal теперь объясняют эту последовательность,
+различают Files и file-selection dialog; admission/guards не ослаблены.
+
+Independent import roundtrip теперь связывает graph key с observed owner.node.tid
+и workflow breadcrumb tid, сохраняя display label отдельно (пробелы/запятые
+не нормализуются). One actual body click допускает fresh delivered ref того же
+узла; строго подтверждённые no-effect epoch/idle validation refusals учитываются
+отдельно. Второйactual/foreign/duplicates/unknown остаются FAIL. Старые audits
+не переписывались. 305client/147Python/10packaging PASS; последующие правки только
+описания tool/goal и документация, без изменения executable semantics.
+
+Дополнительный UI-first в manual TF-4: исходные UnitPrice12.5/7.25/2.5 видны в
+RAW view, но Result был пуст для дробных строк при real и displayed Точка(.).
+Повторный выбор Точка(.) не обновил conversion. Кнопка «Определить типы данных»
+после завершения обновления дала12,50/7,25/2,50; real/continuous сохранились.
+Help integration/import/txt/README.md: кнопка пересчитывает типы/виды; RefreshAll
+пересчитывает также имена/метки; максимум preview здесь200, не общий100 из другого
+preview. Native dialogs/data-tid прочитаны напрямую, package не сохранён.
+Описание и short goal подсказывают перерасчёт для нового импорта ДО manual
+corrections; у существующего импорта осознанные type/kind нельзя сбрасывать.
+
+Hermes нет; manual TF-4 format, Result view, editor закрыт,5fields и6rows видны,
+source `/test/Dock-upload-20260906-033638-57049220.csv`. Production без изменений.
+Далее цельный import участок: полнота schema/mapping/readback и последовательность
+apply/reopen; затем один короткий replay, а не model run после каждого малого
+изменения. Число видимых columns/rows само не доказывает полный output, Preview
+округляет real. P3–P9 открыты; весь выход из MVP не завершён.
+
 **2026-09-06 — picker импорта явно доступен, несколько отказов upload учтены строго.**
 UI-first после terminal122247: click по input редактора UnitPrice не открывает
 список; отдельный exact cbx;trg_picker открывает6 options. Runtime теперь

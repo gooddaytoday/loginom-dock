@@ -9,7 +9,7 @@ PATH = '/test/source.csv'
 def fixture(selection=True):
     source = source_snapshot(); form = snapshot(); mapping = mapping_snapshot()
     done = copy.deepcopy(mapping); done['wizard']['stage'] = 'done'
-    owner = source['wizard']['owner_context']; node = owner['node']['label']
+    owner = source['wizard']['owner_context']; node = owner['node']['tid'].split('>')[-1]
     graph = copy.deepcopy(source); graph['wizard'] = {'status': 'absent'}
     graph['navigation_context'] = {'status': 'observed', 'path': [{k:p[k] for k in ('tid','label')} for p in owner['path'][:-2]]}
     body = {'ref':'body', 'graph_node':{'node_label':node,'part':'body'}, 'allowed_actions':['click']}
@@ -131,3 +131,97 @@ class ImportRoundtripTests(unittest.TestCase):
                     elif index == 4: outcome['trace'][-1]['node_ref'] = 'wrong'
                     else: outcome['trace'][-1]['workflow_path'] = []
                 self.assertEqual(self.diagnose(data), [], (index, mode))
+
+    def test_observed_graph_key_is_separate_from_display_label(self):
+        data=fixture()
+        def replace(value):
+            if isinstance(value,dict):
+                for key,item in value.items():
+                    if key=='label' and item=='Import':value[key]='Text, import diagnostic'
+                    elif key=='tid' and isinstance(item,str):value[key]=item.replace('>n','>Text_import_diagnostic')
+                    elif key=='node_label' and item=='n':value[key]='Text_import_diagnostic'
+                    else:replace(item)
+            elif isinstance(value,list):
+                for item in value:replace(item)
+        replace(data)
+        self.assertEqual(len(self.diagnose(data)),1)
+        for mode in ('wrong_key','collision','changed_owner'):
+            changed=copy.deepcopy(data)
+            for outcome in (changed['tools'][4]['result'],changed['events'][4]['outcome']):
+                if mode=='wrong_key':outcome['output']['ui']['elements'][0]['graph_node']['node_label']='Text, import diagnostic'
+                if mode=='collision':outcome['output']['ui']['elements'].append(copy.deepcopy(outcome['output']['ui']['elements'][0]))
+            if mode=='changed_owner':
+                for outcome in (changed['tools'][6]['result'],changed['events'][6]['outcome']):
+                    owner=outcome['output']['wizard']['owner_context'];owner['node']['label']='Text import diagnostic';owner['path'][-2]['label']='Text import diagnostic'
+            self.assertEqual(self.diagnose(changed),[],mode)
+
+    def rejected_rebind_fixture(self):
+        data=fixture()
+        # Reserve rows after finish for a failed gesture and fresh graph read.
+        for item in data['calls']+data['tools']:
+            if item['row']>=11:item['row']+=4
+        call={'session_id':'s','tool_call_id':'stale','tool':'dock_ui_action','row':11,
+              'arguments':{'operation_id':'stale-op','observation_id':'obs4','action':{'verb':'click','ref':'body'}}}
+        result={'status':'NOT_APPLIED','action_key':'ui.act','operation_id':'stale-op','phase':'preconditions',
+                'effect_possible':False,'cleanup_complete':True,'error':{'code':'UI_EPOCH_CHANGED'},
+                'trace':[{'event':'ui_action_failed','code':'UI_EPOCH_CHANGED'}]}
+        data['calls'].append(call);data['tools'].append({**call,'row':12,'result':result})
+        data['events'].append({'phase':'completed','operation_id':'stale-op','outcome':copy.deepcopy(result)})
+        graph=copy.deepcopy(data['tools'][4]['result']['output']);graph['observation_id']='fresh-graph'
+        graph['ui']['elements'][0]['ref']='fresh-body'
+        observe={'session_id':'s','tool_call_id':'fresh','tool':'dock_workspace_observe','row':13,'arguments':{}}
+        raw={'status':'SUCCEEDED','operation_id':'fresh-op','output':graph}
+        data['calls'].append(observe);data['tools'].append({**observe,'row':14,'result':raw})
+        data['events'].append({'phase':'observation_completed','operation_id':'fresh-op','outcome':copy.deepcopy(raw)})
+        data['calls'][5]['arguments'].update(observation_id='fresh-graph',action={'verb':'click','ref':'fresh-body'})
+        for outcome in (data['tools'][5]['result'],data['events'][5]['outcome']):
+            outcome['trace'][0]['refs']=['fresh-body']
+        return data
+
+    def test_proven_no_effect_click_then_fresh_same_node_rebind(self):
+        data=self.rejected_rebind_fixture()
+        proof=self.diagnose(data)
+        self.assertEqual(len(proof),1)
+        self.assertEqual(proof[0]['pre_effect_rejections'],['stale'])
+        for mode in ('effect','pending','duplicate','foreign','unbound','wrong_body','second_actual','unknown_error'):
+            changed=copy.deepcopy(data)
+            failed=next(t for t in changed['tools'] if t['tool_call_id']=='stale')
+            if mode=='effect':failed['result']['effect_possible']=True
+            if mode=='pending':failed['result']['status']='AMBIGUOUS'
+            if mode=='unknown_error':
+                failed['result']['error']['code']='UNKNOWN'
+                next(e for e in changed['events'] if e['operation_id']=='stale-op')['outcome']=copy.deepcopy(failed['result'])
+            if mode=='duplicate':changed['tools'].append(copy.deepcopy(failed))
+            if mode=='foreign':failed['session_id']='other'
+            if mode=='unbound':changed['events']=[e for e in changed['events'] if e['operation_id']!='stale-op']
+            if mode=='wrong_body':
+                next(t for t in changed['tools'] if t['tool_call_id']=='fresh')['result']['output']['ui']['elements'][0]['graph_node']['node_label']='other'
+            if mode=='second_actual':
+                failed['result'].update(status='SUCCEEDED',phase='completed',effect_possible=True)
+                failed['result']['trace']=[{'event':'ui_preconditions_verified','refs':['body'],'verb':'click'}, {'event':'ui_gesture_applied','verb':'click'}]
+                failed['result']['output']=copy.deepcopy(changed['tools'][4]['result']['output'])
+                next(e for e in changed['events'] if e['operation_id']=='stale-op')['outcome']=copy.deepcopy(failed['result'])
+            self.assertEqual(self.diagnose(changed),[],mode)
+
+    def test_idle_validation_refusal_of_used_no_effect_id(self):
+        data=self.rejected_rebind_fixture()
+        for item in data['calls']+data['tools']:
+            if item['row']>=15:item['row']+=2
+        call={'session_id':'s','tool_call_id':'refused','tool':'dock_ui_action','row':15,
+              'arguments':{'operation_id':'stale-op','observation_id':'fresh-graph',
+                           'action':{'verb':'click','ref':'fresh-body'}}}
+        result={'status':'FAILED','action_key':'request.validate','operation_id':None,'phase':'request_rejected',
+                'request_rejected':True,'effect_possible':False,'trace':[], 'error':{'code':'REQUEST_REJECTED'},
+                'output':{'operation':{'state':'idle','operation_id':None,'cleanup_confirmed':True,'effect_state':'none'}}}
+        data['calls'].append(call);data['tools'].append({**call,'row':16,'result':result})
+        proof=self.diagnose(data)
+        self.assertEqual(len(proof),1)
+        self.assertEqual(proof[0]['pre_effect_rejections'],['stale','refused'])
+        for mode in ('duplicate','pending','effect','foreign','unknown'):
+            changed=copy.deepcopy(data);reply=next(t for t in changed['tools'] if t['tool_call_id']=='refused')
+            if mode=='duplicate':changed['tools'].append(copy.deepcopy(reply))
+            if mode=='pending':reply['result']['output']['operation']['state']='pending'
+            if mode=='effect':reply['result']['effect_possible']=True
+            if mode=='foreign':reply['session_id']='other'
+            if mode=='unknown':reply['result']['error']['code']='OTHER'
+            self.assertEqual(self.diagnose(changed),[],mode)

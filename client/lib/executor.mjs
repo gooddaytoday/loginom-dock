@@ -22,7 +22,7 @@ const uiActionTool = { name: 'dock_ui_action',
     required: ['observation_id', 'operation_id', 'action'], additionalProperties: false },
   annotations: { readOnlyHint: false, destructiveHint: true, openWorldHint: false } };
 const artifactUploadTool = {name:'dock_artifact_upload',
-  description:'Submit an operator-authorized input artifact to its exact Loginom destination. Requires artifact_id and upload_grant_id from dock_prepare plus a fresh observation of the current storage directory. This candidate supports only explicitly authorized replace; reject is unavailable and never silently changed. Submission is not upload completion: the operation remains pending for server verification. A repeated operation_id never sends the file again. No local paths, selectors, or overwrite choices are accepted.',
+  description:'Submit an operator-authorized input artifact to its exact Loginom destination. Requires artifact_id and upload_grant_id from dock_prepare plus a fresh observation with file_storage.status=observed and file_storage.directory equal to the grant directory. First open the main Файлы (Files) workspace using its observed control and enter that exact directory. The import wizard file-selection dialog only selects existing server files; it is not the upload workspace. Cancel that dialog through its observed control before opening Files. Upload and verify the artifact before selecting it in the import wizard. This candidate supports only explicitly authorized replace; reject is unavailable and never silently changed. Submission is not upload completion: the operation remains pending for server verification. A repeated operation_id never sends the file again. No local paths, selectors, or overwrite choices are accepted.',
   inputSchema:{type:'object',additionalProperties:false,required:['artifact_id','upload_grant_id','observation_id','operation_id'],
     properties:{artifact_id:identifier,upload_grant_id:identifier,observation_id:identifier,operation_id:identifier}},
   annotations:{readOnlyHint:false,destructiveHint:true,openWorldHint:false}};
@@ -1349,7 +1349,7 @@ export function createActionRuntime({ pinned, execute, artifactStore, allowCandi
       if(artifact.upload.overwrite!=='replace')throw new Error('reject upload policy is not implemented; it cannot be replaced implicitly');
       const snapshot=observations.get(observationId);
       if(!snapshot || snapshot.file_storage?.status!=='observed' || snapshot.file_storage.directory!==artifact.upload.directory)
-        throw new Error('Observe the exact authorized Loginom storage directory before uploading');
+        throw new Error('Observe the exact authorized Loginom storage directory before uploading. Open the main Файлы (Files) workspace and enter the directory from the upload grant; require file_storage.status=observed and an exact directory match. The import file-selection dialog cannot receive this upload: cancel that dialog through its observed control, then open Files and observe again. No file was staged or submitted.');
       running=true;
       try {
         const lease=await artifactStore.stageUpload(artifactId);
