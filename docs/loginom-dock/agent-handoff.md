@@ -1,3 +1,18 @@
+**Правило пользователя от 6 сентября:** сначала Codex самостоятельно изучает
+нужный Loginom Web UI и формирует подход; при повторных ошибках Hermes возвращается
+в UI и диагностирует причину до нового неизменённого прогона. Сверять E2E/Help;
+ручная диагностика отдельно от Hermes acceptance (ChatGPT/Luna/medium).
+Каноническое правило: AGENTS.md и §18 плана выхода из MVP.
+
+**Checkpoint:** run033638-57049220 terminal, session15644 закрыт,49/58 frozen FAIL,
+56 API calls Luna/ChatGPT/medium. По разрешению пользователя Codex напрямую
+разобрал Loginom UI: navigation TreeText/TreeExpander пропускались observer-ом,
+после click закрытие панели давало UI_ROOT_STALE. Исправлены discovery/controls
+и post-gesture roots rediscovery (не typed verification/preconditions).
+Прямая live capability проверка SUCCEEDED;271 client /110 Python /10 packaging PASS.
+Далее автономная Hermes acceptance с agent.3 /test/packages, test, /test,
+ChatGPT subscription/Luna/medium. Active Hermes нет. Full P3–P9 открыты.
+
 **Checkpoint:** новый2026.09.06-agent.3-candidate собран НА VPS и staged/readback.
 URI viking://resources/loginom-dock/catalogs/executor-preview/releases/2026.09.06-agent.3-candidate/manifest.json
 SHA007465bf4d8fee5f238ef790db4584313d61373d27f92715f01388edfe413ae6.

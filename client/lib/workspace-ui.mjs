@@ -55,7 +55,7 @@ function workspaceUiCapability(page, task) {
   // A WeakMap records DOM incarnations, without adding attributes or mutating
   // Loginom. Re-rendering an identical-looking control invalidates its old ref.
   // The state is document-bound; navigation invalidates every previous reference.
-  const readUi = async () => {
+  const readUi = async (rediscover = false) => {
     const observed = await page.evaluate(({rootRef,discoverRoots,storageName}) => {
     try {
     const scanStarted = Date.now(), maxElements = 6000, maxWork = 250000, maxMs = 500;
@@ -134,7 +134,7 @@ function workspaceUiCapability(page, task) {
       if (dom.length >= maxElements) { const error=new Error('Selected region or global guards exceed the scan budget');error.code='UI_SCAN_LIMIT';throw error; }
       seenElements.add(element);dom.push(element);
     };
-    const regionSelector='[data-tid$=";PreviewForm;DataSetForm"],[data-tid$=";ViewsForm;BrowseView"],[data-tid="MF;cntMain;tlbMainToolbar"],[role="dialog"],.x-window,.bg-dialog,[role="grid"],table,[role="form"],[data-tid$=";WizrdMCF"],[data-tid$=";boundlist"],[data-tid$=";cmpDiagram"],[data-tid$=";pnlWorkarea"],[data-tid$="NavigationBar;NavigationPanel"]';
+    const regionSelector='[data-tid$=";PreviewForm;DataSetForm"],[data-tid$=";ViewsForm;BrowseView"],[data-tid="MF;cntMain;tlbMainToolbar"],[role="dialog"],.x-window,.bg-dialog,[role="grid"],table,[role="form"],[data-tid$=";WizrdMCF"],[data-tid$=";boundlist"],[data-tid$=";MapTreeForm;tree"],[data-tid$=";cmpDiagram"],[data-tid$=";pnlWorkarea"],[data-tid$="NavigationBar;NavigationPanel"]';
     // E2E utils/selectors.Format: whitespace -> underscore, comma removed.
     // This finds candidates, not filesystem identity or absence. CSS hex escapes
     // keep arbitrary filename characters data rather than selector syntax.
@@ -292,7 +292,7 @@ function workspaceUiCapability(page, task) {
       const regions=regionElements.filter(element=>visible(element) && !sensitive(element) && scopeOf(element)!=='inactive_workflow')
         // Deliver the current wizard root before its tables, so a changing form
         // can be read narrowly without paging through those tables first.
-        .sort((a,b)=>{const rank=e=>getTid(e)===workflow?.prefix+';WizrdMCF'?0:wizardCombos.has((getTid(e)??'').replace(/;boundlist$/,'')) && (getTid(e)??'').endsWith(';boundlist')?1:2;return rank(a)-rank(b);});
+        .sort((a,b)=>{const rank=e=>getTid(e)===workflow?.prefix+';WizrdMCF'?0:wizardCombos.has((getTid(e)??'').replace(/;boundlist$/,'')) && (getTid(e)??'').endsWith(';boundlist')?1:(getTid(e)??'').endsWith(';MapTreeForm;tree')?2:3;return rank(a)-rank(b);});
       const elements=regions.slice(0,240).map(element=>({ref:refOf(element),tid:getTid(element),identity:identityOf(element),
         kind:'region',label:textOf(element),scope:scopeOf(element),visible:true,enabled:enabled(element),allowed_actions:[],
         signature:{tag:element.tagName.toLowerCase()},bounding_box:boxOf(element)}));
@@ -329,6 +329,9 @@ function workspaceUiCapability(page, task) {
       // Pinned E2E bg/selectors.ts:272,279,286: palette tree labels and
       // expanders are spans without button/treeitem roles in some UI builds.
       || /;ModelForm;colVendors_Компоненты>[^;]+;(?:TreeText|TreeExpander)$/.test(getTid(element) ?? '')
+      // E2E helpers/navigation.ts ByPanel and live MapTreeForm: navigation
+      // labels/expanders have no ARIA role. Only exact navigation tree parts.
+      || /^MF;(?:TF(?:-\d+)?;)?MapTreeForm;colNavigation_Сервер>[^;]+;(?:TreeText|TreeExpander)$/.test(getTid(element) ?? '')
       // E2E bg/selectors.ts:1068 and bg/helpers/wizard.ts:29: the node
       // settings affordance can be SVG without a button role.
       || /;Graph;[^;]+;Setting$/.test(getTid(element) ?? '')
@@ -661,7 +664,7 @@ function workspaceUiCapability(page, task) {
         ? error.code : 'UI_OBSERVATION_FAILED';
       return {ui_read_failure:{code}};
     }
-  },{rootRef:task.root_ref ?? task.snapshot?.observation_root?.ref ?? null,discoverRoots:task.discover_roots===true,storageName:task.storage_name ?? null});
+  },{rootRef:rediscover ? null : task.root_ref ?? task.snapshot?.observation_root?.ref ?? null,discoverRoots:rediscover || task.discover_roots===true,storageName:task.storage_name ?? null});
     if (observed?.ui_read_failure) {
       const code=observed.ui_read_failure.code;
       const messages={UI_SCAN_LIMIT:'Workspace scan budget exceeded; use root discovery and a narrower observation',
@@ -897,7 +900,16 @@ function workspaceUiCapability(page, task) {
         } else fail('UI_ACTION_INVALID', 'Unsupported UI gesture');
         if (effectPossible) record('ui_gesture_applied', { verb: task.action.verb });
         phase = 'observing'; timeout();
-        let observed = await readUi();
+        let observed;
+        try { observed = await readUi(); }
+        catch(error) {
+          // A generic click can legitimately close its popup/tree. Rediscover
+          // regions only after the completed gesture, never for preconditions
+          // or typed value/stage verification. This proves no navigation goal.
+          if(error?.code!=='UI_ROOT_STALE' || !effectPossible || !['click','double_click','right_click','press'].includes(task.action.verb))throw error;
+          observed=await readUi(true);
+          record('ui_root_closed_after_gesture',{verification_required:true});
+        }
         if(task.action.verb==='select_wizard_option') {
           const choice=current.ui.elements.find(item=>item.ref===task.action.ref).wizard_combo;
           const field=observed.wizard.settings?.fields?.[choice.field.name];

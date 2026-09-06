@@ -1404,3 +1404,51 @@ test('covered control reports only bounded blocker identities, without text or n
   assert.deepEqual(redacted.covering,[{redacted:true}]);
   overlay.remove();assert.equal((await page.observe()).ui.elements.find(e=>e.tid==='Safe;btnAction').interaction.state,'point_observed');
 });
+
+
+test('navigation trees expose named roots and guarded text/expander actions',async()=>{
+  for(const prefix of ['MF','MF;TF-1']) {
+    const page=new Page();
+    for(let i=0;i<80;i++)page.add('table',null);
+    const tree=page.add('div',prefix+';MapTreeForm;tree');
+    const base=prefix+';MapTreeForm;colNavigation_Сервер>Пакеты>Package1';
+    const label=page.add('span',base+';TreeText','Package1',{x:30,y:50,width:80,height:20},tree);
+    page.add('img',base+';TreeExpander','',{x:10,y:50,width:20,height:20},tree);
+    page.add('span',base+';NotAnAction','',undefined,tree);
+    const roots=await page.execute({mode:'observe',discover_roots:true});
+    assert.equal(roots.output.ui.elements[0].tid,prefix+';MapTreeForm;tree');
+    assert.deepEqual(roots.output.ui.elements[0].allowed_actions,[]);
+    const read=await page.execute({mode:'observe',root_ref:roots.output.ui.elements[0].ref});
+    const snapshot=read.output,target=snapshot.ui.elements.find(e=>e.tid===base+';TreeText');
+    assert.equal(target.label,'Package1');
+    assert.ok(target.allowed_actions.includes('click'));
+    assert.ok(snapshot.ui.elements.find(e=>e.tid===base+';TreeExpander').allowed_actions.includes('click'));
+    assert.ok(!snapshot.ui.elements.some(e=>e.tid===base+';NotAnAction'));
+    assert.equal((await page.act({verb:'click',ref:target.ref},snapshot)).status,'SUCCEEDED');
+    label.remove();
+    assert.equal((await page.act({verb:'click',ref:target.ref},snapshot)).status,'NOT_APPLIED');
+  }
+});
+
+test('completed generic click rediscovers regions when its observed root closes',async()=>{
+  for(const when of ['after','before','lost_reply']) {
+    const page=new Page(),tree=page.add('div','MF;MapTreeForm;tree');
+    page.add('span','MF;MapTreeForm;colNavigation_Сервер>Пакеты;TreeText','Пакеты',undefined,tree);
+    const roots=await page.execute({mode:'observe',discover_roots:true});
+    const root=roots.output.ui.elements.find(e=>e.tid==='MF;MapTreeForm;tree');
+    const read=await page.execute({mode:'observe',root_ref:root.ref});
+    const target=read.output.ui.elements.find(e=>e.label==='Пакеты');
+    const click=page.mouse.click;
+    page.mouse.click=async(...args)=>{await click(...args);tree.remove();if(when==='lost_reply')throw new Error('lost reply');};
+    if(when==='before')tree.remove();
+    const result=await page.act({verb:'click',ref:target.ref},read.output);
+    assert.equal(result.status,when==='after'?'SUCCEEDED':when==='before'?'NOT_APPLIED':'AMBIGUOUS');
+    assert.equal(page.clickedPoints.length,when==='before'?0:1);
+    if(when==='after') {
+      assert.equal(result.output.observation_kind,'roots');
+      assert.equal(result.output.verification_required,true);
+      assert.ok(result.output.ui.elements.every(e=>e.allowed_actions.length===0));
+      assert.ok(result.trace.some(e=>e.event==='ui_root_closed_after_gesture'));
+    }
+  }
+});

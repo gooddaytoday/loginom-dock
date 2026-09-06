@@ -1,3 +1,38 @@
+## 2026-09-06 — прямая UI-диагностика навигации и исправление чтения закрытой панели
+
+Run 20260906-033638-57049220 завершён и audited один раз: 49/58 FAIL,
+SHA 722b9496db2409de63af0a8c3dabf2e0825fa1f2b0a075f9e4f2ba3584b9ece0.
+56 API calls, openai-codex / gpt-5.6-luna / medium, completed=true,
+failed=false, returncode=0, timed_out=false. Новый catalog agent.3 использован,
+но до save/reopen Hermes не дошёл; последний double_click был по region ref
+без allowed_actions. Старый audit остаётся неизменным.
+
+Пользователь разрешил Codex самостоятельно диагностировать затруднения в Loginom UI.
+В отдельной браузерной сессии под test, без пароля, создан диагностический черновик.
+Live build 7.5.0-alpha+build.49202 подтвердил: MapTreeForm navigation TreeText —
+SPAN без ARIA role, TreeExpander — IMG presentation. Эти элементы observer
+пропускал; scope roots выдавал безымянные вложенные таблицы вместо дерева.
+Источник последовательности: e2e-tests/bg/helpers/navigation.ts ByPanel,
+один click по TreeText конечного пункта, не double_click по контейнеру.
+
+Добавлены exact global/local MapTreeForm TreeText/TreeExpander в observed controls,
+корень MapTreeForm;tree — в discovery с приоритетом перед таблицами.
+Live прямой вызов client capability подтвердил выдачу «Сценарий» и checked click.
+Первый вызов выявил UI_ROOT_STALE после штатного закрытия панели; теперь только
+после завершённого generic click/double_click/right_click/press при этой ошибке
+исполняется bounded roots discovery. Предусловия и typed settings/stage proofs
+не используют fallback; потерянный ответ остаётся AMBIGUOUS. Результат жеста
+verification_required=true, без утверждения о достижении доменной цели.
+Повторный live вызов: SUCCEEDED, панель закрыта, виден сценарий Package1/Модуль1.
+Это прямая диагностика Codex, НЕ автономная Hermes acceptance.
+
+271 client /110 Python /10 packaging PASS; новые tests проверяют global/local
+навигацию, detached refs, закрытие root после click, отказ до click и lost reply.
+Evidence: .dock/post-mvp-p0/navigation-*-tests.txt и navigation-live-result.txt.
+Далее новая Hermes acceptance на ChatGPT subscription/Luna/medium с agent.3
+URI/SHA из предыдущей записи; сохранить test и /test. Все семь domain gates,
+cursor fix live acceptance и полный P3–P9 остаются открыты.
+
 ## 2026-09-06 — на VPS собран и staged каталог для /test/packages
 
 Из чистого source11f696c5 подготовлен ограниченный исходный архив, SHA

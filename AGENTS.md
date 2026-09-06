@@ -77,6 +77,15 @@
 
 ## Verification and delivery
 
+- For this project, including the current exit from MVP, Codex must first
+  inspect the relevant real Loginom Web UI and use those observations to form
+  the implementation/debugging approach. Cross-check it with E2E and Help.
+  When Hermes repeatedly fails or gets stuck, Codex must return to the live UI,
+  reproduce and diagnose the problematic step, then revise the approach before
+  another unchanged replay. The user explicitly authorized this direct Codex
+  UI diagnosis on 2026-09-06. Keep diagnostic sessions separate from active
+  Hermes runs. Manual success does not replace autonomous Hermes acceptance;
+  retain the configured ChatGPT subscription / Luna / medium for that acceptance.
 - Build production artifacts on the Dock VPS, as requested by the user. Local
   source checks and preview of server-built assets are allowed. Documentation-only
   changes do not require a server rebuild or a client reinstall.
