@@ -1,3 +1,27 @@
+**Checkpoint 2026-09-06 — full Hermes 080744 завершён, null input требует диагностики.**
+Run 20260906-080744-6a33af16, source fb09255b, exec session20705 TERMINAL.
+ChatGPT/openai-codex gpt-5.6-luna medium, 68 API calls, returncode0, timed_out=false;
+runtime/harness unchanged=true. Единственный audit: 47/58 FAIL,
+SHA d5a4e26f810bb84c4c85413a481b87aca1339735c1efb8406327190b42581629.
+Audit не переписывать. 4 transfer gates не подтвердились: observed storage navigation,
+immutable directory receipt, exact delivered CSV target, raw-journal-bound file read;
+также 7 unimplemented domain gates. Экспорт успешен, но task acceptance нет.
+
+Hermes создал imports.text/calculator/group_data; первая Grouping position rejected
+outside workflow, следующая успешна. На import format set_wizard_field null_marker
+\N завершился WIZARD_FIELD_NOT_CONFIRMED: post-read остался ?. Последующие abandon
+recover отклонены Observed state changed before acceptance. Это не внешний блокер:
+нужен UI/runtime разбор, не новый неизменённый прогон.
+
+После terminal в отдельном manual browser открыт импорт диагностического Package1:
+Reform wizard сохранён, источник деактивирован через явное «Да», Next на формат.
+Исходный сохранённый null_marker был \N. Manual fill ?→Tab→click→Ctrl/Meta+A→keyboard
+\N показал \N сразу и после Tab. Ошибка напрямую не воспроизвелась; причина ещё
+не установлена. Current UI import format ОТКРЫТ, null_marker восстановлен \N,
+Package1 не сохранён, active Hermes НЕТ. Далее воспроизвести exact Dock typed input
+с дополнительными observation/ownership checks и разобрать transfer gate failures.
+Полная P3–P9 цель открыта; не считать новый экспорт или manual успех приёмкой.
+
 **Checkpoint 2026-09-06 — ReformColumns finish/open/readback и следующий полный прогон.**
 После apply label Количество единиц выполнен manual Next→typed finish_wizard
 SUCCEEDED566ms, возврат к Изменение. Manual body selection→typed open_wizard

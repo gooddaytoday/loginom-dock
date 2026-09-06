@@ -1,3 +1,12 @@
+**Checkpoint:** run20260906-080744-6a33af16 TERMINAL, session20705 завершён;
+единственный audit47/58FAIL SHA d5a4e26f810bb84c4c85413a481b87aca1339735c1efb8406327190b42581629.
+68calls, no timeout, source/runtime/harness unchanged. Active Hermes нет.
+На null_marker typed input \N post-read остался ?, recovery state-changed loop.
+Manual UI после terminal: обычный input ?→\N работает сразу и после Tab.
+Current diagnostic import format открыт с \N; Package1 не сохранён. Далее exact
+Dock input repro/focus/state diagnosis + 4 failed transfer gates; P3–P9 открыт.
+Audit не повторять, подробности сверху status; private active-run checkpoint terminal.
+
 **Checkpoint:** ReformColumns typed finish566ms→open1325ms→fresh native read
 подтвердил сохранённые integer/Количество единиц/cache off/excluded false.
 Package1 не сохранён, manual wizard открыт без editor. Full pipeline task теперь
