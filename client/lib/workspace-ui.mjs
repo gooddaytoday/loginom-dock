@@ -4,7 +4,7 @@ export const uiActionSchema = {
   type: 'object', additionalProperties: false, required: ['verb'],
   properties: {
     verb: { type: 'string', enum: ['click', 'double_click', 'right_click', 'fill', 'press', 'drag', 'scroll', 'set_checked', 'replace_expression', 'set_wizard_field', 'wizard_step', 'select_wizard_option', 'apply_expression_parameters', 'cancel_expression_parameters', 'open_wizard', 'finish_wizard', 'apply_output_column', 'cancel_output_column'] },
-    expected_stage: { type: 'string', enum: ['text_import_file','text_import_format','input_mapping','output_mapping','calculator','grouping','done'] },
+    expected_stage: { type: 'string', enum: ['text_import_file','text_import_format','input_mapping','output_mapping','calculator','grouping','field_parameters','done'] },
     checked: { type: 'boolean' },
     delta_y: { type: 'integer', minimum: -1000, maximum: 1000 },
     ref: { type: 'string', maxLength: 128 }, text: { type: 'string', maxLength: 2048 },
@@ -158,15 +158,15 @@ function workspaceUiCapability(page, task) {
       input_mapping:';TuneDataSourceInputPortWizard;btnAddMappingColumn',
       output_mapping:[';ColumnsMappingEngineOutputPortWizard;btnAddMappingColumn',';DerivedDataSourceOutputSocketWizard;btnAddMappingColumn',';DerivedDataSourceMappingEngineOutputPortWizard;btnAddMappingColumn'],
       calculator:';CalcDataWizard;btnAddExpr',grouping:';GroupDataWizard;grdUsedFields;tbl',
-      done:';DoneWizard;edtDisplayName'};
+      field_parameters:';ReformColumnsWizard;grdTargetColumns;tbl',done:';DoneWizard;edtDisplayName'};
     const wizardButtons=['btnPrev','btnNext','btnDone','btnExecute','btnClose','btnError'];
     const wizardSelectors=['[data-tid$=";NavigationBar;NavigationPanel"]','[data-tid*=";cnrNaviMode;b.s_"]','[data-tid$=";WizrdMCF"]','[data-tid$=";WizrdMCF;cardWizardPanel;p.h;p.t"]',
       ...Object.values(wizardMarkers).flat().map(suffix=>'[data-tid$=";WizrdMCF'+suffix+'"]'),
       '[data-tid*=";WizrdMCF;CalcDataWizard;colExpressionName_"]','[data-tid*=";WizrdMCF;CalcDataWizard;colExpressionDisplayName_"]','[data-tid$=";WizrdMCF;CalcDataWizard;cmpExpression"]','[data-tid$=";WizrdMCF;CalcDataWizard;btnCalcMode"]','span.bg-TBGCalcMode-cmExpression,span.bg-TBGCalcMode-cmJavaScript',
       ...['edtDelimiterChar','edtTextQualifier','edtValueNull','edtDecimalSeparator'].flatMap(name=>{const owner='[data-tid$=";WizrdMCF;ImportTextFileParamsWizard;'+name+';ValueControl"]';return [owner,owner+' input',owner+' textarea'];}),
       ...['edtDisplayName','cbxNodeTitleMode'].flatMap(name=>{const owner='[data-tid$=";WizrdMCF;DoneWizard;'+name+'"]';return [owner,owner+' input'];}),
-      ...['DerivedDataSourceOutputSocketWizard','DerivedDataSourceMappingEngineOutputPortWizard'].flatMap(form=>
-        ['colName_','colDisplayName_','colDataKind_','colDefaultUsageType_','colSourceDisplayName_'].map(key=>'[data-tid*=";WizrdMCF;'+form+';'+key+'"]')),
+      ...['DerivedDataSourceOutputSocketWizard','DerivedDataSourceMappingEngineOutputPortWizard','ReformColumnsWizard'].flatMap(form=>
+        ['colName_','colDisplayName_','colDataKind_','colDefaultUsageType_','colSourceDisplayName_','colCachingMethod_','colExcluded_'].map(key=>'[data-tid*=";WizrdMCF;'+form+';'+key+'"]')),
       '[data-tid$=";WizrdMCF;EditColumnDefForm"]',
       ...['edtName','edtDisplayName','cbxDataType','cbxDataKind','cbxUsageType'].flatMap(name=>{const owner='[data-tid$=";WizrdMCF;EditColumnDefForm;'+name+'"]';return [owner,owner+' input'];}),
       '[data-tid$=";WizrdMCF;ExprDataEditForm"]',
@@ -323,17 +323,18 @@ function workspaceUiCapability(page, task) {
       if(wizard.status==='observed')wizard.owner_context=ownerContext;
       if(wizard.status==='observed' && wizard.stage==='output_mapping')wizard.port_context=portContext;
     }
-    if(wizard.status==='observed' && wizard.stage==='output_mapping') {
+    if(wizard.status==='observed' && ['output_mapping','field_parameters'].includes(wizard.stage)) {
+      const reform=wizard.stage==='field_parameters',columnsKey=reform?'reform_columns':'output_columns';
       const mappingForms=['DerivedDataSourceOutputSocketWizard','DerivedDataSourceMappingEngineOutputPortWizard'].filter(name=>
         (tids.get(wizard.root_tid+';'+name+';btnAddMappingColumn')??[]).filter(visible).length===1);
-      const base=wizard.root_tid+';'+(mappingForms.length===1?mappingForms[0]:'__unobserved__')+';';
+      const base=wizard.root_tid+';'+(reform?'ReformColumnsWizard':mappingForms.length===1?mappingForms[0]:'__unobserved__')+';';
       const cells=all.filter(e=>{charge();return (getTid(e)??'').startsWith(base+'colName_') && wizardForms[0].contains(e)
         && visible(e) && !sensitive(e) && !e.closest('.x-grid-row-summary');});
       if(cells.length) {
-        wizard.output_columns={status:cells.length>64?'bounded':'rendered_rows',complete:false,settings_applied:false,fields:[]};
+        wizard[columnsKey]={status:cells.length>64?'bounded':'rendered_rows',complete:false,settings_applied:false,fields:[]};
         if(cells.length<=64) {
           const keys=cells.map(e=>getTid(e).slice((base+'colName_').length));
-          wizard.output_columns.fields=cells.map((cell,index)=>{
+          wizard[columnsKey].fields=cells.map((cell,index)=>{
             const key=keys[index],row=cell.closest('table');
             const labels=(tids.get(base+'colDisplayName_'+key)??[]).filter(e=>row && e.closest('table')===row && !e.closest('.x-grid-row-summary') && visible(e) && !sensitive(e));
             const name=textOf(cell,true),label=labels.length===1?textOf(labels[0],true):'';
@@ -342,7 +343,7 @@ function workspaceUiCapability(page, task) {
               .filter(([kind])=>icons.length===1 && icons[0].classList.contains('bg-TBGDataType-dt'+kind));
             if(keys.filter(k=>k===key).length!==1 || labels.length!==1 || types.length!==1 || !name || name.length>=240 || label.length>=240)
               return {status:'ambiguous',field_key:key.slice(0,240)};
-            const extras=Object.fromEntries(Object.entries({data_kind:'colDataKind_',usage:'colDefaultUsageType_'}).map(([name,prefix])=>{
+            const extras=Object.fromEntries(Object.entries({data_kind:'colDataKind_',usage:'colDefaultUsageType_',...(reform?{caching:'colCachingMethod_'}:{})}).map(([name,prefix])=>{
               const cells=(tids.get(base+prefix+key)??[]).filter(e=>e.closest('table')===row && !e.closest('.x-grid-row-summary') && visible(e) && !sensitive(e));
               const text=cells.length===1?textOf(cells[0],true):null;return [name,text && text.length<240?text:null];
             }));
@@ -356,7 +357,13 @@ function workspaceUiCapability(page, task) {
               source={status:!label && nulls===1 && !icons.length?'unmapped':label && label.length<240 && !nulls && types.length===1?'rendered_source':'ambiguous',identity_verified:false,cell_ref:refOf(cell)};
               if(source.status==='rendered_source'){source.label=label;source.type=types[0][1];}
             }
-            return {status:'observed',name,label,type:types[0][1],...extras,source,selected:row.classList.contains('x-grid-item-selected'),name_ref:refOf(cell),label_ref:refOf(labels[0]),row_ref:refOf(row)};
+            let excluded=null;
+            if(reform) {
+              const cells=(tids.get(base+'colExcluded_'+key)??[]).filter(e=>e.closest('table')===row && !e.closest('.x-grid-row-summary') && visible(e) && !sensitive(e));
+              const checks=cells.length===1?[...cells[0].querySelectorAll('.x-grid-checkcolumn')]:[];
+              if(checks.length===1)excluded=checks[0].classList.contains('x-grid-checkcolumn-checked');
+            }
+            return {status:'observed',name,label,type:types[0][1],...extras,...(reform?{excluded}:{source}),selected:row.classList.contains('x-grid-item-selected'),name_ref:refOf(cell),label_ref:refOf(labels[0]),row_ref:refOf(row)};
           });
         }
       }

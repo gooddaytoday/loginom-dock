@@ -1,3 +1,24 @@
+**Checkpoint 2026-09-06 — чтение мастера Параметры полей.**
+Добавлен stage field_parameters по ReformColumnsWizard;grdTargetColumns;tbl.
+Общий bounded reader строк выдаёт отдельный wizard.reform_columns: name/label/type,
+data_kind/usage/caching/excluded/selected и row refs. Сопоставление портов остаётся
+output_columns; reform не объявляет source mapping. Кэширование читается из
+colCachingMethod_, исключение — из единственного native .x-grid-checkcolumn
+и класса x-grid-checkcolumn-checked (E2E app_consts.ts:91). Missing/duplicate check
+возвращает null, не false. Полнота/применение остаются false. Fixed native queries
+поддерживают narrow read вне выбранной строки; конфликт stages остаётся ambiguous.
+
+Live reopen Изменение через подтверждённое «Да» деактивации: мастер сохранил
+Region string, AmountSum real, RowCount integer, QuantitySum integer; все четыре
+excluded=false, caching=Отключено. Новый reader SUCCEEDED с node owner Изменение.
+Это наблюдение повторно открытых node settings, не package persistence или
+автономная приёмка. Preview закрыт, узел Изменение теперь inactive; мастер
+ReformColumnsWizard ОТКРЫТ, editor закрыт, никаких новых изменений настроек нет.
+Package1 не сохранён, Hermes не запущен. 286 client /115 Python /10 packaging PASS.
+Далее read/write EditReformColumnDefForm с сохранением cache/exclusion, Grouping
+и независимые settings/results gates; полный data-pipeline Luna/ChatGPT/medium,
+P3–P9 остаётся открытым.
+
 **Checkpoint 2026-09-06 — ручной полный расчёт после явного преобразования типа.**
 В диагностическом Package1 исправлено сопоставление Grouping: удалено пустое
 QuantitySum integer, существующая Quantity real переименована в QuantitySum

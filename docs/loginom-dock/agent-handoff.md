@@ -1,3 +1,10 @@
+**Checkpoint:** field_parameters stage + wizard.reform_columns читает type,
+кэширование и exclusion, missing check=null. Live reopen Изменение подтвердил
+QuantitySum integer и все поля включёнными/без cache. Node inactive после явного
+«Да» деактивации. UI ReformColumnsWizard открыт, editor/preview закрыты; Package1
+не сохранён, Hermes нет. Далее EditReformColumnDefForm read/write + independent
+settings/results/full Luna acceptance, P3–P9. 286 client /115 Python /10 packaging PASS. Подробности сверху status.
+
 **Checkpoint:** ручная цепь import→Сумма→Grouping→ReformColumns успешно выполнена.
 В Grouping QuantitySum восстановлен как real с source Quantity|Сумма. Отдельный
 ReformColumns преобразует его в integer; после Done auto label узла Изменение.

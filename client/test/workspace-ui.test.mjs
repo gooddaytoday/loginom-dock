@@ -1871,3 +1871,30 @@ test('node and socket output mapping read source cells without inventing source 
     }
   }
 });
+
+test('field parameters read row types caching and exclusion separately from port mapping',async()=>{
+  for(const mode of ['valid','excluded','missing_check','duplicate_check','missing_cache','conflict']) {
+    const page=new Page(),base='MF;TF-1;WizrdMCF;',form=page.add('div',base.slice(0,-1)),stem=base+'ReformColumnsWizard;';
+    page.add('div',stem+'grdTargetColumns;tbl','',undefined,form);
+    if(mode==='conflict')page.add('button',base+'DerivedDataSourceOutputSocketWizard;btnAddMappingColumn','',undefined,form);
+    const row=page.add('table',null,'',undefined,form);
+    page.add('td',stem+'colName_QuantitySum','QuantitySum',undefined,row);
+    const label=page.add('td',stem+'colDisplayName_QuantitySum','QuantitySum',undefined,row);
+    page.add('span',null,'',undefined,label).attrs.class='bg-TBGDataType-dtInteger';
+    page.add('td',stem+'colDataKind_QuantitySum','Непрерывный',undefined,row);
+    page.add('td',stem+'colDefaultUsageType_QuantitySum','Не задано',undefined,row);
+    if(mode!=='missing_cache')page.add('td',stem+'colCachingMethod_QuantitySum','Отключено',undefined,row);
+    const excluded=page.add('td',stem+'colExcluded_QuantitySum','',undefined,row);
+    if(mode!=='missing_check')page.add('img',null,'',undefined,excluded).attrs.class='x-grid-checkcolumn'+(mode==='excluded'?' x-grid-checkcolumn-checked':'');
+    if(mode==='duplicate_check')page.add('img',null,'',undefined,excluded).attrs.class='x-grid-checkcolumn';
+    const full=await page.observe();
+    if(mode==='conflict'){assert.equal(full.wizard.stage,null);assert.equal(full.wizard.reform_columns,undefined);continue;}
+    assert.equal(full.wizard.stage,'field_parameters');assert.equal(full.wizard.output_columns,undefined);
+    const columns=full.wizard.reform_columns,field=columns.fields[0];
+    assert.equal(field.type,'integer');assert.equal(field.caching,mode==='missing_cache'?null:'Отключено');
+    assert.equal(field.excluded,['missing_check','duplicate_check'].includes(mode)?null:mode==='excluded');
+    assert.equal(field.source,undefined);assert.equal(columns.complete,false);assert.equal(columns.settings_applied,false);
+    const narrow=await page.execute({mode:'observe',root_ref:field.name_ref});
+    assert.deepEqual(narrow.output.wizard.reform_columns,columns);
+  }
+});
