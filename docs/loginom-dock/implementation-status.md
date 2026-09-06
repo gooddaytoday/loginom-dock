@@ -1,3 +1,28 @@
+**Остановка по запросу пользователя — 6 сентября 2026, редактор типов импорта.**
+Работа остановлена до реализации действия выбора типа/вида данных. Добавлено
+только структурированное чтение `wizard.import_column_editor`: единственный
+видимый editor (`celleditor` или с индексом), единственная выбранная type/kind
+ячейка, index/name/label/property/value/canonical_value и refs. Скрытый старый
+текст ячейки не считается применённым значением. Неоднозначность/неизвестное
+значение дают unobserved_or_ambiguous; settings_applied=false. Новое действие
+выбора не объявлено. Fixed selector обеспечивает то же чтение в roots.
+Проверено 107/107 тестов workspace-ui.test.mjs, включая новый тест двух вариантов
+editor, hidden old text, roots equality, multiple selection, kind, unknown/hidden
+input и закрытие. Полные client/Python/packaging suites после этой правки ещё НЕ
+запускались; live проверка нового editor readback ещё НЕ выполнена.
+
+Продолжить: проверить новый readback на реальном видимом TF-1 import wizard;
+добавить guarded выбор type/kind с закрытием editor и bounded settled readback
+того же column/context. Учесть отложенное изменение data_kind при смене type,
+replacement/duplicate selection/lost reply; не повторять жест после ambiguous.
+Затем полные проверки и новый Hermes replay только на existing ChatGPT
+subscription / openai-codex / gpt-5.6-luna / medium. Ручная диагностика отдельно
+от активного Hermes. P3–P9 остаются открыты, последний audit091427 не переписывать.
+В этой итерации браузер не менялся; прежний ручной Package1 не сохранён.
+Acceptance run не активен. Найденные Hermes gateway процессы — фоновый сервис,
+не acceptance; они не останавливались. Production не менялся. Пользователь
+попросил остановиться: без новой команды работу не возобновлять.
+
 **2026-09-06 — UI-first контракт редактора типа импортируемого поля.**
 В действительно видимом TF-1 ImportTextFileParamsWizard проверено редактирование
 Quantity (column2). E2E bg/helpers/columnDefsTuning.ts:350–361 использует single

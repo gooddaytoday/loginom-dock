@@ -169,6 +169,7 @@ function workspaceUiCapability(page, task) {
         ['colName_','colDisplayName_','colDataKind_','colDefaultUsageType_','colSourceDisplayName_','colCachingMethod_','colExcluded_'].map(key=>'[data-tid*=";WizrdMCF;'+form+';'+key+'"]')),
       '[data-tid$=";WizrdMCF;EditReformColumnDefForm"]',
       '[data-tid*=";WizrdMCF;ImportTextFileParamsWizard;ColumnDefsTuning;grdSettings;grd-1;normalHeaderCt;"]',
+      '[data-tid*=";WizrdMCF;ImportTextFileParamsWizard;ColumnDefsTuning;grdSettings;grd-1;tbl;celleditor"][data-tid$=";cbx"]',
       ...['edtName','edtDisplayName','cbxDataType','cbxDataKind','cbxUsageType','cntMain;cbxCachingMethod'].flatMap(name=>{const owner='[data-tid$=";WizrdMCF;EditReformColumnDefForm;'+name+'"]';return [owner,owner+' input'];}),
       '[data-tid$=";WizrdMCF;EditReformColumnDefForm;cntMain;chbExcluded"]','[data-tid$=";WizrdMCF;EditReformColumnDefForm;cntMain;chbExcluded;DisplayEl"]',
       '[data-tid$=";WizrdMCF;EditColumnDefForm"]',
@@ -532,6 +533,31 @@ function workspaceUiCapability(page, task) {
         return {index:Number(index),status:'observed',name:values[0],label:values[1],type:types[values[2]],data_kind:values[3],used,
           cell_refs:Object.fromEntries(['name','label','type','data_kind','used'].map((key,i)=>[key,refOf(cells[i][0])]))};
       });
+      // The cell's old text is hidden while the floating editor is open.
+      // Bind the draft input to one selected property; never promote it to an
+      // applied column value or advertise a choice action before its guard exists.
+      const editorBase=base+'ColumnDefsTuning;grdSettings;grd-1;tbl;';
+      const editors=all.filter(e=>{charge();const tid=getTid(e);return tid?.startsWith(editorBase)
+        && /^celleditor(?:-\d+)?;cbx$/.test(tid.slice(editorBase.length)) && visible(e) && !sensitive(e) && wizardForms[0].contains(e);});
+      if(editors.length) {
+        wizard.import_column_editor={status:'unobserved_or_ambiguous',settings_applied:false};
+        const selected=all.filter(e=>{charge();const tid=getTid(e);return tid?.startsWith(columnBase)
+          && /^\d{1,4}_[0-4]$/.test(tid.slice(columnBase.length)) && visible(e) && !sensitive(e)
+          && wizardForms[0].contains(e) && e.classList.contains('x-grid-cell-selected');});
+        if(editors.length===1 && selected.length===1) {
+          const [index,row]=getTid(selected[0]).slice(columnBase.length).split('_');
+          const nativeInputs=editors[0].querySelectorAll('input:not([type="hidden"])');charge();
+          const inputs=[...nativeInputs].filter(e=>{charge();return visible(e) && !sensitive(e);});
+          const names=[0,1].map(r=>(tids.get(columnBase+index+'_'+r)??[]).filter(e=>visible(e) && !sensitive(e) && wizardForms[0].contains(e)));
+          const value=inputs.length===1?String(inputs[0].value??''):'';
+          const name=names[0].length===1?textOf(names[0][0],true):'',label=names[1].length===1?textOf(names[1][0],true):'';
+          const canonical=row==='2'?types[value]:row==='3' && ['Неопределенное','Непрерывный','Дискретный'].includes(value)?value:null;
+          if(canonical && name && name.length<=120 && label && label.length<=120 && inputs.length===1)
+            wizard.import_column_editor={status:'observed',index:Number(index),name,label,property:row==='2'?'type':'data_kind',
+              value,canonical_value:canonical,input_ref:refOf(inputs[0]),owner_ref:refOf(editors[0]),cell_ref:refOf(selected[0]),
+              enabled:enabled(inputs[0]),settings_applied:false};
+        }
+      }
       wizard.import_columns={status:columns.length?'rendered_draft_columns':'unobserved',fields:columns,
         truncated:indexes.length>8,complete:false,settings_applied:false};
     }

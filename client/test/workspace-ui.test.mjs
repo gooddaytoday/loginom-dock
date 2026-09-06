@@ -2067,3 +2067,29 @@ test('format edit exposes recomputed column types without claiming schema accept
   assert.equal(result.output.wizard.import_columns.settings_applied,false);
   assert.equal(result.output.wizard.import_columns.complete,false);
 });
+
+test('import floating editor binds selected type/kind and rejects ambiguous selection',async()=>{
+  for(const suffix of ['celleditor','celleditor-1']) {
+    const page=new Page(),c=importFormatField(page),col=importColumnFixture(page,c.form,2);
+    col.cells[2].attrs.class='x-grid-cell-selected';col.cells[2].ownText='';
+    const hidden=col.cells[2].append(new Element('div',{},'Целый',col.cells[2].box));hidden.style.visibility='hidden';
+    const tid='MF;TF-1;WizrdMCF;ImportTextFileParamsWizard;ColumnDefsTuning;grdSettings;grd-1;tbl;'+suffix+';cbx';
+    const owner=page.add('div',tid,'',col.cells[2].box,c.form);
+    const input=owner.append(new Element('input',{},'',col.cells[2].box));input.value='Строковый';
+    const initial=await page.observe();
+    assert.equal(initial.wizard.import_columns.fields[0].status,'unobserved_or_ambiguous');
+    const editor=initial.wizard.import_column_editor;
+    assert.equal(editor.status,'observed');assert.equal(editor.index,2);assert.equal(editor.name,'Quantity');
+    assert.equal(editor.property,'type');assert.equal(editor.canonical_value,'string');assert.equal(editor.settings_applied,false);
+    const roots=await page.execute({mode:'observe',discover_roots:true});
+    assert.deepEqual(roots.output.wizard.import_column_editor,editor);
+    col.cells[3].attrs.class='x-grid-cell-selected';
+    assert.equal((await page.observe()).wizard.import_column_editor.status,'unobserved_or_ambiguous');
+    col.cells[2].attrs.class='';input.value='Дискретный';
+    assert.equal((await page.observe()).wizard.import_column_editor.property,'data_kind');
+    input.value='unknown';assert.equal((await page.observe()).wizard.import_column_editor.status,'unobserved_or_ambiguous');
+    input.value='Непрерывный';input.style.display='none';
+    assert.equal((await page.observe()).wizard.import_column_editor.status,'unobserved_or_ambiguous');
+    owner.remove();assert.equal((await page.observe()).wizard.import_column_editor,undefined);
+  }
+});
