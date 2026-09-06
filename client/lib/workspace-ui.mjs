@@ -347,6 +347,19 @@ function workspaceUiCapability(page, task) {
       // Loginom message-box buttons are anchors without an ARIA button role;
       // their pinned test identifiers end with tlb;yes / tlb;no, not btn*.
       || ((getTid(element) ?? '').startsWith('msgbox') && /;tlb;(?:yes|no|ok|cancel)$/.test(getTid(element)) && !!dialogRef(element));
+    const graphPrefix = workflow ? workflow.prefix + ';Graph;' : null;
+    const graphElements = graphPrefix ? all.filter(element => (getTid(element) ?? '').startsWith(graphPrefix)) : [];
+    const labels = [...new Set(graphElements.filter(element => /;Label;Label$/.test(getTid(element)) && visible(element))
+      .map(element => getTid(element).slice(graphPrefix.length).replace(/;Label;Label$/, '')).filter(label => label && label !== 'Переменные_сценария'))].sort();
+    const graphLabels=new Set(labels);
+    const graphNodeOf=element=>{
+      const tid=getTid(element)??'';
+      if(!graphPrefix || !tid.startsWith(graphPrefix))return null;
+      const body=tid.slice(graphPrefix.length),parts=body.split(';'),label=parts[0];
+      if(!graphLabels.has(label) || (tids.get(graphPrefix+label)??[]).filter(visible).length!==1)return null;
+      const part=parts.length===1?'body':parts.slice(1).join(';')==='Label;Label'?'label':parts.length===2 && parts[1]==='Setting'?'settings':null;
+      return part?{node_label:label,part}:null;
+    };
     const priority = { graph_editor: 0, dialog: 1, graph: 2, workflow: 3, global: 4 };
     const controlPriority = element => {
       const tid=getTid(element)??'',base=workflow?.prefix+';WizrdMCF;';
@@ -361,6 +374,8 @@ function workspaceUiCapability(page, task) {
       if(tid.startsWith(base+'CalcDataWizard;colExpressionName_'))return -7;
       if((getTid(element.closest('[data-tid]'))??'').startsWith(base) && !dangerous(element)
         && element.matches('input,textarea,select,[contenteditable="true"]'))return -6;
+      const graphNode=graphNodeOf(element);
+      if(graphNode)return graphNode.part==='settings'?1.5:graphNode.part==='body'?1.6:1.7;
       return priority[scopeOf(element)];
     };
     const controls = candidates.filter(interesting).filter(element=>!selectedRoot || selectedRoot===element || selectedRoot.contains(element))
@@ -496,6 +511,7 @@ function workspaceUiCapability(page, task) {
       const value = fullValue?.slice(0, 2048), valueTruncated = fullValue !== undefined && fullValue.length > 2048;
       const fieldValue = value === undefined ? {} : {value, value_truncated:valueTruncated, value_length_utf16:fullValue.length};
       return { ref: refOf(element), tid, identity, kind, role, label, scope: scopeOf(element), ...fieldValue,
+        ...(graphNodeOf(element) ? {graph_node:graphNodeOf(element)} : {}),
         ...(scroll ? { scroll } : {}),
         ...(checkState ? {check_state:checkState} : {}),
         ...(calculatorEditor ? {calculator_editor:calculatorEditor} : {}),
@@ -508,10 +524,6 @@ function workspaceUiCapability(page, task) {
         // large-field driver must establish its own complete read/write contract.
         allowed_actions: expressionWritable ? ['replace_expression'] : allowed && !valueTruncated ? ['click', 'double_click', 'right_click', 'press', 'drag', ...(editable ? ['fill',...(wizardFields.has(element)?['set_wizard_field']:[])] : []), ...(checkState ? ['set_checked'] : []), ...(wizardStep?['wizard_step']:[]), ...(combo?.kind==='option'?['select_wizard_option']:[]), ...(scroll && interaction.state === 'point_observed' ? ['scroll'] : [])] : [] };
     });
-    const graphPrefix = workflow ? workflow.prefix + ';Graph;' : null;
-    const graphElements = graphPrefix ? all.filter(element => (getTid(element) ?? '').startsWith(graphPrefix)) : [];
-    const labels = [...new Set(graphElements.filter(element => /;Label;Label$/.test(getTid(element)) && visible(element))
-      .map(element => getTid(element).slice(graphPrefix.length).replace(/;Label;Label$/, '')).filter(label => label && label !== 'Переменные_сценария'))].sort();
     const nodes = labels.slice(0, 200).map(label => {
       const nodeTid = graphPrefix + label, node = tids.get(nodeTid)?.[0];
       return { node_ref: { kind: 'node', node_label: label, workflow_ref: workflow }, bounding_box: node ? boxOf(node) : null,

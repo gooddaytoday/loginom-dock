@@ -1452,3 +1452,24 @@ test('completed generic click rediscovers regions when its observed root closes'
     }
   }
 });
+
+test('graph paging leads with identified node controls before anonymous SVG vertices',async()=>{
+  const page=new Page();
+  for(let i=0;i<70;i++)page.add('g','MF;TF-1;Graph;Vertex');
+  for(const name of ['Источник','Расчёт','Итог']) {
+    const body=page.add('g','MF;TF-1;Graph;'+name);
+    page.add('span','MF;TF-1;Graph;'+name+';Label;Label',name,undefined,body);
+  }
+  page.add('g','MF;TF-1;Graph;Источник;Setting');
+  const raw=await page.execute({mode:'observe'}),snapshot=raw.output,pages=createObservationPages();
+  const first=pages.retain(raw,'graph');
+  for(const name of ['Источник','Расчёт','Итог']) {
+    const label=first.output.ui.elements.find(e=>e.graph_node?.node_label===name && e.graph_node.part==='label');
+    assert.ok(label?.allowed_actions.includes('click'));
+    assert.doesNotThrow(()=>pages.assertIssued(first.output.observation_id,{ref:label.ref}));
+  }
+  assert.equal(first.output.ui.elements[0].graph_node.part,'settings');
+  assert.equal(first.output.ui.elements[1].graph_node.part,'body');
+  assert.ok(first.output.page.next_cursor,'remaining SVG geometry remains paged');
+  assert.ok(snapshot.ui.elements.filter(e=>e.tid.endsWith(';Vertex')).every(e=>!e.graph_node));
+});

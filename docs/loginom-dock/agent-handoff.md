@@ -1,3 +1,10 @@
+**Checkpoint:** graph_node metadata связывает body/label/settings с видимым
+именованным узлом; first-page priority settings→body→label перед Vertex.
+Прямой live body click показал Setting; label click этого не доказал.
+272 client /110 Python /10 packaging PASS. Далее новый Hermes full data-pipeline
+на ChatGPT/Luna/medium, agent.3 URI/SHA, test и /test. Проверить monitor checkpoint
+перед запуском: в продолжении может быть запущен run. P3–P9 открыты.
+
 **Checkpoint:** run035739-62c8e272 terminal, session17304 закрыт,50/58 FAIL,
 48 API calls Luna/ChatGPT/medium. Последний отказ: невыданный ref417; первая
 graph page перегружена Graph;Vertex, actual nodes дальше. Далее улучшить

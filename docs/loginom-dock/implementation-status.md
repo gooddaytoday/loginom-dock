@@ -1,3 +1,27 @@
+## 2026-09-06 — граф выдаёт связанные с узлом controls перед служебными Vertex
+
+Прямая UI-диагностика на отдельном черновике подтвердила: повторяющиеся
+Graph;Vertex — безымянные SVG-элементы. Тело узла имеет exact Graph;<label>,
+его подпись — Graph;<label>;Label;Label, настройки — Graph;<label>;Setting.
+Клик по подписи через client capability дал gesture SUCCEEDED, но не выделил
+узел и не показал настройки. Клик по body через те же guards выделил узел;
+свежее наблюдение подтвердило видимую и доступную Setting. Не путать жест с целью.
+
+Observer теперь связывает эти три вида controls с видимой меткой и единственным
+телом узла через graph_node {node_label,part:body/label/settings}. Это текущая
+UI-связь, не постоянная identity или wizard ownership. Settings/body/label идут
+перед Vertex/портами/прочей графикой, сохраняя полный доступ к остальным страницам.
+Передача ref всё ещё требует delivered element, epoch/identity/hit guards прежние.
+Guidance описывает body click → fresh observe → settings click, а также различие
+переносимого визуального текста подписи и node_label из test identity.
+
+272 client /110 Python /10 packaging PASS. Test проверил первую compact graph
+page с тремя узлами после 70 Vertex: body/labels/settings доступны сразу,
+их refs выданы; служебные элементы остаются дальше и не получают graph_node.
+Live evidence: .dock/post-mvp-p0/graph-controls-live-result.txt (Codex diagnosis,
+не Hermes acceptance). Далее новый полный Luna/ChatGPT/medium run на agent.3.
+Все domain gates, wizard apply/readback и полный P3–P9 остаются открыты.
+
 ## 2026-09-06 — повторная Hermes проверка и самостоятельный разбор импорта
 
 Run 20260906-035739-62c8e272 на source96282e85 завершён, session17304 закрыт.
