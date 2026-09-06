@@ -852,3 +852,36 @@ test('each observation records its own immutable browser result before paging', 
   assert.equal(reads[0].outcome.output.operation,undefined);
   first.output.origin='changed';assert.notEqual(reads[0].outcome.output.origin,'changed');
 });
+
+test('abandon recovery observes the same roots or narrow region instead of the whole page',async()=>{
+  for(const scope of ['roots','narrow','roots_changed','narrow_changed']) {
+    const page=partialInputAdd();
+    const evaluate=page.evaluate;
+    page.evaluate=async function(fn,arg){
+      const result=await evaluate.call(this,fn,arg);
+      if(result?.ui && arg && ('rootRef' in arg || 'discoverRoots' in arg)) {
+        if(arg.discoverRoots){result.observation_kind='roots';result.ui.elements=result.ui.elements.slice(0,1);}
+        if(arg.rootRef){result.observation_root={ref:arg.rootRef};result.ui.elements=result.ui.elements.slice(0,1);}
+      }
+      return result;
+    };
+    const engine=runtime(page);
+    const initial=await engine.run('link.create',linkParameters(page),{operationId:'scoped-partial'});
+    assert.equal(initial.status,'AMBIGUOUS');
+    const roots=await engine.observe({scope:'roots'});
+    let observed=roots;
+    if(scope.startsWith('narrow')) {
+      const root=roots.output.ui.elements.find(e=>e.ref);assert.ok(root);
+      observed=await engine.observe({rootRef:root.ref,observationId:observationId(roots)});
+      assert.ok(observed.output.observation_root);
+    }
+    if(scope.endsWith('_changed')) {
+      page.nodes[0].label='Changed';
+      await assert.rejects(engine.recover('scoped-partial',{strategy:'abandon_operation',recoveryOperationId:'changed-abandon',observationId:observationId(observed)}),/changed/);
+      assert.throws(()=>engine.assertPreparationAllowed(),/preparation cannot run/);continue;
+    }
+    const result=await engine.recover('scoped-partial',{strategy:'abandon_operation',recoveryOperationId:'scoped-abandon',observationId:observationId(observed)});
+    assert.equal(result.status,'SUCCEEDED');assert.equal(result.output.goal_verified,false);
+    assert.equal(page.drops,1);
+  }
+});

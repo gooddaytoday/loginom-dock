@@ -1170,8 +1170,12 @@ export function createActionRuntime({ pinned, execute, artifactStore, allowCandi
         if (strategy === 'accept_observed_state' || strategy === 'abandon_operation') {
           const snapshot = observations.get(observationId);
           if (!snapshot) throw new Error('Observe the current UI before accepting its state');
-          const current = await execute(makeWorkspaceUiCode({ mode: 'observe', expected_build: targetBuild, expected_origin: targetOrigin }), { signal, timeout: 35000 });
-          const identity = value => [value.origin, value.loginom_build, value.workflow_ref, value.package_identity, value.nodes, value.links, value.ui];
+          const current = await execute(makeWorkspaceUiCode({ mode: 'observe',
+            root_ref:snapshot.observation_root?.ref,discover_roots:snapshot.observation_kind==='roots',
+            storage_name:snapshot.observation_filter?.storage_name,
+            expected_build: targetBuild, expected_origin: targetOrigin }), { signal, timeout: 35000 });
+          const identity = value => [value.origin, value.loginom_build, value.workflow_ref, value.package_identity,
+            value.observation_root,value.observation_kind,value.observation_filter,value.wizard,value.nodes,value.links,value.ui];
           if (current.status !== 'SUCCEEDED' || fingerprint('ui-state', identity(snapshot)) !== fingerprint('ui-state', identity(current.output))) {
             throw new Error('Observed state changed before acceptance; inspect the fresh UI');
           }

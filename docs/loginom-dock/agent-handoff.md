@@ -1,3 +1,12 @@
+**Checkpoint:** exact direct Dock null ?→\N PASS247ms, первопричина Hermes input
+ещё не найдена (перед ним raw delimiter ;). Исправлена отдельная recovery ошибка:
+свежий снимок теперь того же roots/narrow/filter scope, fingerprint включает wizard.
+Frozen failed recovery snapshots были roots/WizrdMCF; full сравнение ошибочно.
+Tests roots/narrow + genuine changes; live recovery нового кода ещё нет. Manual
+import format открыт с \N, Package1 не сохранён, active Hermes нет. Далее
+raw delimiter→null repro + transfer evidence, новый full Luna run, P3–P9.
+289 client /115 Python /10 packaging PASS.
+
 **Checkpoint:** run20260906-080744-6a33af16 TERMINAL, session20705 завершён;
 единственный audit47/58FAIL SHA d5a4e26f810bb84c4c85413a481b87aca1339735c1efb8406327190b42581629.
 68calls, no timeout, source/runtime/harness unchanged. Active Hermes нет.

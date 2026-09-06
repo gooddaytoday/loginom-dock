@@ -1,3 +1,25 @@
+**Checkpoint 2026-09-06 — scoped recovery после full-run отказов.**
+Точный direct Dock set_wizard_field null_marker ?→\N в диагностическом Loginom
+прошёл SUCCEEDED247ms. Отличие от Hermes ещё не установлено: в его прогоне перед
+null вводился raw delimiter ; (baseline после этого ещё ;), в manual baseline
+уже нормализованный label Точка с запятой. Input failure не объявлять исправленным.
+Current manual import format открыт, null_marker \N восстановлен; Package1 не сохранён.
+289 client /115 Python /10 packaging PASS.
+
+Независимо установлена ошибка восстановления: executor.recover для accept/abandon
+всегда снимал full observation, хотя retained snapshot был roots или narrow root.
+В frozen evidence 080744: 65d39019… — roots, 2922b7b1… и 06edacfa… — WizrdMCF root.
+Сравнение ui с разным охватом приводило к state changed. Теперь recovery передаёт
+retained observation_root.ref / observation_kind / storage_name при свежем чтении.
+Fingerprint дополнен scope/filter и wizard, поэтому реальные изменения настроек
+не могут скрыться за одинаковыми видимыми controls. Не снимает pending guard при
+stale state или неподтверждённой cleanup; goal_verified остаётся false.
+Тесты воспроизводят разные scoped/full payloads и проверяют roots/narrow success,
+реальное изменение графа остаётся rejected/pending. Live Hermes recovery после
+исправления ещё НЕ выполнено. Старый audit не переписан. Active Hermes нет.
+Далее проверить raw delimiter→null exact sequence и transfer failures, затем новый
+full Luna/ChatGPT/medium прогон; исходная P3–P9 цель открыта.
+
 **Checkpoint 2026-09-06 — full Hermes 080744 завершён, null input требует диагностики.**
 Run 20260906-080744-6a33af16, source fb09255b, exec session20705 TERMINAL.
 ChatGPT/openai-codex gpt-5.6-luna medium, 68 API calls, returncode0, timed_out=false;
