@@ -1,3 +1,30 @@
+**2026-09-06 — исправлен контекст каталога при узком чтении файлов.**
+
+Run143840-1fc30c8f / handle31054 TERMINAL: source7ebd2849,
+ChatGPT/openai-codex/gpt-5.6-luna/medium,34APIcalls,returncode0,
+completed=true/failed=false/no timeout. Единственный frozen audit24/32 SHA
+`8b6d3ca2ab7d16e6035491abf7bd59ba701cee6685735fae19e0560f7b806b4e`.
+Upload rejected до эффекта: точный directory не наблюдался. Agent завершился
+после узких чтений table/tree, где buttons3/labels0. Ни файл, ни мастер этим
+run не приняты. Oldaudit не пересчитывать. Предшествующий141803-0885ac3c
+FAILED_BEFORE_MODEL на MCP precheck; повтор sameconfig list_tools прошёл,
+модель в той попытке не запускалась. Причина transient отказа не установлена.
+
+Root UI-first воспроизвёл: узкая строка mainFiles содержит fixed navigation
+buttons, но label descendants не включены в fixed queries; labels0 и directorynull.
+Добавлен точный native selector breadcrumb label descendants, все matches
+учитываются в прежних budgets. Активный bar, точное число/видимость/содержимое
+сегментов проверяются по прежним правилам; navigation actions не выдаются из
+узкого чтения строки. Это observed metadata, не выбор каталога по умолчанию.
+
+Native probe после реального dblclick test: file_storage observed /test,
+158 visited/18detail, global_scan=false. Private evidence
+`.dock/post-mvp-p0/storage-narrow-context-live.json`. Hidden/foreign/invalid path
+и изменение имени проверены tests. 317client/160Python/10packaging PASS.
+UI manualTF2Files/test, TF4wizardformat сохранён в другой вкладке, пакет не сохранён.
+Hermes нет, production unchanged. Далее реализация независимой приёмки первого
+P3 gate и цельный replay; полный P3–P9 открыт.
+
 **2026-09-06 — компактные страницы и стабильный переход мастера.**
 
 Root UI-first дважды воспроизвёл отложенное обновление после перехода file→format:

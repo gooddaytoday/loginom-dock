@@ -13,6 +13,8 @@ const clone = value => JSON.parse(JSON.stringify(value));
 function matches(element, selector) {
   if (selector.includes(',')) return selector.split(',').some(part => matches(element, part));
   selector = selector.trim();
+  const breadcrumbLabel=/^(\[data-tid\*=";cnrNaviMode;b\.s"\]) (\.x-btn-inner-default-toolbar-small)$/.exec(selector);
+  if(breadcrumbLabel)return matches(element,breadcrumbLabel[2]) && !!element.parentElement?.closest(breadcrumbLabel[1]);
   const ownedInput=/^(\[data-tid\$="[^"]+"\]) (input|textarea)$/.exec(selector);
   if(ownedInput)return matches(element,ownedInput[2]) && !!element.parentElement?.closest(ownedInput[1]);
   const not = [...selector.matchAll(/:not\(([^)]+)\)/g)];
@@ -784,6 +786,28 @@ test('file storage directory uses active complete breadcrumbs and never proves f
   }
   labels[1].ownText='data';bar.attrs['data-tid']='MF;TF-2;NavigationBar;NavigationPanel';
   assert.equal((await page.observe()).file_storage.directory,null);
+});
+
+test('narrow file rows retain exact active breadcrumb context without issuing navigation controls',async()=>{
+  const page=new Page(),table=page.add('div','MF;TF-1;FileStorageForm;pnlFileStorage;tbl');
+  const row=page.add('table',null,'',undefined,table);
+  page.add('td','MF;TF-1;FileStorageForm;colName_sample_csv','sample.csv',undefined,row);
+  const bar=page.add('div','MF;TF-1;NavigationBar;NavigationPanel');
+  const labels=[];
+  for(const [i,text] of ['Файлы','test'].entries()) {
+    const button=page.add('div','MF;TF-1;cnrNaviMode;b.s_'+i,'',undefined,bar);
+    const label=page.add('span',null,text,undefined,button);label.attrs.class='x-btn-inner-default-toolbar-small';labels.push(label);
+  }
+  const roots=await page.execute({mode:'observe',discover_roots:true});
+  const root=roots.output.ui.elements.find(e=>e.identity?.anchor_tid===table.getAttribute('data-tid') && e.identity.path.length);
+  assert.ok(root);
+  const read=()=>page.execute({mode:'observe',root_ref:root.ref});
+  let narrow=await read();assert.equal(narrow.output.file_storage.directory,'/test');
+  assert.ok(narrow.output.ui.elements.every(e=>!e.tid?.includes('cnrNaviMode')));
+  labels[1].ownText='another';assert.equal((await read()).output.file_storage.directory,'/another');
+  labels[1].style.display='none';assert.equal((await read()).output.file_storage.status,'unobserved');
+  labels[1].style.display='';labels[1].ownText='../test';assert.equal((await read()).output.file_storage.status,'unobserved');
+  bar.attrs['data-tid']='MF;TF-2;NavigationBar;NavigationPanel';assert.equal((await read()).output.file_storage.status,'unobserved');
 });
 
 test('file storage name cells expose E2E targets without requiring a button role', async () => {
