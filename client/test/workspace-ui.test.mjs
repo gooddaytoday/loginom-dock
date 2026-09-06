@@ -1612,7 +1612,7 @@ test('Calculator type selection reads the original form after closing a narrow l
 });
 
 test('wizard owner context uses bounded active-tab breadcrumbs and survives narrow wizard reads',async()=>{
-  for(const mode of ['valid','duplicate','broken_chain','wrong_tab','no_wizard_icon','no_vendor_icon','too_many','long_path']) {
+  for(const mode of ['valid','duplicate','broken_chain','wrong_tab','no_wizard_icon','no_vendor_icon','port_owner','too_many','long_path']) {
     const page=new Page(),wizard=page.add('div','MF;TF-1;WizrdMCF');
     page.add('button','MF;TF-1;WizrdMCF;CalcDataWizard;btnAddExpr','',undefined,wizard);
     const tab=mode==='wrong_tab'?'MF;TF-2':'MF;TF-1';
@@ -1622,6 +1622,7 @@ test('wizard owner context uses bounded active-tab breadcrumbs and survives narr
       path+=(index?'>':'')+(mode==='long_path'?'x'.repeat(220):label);
       const tid=tab+';cnrNaviMode;b.s_'+(mode==='broken_chain' && index===3?'Other':path);
       const crumb=page.add('a',tid,label,undefined,panel);
+      if(index===4 && mode!=='port_owner')page.add('span',null,'',undefined,crumb).attrs.class='maptree-icon-workflow';
       if(index===5 && mode!=='no_vendor_icon')page.add('span',null,'',undefined,crumb).attrs.class='bg-vendor-icon-calcdata';
       if(index===6 && mode!=='no_wizard_icon')page.add('span',null,'',undefined,crumb).attrs.class='maptree-icon-wizard';
       if(index===5 && mode==='duplicate')page.add('a',tid,label,undefined,panel);
@@ -1710,5 +1711,17 @@ test('wizard finish waits for the expected graph node and does not claim setting
     assert.equal(result.status,mode==='success'?'SUCCEEDED':'AMBIGUOUS',mode+JSON.stringify(result.error));
     assert.equal(page.events.filter(e=>e==='click').length,1);
     assert.equal(result.trace.some(e=>e.event==='wizard_finish_graph_verified' && e.reopen_required && !e.settings_readback_verified),mode==='success');
+  }
+});
+
+test('output port mapping is recognized narrowly and conflicting visible variants stay ambiguous',async()=>{
+  for(const conflict of [false,true]) {
+    const page=new Page(),form=page.add('div','MF;TF-1;WizrdMCF');
+    page.add('button','MF;TF-1;WizrdMCF;DerivedDataSourceOutputSocketWizard;btnAddMappingColumn','',undefined,form);
+    if(conflict)page.add('button','MF;TF-1;WizrdMCF;ColumnsMappingEngineOutputPortWizard;btnAddMappingColumn','',undefined,form);
+    const full=await page.observe();
+    const narrow=await page.execute({mode:'observe',root_ref:full.wizard.root_ref});
+    assert.equal(narrow.output.wizard.stage,conflict?null:'output_mapping');
+    assert.equal(narrow.output.wizard.stage_status,conflict?'ambiguous':'observed');
   }
 });

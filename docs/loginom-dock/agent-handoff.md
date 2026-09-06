@@ -1,3 +1,14 @@
+**Checkpoint:** direct Grouping UI: Region key, Quantity/Amount sums, special0
+count. Summary rows duplicate real field tids; FactorEditDialog uses owner checked
+class, not hidden input.checked. Saved node Quantity, Сумма по Region via typed
+finish660ms. Next skips hidden mapping; working path output-port context ConfigurePort.
+Current UI DerivedDataSourceOutputSocketWizard OPEN, columns Region/Quantity/Amount/Count
+not renamed yet. Runtime recognizes output_mapping; port must not count as node
+owner (require immediate workflow parent). Live fixed owner unobserved.
+280 client /115 Python /10 packaging PASS. Active Hermes нет.
+Далее output naming + Grouping drivers/readback, full Luna/ChatGPT/medium acceptance.
+Пакет диагностический Package1 не сохранён; full P3–P9 остаётся целью.
+
 **Checkpoint:** settings_evidence.py связывает immutable call/reply receipts
 Calculator baseline→step→finish→body→open→fresh readback, без посторонних mutations.
 data_pipeline выводит settings_roundtrip_diagnostics, scope calculator_node_only;

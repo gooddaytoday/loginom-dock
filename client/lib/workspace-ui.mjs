@@ -156,12 +156,12 @@ function workspaceUiCapability(page, task) {
     const wizardMarkers={text_import_file:';ImportTextFilePreviewWizard;edtFileName',
       text_import_format:';ImportTextFileParamsWizard;edtValueNull',
       input_mapping:';TuneDataSourceInputPortWizard;btnAddMappingColumn',
-      output_mapping:';ColumnsMappingEngineOutputPortWizard;btnAddMappingColumn',
+      output_mapping:[';ColumnsMappingEngineOutputPortWizard;btnAddMappingColumn',';DerivedDataSourceOutputSocketWizard;btnAddMappingColumn'],
       calculator:';CalcDataWizard;btnAddExpr',grouping:';GroupDataWizard;grdUsedFields;tbl',
       done:';DoneWizard;edtDisplayName'};
     const wizardButtons=['btnPrev','btnNext','btnDone','btnExecute','btnClose','btnError'];
     const wizardSelectors=['[data-tid$=";NavigationBar;NavigationPanel"]','[data-tid*=";cnrNaviMode;b.s_"]','[data-tid$=";WizrdMCF"]','[data-tid$=";WizrdMCF;cardWizardPanel;p.h;p.t"]',
-      ...Object.values(wizardMarkers).map(suffix=>'[data-tid$=";WizrdMCF'+suffix+'"]'),
+      ...Object.values(wizardMarkers).flat().map(suffix=>'[data-tid$=";WizrdMCF'+suffix+'"]'),
       '[data-tid*=";WizrdMCF;CalcDataWizard;colExpressionName_"]','[data-tid*=";WizrdMCF;CalcDataWizard;colExpressionDisplayName_"]','[data-tid$=";WizrdMCF;CalcDataWizard;cmpExpression"]','[data-tid$=";WizrdMCF;CalcDataWizard;btnCalcMode"]','span.bg-TBGCalcMode-cmExpression,span.bg-TBGCalcMode-cmJavaScript',
       ...['edtDelimiterChar','edtTextQualifier','edtValueNull','edtDecimalSeparator'].flatMap(name=>{const owner='[data-tid$=";WizrdMCF;ImportTextFileParamsWizard;'+name+';ValueControl"]';return [owner,owner+' input',owner+' textarea'];}),
       ...['edtDisplayName','cbxNodeTitleMode'].flatMap(name=>{const owner='[data-tid$=";WizrdMCF;DoneWizard;'+name+'"]';return [owner,owner+' input'];}),
@@ -267,7 +267,7 @@ function workspaceUiCapability(page, task) {
       const form=wizardForms[0],base=getTid(form);
       const matching=suffix=>(tids.get(base+suffix)??[]).filter(element=>form.contains(element) && visible(element) && !sensitive(element));
       const titles=matching(';cardWizardPanel;p.h;p.t');
-      const stages=Object.entries(wizardMarkers).filter(([,suffix])=>matching(suffix).length===1).map(([key])=>key);
+      const stages=Object.entries(wizardMarkers).flatMap(([key,suffixes])=>[suffixes].flat().flatMap(suffix=>matching(suffix).map(()=>key)));
       wizard={status:'observed',root_tid:base,root_ref:refOf(form),title:titles.length===1?textOf(titles[0],true):null,
         title_status:titles.length===1?'observed':titles.length?'ambiguous':'unobserved',
         stage:stages.length===1?stages[0]:null,stage_status:stages.length===1?'observed':stages.length?'ambiguous':'unrecognized',
@@ -299,7 +299,7 @@ function workspaceUiCapability(page, task) {
           else if(last.workflow_icon) {
             navigationContext={status:'observed',kind:'workflow',path:items.map(({tid,label})=>({tid,label}))};
           }
-          else if(last.wizard_icon && items.filter(i=>i.wizard_icon).length===1 && node?.vendor_icon && node.label) {
+          else if(last.wizard_icon && items.filter(i=>i.wizard_icon).length===1 && node?.vendor_icon && node.label && items.at(-3)?.workflow_icon) {
             ownerContext={status:'observed',opening_verified:false,panel_ref:refOf(panels[0]),
               node:{ref:node.ref,tid:node.tid,label:node.label},
               path:items.map(({ref,tid,label})=>({ref,tid,label}))};

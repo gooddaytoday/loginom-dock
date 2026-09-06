@@ -1,3 +1,45 @@
+**Checkpoint 2026-09-06 — прямой разбор Grouping и отдельного output-port mapping.**
+Codex добавил Группировку справа от выбранного Сумма; подтверждена автоматическая
+связь Сумма|Output_Data-0|Группировка|Input_Data-0. После drop узел уже выбран,
+NodesControls перекрывает повторный body click; observed Setting доступен.
+Через visible colDisplayName_Region → frmMoveButtons;btnMove0 выбран ключ Region;
+Quantity, Amount и специальный colDisplayName_0 → btnMove1 добавлены в показатели.
+Числовые поля получили Сумма по умолчанию. Used rows отображают Quantity (Сумма),
+Сумма (Сумма), Количество; имена и метки различаются. В x-grid-row-summary
+обнаружены дубли настоящих data-tid colUsedFields_*: при чтении/действиях нужно
+исключать summary rows, не объявлять второе поле. Роль задаёт group header icon
+bg-icon-groupdata-dimension/factor, числовые GroupHeader suffix не семантика.
+Double-click Quantity открыл sibling FactorEditDialog. Сумма отмечена классом
+x-form-cb-checked владельца chb, хотя hidden input.checked=false. Диалог отменён.
+Источники: E2E bg/sels/transform/sGroupData.ts; Help processors/transformation/grouping.md.
+
+Next из Grouping пропускает mapping и открывает Done. В DOM есть radio шага
+mapping, но он скрыт (owner/input boundingBox null), клик недоступен. Не обходили.
+finish_wizard подтвердил Done660ms и новый узел Quantity, Сумма по Region
+(graph tid Quantity_Сумма_по_Region): spaces/comma форматируются, display label
+использована для проверки. Это дополнительная live проверка автоматической метки.
+
+Рабочий путь к выходным столбцам: right-click Output_Data-0 → mn;mniConfigurePort
+(«Настроить порт…»), по E2E helpers/workflow/ports.ts:33–43 и selectors.ts:933.
+Открылся DerivedDataSourceOutputSocketWizard: Region, Quantity, Amount, Count;
+ожидаемые QuantitySum/AmountSum/RowCount ещё НЕ заданы. Help workflow/ports/
+mapping-master.md подтверждает назначение этого мастера. В runtime output_mapping
+теперь распознаёт и socket variant (sDataMapping.ts:30–31), конфликт видимых
+вариантов остаётся ambiguous. Native narrow live read подтвердил output_mapping.
+
+Live также обнаружил ложную node-owner интерпретацию порта по vendor icon.
+Теперь для node owner требуется непосредственный workflow parent; отдельный
+port path остаётся owner_context unobserved. После исправления live прочитал
+output_mapping + owner unobserved. Port identity/open/finish требуют своего
+контракта, применять node finish к порту нельзя.
+280 client /115 Python /10 packaging PASS; логи grouping-discovery-*-tests.txt.
+Private evidence: .dock/post-mvp-p0/grouping-discovery-live-result.txt, grouping-done.png.
+Далее читать/редактировать output mapping имена, реализовать Grouping row/aggregate
+readback и typed moves с учётом summary duplicates; затем full Hermes acceptance.
+Active Hermes нет. Диагностический output-port mapping Группировки ОТКРЫТ;
+пакет Package1 не сохранён, Grouping node сохранён, настройки output ещё не менялись.
+P3–P9 остаются открытыми.
+
 **Checkpoint 2026-09-06 — независимая корреляция Calculator node roundtrip.**
 Добавлен settings_evidence.py. Сначала сопоставляет единственные call/reply и
 immutable completed/observation_completed outcome через journal_equal (включая
