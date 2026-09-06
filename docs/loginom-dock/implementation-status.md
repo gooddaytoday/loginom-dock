@@ -1,3 +1,24 @@
+**2026-09-06 — исправлено завершение ввода формата CSV.**
+После подтверждённого UI воспроизведения исходной смены delimiter tab→semicolon
+set_wizard_field для import_format завершает ввод Tab и наблюдает готовность
+того же мастера: unchanged origin/build/workflow/package/tab/root/stage/owner,
+неизменные диалоги, отсутствие masks, доступная исходная input incarnation,
+exact value и два последовательных совпадения DOM epoch + wizard. Ожидание
+ограничено 40 poll × 100ms и общим deadline; повторного ввода/клика нет. Затем
+сохраняется прежняя полная проверка остальных настроек и identity. При зависании,
+подмене/откате или потере ответа остаётся AMBIGUOUS. Это подтверждение завершения
+ввода в UI, не node/package persistence и не точность импортированных данных.
+Import fields теперь явно имеют scope=import_format.
+
+Live: native dropdown «Символ табуляции», null=? → два последовательных Dock
+set_wizard_field delimiter ; / null \N прошли SUCCEEDED. Null input readback
+value_length_utf16=2, action524ms, trace import_format_input_settled и
+wizard_draft_value_verified. Предыдущий код на той же исходной конфигурации давал
+AMBIGUOUS167ms. Диагностический мастер оставлен с ; / \N / decimal dot,
+Package1 не сохранён. Новый автономный Hermes прогон ещё нужен.
+Тесты покрывают позднюю/обычную/постоянную mask, replacement, reverted value,
+lost Tab reply; ровно один ввод и Tab. 291 client /118 Python /10 packaging PASS. P3–P9 не закрыты этим исправлением.
+
 **2026-09-06 — terminal083616, воспроизведён сбой null при смене разделителя.**
 Проверки изменений: 290 client / 118 Python / 10 packaging PASS.
 Hermes run20260906-083616-f670d535 (source9e462a72, session18465) завершён:

@@ -1161,6 +1161,8 @@ test('import settings preserve blank and whitespace values and exclude hidden or
 });
 
 function importFormatField(page) {
+  page.waitForTimeout=async()=>{};
+  page.context.innerWidth=1000;page.context.innerHeight=800;
   const base='MF;TF-1;WizrdMCF',form=page.add('div',base);
   page.add('div',base+';ImportTextFileParamsWizard;edtValueNull','',undefined,form);
   const owner=page.add('div',base+';ImportTextFileParamsWizard;edtValueNull;ValueControl','',undefined,form);
@@ -1997,4 +1999,33 @@ test('storage row selection reads folder type from its own visible unique cell',
   const duplicate=row.append(new Element('td',type.attrs,'Папка'));
   assert.equal((await read()).kind,'unknown');duplicate.remove();
   type.ownText='Текстовый файл';assert.equal((await read()).kind,'unknown');
+});
+
+test('import input completion waits through delayed preview masks and never repeats typing',async()=>{
+  for(const mode of ['refresh','late_refresh','stuck','replacement','reverted','lost_tab_reply']) {
+    const page=new Page(),c=importFormatField(page),snapshot=await page.observe();
+    const field=snapshot.ui.elements.find(e=>e.wizard_field?.name==='null_marker');
+    let mask,waits=0;
+    const block=()=>{mask=page.add('div',null,'Обновление');mask.attrs.class='x-mask-msg';};
+    page.onPress=key=>{if(key==='Tab') {
+      if(mode==='lost_tab_reply')throw new Error('lost completion reply');
+      if(mode!=='late_refresh')block();
+    }};
+    page.waitForTimeout=async()=>{
+      waits++;
+      if(mode==='late_refresh' && waits===1)block();
+      if(mode==='replacement')c.form.attrs['data-tid']='MF;TF-1;OtherWizard';
+      if(mode==='reverted')c.input.value='old';
+      if(mode!=='stuck' && waits===3)mask?.remove();
+    };
+    const result=await page.act({verb:'set_wizard_field',ref:field.ref,text:'\\N'},snapshot);
+    assert.equal(result.status,['refresh','late_refresh'].includes(mode)?'SUCCEEDED':'AMBIGUOUS',mode+JSON.stringify(result.error));
+    assert.equal(page.events.filter(e=>e==='keyboard_type').length,1,mode);
+    assert.equal(page.events.filter(e=>e==='Tab').length,1,mode);
+    if(result.status==='SUCCEEDED') {
+      assert.ok(waits>=5,mode);
+      assert.ok(result.trace.some(e=>e.event==='import_format_input_settled'));
+      assert.equal(result.output.wizard.settings.applied_verified,false);
+    } else assert.ok(!result.trace.some(e=>e.event==='wizard_draft_value_verified'),mode);
+  }
 });

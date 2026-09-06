@@ -1,3 +1,11 @@
+**Checkpoint:** import_format typed input теперь Tab + bounded readiness в том
+же wizard/context, exact value, stable epoch/wizard, no masks, original input hit.
+Live native delimiter tab → Dock ; → Dock null \N SUCCEEDED524ms (null length2).
+Old same-start repro AMBIGUOUS167ms. 291 client/118 Python/10 packaging PASS.
+Manual import format ;/\N/decimal dot, Package1 не сохранён, Hermes нет.
+Далее full Luna/ChatGPT/medium agent.3 replay с нового commit; freeze после start,
+audit083616 не переписывать. P3–P9 остаются открытыми.
+
 **Checkpoint:** Hermes083616/session18465 TERMINAL, audit25/27FAIL frozen SHA
 cc017b4a572d89ec2d3b5a8b7b9d49a4a0efdec67bec9e23e23d60ed70febbb8.
 Null failure повторился, recovery SUCCEEDED. Реальная причина найдена для repro:

@@ -507,7 +507,7 @@ function workspaceUiCapability(page, task) {
         if(enabled(input) && value.length<=256)wizardCombos.set(ownerTid,{name,owner_ref:refOf(owners[0]),input_ref:refOf(input),root_ref:wizard.root_ref,value});
         const rawMax=input.getAttribute('maxlength'),nativeMax=rawMax!==null && /^\d+$/.test(rawMax) && Number.isSafeInteger(Number(rawMax))?Number(rawMax):null;
         if(value.length<=256 && !/[\0\r\n]/.test(value) && !input.readOnly && enabled(input))
-          wizardFields.set(input,{name,max_length_utf16:Math.min(256,nativeMax??256),stage:wizard.stage,root_ref:refOf(wizardForms[0]),owner_ref:refOf(owners[0])});
+          wizardFields.set(input,{name,scope:'import_format',max_length_utf16:Math.min(256,nativeMax??256),stage:wizard.stage,root_ref:refOf(wizardForms[0]),owner_ref:refOf(owners[0])});
         return [name,{status:'observed',value:value.slice(0,256),value_length_utf16:value.length,truncated:value.length>256,
           enabled:enabled(input),read_only:input.readOnly===true,source_tid:ownerTid,input_ref:refOf(input),owner_ref:refOf(owners[0]),value_kind:'displayed_input_text',native_max_length_utf16:nativeMax}];
       }))};
@@ -1155,8 +1155,8 @@ function workspaceUiCapability(page, task) {
             timeout();
             if(task.action.text)await page.keyboard.type(task.action.text,{delay:0});
             else await first.press('Backspace',{timeout:timeout()});
-            if(['expression_parameter','output_column'].includes(before.wizard_field.scope)) {
-              if(!await first.evaluate(element=>document.activeElement===element))fail('WIZARD_FIELD_CHANGED','Expression field lost focus before edit completion');
+            if(['expression_parameter','output_column','import_format'].includes(before.wizard_field.scope)) {
+              if(!await first.evaluate(element=>document.activeElement===element))fail('WIZARD_FIELD_CHANGED','Wizard field lost focus before edit completion');
               // Loginom updates a linked display label on input completion.
               // Commit the draft input before reading coupled parameter values.
               await first.press('Tab',{timeout:timeout()});
@@ -1318,6 +1318,28 @@ function workspaceUiCapability(page, task) {
         }
         if(task.action.verb==='set_wizard_field') {
           const before=current.ui.elements.find(item=>item.ref===task.action.ref);
+          if(before.wizard_field.scope==='import_format' && before.value!==task.action.text) {
+            // Blur applies import format and can asynchronously rebuild preview.
+            // Observe only: never type again while that refresh is pending.
+            const contextMatches=fresh=>fresh.authenticated && fresh.origin===current.origin && fresh.loginom_build===current.loginom_build
+              && same(fresh.workflow_ref,current.workflow_ref) && same(fresh.package_identity,current.package_identity)
+              && fresh.active_tab_ref===current.active_tab_ref && fresh.wizard.root_ref===current.wizard.root_ref
+              && fresh.wizard.stage===current.wizard.stage && same(fresh.wizard.owner_context,current.wizard.owner_context)
+              && same(fresh.ui.dialogs,current.ui.dialogs);
+            let stable=0,previous=null;
+            for(let attempt=0;attempt<40 && contextMatches(observed);attempt++) {
+              const field=observed.ui.elements.find(e=>e.ref===before.ref);
+              const ready=observed.ui.masks.length===0 && field?.interaction?.state==='point_observed'
+                && field.enabled && field.value===task.action.text;
+              const stamp={epoch:observed.dom_epoch,wizard:observed.wizard};
+              stable=ready && previous && same(stamp,previous)?stable+1:0;
+              if(stable>=2)break;
+              previous=ready?stamp:null;
+              timeout();await page.waitForTimeout(Math.min(100,timeout()));observed=await readUi();
+            }
+            if(stable<2)fail('WIZARD_FIELD_NOT_CONFIRMED','Import preview did not settle in the original wizard after input completion');
+            record('import_format_input_settled',{ref:before.ref,settings_applied:false});
+          }
           const after=observed.ui.elements.find(item=>item.ref===before.ref);
           const expected=JSON.parse(JSON.stringify(current.wizard));
           const expressionParameter=before.wizard_field.scope==='expression_parameter';
