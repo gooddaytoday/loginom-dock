@@ -1,3 +1,11 @@
+**Checkpoint:** apply_expression_parameters выполняет один observed btnApply,
+после закрытия внешнего окна читает исходный wizard root, ждёт row + masks,
+сверяет name/label/type. Новое expression_selection по selected table/type icon.
+Live modified apply SUCCEEDED198ms; reopen показал Amount/Сумма/Вещественный.
+275 client /110 Python /10 packaging PASS. Это НЕ node/package save или Hermes
+acceptance. Далее cancel/type/node binding и полный P3–P9. Active Hermes нет;
+диагностический ExprDataEditForm остаётся открытым. Детали сверху status.
+
 **Checkpoint:** set_wizard_field теперь поддерживает expression_parameter
 name/label с текущими form/wizard/selected row/input refs и exact draft readback.
 Live обнаружен deferred linked label update: после keyboard input добавлен

@@ -1529,3 +1529,36 @@ test('typed Calculator parameter editing binds dialog, selected row and exact dr
     }
   }
 });
+
+test('expression apply checks the resulting selected row after its separate dialog closes',async()=>{
+  for(const variation of ['success','delayed_mask','wrong_name','wrong_label','wrong_type','still_open','lost_reply']) {
+    const page=new Page(),wizard=page.add('div','MF;TF-1;WizrdMCF'),base='MF;TF-1;WizrdMCF;';
+    page.add('button',base+'CalcDataWizard;btnAddExpr','',undefined,wizard);
+    const row=page.add('table',null,'',undefined,wizard);row.attrs.class='x-grid-item-selected';
+    const name=page.add('td',base+'CalcDataWizard;colExpressionName_Expr1','Expr1',undefined,row);
+    const label=page.add('td',base+'CalcDataWizard;colExpressionDisplayName_Expr1','Expr1',undefined,row);
+    const icon=page.add('div',null,'',undefined,name);icon.attrs.class='bg-TBGDataType-dtFloat';
+    const dialog=page.add('div',base+'ExprDataEditForm');dialog.attrs.class='x-window';
+    for(const [key,value] of [['edtName','Amount'],['edtDisplayName','Сумма'],['cbxDataType','Вещественный']]) {
+      const owner=page.add('div',base+'ExprDataEditForm;'+key,'',undefined,dialog),input=page.add('input',null,'',undefined,owner);input.value=value;
+    }
+    const button=page.add('button',base+'ExprDataEditForm;btnApply','Изменить',{x:600,y:400,width:90,height:25},dialog);
+    const roots=await page.execute({mode:'observe',discover_roots:true});
+    const root=roots.output.ui.elements.find(e=>e.tid===base+'ExprDataEditForm');
+    const read=await page.execute({mode:'observe',root_ref:root.ref});
+    const target=read.output.ui.elements.find(e=>e.tid===button.getAttribute('data-tid'));
+    assert.ok(target.allowed_actions.includes('apply_expression_parameters'));
+    const click=page.mouse.click;
+    page.mouse.click=async(...args)=>{await click(...args);if(variation==='still_open')return;
+      dialog.remove();name.attrs['data-tid']=base+'CalcDataWizard;colExpressionName_Amount';name.ownText=variation==='wrong_name'?'Other':'Amount';
+      label.attrs['data-tid']=base+'CalcDataWizard;colExpressionDisplayName_Amount';label.ownText=variation==='wrong_label'?'Other':'Сумма';
+      if(variation==='wrong_type')icon.attrs.class='bg-TBGDataType-dtInteger';
+      if(variation==='delayed_mask'){const mask=page.add('div',null,'Загрузка');mask.attrs.class='x-mask-msg';page.waitForTimeout=async()=>mask.remove();}
+      if(variation==='lost_reply')throw new Error('reply lost');
+    };
+    const outcome=await page.act({verb:'apply_expression_parameters',ref:target.ref},read.output);
+    assert.equal(outcome.status,['success','delayed_mask'].includes(variation)?'SUCCEEDED':'AMBIGUOUS',variation+JSON.stringify(outcome.error));
+    assert.equal(page.clickedPoints.length,1);
+    if(variation==='success')assert.ok(outcome.trace.some(e=>e.event==='expression_parameters_row_verified' && e.node_settings_applied===false));
+  }
+});

@@ -3,7 +3,7 @@
 export const uiActionSchema = {
   type: 'object', additionalProperties: false, required: ['verb'],
   properties: {
-    verb: { type: 'string', enum: ['click', 'double_click', 'right_click', 'fill', 'press', 'drag', 'scroll', 'set_checked', 'replace_expression', 'set_wizard_field', 'wizard_step', 'select_wizard_option'] },
+    verb: { type: 'string', enum: ['click', 'double_click', 'right_click', 'fill', 'press', 'drag', 'scroll', 'set_checked', 'replace_expression', 'set_wizard_field', 'wizard_step', 'select_wizard_option', 'apply_expression_parameters'] },
     expected_stage: { type: 'string', enum: ['text_import_file','text_import_format','input_mapping','output_mapping','calculator','grouping','done'] },
     checked: { type: 'boolean' },
     delta_y: { type: 'integer', minimum: -1000, maximum: 1000 },
@@ -44,6 +44,7 @@ export function validateUiAction(action, snapshot) {
 function workspaceUiCapability(page, task) {
   const started = Date.now(), deadline = started + 15000;
   const trace = [], handles = [];
+  let postActionRoot;
   let phase = 'observing', effectPossible = false, mouseHeld = false, mouseButton = 'left';
   const record = (event, details = {}) => trace.push({ at_ms: Date.now() - started, event, ...details });
   const result = (status, output = {}, error = null) => ({ status, action_key: task.mode === 'observe' ? 'workspace.observe' : 'ui.act',
@@ -161,7 +162,7 @@ function workspaceUiCapability(page, task) {
     const wizardButtons=['btnPrev','btnNext','btnDone','btnExecute','btnClose','btnError'];
     const wizardSelectors=['[data-tid$=";WizrdMCF"]','[data-tid$=";WizrdMCF;cardWizardPanel;p.h;p.t"]',
       ...Object.values(wizardMarkers).map(suffix=>'[data-tid$=";WizrdMCF'+suffix+'"]'),
-      '[data-tid*=";WizrdMCF;CalcDataWizard;colExpressionName_"]','[data-tid$=";WizrdMCF;CalcDataWizard;cmpExpression"]','[data-tid$=";WizrdMCF;CalcDataWizard;btnCalcMode"]','span.bg-TBGCalcMode-cmExpression,span.bg-TBGCalcMode-cmJavaScript',
+      '[data-tid*=";WizrdMCF;CalcDataWizard;colExpressionName_"]','[data-tid*=";WizrdMCF;CalcDataWizard;colExpressionDisplayName_"]','[data-tid$=";WizrdMCF;CalcDataWizard;cmpExpression"]','[data-tid$=";WizrdMCF;CalcDataWizard;btnCalcMode"]','span.bg-TBGCalcMode-cmExpression,span.bg-TBGCalcMode-cmJavaScript',
       ...['edtDelimiterChar','edtTextQualifier','edtValueNull','edtDecimalSeparator'].flatMap(name=>{const owner='[data-tid$=";WizrdMCF;ImportTextFileParamsWizard;'+name+';ValueControl"]';return [owner,owner+' input',owner+' textarea'];}),
       '[data-tid$=";WizrdMCF;ExprDataEditForm"]',
       ...['edtName','edtDisplayName','cbxDataType'].flatMap(name=>{const owner='[data-tid$=";WizrdMCF;ExprDataEditForm;'+name+'"]';return [owner,owner+' input'];}),
@@ -271,6 +272,21 @@ function workspaceUiCapability(page, task) {
         stage:stages.length===1?stages[0]:null,stage_status:stages.length===1?'observed':stages.length?'ambiguous':'unrecognized',
         controls:Object.fromEntries(wizardButtons.map(name=>{const found=matching(';'+name);return [name,
           {status:found.length===1?'observed':found.length?'ambiguous':'unobserved',enabled:found.length===1?enabled(found[0]):null}];}))};
+    }
+    if(wizard.status==='observed' && wizard.stage==='calculator') {
+      const base=wizard.root_tid+';CalcDataWizard;';
+      const selected=all.filter(e=>{charge();return (getTid(e)??'').startsWith(base+'colExpressionName_') && visible(e) && !sensitive(e) && e.closest('table')?.classList.contains('x-grid-item-selected');});
+      wizard.expression_selection={status:selected.length>1?'ambiguous':'unobserved'};
+      if(selected.length===1) {
+        const cell=selected[0],suffix=getTid(cell).slice((base+'colExpressionName_').length),row=cell.closest('table');
+        const labels=(tids.get(base+'colExpressionDisplayName_'+suffix)??[]).filter(e=>visible(e) && !sensitive(e) && e.closest('table')===row);
+        const typeNames={None:'Неопределенный',DateTime:'Дата/Время',Float:'Вещественный',Integer:'Целый',Boolean:'Логический',String:'Строковый',Variant:'Переменный'};
+        const icons=[...cell.querySelectorAll('[class*="bg-TBGDataType-dt"]')];charge();
+        const types=icons.length<=8?Object.entries(typeNames).filter(([type])=>icons.some(e=>{charge();return visible(e) && e.classList.contains('bg-TBGDataType-dt'+type);})):[];
+        const name=String(cell.textContent??''),label=labels.length===1?String(labels[0].textContent??''):null;
+        if(labels.length===1 && types.length===1 && name.length<=256 && label.length<=256)
+          wizard.expression_selection={status:'observed',row_ref:refOf(row),name,label,type_label:types[0][1]};
+      }
     }
     const wizardFields=new Map(),wizardCombos=new Map();
     if(wizard.status==='observed' && wizard.stage==='calculator') {
@@ -534,6 +550,11 @@ function workspaceUiCapability(page, task) {
       const wizardStep=wizard.status==='observed' && wizard.stage && ['btnNext','btnPrev'].some(name=>tid===wizard.root_tid+';'+name)
         && wizard.controls[tid.split(';').at(-1)]?.status==='observed'
         ? {direction:tid.endsWith(';btnNext')?'next':'previous',root_ref:wizard.root_ref,stage:wizard.stage}:null;
+      const params=wizard.expression_parameters;
+      const expressionApply=tid===wizard.root_tid+';ExprDataEditForm;btnApply' && params?.status==='observed'
+        && wizard.expression_selection?.status==='observed' && params.selected_expression
+        && Object.values(params.fields??{}).length===3 && Object.values(params.fields).every(f=>f.status==='observed' && !f.truncated)
+        ? {root_ref:params.root_ref,wizard_root_ref:wizard.root_ref,selected_expression:params.selected_expression}:null;
       const expressionWritable=identity && isEnabled && calculatorEditor?.status==='observed' && calculatorEditor.mode==='expression'
         && calculatorEditor.selected_expression && calculatorEditor.document.full_text_verified && calculatorEditor.document.writable;
       const fullValue = editable && !sensitive(element) ? String(element.value ?? (element.isContentEditable ? element.textContent : '') ?? '') : undefined;
@@ -546,12 +567,13 @@ function workspaceUiCapability(page, task) {
         ...(calculatorEditor ? {calculator_editor:calculatorEditor} : {}),
         ...(combo ? {wizard_combo:combo} : {}),
         ...(wizardStep ? {wizard_step:wizardStep} : {}),
+        ...(expressionApply ? {expression_apply:expressionApply} : {}),
         ...(wizardFields.has(element) ? {wizard_field:wizardFields.get(element)} : {}),
         signature: { tag, tid, role, type: element.getAttribute('type'), name: element.getAttribute('name'), label, ...fieldValue, dialog_ref: dialogRef(element), scroll, check_state:checkState },
         enabled: isEnabled, visible: true, interaction, bounding_box: boxOf(element),
         // A bounded prefix is not a sufficient value precondition. A dedicated
         // large-field driver must establish its own complete read/write contract.
-        allowed_actions: expressionWritable ? ['replace_expression'] : allowed && !valueTruncated ? ['click', 'double_click', 'right_click', 'press', 'drag', ...(editable ? ['fill',...(wizardFields.has(element)?['set_wizard_field']:[])] : []), ...(checkState ? ['set_checked'] : []), ...(wizardStep?['wizard_step']:[]), ...(combo?.kind==='option'?['select_wizard_option']:[]), ...(scroll && interaction.state === 'point_observed' ? ['scroll'] : [])] : [] };
+        allowed_actions: expressionWritable ? ['replace_expression'] : allowed && !valueTruncated ? ['click', 'double_click', 'right_click', 'press', 'drag', ...(editable ? ['fill',...(wizardFields.has(element)?['set_wizard_field']:[])] : []), ...(checkState ? ['set_checked'] : []), ...(wizardStep?['wizard_step']:[]), ...(expressionApply?['apply_expression_parameters']:[]), ...(combo?.kind==='option'?['select_wizard_option']:[]), ...(scroll && interaction.state === 'point_observed' ? ['scroll'] : [])] : [] };
     });
     const nodes = labels.slice(0, 200).map(label => {
       const nodeTid = graphPrefix + label, node = tids.get(nodeTid)?.[0];
@@ -705,7 +727,7 @@ function workspaceUiCapability(page, task) {
         ? error.code : 'UI_OBSERVATION_FAILED';
       return {ui_read_failure:{code}};
     }
-  },{rootRef:rediscover ? null : task.root_ref ?? task.snapshot?.observation_root?.ref ?? null,discoverRoots:rediscover || task.discover_roots===true,storageName:task.storage_name ?? null});
+  },{rootRef:rediscover ? null : postActionRoot ?? task.root_ref ?? task.snapshot?.observation_root?.ref ?? null,discoverRoots:rediscover || task.discover_roots===true,storageName:task.storage_name ?? null});
     if (observed?.ui_read_failure) {
       const code=observed.ui_read_failure.code;
       const messages={UI_SCAN_LIMIT:'Workspace scan budget exceeded; use root discovery and a narrower observation',
@@ -727,6 +749,7 @@ function workspaceUiCapability(page, task) {
       || !current.allowed_actions.includes(task.action.verb)
       || task.action.verb==='replace_expression' && !same(before.calculator_editor,current.calculator_editor)
       || task.action.verb==='set_wizard_field' && !same(before.wizard_field,current.wizard_field)
+      || task.action.verb==='apply_expression_parameters' && !same(before.expression_apply,current.expression_apply)
       || task.action.verb==='wizard_step' && !same(before.wizard_step,current.wizard_step)
       || task.action.verb==='select_wizard_option' && !same(before.wizard_combo,current.wizard_combo)) fail('UI_REFERENCE_STALE', 'The observed control changed; observe the workspace again');
     const locator = locatorFor(current.identity);
@@ -811,7 +834,7 @@ function workspaceUiCapability(page, task) {
         if (!current.authenticated) fail('LOGIN_REQUIRED', 'Loginom authentication is required before changing the workspace');
         if (!same(task.snapshot.dom_epoch, current.dom_epoch)) fail('UI_EPOCH_CHANGED', 'The document changed since this observation; observe again even if its visible state looks unchanged');
         if (!same(current.ui.dialogs.map(item => item.ref), task.snapshot.ui.dialogs.map(item => item.ref))) fail('UI_CONTEXT_CHANGED', 'The visible dialog changed; observe the workspace again');
-        if(['set_wizard_field','wizard_step','select_wizard_option'].includes(task.action.verb) && (!same(task.snapshot.wizard,current.wizard)
+        if(['set_wizard_field','wizard_step','select_wizard_option','apply_expression_parameters'].includes(task.action.verb) && (!same(task.snapshot.wizard,current.wizard)
           || !same(task.snapshot.active_identity,current.active_identity) || !same(task.snapshot.package_identity,current.package_identity)))
           fail('WIZARD_CONTEXT_CHANGED','Wizard settings or package changed; observe again');
         const refs = task.action.verb === 'drag' ? [task.action.source_ref, task.action.target_ref] : [task.action.ref];
@@ -846,7 +869,7 @@ function workspaceUiCapability(page, task) {
           await page.mouse.click(targets[0].point.x, targets[0].point.y, { clickCount, button });
           mouseHeld = false;
         };
-        if (task.action.verb === 'click' || ['wizard_step','select_wizard_option'].includes(task.action.verb)) await clickTarget(1);
+        if (task.action.verb === 'click' || ['wizard_step','select_wizard_option','apply_expression_parameters'].includes(task.action.verb)) await clickTarget(1);
         else if (task.action.verb === 'double_click') await clickTarget(2);
         else if (task.action.verb === 'right_click') await clickTarget(1, 'right');
         else if (task.action.verb === 'press') await first.press(task.action.key, { timeout: timeout() });
@@ -947,6 +970,7 @@ function workspaceUiCapability(page, task) {
         } else fail('UI_ACTION_INVALID', 'Unsupported UI gesture');
         if (effectPossible) record('ui_gesture_applied', { verb: task.action.verb });
         phase = 'observing'; timeout();
+        if(task.action.verb==='apply_expression_parameters')postActionRoot=current.wizard.root_ref;
         let observed;
         try { observed = await readUi(); }
         catch(error) {
@@ -956,6 +980,24 @@ function workspaceUiCapability(page, task) {
           if(error?.code!=='UI_ROOT_STALE' || !effectPossible || !['click','double_click','right_click','press'].includes(task.action.verb))throw error;
           observed=await readUi(true);
           record('ui_root_closed_after_gesture',{verification_required:true});
+        }
+        if(task.action.verb==='apply_expression_parameters') {
+          const desired=current.wizard.expression_parameters.fields;
+          const contextChecks=fresh=>({authenticated:fresh.authenticated,origin:fresh.origin===current.origin,build:fresh.loginom_build===current.loginom_build,
+            workflow:same(fresh.workflow_ref,current.workflow_ref),package:same(fresh.package_identity,current.package_identity),
+            active:same(fresh.active_identity,current.active_identity),wizard:fresh.wizard.root_ref===current.wizard.root_ref,stage:fresh.wizard.stage==='calculator'});
+          const sameContext=fresh=>Object.values(contextChecks(fresh)).every(Boolean);
+          const closed=fresh=>!fresh.wizard.expression_parameters && !fresh.ui.dialogs.some(d=>d.ref===current.wizard.expression_parameters.root_ref);
+          const rowMatches=fresh=>{const row=fresh.wizard.expression_selection;return row?.status==='observed' && row.name===desired.name.value && row.label===desired.label.value && row.type_label===desired.type_label.value;};
+          for(let attempt=0;attempt<12 && sameContext(observed) && (!closed(observed) || !rowMatches(observed) || observed.ui.masks.length);attempt++) {
+            await page.waitForTimeout(Math.min(100,timeout()));observed=await readUi();
+          }
+          const row=observed.wizard.expression_selection;
+          record('expression_apply_checks',{...contextChecks(observed),dialog_closed:closed(observed),no_masks:observed.ui.masks.length===0,no_dialogs:observed.ui.dialogs.length===0,row_matches:rowMatches(observed)});
+          if(!sameContext(observed) || !closed(observed) || observed.ui.masks.length || observed.ui.dialogs.length
+            || row?.status!=='observed' || row.name!==desired.name.value || row.label!==desired.label.value || row.type_label!==desired.type_label.value)
+            fail('EXPRESSION_PARAMETERS_NOT_CONFIRMED','Expression row did not confirm name, label and type after apply; inspect before retry');
+          record('expression_parameters_row_verified',{name:row.name,label:row.label,type_label:row.type_label,node_settings_applied:false,package_saved:false});
         }
         if(task.action.verb==='select_wizard_option') {
           const choice=current.ui.elements.find(item=>item.ref===task.action.ref).wizard_combo;

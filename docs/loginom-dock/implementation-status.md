@@ -1,3 +1,34 @@
+## 2026-09-06 — применение параметров с проверкой строки выражения
+
+Добавлен typed verb apply_expression_parameters через существующий dock_ui_action.
+Его получает только observed btnApply единственного ExprDataEditForm, при полном
+bounded чтении трёх полей и определённой selected row. Проверяется исходный
+wizard/context/epoch/refs; один click, затем чтение исходного wizard root вместо
+закрывшегося внешнего диалога. До12 ожиданий по100ms в общем deadline проверяют
+закрытие окна, появление выбранной строки и исчезновение масок. Повторного click нет.
+
+Новое wizard.expression_selection читает имя, метку и единственный известный
+значок типа в той же selected table row по pinned E2E selectors/DataTypeIcon.
+После apply все три значения должны точно совпасть с исходными полями диалога;
+другой context, незакрытое окно, маска/диалог, неверная row дают AMBIGUOUS.
+Trace expression_parameters_row_verified явно сохраняет node_settings_applied=false
+и package_saved=false. Это не доказательство сохранения узла/пакета, формулы,
+остальных параметров или всего списка выражений.
+
+Первый живой изменяющий apply подтвердил значения, но вернул AMBIGUOUS. Boolean
+trace установил причину: no_masks=false после закрытия окна и обновления row.
+В bounded wait включено завершение этой маски; остальные guards не ослаблялись.
+Повторный изменяющий apply прошёл SUCCEEDED за198ms, один click, все checks=true:
+name Amount, label Сумма, type Вещественный. Ручное повторное открытие ExprDataEditForm
+подтвердило эти три значения. Прямой Codex diagnostic, не Hermes acceptance.
+Evidence .dock/post-mvp-p0/expression-apply-live-result.txt, expression-apply-*-tests.txt.
+275 client /110 Python /10 packaging PASS. Test покрывает actual row rename,
+wrong name/label/type, delayed mask, незакрытый диалог и lost reply без повторного click.
+Источники: e2e-tests/bg/helpers/wizards/transform/calculator_helpers.ts check.ExprParams/
+expression rows, bg/consts/app_consts.ts DataTypeIcon, bg/types.ts DataTypeNames.
+Далее cancel/readback, изменение типа, node/wizard binding и полноценные P3–P9.
+Active Hermes нет; диагностическая форма Amount/Сумма открыта, мастер не сохранён.
+
 ## 2026-09-06 — типизированный ввод имени и метки выражения
 
 set_wizard_field расширен на два наблюдаемых input ExprDataEditForm: name/label.
