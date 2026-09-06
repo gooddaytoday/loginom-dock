@@ -2242,3 +2242,16 @@ test('import source fails closed for duplicate hidden missing controls and redac
     const roots=await page.execute({mode:'observe',discover_roots:true});assert.deepEqual(roots.output.wizard.import_source,source,mode);
   }
 });
+
+
+test('import type controls are delivered before format inputs in compact observation',async()=>{
+  const page=new Page(),c=importFormatField(page);
+  for(let i=0;i<5;i++)importColumnFixture(page,c.form,i,['Id','Region','Quantity','UnitPrice','Comment'][i]);
+  for(let i=0;i<40;i++)page.add('input','MF;TF-1;WizrdMCF;ImportTextFileParamsWizard;extra'+i,'',{x:10,y:100,width:30,height:15},c.form);
+  const raw=await page.execute({mode:'observe'}),ref=raw.output.wizard.import_columns.fields[3].cell_refs.type;
+  const pager=createObservationPages(),first=pager.retain(raw);
+  assert.ok(first.output.ui.elements.some(e=>e.ref===ref && e.allowed_actions.includes('click')));
+  assert.doesNotThrow(()=>pager.assertIssued(first.output.observation_id,{verb:'click',ref}));
+  const unused=first.output.wizard.import_columns.fields[3].cell_refs.name;
+  assert.throws(()=>pager.assertIssued(first.output.observation_id,{verb:'click',ref:unused}),/not been delivered/);
+});

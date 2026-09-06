@@ -1,3 +1,28 @@
+**2026-09-06 — UnitPrice type доставляется на первой странице.**
+После terminal120105 UI-first в отдельном manual TF-4 text_import_format:
+UnitPrice real, cell3_2 видима. Serialized native snapshot + реальный
+createObservationPages показал type ref только page8/offset42, хотя metadata
+import_columns уже выдаёт ref. Runtime controlPriority теперь ставит observed
+import type cells первыми, kind вторыми перед lifecycle/inputs. Live повтор
+того же read/pager: UnitPrice page1/offset0. Это delivery fix, не новый типовой
+жест и не разрешение metadata refs. Тест доказывает issued type и отказ для
+недоставленного name ref. Пакет в UI не менялся; только переход mapping→format.
+
+Аудит pre-dispatch upload refusal исправлен узко: более поздний same-ID journal
+не отменяет отказ только при одной последующей same-session отправке с unique
+bound completed receipt, промежуточном bound idle observation и всех событиях
+после его timezone-aware timestamp в той же journal session. Prior/unknown/
+duplicate effects/response/foreign session отвергаются. Helper подтвердил
+row32 старого run как rejected; старый audit120105 НЕ пересчитывался.
+
+303client/142Python/10packaging PASS. Первый full client run одновременно с
+packaging дал один failure старого wizard-context test (snapshot без wizard,
+1288ms); отдельно повторён весь client suite без правки кода —303/303PASS.
+Targeted114/114 был успешен до full run. Не выдавать предположение о CPU за
+доказанную причину. Runtime и auditor готовы для нового короткого import run;
+на момент записи Hermes нет, UI manual TF-4 format, production без изменений.
+P3–P9 открыты; новый autonomous type/reopen proof ещё требуется.
+
 **2026-09-06 — короткий import run120105 завершён, UnitPrice остаётся string.**
 Run20260906-120105-4973c565/session75023 TERMINAL, source78bc5486,
 132 API calls, returncode0/no timeout; runtime_source_unchanged/harness_unchanged

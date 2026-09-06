@@ -5,6 +5,7 @@ import hashlib
 import json
 import re
 import copy
+from datetime import datetime
 import auto_link_delete
 import manual_reopen
 import rename_effect
@@ -580,17 +581,64 @@ def scroll_receipt_bound(call, target, evidence):
                and rename_effect.journal_equal(e.get('outcome',{}),result) for e in evidence.get('events',[]))
 
 
+def _later_upload_journal(call, rejected_reply, evidence, operation_id, records):
+    """A rejected ID can be used later; prove a fresh idle boundary first.
+
+    This narrow exception covers one actual upload after one pre-dispatch
+    refusal. Unknown, earlier or duplicate operation effects remain rejected.
+    """
+    if call.get('tool') != PREFIX+'dock_artifact_upload':return False
+    peers=[c for c in evidence.get('calls',[]) if c.get('tool')==call['tool']
+           and c.get('arguments',{}).get('operation_id')==operation_id]
+    if len(peers)!=2 or sum(c==call for c in peers)!=1:return False
+    later=next(c for c in peers if c!=call)
+    if later.get('session_id')!=call.get('session_id') or later.get('row',-1)<=rejected_reply['row']:return False
+    replies=[t for t in evidence['tools'] if (t.get('session_id'),t.get('tool_call_id'))
+             ==(later.get('session_id'),later.get('tool_call_id'))]
+    if len(replies)!=1 or replies[0].get('tool')!=later['tool'] or replies[0].get('row',-1)<=later['row']:return False
+    outcome=replies[0].get('result',{})
+    completed=[e for e in records if e.get('phase')=='completed']
+    if (not isinstance(outcome,dict) or outcome.get('operation_id')!=operation_id
+            or outcome.get('action_key')!='artifact.upload' or outcome.get('request_rejected')
+            or len(completed)!=1 or not rename_effect.journal_equal(completed[0].get('outcome',{}),outcome)):
+        return False
+    from settings_evidence import bound_receipts
+    for receipt in bound_receipts(evidence,PREFIX):
+        boundary=receipt['call']
+        if (boundary.get('tool')!=PREFIX+'dock_workspace_observe' or boundary.get('session_id')!=call.get('session_id')
+                or not rejected_reply['row']<boundary['row']<receipt['reply_row']<later['row']):continue
+        state=receipt['delivered'].get('output',{}).get('operation',{})
+        if (state.get('state')!='idle' or state.get('operation_id') is not None
+                or state.get('cleanup_confirmed') is not True or state.get('effect_state')!='none'):continue
+        anchors=[e for e in evidence.get('events',[]) if e.get('phase')=='observation_completed'
+                 and e.get('operation_id')==receipt['outcome'].get('operation_id')]
+        if len(anchors)!=1 or not anchors[0].get('session_id'):continue
+        try:
+            stamp=datetime.fromisoformat(anchors[0]['recorded_at'])
+            if stamp.tzinfo is None:continue
+            if all(e.get('session_id')==anchors[0]['session_id']
+                   and datetime.fromisoformat(e['recorded_at'])>stamp for e in records):return True
+        except (KeyError,TypeError,ValueError):continue
+    return False
+
+
 def rejected_before_browser(call, evidence):
     operation_id=call.get('arguments',{}).get('operation_id')
     if not isinstance(operation_id,str) or not operation_id:return False
-    replies=[t for t in evidence['tools'] if t.get('tool_call_id')==call.get('tool_call_id') and t['row']>call['row']]
-    if len(replies)!=1:return False
-    r=replies[0].get('result',{});operation=r.get('output',{}).get('operation',{})
-    return (r.get('request_rejected') is True and r.get('effect_possible') is False
+    replies=[t for t in evidence['tools'] if (t.get('session_id'),t.get('tool_call_id'))
+             ==(call.get('session_id'),call.get('tool_call_id'))]
+    if len(replies)!=1 or replies[0].get('row',-1)<=call.get('row',-1) or replies[0].get('tool')!=call.get('tool'):return False
+    r=replies[0].get('result',{})
+    if not isinstance(r,dict) or not isinstance(r.get('output'),dict) or not isinstance(r['output'].get('operation'),dict):return False
+    operation=r['output']['operation']
+    rejected=(r.get('request_rejected') is True and r.get('effect_possible') is False
             and r.get('status')=='FAILED' and r.get('phase')=='request_rejected' and r.get('action_key')=='request.validate'
             and r.get('operation_id') is None and r.get('trace')==[] and r.get('error',{}).get('code')=='REQUEST_REJECTED'
-            and operation.get('state')=='idle' and operation.get('cleanup_confirmed') is True and operation.get('effect_state')=='none'
-            and not any(e.get('operation_id')==operation_id for e in evidence.get('events',[])))
+            and operation.get('operation_id') is None and operation.get('state')=='idle'
+            and operation.get('cleanup_confirmed') is True and operation.get('effect_state')=='none')
+    if not rejected:return False
+    records=[e for e in evidence.get('events',[]) if e.get('operation_id')==operation_id]
+    return not records or _later_upload_journal(call,replies[0],evidence,operation_id,records)
 
 
 def palette_inventory(evidence, checks, require_scroll=False):

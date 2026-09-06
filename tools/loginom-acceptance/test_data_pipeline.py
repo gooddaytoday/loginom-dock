@@ -7,6 +7,58 @@ from audit import PREFIX, MUTATIONS, file_storage_inspect, rejected_before_brows
 
 
 class DataPipelineTest(unittest.TestCase):
+    def same_id_refusal_fixture(self):
+        evidence,request=UploadVerifyTest().fixture()
+        for record in evidence['calls']+evidence['tools']:record['row']+=10
+        upload=next(c for c in evidence['calls'] if c['tool']==PREFIX+'dock_artifact_upload')
+        operation_id=upload['arguments']['operation_id']
+        idle={'state':'idle','operation_id':None,'cleanup_confirmed':True,'effect_state':'none'}
+        rejected={'session_id':'s','tool_call_id':'refused','tool':upload['tool'],'row':1,
+                  'arguments':{'operation_id':operation_id}}
+        rejection={'status':'FAILED','phase':'request_rejected','action_key':'request.validate',
+                   'operation_id':None,'request_rejected':True,'effect_possible':False,'trace':[],
+                   'error':{'code':'REQUEST_REJECTED'},'output':{'operation':idle}}
+        evidence['calls'].append(rejected);evidence['tools'].append({**rejected,'row':2,'result':rejection})
+        observe={'session_id':'s','tool_call_id':'boundary','tool':PREFIX+'dock_workspace_observe','row':3,'arguments':{}}
+        raw={'status':'SUCCEEDED','operation_id':'boundary-read','output':{'observation_id':'boundary-obs'}}
+        evidence['calls'].append(observe)
+        delivered=copy.deepcopy(raw);delivered['output']['operation']=copy.deepcopy(idle)
+        evidence['tools'].append({**observe,'row':4,'result':delivered})
+        for event in evidence['events']:
+            if event.get('operation_id')==operation_id:
+                event.update(session_id='journal-session',recorded_at='2026-09-06T09:00:02Z')
+        evidence['events'].append({'phase':'observation_completed','operation_id':'boundary-read',
+                                   'session_id':'journal-session','recorded_at':'2026-09-06T09:00:01Z','outcome':raw})
+        return evidence,request,rejected
+
+    def test_rejected_id_can_be_used_by_one_later_bound_upload(self):
+        evidence,request,call=self.same_id_refusal_fixture()
+        self.assertTrue(rejected_before_browser(call,evidence))
+        report=data_pipeline.audit(evidence,[],request,PREFIX,MUTATIONS,file_storage_inspect,rejected_before_browser)
+        self.assertEqual(report['pre_action_rejections'],1)
+        self.assertTrue(next(c['passed'] for c in report['assertions'] if c['name']=='pipeline_exactly_one_upload_and_verify'))
+        self.assertFalse(report['all_assertions_passed'])
+
+    def test_same_id_exception_requires_new_idle_boundary_and_unique_effect(self):
+        for mode in ('prior_event','missing_timestamp','foreign_journal','missing_boundary','pending_boundary',
+                     'duplicate_reply','duplicate_effect','changed_journal','overlap','foreign_retry','possible_effect'):
+            with self.subTest(mode=mode):
+                evidence,_,call=self.same_id_refusal_fixture()
+                event=next(e for e in evidence['events'] if e.get('operation_id')=='up')
+                upload=next(c for c in evidence['calls'] if c['tool']==PREFIX+'dock_artifact_upload' and c['row']>2)
+                if mode=='prior_event':event['recorded_at']='2026-09-06T09:00:00Z'
+                if mode=='missing_timestamp':event.pop('recorded_at')
+                if mode=='foreign_journal':event['session_id']='foreign'
+                if mode=='missing_boundary':evidence['events']=[e for e in evidence['events'] if e.get('operation_id')!='boundary-read']
+                if mode=='pending_boundary':next(t for t in evidence['tools'] if t['tool_call_id']=='boundary')['result']['output']['operation']['state']='pending'
+                if mode=='duplicate_reply':evidence['tools'].append(copy.deepcopy(next(t for t in evidence['tools'] if t['tool_call_id']==upload['tool_call_id'])))
+                if mode=='duplicate_effect':evidence['calls'].append({**copy.deepcopy(upload),'row':100,'tool_call_id':'another'})
+                if mode=='changed_journal':next(e for e in evidence['events'] if e.get('operation_id')=='up' and e.get('phase')=='completed')['outcome']['status']='FAILED'
+                if mode=='overlap':upload['row']=4
+                if mode=='foreign_retry':upload['session_id']='foreign'
+                if mode=='possible_effect':next(t for t in evidence['tools'] if t['tool_call_id']=='refused')['result']['effect_possible']=True
+                self.assertFalse(rejected_before_browser(call,evidence))
+
     def test_transfer_prefix_survives_later_pipeline_mutations_but_never_admits_domain(self):
         evidence,request=UploadVerifyTest().fixture()
         evidence['calls'].append({'session_id':'s','tool_call_id':'later','tool':PREFIX+'dock_ui_action','row':20,'arguments':{}})

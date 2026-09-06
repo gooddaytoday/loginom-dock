@@ -691,6 +691,10 @@ function workspaceUiCapability(page, task) {
       if(dialogRef(element))return -20;
       // Keep lifecycle and selected-expression controls on the first compact
       // page, ahead of Calculator operator palettes and rendered preview cells.
+      // Import types are needed before advancing: metadata cell_refs are not
+      // issued controls. Deliver type cells first instead of burying them behind
+      // all format inputs and preview controls on later compact pages.
+      if(importColumnCellRefs.has(state.ids.get(element)))return /_2$/.test(tid)?-12:-11;
       if(wizardButtons.some(name=>tid===base+name))return -10;
       if(['btnCalcMode','btnAddExpr','btnExprEdit'].some(name=>tid===base+'CalcDataWizard;'+name))return -9;
       if(tid===base+'CalcDataWizard;cmpExpression')return -8;
