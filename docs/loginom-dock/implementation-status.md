@@ -1,3 +1,31 @@
+**Checkpoint 2026-09-06 — независимая корреляция Calculator node roundtrip.**
+Добавлен settings_evidence.py. Сначала сопоставляет единственные call/reply и
+immutable completed/observation_completed outcome через journal_equal (включая
+compact receipts); отдельные snapshots или текст модели не являются доказательством.
+Для действий требует выданный ref/allowed action в предшествующей observation,
+один preconditions/gesture trace и cleanup_complete. Затем связывает Calculator
+baseline → wizard_step(s) → finish_wizard → необязательный body click →
+open_wizard → свежий Calculator readback. Посторонние mutation calls, включая
+изменение во время finish/open, разрывают цепочку. Сравнивает origin/build,
+workflow/package/tab/document, путь, node, expression name/label/type и точный
+полный текст Quantity * UnitPrice; editor document_ref после reopen должен быть новым.
+
+data_pipeline.audit теперь выводит settings_roundtrip_diagnostics. Положительный
+результат имеет scope calculator_node_only и package_persistence_verified=false.
+Семь полных domain gates остаются закрыты: здесь нет mappings/import/Grouping,
+package save/reopen или execution/result proofs. Новый файл включён в проверку
+замороженного harness; старые audits не переписаны. Полная синтетическая native
+receipt chain и отрицательные варианты проверены, live Hermes correlation ещё
+не принята. Direct UI cycle прошлого checkpoint остаётся отдельной диагностикой.
+Также обновлено описание dock_ui_action для ранее добавленных typed parameter,
+open_wizard и finish_wizard, чтобы Hermes получал их назначение через tool contract.
+
+279 client /115 Python /10 packaging PASS. Логи:
+.dock/post-mvp-p0/settings-evidence-{client,python,packaging}-tests.txt.
+Далее live полный Hermes data-pipeline на ChatGPT/Luna/medium с agent.3 /test,
+проверить новую цепочку; до повтора изучить Grouping UI и недостающий mapping.
+Active Hermes нет; Calculator Сумма открыт, параметры закрыты; P3–P9 открыты.
+
 **Checkpoint 2026-09-06 — finish_wizard и direct typed reopen/readback.**
 DoneWizard теперь раскрывает bounded completion.fields label/label_mode через
 исходные input refs. Готовность требует единственных полей, непустых коротких

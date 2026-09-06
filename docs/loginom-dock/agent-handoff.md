@@ -1,3 +1,12 @@
+**Checkpoint:** settings_evidence.py связывает immutable call/reply receipts
+Calculator baseline→step→finish→body→open→fresh readback, без посторонних mutations.
+data_pipeline выводит settings_roundtrip_diagnostics, scope calculator_node_only;
+семь domain gates НЕ закрыты, package persistence false. Freeze включает новый файл.
+279 client /115 Python /10 packaging PASS; полная synthetic chain покрыта,
+live Hermes acceptance нет. Старые audit не переписаны. Active Hermes нет.
+Далее изучить Grouping/mapping UI и full Luna/ChatGPT/medium acceptance agent.3;
+диагностический Calculator Сумма открыт. Полный P3–P9 остаётся целью.
+
 **Checkpoint:** finish_wizard читает future label/mode, делает один Done click,
 подтверждает прежний workflow и expected graph node; требует reopen/readback.
 Live finish554ms → manual body selection → typed open1085ms → narrow read
