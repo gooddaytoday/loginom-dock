@@ -1676,3 +1676,39 @@ test('typed wizard opening verifies node and workflow path after one settings cl
     assert.equal(result.trace.some(e=>e.event==='wizard_open_verified'),success);
   }
 });
+
+test('wizard finish waits for the expected graph node and does not claim settings readback',async()=>{
+  for(const mode of ['success','wrong_label','dialog','still_open','lost_reply','empty_label']) {
+    const page=new Page(),base='MF;TF-1;',panel=page.add('div',base+'NavigationBar;NavigationPanel');
+    let path='';const breadcrumbs=[];
+    for(const label of ['Сервер','Пакеты','Package1','Модуль1','Сценарий','Old','Настройка']) {
+      path+=(path?'>':'')+label;
+      const crumb=page.add('a',base+'cnrNaviMode;b.s_'+path,label,undefined,panel);breadcrumbs.push(crumb);
+      if(label==='Сценарий')page.add('span',null,'',undefined,crumb).attrs.class='maptree-icon-workflow';
+      if(label==='Old')page.add('span',null,'',undefined,crumb).attrs.class='bg-vendor-icon-calcdata';
+      if(label==='Настройка')page.add('span',null,'',undefined,crumb).attrs.class='maptree-icon-wizard';
+    }
+    const wizard=page.add('div',base+'WizrdMCF');
+    for(const [key,value] of [['edtDisplayName',mode==='empty_label'?'':'Сумма'],['cbxNodeTitleMode','Автоматическая метка']]) {
+      const owner=page.add('div',base+'WizrdMCF;DoneWizard;'+key,'',undefined,wizard);
+      page.add('input',null,'',undefined,owner).value=value;
+    }
+    page.add('button',base+'WizrdMCF;btnDone','Готово',{x:500,y:300,width:100,height:30},wizard);
+    const snapshot=await page.observe(),button=snapshot.ui.elements.find(e=>e.wizard_finish);
+    if(mode==='empty_label'){assert.equal(button,undefined);continue;}
+    assert.ok(button);
+    const click=page.mouse.click;page.mouse.click=async(...args)=>{await click(...args);
+      if(mode==='still_open')return;
+      wizard.remove();breadcrumbs.at(-1).remove();breadcrumbs.at(-2).remove();
+      const graph=page.add('div',base+'ModelForm;cmpDiagram'),name=mode==='wrong_label'?'Other':'Сумма';
+      const node=page.add('g',base+'Graph;'+name,'',undefined,graph);
+      page.add('span',base+'Graph;'+name+';Label;Label',name,undefined,node);
+      if(mode==='dialog')page.add('div','msgbox','Подтвердить').attrs.class='x-window';
+      if(mode==='lost_reply')throw new Error('Lost reply');
+    };
+    const result=await page.act({verb:'finish_wizard',ref:button.ref},snapshot);
+    assert.equal(result.status,mode==='success'?'SUCCEEDED':'AMBIGUOUS',mode+JSON.stringify(result.error));
+    assert.equal(page.events.filter(e=>e==='click').length,1);
+    assert.equal(result.trace.some(e=>e.event==='wizard_finish_graph_verified' && e.reopen_required && !e.settings_readback_verified),mode==='success');
+  }
+});

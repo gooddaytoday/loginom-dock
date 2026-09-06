@@ -1,3 +1,10 @@
+**Checkpoint:** finish_wizard читает future label/mode, делает один Done click,
+подтверждает прежний workflow и expected graph node; требует reopen/readback.
+Live finish554ms → manual body selection → typed open1085ms → narrow read
+Amount/Сумма/Вещественный, Quantity * UnitPrice full_text_verified.
+279 client /110 Python /10 packaging PASS. Active Hermes нет; Calculator открыт.
+Далее независимые correlated settings verifiers + Grouping/results и P3–P9.
+
 **Checkpoint:** open_wizard выполняет один observed settings click, проверяет
 исходный tab ref + workflow/package/path и owner node; trace wizard_open_verified.
 Live SUCCEEDED1091ms Сумма. Подпись tab меняется Сценарий→Настройка, поэтому

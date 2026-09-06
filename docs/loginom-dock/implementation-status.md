@@ -1,3 +1,29 @@
+**Checkpoint 2026-09-06 — finish_wizard и direct typed reopen/readback.**
+DoneWizard теперь раскрывает bounded completion.fields label/label_mode через
+исходные input refs. Готовность требует единственных полей, непустых коротких
+значений без control chars и известного режима метки. Live поля были пусты сразу
+после появления Done, затем заполнились Автоматическая метка / Сумма.
+Источники E2E bg/selectors.ts:1715–1744, bg/helpers/wizard.ts:120–131 и live UI.
+
+Добавлен finish_wizard на observed btnDone при ready completion и owner_context.
+Один click, bounded rediscovery/read текущего root, затем отсутствие wizard/dialog/
+mask, тот же tab incarnation и workflow/package, прежний navigation workflow path,
+уникальная видимая label будущего узла и его body. Возврат к графу сам по себе
+НЕ доказывает настройки: trace wizard_finish_graph_verified содержит
+reopen_required=true, settings_readback_verified=false, package_saved=false.
+Повторного клика при задержке/ошибке/потере ответа нет. Guidance обновлён.
+
+Live finish_wizard SUCCEEDED554ms, один click. Далее manual body selection и
+open_wizard SUCCEEDED1085ms, один settings click, подтвердил Сумма и прежний path.
+Отдельный narrow read подтвердил Amount / Сумма / Вещественный и полный документ
+Quantity * UnitPrice (full_text_verified=true). Это прямой capability cycle,
+не Hermes acceptance и не сохранение пакета. Проверки 279 client /110 Python /10 packaging PASS;
+результаты в wizard-finish-{client,python,packaging}-tests.txt.
+Private evidence .dock/post-mvp-p0/wizard-finish-live-result.txt.
+Далее независимый verifier связанной цепочки opening/edit/finish/reopen для
+Calculator и import, mappings/Grouping/result identity, полный P3–P9 открыт.
+Active Hermes нет. Диагностический Calculator Сумма открыт, параметры закрыты.
+
 **Checkpoint 2026-09-06 — подтверждаемое открытие настроек узла.**
 Добавлен `open_wizard` на observed graph settings control при отсутствии
 мастера и полном bounded workflow navigation_context. Действие выполняет один
