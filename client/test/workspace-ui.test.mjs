@@ -1900,7 +1900,7 @@ test('field parameters read row types caching and exclusion separately from port
 });
 
 test('reform editor reads seven native parameters including disabled cache and owner checkbox state',async()=>{
-  for(const mode of ['valid','checked','missing_display','duplicate_display','duplicate_form','long_name']) {
+  for(const mode of ['valid','checked','missing_display','duplicate_display','duplicate_form','long_name','combo','combo_excluded','combo_cache','combo_busy','combo_lost']) {
     const page=new Page(),base='MF;TF-1;WizrdMCF;',form=page.add('div',base.slice(0,-1)),stem=base+'ReformColumnsWizard;';
     page.add('div',stem+'grdTargetColumns;tbl','',undefined,form);
     const row=page.add('table',null,'',undefined,form);row.attrs.class='x-grid-item-selected';
@@ -1908,9 +1908,9 @@ test('reform editor reads seven native parameters including disabled cache and o
     const label=page.add('td',stem+'colDisplayName_QuantitySum','QuantitySum',undefined,row);
     page.add('span',null,'',undefined,label).attrs.class='bg-TBGDataType-dtInteger';
     const dialog=page.add('div',base+'EditReformColumnDefForm');dialog.attrs.class='x-window';
-    const root=base+'EditReformColumnDefForm;';
+    const root=base+'EditReformColumnDefForm;',inputs={};
     for(const [key,value] of [['edtName',mode==='long_name'?'x'.repeat(257):'QuantitySum'],['edtDisplayName','QuantitySum'],['cbxDataType','Целый'],['cbxDataKind','Непрерывный'],['cbxUsageType','Не задано'],['cntMain;cbxCachingMethod','Отключено']]) {
-      const owner=page.add('div',root+key,'',undefined,dialog),input=page.add('input',null,'',undefined,owner);input.value=value;
+      const owner=page.add('div',root+key,'',undefined,dialog),input=page.add('input',null,'',undefined,owner);input.value=value;inputs[key]=input;
       if(key.endsWith('cbxCachingMethod'))input.disabled=true;
     }
     const owner=page.add('div',root+'cntMain;chbExcluded','',undefined,dialog);owner.attrs.class=mode==='checked'?'x-form-cb-checked':'';
@@ -1918,6 +1918,24 @@ test('reform editor reads seven native parameters including disabled cache and o
     if(mode!=='missing_display')page.add('span',root+'cntMain;chbExcluded;DisplayEl','',undefined,owner).attrs.class='x-form-checkbox';
     if(mode==='duplicate_display')page.add('span',root+'cntMain;chbExcluded;DisplayEl','',undefined,owner).attrs.class='x-form-checkbox';
     if(mode==='duplicate_form')page.add('div',base+'EditReformColumnDefForm');
+    if(mode.startsWith('combo')) {
+      const list=page.add('div',root+'cbxDataType;boundlist','',{x:600,y:300,width:140,height:40});
+      page.add('div',root+'cbxDataType;boundlist;Вещественный','Вещественный',{x:605,y:305,width:130,height:25},list);
+      form.attrs.class='bg-mask-message';form.attrs['bg-mask-text']='Загрузка';
+      if(mode==='combo_busy')dialog.attrs.class='x-window bg-mask-message';
+      const full=await page.observe(),first=full.ui.elements.find(e=>e.wizard_combo?.kind==='option');assert.ok(first);
+      const read=await page.execute({mode:'observe',root_ref:first.wizard_combo.list_ref});
+      const option=read.output.ui.elements.find(e=>e.wizard_combo?.kind==='option');assert.ok(option);
+      const click=page.mouse.click;page.mouse.click=async(...args)=>{await click(...args);list.remove();
+        inputs.cbxDataType.value='Вещественный';
+        if(mode==='combo_excluded')owner.attrs.class='x-form-cb-checked';
+        if(mode==='combo_cache')inputs['cntMain;cbxCachingMethod'].value='При активации';
+        if(mode==='combo_lost')throw new Error('lost reply');
+      };
+      const result=await page.act({verb:'select_wizard_option',ref:option.ref},read.output);
+      assert.equal(result.status,mode==='combo'?'SUCCEEDED':mode==='combo_busy'?'NOT_APPLIED':'AMBIGUOUS',mode+JSON.stringify(result.error));
+      assert.equal(page.events.filter(e=>e==='click').length,mode==='combo_busy'?0:1);continue;
+    }
     const full=await page.observe(),params=full.wizard.reform_parameters;
     if(mode==='duplicate_form'){assert.equal(params.status,'ambiguous');assert.equal(params.fields,undefined);continue;}
     assert.equal(params.selected_column.name,'QuantitySum');assert.equal(Object.keys(params.fields).length,7);

@@ -1,3 +1,21 @@
+**Checkpoint 2026-09-06 — подтверждённый выбор типа в ReformColumns editor.**
+select_wizard_option поддерживает scope reform_column: выбор из native
+EditReformColumnDefForm;cbxDataType;boundlist связан с original form/input/owner и
+selected row. Typed option выдаётся только при всех 7 observed/untruncated
+параметрах; после одного click читается original wizard root. Full wizard readback
+разрешает только ожидаемую смену type_label/value_length, остальные свойства
+(включая disabled caching и excluded) должны остаться прежними. Допуск background
+mask ограничен опцией foreground editor; busy mask не обходится.
+
+Live QuantitySum Целый→Вещественный SUCCEEDED42ms →Целый SUCCEEDED48ms;
+остальные шесть параметров и selected row неизменны. Editor открыт, dropdown
+закрыт, исходный integer восстановлен; Apply не выполнялся. Это не сохранение
+узла/пакета и не Hermes acceptance. Тесты включают collateral cache/excluded,
+busy mask и потерю ответа; в каждом случае максимум один click. 287 client /115 Python /10 packaging PASS.
+Current Package1 не сохранён, Изменение inactive; active Hermes нет. Далее
+apply/cancel ReformColumns с 7-property row readback и node/package persistence,
+Grouping/results gates, full Luna/ChatGPT/medium data-pipeline и P3–P9.
+
 **Checkpoint 2026-09-06 — семь параметров редактора ReformColumns.**
 Добавлен read-only wizard.reform_parameters для EditReformColumnDefForm: name,
 label, type_label, data_kind, usage, caching, excluded; original selected row и

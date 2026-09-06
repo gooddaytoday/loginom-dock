@@ -410,7 +410,7 @@ function workspaceUiCapability(page, task) {
             const inputs=owners.length===1?dom.filter(e=>{charge();return owners[0].contains(e) && e.matches('input') && visible(e) && !sensitive(e);}):[];
             if(inputs.length!==1)return [name,{status:inputs.length>1?'ambiguous':'unobserved'}];
             const input=inputs[0],value=String(input.value??'');
-            return [name,{status:'observed',value:value.slice(0,256),truncated:value.length>256,input_ref:refOf(input),owner_ref:refOf(owners[0]),enabled:enabled(input),read_only:input.readOnly===true}];
+            return [name,{status:'observed',value:value.slice(0,256),value_length_utf16:value.length,truncated:value.length>256,input_ref:refOf(input),owner_ref:refOf(owners[0]),enabled:enabled(input),read_only:input.readOnly===true}];
           }));
           const owners=(tids.get(base+';cntMain;chbExcluded')??[]).filter(e=>form.contains(e) && visible(e) && !sensitive(e));
           const displays=(tids.get(base+';cntMain;chbExcluded;DisplayEl')??[]).filter(e=>owners.length===1 && owners[0].contains(e) && visible(e) && !sensitive(e));
@@ -422,6 +422,16 @@ function workspaceUiCapability(page, task) {
       }
     }
     const wizardFields=new Map(),wizardCombos=new Map();
+    const reformParams=wizard.reform_parameters;
+    if(reformParams?.status==='observed' && reformParams.selected_column && Object.keys(reformParams.fields??{}).length===7
+      && Object.values(reformParams.fields).every(f=>f.status==='observed' && !f.truncated)) {
+      const field=reformParams.fields.type_label;
+      if(field.enabled && !field.read_only)
+        wizardCombos.set(wizard.root_tid+';EditReformColumnDefForm;cbxDataType',{name:'type_label',scope:'reform_column',
+          owner_ref:field.owner_ref,input_ref:field.input_ref,root_ref:wizard.root_ref,parameter_root_ref:reformParams.root_ref,
+          selected_column:reformParams.selected_column,value:field.value});
+    }
+
     if(wizard.status==='observed' && wizard.stage==='output_mapping') {
       const base=wizard.root_tid+';EditColumnDefForm';
       const forms=(tids.get(base)??[]).filter(e=>visible(e) && !sensitive(e));
@@ -1031,7 +1041,7 @@ function workspaceUiCapability(page, task) {
           const targetsForeground = foreground && refs.every(ref => {
             const element=current.ui.elements.find(element=>element.ref===ref);
             return element?.signature.dialog_ref===foreground.ref || task.action.verb==='select_wizard_option'
-              && element?.wizard_combo?.kind==='option' && ['expression_parameter','output_column'].includes(element.wizard_combo.field.scope)
+              && element?.wizard_combo?.kind==='option' && ['expression_parameter','output_column','reform_column'].includes(element.wizard_combo.field.scope)
               && element.wizard_combo.field.parameter_root_ref===foreground.ref;
           });
           const dialogBlocked = !foreground || current.ui.masks.some(mask => mask.dialog_ref === foreground.ref || mask.kind !== 'modal_background');
@@ -1259,7 +1269,7 @@ function workspaceUiCapability(page, task) {
         }
         if(task.action.verb==='select_wizard_option') {
           const choice=current.ui.elements.find(item=>item.ref===task.action.ref).wizard_combo;
-          const parameterKey=choice.field.scope==='expression_parameter'?'expression_parameters':choice.field.scope==='output_column'?'column_parameters':null;
+          const parameterKey=choice.field.scope==='expression_parameter'?'expression_parameters':choice.field.scope==='output_column'?'column_parameters':choice.field.scope==='reform_column'?'reform_parameters':null;
           const expressionParameter=parameterKey!==null;
           const field=observed.wizard[parameterKey??'settings']?.fields?.[choice.field.name];
           const expected=JSON.parse(JSON.stringify(current.wizard));

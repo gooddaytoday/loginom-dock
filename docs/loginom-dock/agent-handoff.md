@@ -1,3 +1,9 @@
+**Checkpoint:** select_wizard_option поддерживает reform_column type с полным
+7-property readback и selected row. Live integer→real→integer PASS42/48ms,
+исходный тип восстановлен, Apply не выполнялся. Editor QuantitySum ОТКРЫТ,
+dropdown закрыт, node inactive, Package1 не сохранён, Hermes нет. Далее typed
+apply/cancel с row readback, persistence + full P3–P9. 287 client /115 Python /10 packaging PASS. Детали сверху status.
+
 **Checkpoint:** reform_parameters читает 7 draft properties + selected row.
 Live owner checkbox false→true→false подтверждён (input.checked всегда false).
 Narrow read SUCCEEDED, QuantitySum integer, caching disabled, excluded=false.
