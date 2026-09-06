@@ -15,7 +15,7 @@ class Locator {
   async count() { return this.all().length; }
   nth(index) { return new Locator(this.page, () => this.all().slice(index, index + 1)); }
   first() { return this.nth(0); }
-  locator(query) { return new Locator(this.page, () => this.page.match(query, this.all().flatMap(item => item.children ?? []))); }
+  locator(query) { const descendants=item=>(item.children??[]).flatMap(child=>[child,...descendants(child)]);return new Locator(this.page, () => this.page.match(query, this.all().flatMap(descendants))); }
   async isVisible() { return this.all()[0]?.visible !== false && this.all().length > 0; }
   async isEnabled() { return this.all()[0]?.enabled !== false; }
   async boundingBox() { return this.all()[0]?.box ?? null; }
@@ -79,6 +79,7 @@ class Page {
     this.events = []; this.drops = 0; this.upCalls = 0; this.down = false; this.menu = false;
     this.dialog = null; this.fileValue = ''; this.storage = new Map(); this.conflict = false;
     this.graph = { scrollLeft: 0, scrollTop: 0 };
+    this.dom={createTreeWalker:root=>{function* walk(node){for(const child of node.children??[]){yield child;yield* walk(child);}}const iterator=walk(root);return {nextNode:()=>iterator.next().value??null};}};
     this.diagramOffset = { x: 0, y: 0 };
     this.viewScale = 1;
     this.packagePath = null;
@@ -133,7 +134,8 @@ class Page {
   contains(box, point) { return box && point && point.x >= box.x && point.x <= box.x + box.width && point.y >= box.y && point.y <= box.y + box.height; }
   ref(label) { return { kind: 'node', node_label: label, workflow_ref: { tab_tid: this.tabTid, prefix: this.prefix } }; }
   addNode(label, x, y, ports = []) { this.nodes.push({ label, x, y, ports: [...ports] }); }
-  element(tid, props = {}) { return { tid, visible: true, box: { x: 10, y: 10, width: 20, height: 20 }, ...props,
+  element(tid, props = {}) { const page=this;return { tid,ownerDocument:page.dom, visible: true, box: { x: 10, y: 10, width: 20, height: 20 }, ...props,
+    querySelectorAll(selector) {const descendants=item=>(item.children??[]).flatMap(child=>[child,...descendants(child)]);return page.match(selector,descendants(this));},
     getBoundingClientRect() { return { ...this.box, left: this.box.x, top: this.box.y, right: this.box.x + this.box.width, bottom: this.box.y + this.box.height }; },
     getAttribute(name) { return name === 'data-tid' ? this.tid : this.attributes?.[name] ?? null; } }; }
   elements() {
@@ -169,7 +171,7 @@ class Page {
     if (this.active) {
       result.push(this.element(this.tabTid, { text: this.identity, classes: ['x-tab-active'] }));
       for (const node of this.nodes) {
-        const nodeTid = this.prefix + ';Graph;' + node.label;
+        const nodeTid = (this.graphPrefix??this.prefix) + ';Graph;' + node.label;
         const box = { x: 300 + node.x * this.viewScale - this.graph.scrollLeft, y: 100 + node.y * this.viewScale - this.graph.scrollTop, width: 100 * this.viewScale, height: 60 * this.viewScale };
         result.push(this.element(nodeTid, { box, children: [this.element('', { tag: 'rect', box, attributes: { x: String(node.x * this.viewScale), y: String(node.y * this.viewScale) } })] }));
         result.push(this.element(nodeTid + ';Label;Label', { box, label: node.label, visible: !(this.hideLabelWhileEditing && this.editor?.label === node.label) }));
@@ -178,7 +180,12 @@ class Page {
           box: { x: box.x + (port.startsWith('Output') ? 100 : 0), y: box.y + 5 + index * 10, width: 8, height: 8 },
         })));
       }
-      for (const edge of this.edges) result.push(this.element(this.prefix + ';Graph;' + edge, { kind: 'link', edge }));
+      for (const edge of this.edges) result.push(this.element((this.graphPrefix??this.prefix) + ';Graph;' + edge, { kind: 'link', edge }));
+    }
+    const graph=result.find(e=>e.symbol==='workflow.graph');
+    if(graph) {
+      for(const item of result.filter(e=>e.tid.includes(';Graph;'))) {graph.children.push(item);item.parentElement=graph;}
+      const parents=item=>{for(const child of item.children??[]){child.parentElement=item;parents(child);}};parents(graph);
     }
     return result;
   }
@@ -215,11 +222,12 @@ class Page {
         allowed_actions: ['click', 'double_click', 'press', 'drag', ...(field ? ['fill'] : [])] };
     });
     return { origin: 'https://loginom.invalid', authenticated: true, loginom_build: build, workflow_ref: workflow,
+      graph_identity:{status:'observed',container_tid:this.prefix+';ModelForm;cmpDiagram',container_ref:'fixture-diagram',native_prefix:(this.graphPrefix??this.prefix)+';Graph;'},
       dom_epoch: {document:'fixture-document',revision:0},
       active_identity: this.identity, package_identity: { path: this.packagePath, name: this.packagePath?.split('/').at(-1) ?? null },
       nodes: this.nodes.map(node => ({ node_ref: this.ref(node.label), ports: node.ports.map(port => ({
-        tid: `${this.prefix};Graph;${node.label};${port}`, ui_ref: this.uiReference(`${this.prefix};Graph;${node.label};${port}`),
-      })) })), links: this.edges.map(edge => this.prefix + ';Graph;' + edge),
+        tid: `${this.graphPrefix??this.prefix};Graph;${node.label};${port}`, ui_ref: this.uiReference(`${this.graphPrefix??this.prefix};Graph;${node.label};${port}`),
+      })) })), links: this.edges.map(edge => (this.graphPrefix??this.prefix) + ';Graph;' + edge),
       ui: { elements, dialogs: [], messages: [], masks: [], table_cells: [], truncated: {} } };
   }
   async evaluate(fn, arg) {

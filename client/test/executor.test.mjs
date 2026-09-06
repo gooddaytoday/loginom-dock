@@ -272,3 +272,56 @@ test('save fingerprint rejects changed port ordinal, direction, missing port and
     assert.ok(result.output.expected_graph); assert.ok(result.output.actual_graph);
   }
 });
+
+test('node and link capabilities preserve active workflow while binding relocated native graph',async()=>{
+  const nodePage=new Page();nodePage.prefix='MF;TF-4';nodePage.tabTid='MF;cntMain;cntWorkspace;Workspace;t.br;tb-4';nodePage.graphPrefix='MF;TF-1';
+  const created=await run(nodePage,'node.add',nodeParameters);
+  assert.equal(created.status,'SUCCEEDED',JSON.stringify(created.error));assert.equal(created.output.node_ref.workflow_ref.prefix,'MF;TF-4');
+  const page=linkPage();page.prefix='MF;TF-4';page.tabTid='MF;cntMain;cntWorkspace;Workspace;t.br;tb-4';page.graphPrefix='MF;TF-1';
+  const linked=await run(page,'link.create',linkParameters(page));
+  assert.equal(linked.status,'SUCCEEDED',JSON.stringify(linked.error));
+  assert.ok(linked.output.link_ref.tid.startsWith('MF;TF-1;Graph;'));
+  const prepared=await run(page,'link.create',linkParameters(page),{mode:'prepare'});
+  assert.equal(prepared.checkpoint.workflow_ref.prefix,'MF;TF-4');
+  assert.deepEqual(prepared.checkpoint.graph_binding,{container_tid:'MF;TF-4;ModelForm;cmpDiagram',native_prefix:'MF;TF-1;Graph;'});
+});
+
+test('ready graph binding excludes foreign namespace outside diagram and rejects multiple owned namespaces',async()=>{
+  for(const mode of ['foreign','multiple','duplicate_container','hidden_container','namespace_change']) {
+    const page=linkPage(),elements=page.elements.bind(page);
+    page.elements=()=>{
+      const all=elements(),graph=all.find(e=>e.symbol==='workflow.graph');
+      const foreign=page.element('MF;TF-9;Graph;Foreign;Label;Label',{label:'Foreign'});
+      if(mode==='foreign')all.push(foreign);
+      if(mode==='multiple'){graph.children.push(foreign);foreign.parentElement=graph;}
+      if(mode==='duplicate_container')all.push(page.element(graph.tid,{symbol:'duplicate'}));
+      if(mode==='hidden_container')graph.visible=false;
+      return all;
+    };
+    if(mode==='namespace_change')page.onDrop=item=>{item.graphPrefix='MF;TF-9';};
+    const result=await run(page,'link.create',linkParameters(page));
+    assert.equal(result.status,mode==='foreign'?'SUCCEEDED':mode==='namespace_change'?'AMBIGUOUS':'FAILED',mode+JSON.stringify(result.error));
+    assert.equal(page.drops,['foreign','namespace_change'].includes(mode)?1:0,mode);
+  }
+});
+
+test('native graph accepts decorative duplicate vertices but stops bounded scan before effects',async()=>{
+  for(const mode of ['vertices','duplicate_port','oversized']) {
+    const page=linkPage(),elements=page.elements.bind(page);
+    let visits=0;const createWalker=page.dom.createTreeWalker;
+    page.dom.createTreeWalker=root=>{const walker=createWalker(root);return {nextNode:()=>{visits++;return walker.nextNode();}};};
+    page.elements=()=>{
+      const all=elements(),graph=all.find(e=>e.symbol==='workflow.graph');
+      const count=mode==='oversized'?6500:2;
+      for(let i=0;i<count;i++){
+        const item=page.element(mode==='duplicate_port'?page.prefix+';Graph;Источник;Output_Data-0':page.prefix+';Graph;Vertex');
+        item.parentElement=graph;graph.children.push(item);
+      }
+      return all;
+    };
+    const result=await run(page,'link.create',linkParameters(page));
+    assert.equal(result.status,mode==='vertices'?'SUCCEEDED':'FAILED',mode+JSON.stringify(result.error));
+    assert.equal(page.drops,mode==='vertices'?1:0);
+    if(mode==='oversized'){assert.match(result.error.message,/scan element budget/);assert.ok(visits<=6001);}
+  }
+});

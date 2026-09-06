@@ -61,6 +61,55 @@ def mapping_snapshot():
 
 
 class ImportSettingsEvidenceTests(unittest.TestCase):
+    def configured_mapping_snapshot(self):
+        state=mapping_snapshot();mapping=state['wizard']['output_columns']
+        mapping['auto_sync']={'status':'observed','value':False,'ref':'auto-sync'}
+        mapping['definition_coverage']={'status':'complete_configured_rows','count':5,
+            'body_ref':'mapping-body','container_ref':'mapping-container','filter_ref':'mapping-filter',
+            'table_mode_ref':'table-mode','first_row_ref':'row-0','last_row_ref':'row-4','source_identity_verified':False}
+        return state
+
+    def test_configured_mapping_preserves_observed_auto_sync_without_source_claim(self):
+        for auto in (False,True):
+            state=self.configured_mapping_snapshot();state['wizard']['output_columns']['auto_sync']['value']=auto
+            proof=ise.configured_mapping_compare(state,EXPECTED)
+            self.assertTrue(proof['configured_import_mapping_match']);self.assertEqual(proof['auto_sync'],auto)
+            self.assertFalse(proof['source_identity_verified']);self.assertFalse(proof['complete'])
+            self.assertFalse(proof['package_persistence_verified'])
+
+    def test_configured_mapping_rejects_unknown_bounds_and_auto_sync(self):
+        for mode in ('partial','count','unknown','endpoint','collision','empty_filter','source_claim','auto_missing',
+                     'auto_ambiguous','auto_integer','auto_collision','context','editor'):
+            with self.subTest(mode=mode):
+                state=self.configured_mapping_snapshot();mapping=state['wizard']['output_columns'];coverage=mapping['definition_coverage']
+                context=ise.configured_mapping_compare(state,EXPECTED)['context']
+                if mode=='partial':coverage['status']='partial'
+                if mode=='count':coverage['count']=4
+                if mode=='unknown':coverage['extra']=True
+                if mode=='endpoint':coverage['last_row_ref']='row-3'
+                if mode=='collision':coverage['body_ref']='row-0'
+                if mode=='empty_filter':coverage['filter_ref']=''
+                if mode=='source_claim':coverage['source_identity_verified']=True
+                if mode=='auto_missing':mapping.pop('auto_sync')
+                if mode=='auto_ambiguous':mapping['auto_sync']['status']='ambiguous'
+                if mode=='auto_integer':mapping['auto_sync']['value']=1
+                if mode=='auto_collision':mapping['auto_sync']['ref']='table-mode'
+                if mode=='context':state['active_tab_ref']='other'
+                if mode=='editor':state['wizard']['column_parameters']={}
+                self.assertFalse(ise.configured_mapping_compare(state,EXPECTED,context)['configured_import_mapping_match'])
+
+    def test_configured_mapping_diagnostic_is_journal_bound(self):
+        state=self.configured_mapping_snapshot()
+        call={'session_id':'s','tool_call_id':'c','tool':'dock_workspace_observe','row':1}
+        outcome={'status':'SUCCEEDED','operation_id':'op','output':state}
+        evidence={'calls':[call],'tools':[{**call,'row':2,'result':outcome}],
+                  'events':[{'phase':'observation_completed','operation_id':'op','outcome':copy.deepcopy(outcome)}]}
+        proof=ise.diagnose(evidence,EXPECTED,'')['observations'][0]
+        self.assertTrue(proof['rendered_import_mapping_match'])
+        self.assertTrue(proof['configured_mapping_diagnostics']['configured_import_mapping_match'])
+        evidence['tools'][0]['result']['output']['wizard']['output_columns']['auto_sync']['value']=True
+        self.assertEqual(ise.diagnose(evidence,EXPECTED,'')['observations'],[])
+
     def configured_snapshot(self):
         state = snapshot(); columns = state['wizard']['import_columns']
         for field in columns['fields']: field['header_ref'] = 'header-' + str(field['index'])

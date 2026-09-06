@@ -170,6 +170,7 @@ function browserCapability(page, task) {
   let restoreViewport = null;
   let workflow = task.checkpoint?.workflow_ref ?? null;
   let loginomBuild = null;
+  let graphBinding=task.checkpoint?.graph_binding??null;
   const record = (event, detail = {}) => trace.push({ at_ms: Date.now() - started, event, ...detail });
   const remaining = () => Math.max(0, deadline - Date.now());
   const wait = ms => page.waitForTimeout(Math.min(ms, remaining()));
@@ -219,20 +220,59 @@ function browserCapability(page, task) {
     if (!(name in bindings)) throw new Error(`Missing selector binding ${name}`);
     return encode(bindings[name], definition.parameters[name]);
   });
+  const ownedGraph = async prefix => {
+    if(await activePrefix()!==prefix)throw new Error('Graph workflow changed');
+    const containerTid=prefix+';ModelForm;cmpDiagram',container=tid('',containerTid);
+    if(await container.count()!==1 || !(await container.isVisible()))throw new Error('Unique visible owned graph container is required');
+    const box=await container.boundingBox(),viewport=page.viewportSize();
+    if(!box || box.x+box.width<=0 || box.y+box.height<=0 || viewport && (box.x>=viewport.width || box.y>=viewport.height))throw new Error('Graph container is outside the visible viewport');
+    const data=await container.evaluate((element,ownerPrefix)=>{
+      const started=Date.now();let work=0;
+      const charge=()=>{if(++work>250000 || Date.now()-started>500)throw new Error('Graph scan budget exceeded');};
+      const visible=e=>{
+        for(let p=e;p;p=p.parentElement){charge();const style=getComputedStyle(p);if(style.display==='none' || style.visibility==='hidden' || style.visibility==='collapse')return false;}
+        const b=e.getBoundingClientRect();return b.width>=0 && b.height>=0 && (b.width>0 || b.height>0);
+      };
+      for(let p=element.parentElement;p;p=p.parentElement){charge();const owner=/^(MF;TF(?:-\d+)?)(?:;|$)/.exec(p.getAttribute?.('data-tid')??'')?.[1];if(owner && owner!==ownerPrefix)throw new Error('Graph container belongs to another workflow');}
+      const all=[],walker=element.ownerDocument.createTreeWalker(element,1);let next;
+      while((next=walker.nextNode())){charge();if(all.length>=6000)throw new Error('Graph scan element budget exceeded');all.push(next);}
+      const graph=all.filter(e=>{charge();return /^MF;TF(?:-\d+)?;Graph;/.test(e.getAttribute('data-tid')??'') && visible(e);});
+      const prefixes=[...new Set(graph.map(e=>/^(MF;TF(?:-\d+)?;Graph;)/.exec(e.getAttribute('data-tid'))[1]))];
+      if(prefixes.length>1)throw new Error('Multiple native graph namespaces in the active container');
+      const native=prefixes[0]??null,tids=graph.map(e=>e.getAttribute('data-tid'));
+      const labels=[...new Set(tids.filter(t=>t.endsWith(';Label;Label')).map(t=>t.slice(native.length).replace(/;Label;Label$/,''))
+        .filter(t=>t && t!=='Переменные_сценария'))].sort();
+      const actionable=tids.filter(t=>{charge();const body=t.slice(native.length);return body.split('|').length===4 && !body.includes(';')
+        || labels.some(label=>body===label || body===label+';Label;Label' || body===label+';Setting'
+          || body.startsWith(label+';') && /;(?:Input|Output)_[^;]+$/.test(body));});
+      if(new Set(actionable).size!==actionable.length)throw new Error('Duplicate actionable graph identifiers');
+      return {native_prefix:native,nodes:labels.map(label=>({label,ports:tids.filter(t=>t.startsWith(native+label+';') && /;(?:Input|Output)_[^;]+$/.test(t)).sort()})),
+        links:tids.filter(t=>{const body=t.slice(native.length);return body.split('|').length===4 && !body.includes(';');}).sort()};
+    },prefix);
+    const binding={container_tid:containerTid,native_prefix:data.native_prefix};
+    if(graphBinding && (graphBinding.container_tid!==containerTid || graphBinding.native_prefix!==null && graphBinding.native_prefix!==binding.native_prefix))
+      throw new Error('Native graph binding changed after preflight');
+    graphBinding=binding;
+    return {container,binding,nodes:data.nodes,links:data.links};
+  };
+  const graphPrefixFor=async prefix=>{const native=(await ownedGraph(prefix)).binding.native_prefix;if(!native)throw new Error('No observed native graph namespace');return native;};
   const resolve = async (symbol, bindings = {}, options = {}) => {
     ensureDeadline();
     const definition = task.selectors[symbol];
     if (!definition || !task.action.selector_symbols.includes(symbol)) throw new Error(`Selector ${symbol} is not allowed by the action`);
     let value = interpolate(definition, bindings);
-    let match = definition.match;
+    let match = definition.match,ownedContainer=null;
     if (['activeTab', 'activeWorkflow'].includes(definition.scope)) {
       const prefix = await activePrefix();
-      value = `${prefix};${value}`;
+      if(value.startsWith('Graph;')) {
+        const graph=options.graphCapture??await ownedGraph(prefix);if(!graph.binding.native_prefix)throw new Error('Graph selector has no observed namespace');
+        value=graph.binding.native_prefix+value.slice('Graph;'.length);ownedContainer=graph.container;
+      } else value = `${prefix};${value}`;
       match = 'exact';
     }
     const operator = { exact: '', prefix: '^', suffix: '$' }[match];
     const classSuffix = definition.required_class ? `.${definition.required_class}` : '';
-    const all = tid(operator, value, classSuffix);
+    const all = ownedContainer?ownedContainer.locator(`[data-tid${operator}=${cssString(value)}]${classSuffix}`):tid(operator, value, classSuffix);
     let matches = [...Array(await all.count()).keys()].map(index => all.nth(index));
     if (definition.visibility !== 'any') {
       const visibility = await Promise.all(matches.map(locator => locator.isVisible()));
@@ -290,27 +330,16 @@ function browserCapability(page, task) {
     record('preconditions_verified', { active_tab: prefix });
     return prefix;
   };
-  const graphNodes = async prefix => page.locator(`[data-tid^=${cssString(prefix + ';Graph;')}][data-tid$=";Label;Label"]`).evaluateAll(elements =>
-    [...new Set(elements.filter(element => {
-      const style = getComputedStyle(element);
-      return style.display !== 'none' && style.visibility !== 'hidden';
-    }).map(element => (element.getAttribute('data-tid') ?? '').split(';Graph;')[1]?.replace(/;Label;Label$/, ''))
-      .filter(label => label && label !== 'Переменные_сценария'))].sort());
-  const ports = async (prefix, nodeLabel) => page.locator(`[data-tid^=${cssString(prefix + ';Graph;' + nodeLabel + ';')}]`).evaluateAll(elements =>
-    [...new Set(elements.map(element => element.getAttribute('data-tid')).filter(value => /;(?:Input|Output)_[^;]+$/.test(value ?? '')))].sort());
-  const graphLinks = async prefix => page.locator(`[data-tid^=${cssString(prefix + ';Graph;')}]`).evaluateAll(elements =>
-    [...new Set(elements.map(element => element.getAttribute('data-tid')).filter(value => {
-      const body = (value ?? '').split(';Graph;')[1] ?? '';
-      return body.split('|').length === 4 && !body.includes(';');
-    }))].sort());
-  const rawGraph = async prefix => ({ nodes: await Promise.all((await graphNodes(prefix)).map(async label =>
-    ({ label, ports: await ports(prefix, label) }))), links: await graphLinks(prefix) });
+  const graphNodes=async prefix=>(await ownedGraph(prefix)).nodes.map(node=>node.label);
+  const ports=async(prefix,nodeLabel)=>(await ownedGraph(prefix)).nodes.find(node=>node.label===nodeLabel)?.ports??[];
+  const graphLinks=async prefix=>(await ownedGraph(prefix)).links;
+  const rawGraph=async prefix=>{const graph=await ownedGraph(prefix);return {nodes:graph.nodes,links:graph.links};};
   const graphSnapshot = async prefix => {
-    const nodes = await graphNodes(prefix);
+    const captured=await rawGraph(prefix),nodes=captured.nodes.map(node=>node.label);
     const mappings = new Map();
     const canonicalPorts = [];
     for (const node of nodes) {
-      const rawPorts = (await ports(prefix, node)).map(value => value.slice((prefix + ';Graph;' + node + ';').length));
+      const rawPorts = captured.nodes.find(item=>item.label===node).ports.map(value => value.split(';Graph;')[1].slice((node+';').length));
       const groups = new Map(), mapping = new Map();
       for (const port of rawPorts) {
         const match = /^(.*)-(\d+)$/.exec(port);
@@ -328,8 +357,8 @@ function browserCapability(page, task) {
     // Loginom recreates live port indices on reopen (observed 0,1,3 -> 0,1,2).
     // Preserve type/direction/count and ordinal, and remap each link endpoint
     // through the same bijection. A different ordinal still changes the graph.
-    const canonicalLinks = (await graphLinks(prefix)).map(value => {
-      const [source, output, target, input] = value.slice((prefix + ';Graph;').length).split('|');
+    const canonicalLinks = captured.links.map(value => {
+      const [source, output, target, input] = value.split(';Graph;')[1].split('|');
       const sourcePort = mappings.get(source)?.get(output), targetPort = mappings.get(target)?.get(input);
       if (!sourcePort || !targetPort) throw new Error('Graph link endpoint is absent from its node port snapshot');
       return `${source}|${sourcePort}|${target}|${targetPort}`;
@@ -414,7 +443,7 @@ function browserCapability(page, task) {
     if (task.parameters.expected_label && before.includes(encode(task.parameters.expected_label, 'loginom_tid'))) {
       throw new Error('Expected node label already exists before this operation');
     }
-    return { workflow_ref: { ...workflow }, nodes: before, graph: await rawGraph(prefix), geometry: await nodeDropGeometry() };
+    return { workflow_ref: { ...workflow }, nodes: before, graph: await rawGraph(prefix), geometry: await nodeDropGeometry(),graph_binding:{...graphBinding} };
   };
   const reconcileNode = async before => {
     const prefix = await ensureReady();
@@ -441,7 +470,7 @@ function browserCapability(page, task) {
       if (!same(current, before.graph)) {
         const addedLinks = current.links.filter(link => !before.graph.links.includes(link));
         const ownedLinks = addedLinks.filter(link => {
-          const parts = link.slice((prefix + ';Graph;').length).split('|');
+          const parts = link.split(';Graph;')[1].split('|');
           return parts.length === 4 && (parts[0] === label || parts[2] === label);
         });
         const withoutOwnedLinks = { ...current, links: current.links.filter(link => !ownedLinks.includes(link)) };
@@ -518,7 +547,7 @@ function browserCapability(page, task) {
     const target = await resolve(portSymbol('input', targetPort), portBindings(targetNode, targetPort));
     return { workflow_ref: { ...workflow },
       source_tid: await source.getAttribute('data-tid'), target_tid: await target.getAttribute('data-tid'),
-      links: await graphLinks(prefix), ports: await ports(prefix, targetNode.node_label), graph: await rawGraph(prefix) };
+      links: await graphLinks(prefix), ports: await ports(prefix, targetNode.node_label), graph: await rawGraph(prefix),graph_binding:{...graphBinding} };
   };
   const reconcileLink = async (before, context = null) => {
     const prefix = await ensureReady();
@@ -532,7 +561,7 @@ function browserCapability(page, task) {
     const removedPorts = before.ports.filter(value => !currentPorts.includes(value));
     const sourceInfo = before.source_tid.split(';').at(-1);
     const targetInfo = before.target_tid.split(';').at(-1);
-    const linkPrefix = `${prefix};Graph;${sourceNode.node_label}|${sourceInfo}|${targetNode.node_label}|`;
+    const linkPrefix = `${await graphPrefixFor(prefix)}${sourceNode.node_label}|${sourceInfo}|${targetNode.node_label}|`;
     if (before.graph) {
       const current = await rawGraph(prefix);
       current.links = current.links.filter(link => !addedLinks.includes(link) || !link.startsWith(linkPrefix));
@@ -606,10 +635,11 @@ function browserCapability(page, task) {
     if (observed.status !== 'AMBIGUOUS' || observed.output.reason || observed.output.added_links?.length !== 0
         || observed.output.added_ports?.length !== 1) return observed;
     const targetTid = observed.output.added_ports[0];
-    if (!targetTid.startsWith(before.workflow_ref.prefix + ';Graph;' + task.parameters.target_node.node_label + ';Input_Data-')) {
+    if (!targetTid.startsWith((await graphPrefixFor(before.workflow_ref.prefix)) + task.parameters.target_node.node_label + ';Input_Data-')) {
       throw new Error('The observed partial port is not an input data port of the requested target');
     }
-    const source = tid('', before.source_tid), target = tid('', targetTid);
+    const owner=(await ownedGraph(before.workflow_ref.prefix)).container;
+    const source = owner.locator(`[data-tid=${cssString(before.source_tid)}]`), target = owner.locator(`[data-tid=${cssString(targetTid)}]`);
     if (await source.count() !== 1 || await target.count() !== 1) throw new Error('Recovery ports are no longer unique');
     const box = await target.boundingBox();
     if (!box) throw new Error('Recovery target has no geometry');
@@ -725,7 +755,7 @@ function browserCapability(page, task) {
     await click('packages.close', true);
     // Closing and reopening necessarily changes the selected tab identity.
     const closedTabTid = workflow.tab_tid;
-    workflow = null;
+    workflow = null;graphBinding=null;
     await poll(async () => {
       const unsaved = await resolve('message.text', {}, { cardinality: 'zeroOrOne', stable: false });
       if (unsaved && (await unsaved.innerText()).toLocaleLowerCase('ru').includes('сохранить изменения')) {
@@ -756,13 +786,14 @@ function browserCapability(page, task) {
   };
   const observe = async () => {
     const prefix = await ensureReady();
-    const labels = await graphNodes(prefix);
+    const captured=await ownedGraph(prefix),labels=captured.nodes.map(node=>node.label);
     const nodes = [];
     for (const label of labels) {
-      const locator = await resolve('workflow.node', { node_label: label }, { stable: false });
+      const locator = await resolve('workflow.node', { node_label: label }, { stable: false,graphCapture:captured });
       const nodePorts = [];
-      for (const portTid of await ports(prefix, label)) {
-        const locator = tid('', portTid);
+      for (const portTid of captured.nodes.find(node=>node.label===label).ports) {
+        const owner=captured.container;
+        const locator = owner.locator(`[data-tid=${cssString(portTid)}]`);
         if (await locator.count() !== 1) throw new Error('Observed port has ambiguous identity');
         nodePorts.push({ tid: portTid, bounding_box: await locator.boundingBox() });
       }
@@ -773,7 +804,7 @@ function browserCapability(page, task) {
     const observedPackage = await packageIdentity();
     return result('SUCCEEDED', { authenticated: true, loginom_build: loginomBuild, workflow_ref: { ...workflow },
       active_identity: (await tab.innerText()).trim(), package_identity: { path: normalizeStoredPath(observedPackage.path), name: observedPackage.name },
-      nodes, links: await graphLinks(prefix), workarea });
+      nodes, links: captured.links, workarea });
   };
   return (async () => {
     record('action_started', { capability: task.action.capability, mode: task.mode ?? 'apply' });
@@ -1284,22 +1315,27 @@ export function createActionRuntime({ pinned, execute, artifactStore, allowCandi
         const label = original.action.capability === 'node.add.v1'
           ? output.added_label ?? (output.added_labels?.length === 1 ? output.added_labels[0] : null)
           : original.action.capability === 'link.create.v1' ? original.parameters.target_node.node_label : null;
-        const prefix = original.checkpoint.workflow_ref?.prefix;
+        const binding=original.checkpoint.graph_binding,identity=snapshot.graph_identity;
+        const boundGraph=binding && identity?.status==='observed' && identity.container_tid===binding.container_tid
+          && (binding.native_prefix===null || identity.native_prefix===binding.native_prefix)
+          && snapshot.workflow_ref?.prefix===original.checkpoint.workflow_ref?.prefix
+          && snapshot.workflow_ref?.tab_tid===original.checkpoint.workflow_ref?.tab_tid;
+        const nativePrefix=boundGraph?identity.native_prefix:null;
         const references = [action.ref, action.source_ref, action.target_ref].filter(Boolean);
         for (const ref of references) {
           const element = snapshot.ui.elements.find(item => item.ref === ref);
           const tidValue = element?.tid ?? element?.identity?.anchor_tid ?? '';
-          const owned = label && (tidValue === `${prefix};Graph;${label}` || tidValue.startsWith(`${prefix};Graph;${label};`));
-          const source = original.action.capability === 'link.create.v1' && tidValue === original.checkpoint.source_tid
+          const owned = boundGraph && element?.scope==='graph' && label && (tidValue === `${nativePrefix}${label}` || tidValue.startsWith(`${nativePrefix}${label};`));
+          const source = boundGraph && element?.scope==='graph' && original.action.capability === 'link.create.v1' && tidValue === original.checkpoint.source_tid
             && action.verb === 'drag' && action.source_ref === ref;
           const uiOwned = original.action.capability === 'ui.act' && original.checkpoint.target_tids?.includes(tidValue);
-          const createdLink = original.action.capability === 'node.add.v1' && output.repairable_links?.includes(tidValue);
-          const linkPrefix = `${prefix};Graph;${original.parameters.source_node?.node_label}|${original.checkpoint.source_tid?.split(';').at(-1)}|${original.parameters.target_node?.node_label}|`;
-          const misplacedLink = original.action.capability === 'link.create.v1' && !output.reason
+          const createdLink = boundGraph && element?.scope==='graph' && original.action.capability === 'node.add.v1' && output.repairable_links?.includes(tidValue);
+          const linkPrefix = `${nativePrefix}${original.parameters.source_node?.node_label}|${original.checkpoint.source_tid?.split(';').at(-1)}|${original.parameters.target_node?.node_label}|`;
+          const misplacedLink = boundGraph && element?.scope==='graph' && original.action.capability === 'link.create.v1' && !output.reason
             && original.checkpoint.graph && output.added_links?.includes(tidValue)
             && !original.checkpoint.links.includes(tidValue) && tidValue.startsWith(linkPrefix)
             && !output.removed_links?.length && !output.removed_ports?.length;
-          const editor = element?.kind === 'field' && (element?.scope === 'graph_editor' || tidValue === `${prefix};Graph`);
+          const editor = boundGraph && element?.kind === 'field' && element?.scope === 'graph_editor';
           const dialog = element?.scope === 'dialog' || !!element?.signature?.dialog_ref;
           if (!owned && !source && !uiOwned && !createdLink && !misplacedLink && !editor && !dialog) throw new Error('UI repair target is outside the pending operation; inspect its actual partial result');
         }

@@ -1,3 +1,51 @@
+**2026-09-06 — mapping coverage и ручная проверка завершения импорта.**
+
+Добавлено доказательство границ настроенного output mapping для малого полностью
+видимого ColumnsMappingEngineOutputPortWizard: 1–8 непрерывных строк собственного
+контейнера, без фильтра, прокрутки, скрытых/лишних строк, gaps, editors и masks.
+Отдельно читается auto_sync. Независимые configured_mapping_compare и roundtrip
+проверяют границы, refs, точное соответствие полей и неизменность auto_sync.
+Это не доказательство исходной схемы, сохранения пакета или результата выполнения;
+семь domain gates P3 остаются незакрытыми.
+
+Live UI выявил, что активный TF4 cmpDiagram содержит native TF1 Graph. Чтение
+теперь связывает namespace с уникальным собственным контейнером; workflow остаётся
+TF4. Roots и чтение части diagram не выдают graph binding. Namespace определяется
+из уже ограниченного обхода, лимиты 6000 элементов/500 мс сохранены. Live snapshot
+`.dock/post-mvp-p0/graph-binding-live-snapshot.json` подтвердил четыре узла и три связи.
+
+Первый новый finish после исправления namespace всё ещё вернул AMBIGUOUS: native
+метка длинного CSV разбита через <br>, а общее чтение вставляло пробелы. Добавлен
+bounded graph_node.label_text без искусственных разделителей для сравнения метки.
+Новый отдельный цикл select → open → format → mapping → done → finish прошёл
+SUCCEEDED. Configured schema и mapping readback: оба match=true, по 5 полей/строк.
+Артефакты: `.dock/post-mvp-p0/graph-label-{open,steps,finish}-result.json`.
+После успешного finish выполнено отдельное повторное открытие: schema и mapping
+снова match=true, последующий finish также SUCCEEDED. Артефакты
+`graph-label-reopened-{steps,finish}-result.json` в том же private каталоге.
+Предыдущие неоднозначные receipts не переписаны; это ручной native driver proof,
+не autonomous Hermes acceptance и не immutable executor journal.
+
+Ready actions node.add/link.create, graph snapshots и recovery адаптированы
+к собственному cmpDiagram и наблюдённому native namespace. Checkpoint хранит
+container_tid/native_prefix; пустой граф допускает null до появления узла.
+Обход TreeWalker ограничен, повторные декоративные Vertex допустимы, дубли
+actionable элементов запрещены. Live link.create prepare получил корректные
+TF1 ports при TF4 workflow (NOT_APPLIED/prepared/effect_possible=false), файл
+`.dock/post-mvp-p0/executor-link-prepare-result.json`. Реальный drag этим не проверен.
+Node.add prepare остановился до эффекта: компонент импорта сейчас не виден
+в палитре; это не подтверждение создания узла на перенесённом графе.
+
+Независимый roundtrip verifier теперь проверяет graph_identity, exact native tids,
+scope=graph и label_text, сохраняет container binding между finish/click/open.
+Чужие/неоднозначные графы, подмена контейнера и реальное изменение метки запрещены.
+313 client / 158 Python / 10 packaging tests прошли. Первый полный client run дал
+старый timing failure 508/500 мс; повтор прошёл без изменения лимита.
+Далее один короткий Hermes replay собранного участка:
+ChatGPT / openai-codex / gpt-5.6-luna / medium.
+UI: TF4, сценарий Package1/Модуль1, мастер закрыт. Пакет не сохранён.
+Hermes не запускался, production без изменений. Полный P3–P9 открыт.
+
 **2026-09-06 — подтверждены границы настроенной схемы импорта.**
 Root UI-first manualTF4format: exact grdSettings;grd-1 содержит unique
 normalHeaderCt и tbl, header indexes0..4; native x-column-header-first на0,

@@ -124,7 +124,17 @@ class Page {
       up: async options => { this.releasedButton = options?.button; this.events.push('mouse_up'); if (this.failRelease) throw new Error('mouse release interrupted'); this.mouseHeld = false; },
     };
   }
-  add(tag, tid, text = '', box = { x: 30, y: 100, width: 100, height: 25 }, parent = this.document.body) { return parent.append(new Element(tag, tid ? { 'data-tid': tid } : {}, text, box)); }
+  add(tag, tid, text = '', box = { x: 30, y: 100, width: 100, height: 25 }, parent = this.document.body) {
+    // Graph fixture shorthand models Loginom's real cmpDiagram ownership.
+    // Tests for foreign elements pass an explicit parent to bypass this helper.
+    const prefix=/^(MF;TF(?:-\d+)?);Graph;/.exec(tid??'')?.[1];
+    if(prefix && arguments.length<5) {
+      const containerTid=prefix+';ModelForm;cmpDiagram';
+      parent=this.document.querySelectorAll('[data-tid="'+containerTid+'"]').find(e=>e.isConnected)
+        ?? this.document.body.append(new Element('div',{'data-tid':containerTid},'',{x:0,y:50,width:1000,height:700}));
+    }
+    return parent.append(new Element(tag, tid ? { 'data-tid': tid } : {}, text, box));
+  }
   async evaluate(fn, arg) { return fn(arg); }
   viewportSize() { return { width: 1000, height: 800 }; }
   locator(selector) {
@@ -1683,7 +1693,7 @@ test('typed wizard opening verifies node and workflow path after one settings cl
 });
 
 test('wizard finish waits for the expected graph node and does not claim settings readback',async()=>{
-  for(const mode of ['success','wrong_label','dialog','still_open','lost_reply','empty_label']) {
+  for(const mode of ['success','wrapped_label','actual_space','wrong_label','dialog','still_open','lost_reply','empty_label']) {
     const page=new Page(),base='MF;TF-1;',panel=page.add('div',base+'NavigationBar;NavigationPanel');
     let path='';const breadcrumbs=[];
     for(const label of ['Сервер','Пакеты','Package1','Модуль1','Сценарий','Old','Настройка']) {
@@ -1707,14 +1717,15 @@ test('wizard finish waits for the expected graph node and does not claim setting
       wizard.remove();breadcrumbs.at(-1).remove();breadcrumbs.at(-2).remove();
       const graph=page.add('div',base+'ModelForm;cmpDiagram'),name=mode==='wrong_label'?'Other':'Сумма';
       const node=page.add('g',base+'Graph;'+name,'',undefined,graph);
-      page.add('span',base+'Graph;'+name+';Label;Label',name,undefined,node);
+      const label=page.add('span',base+'Graph;'+name+';Label;Label',['wrapped_label','actual_space'].includes(mode)?'':name,undefined,node);
+      if(['wrapped_label','actual_space'].includes(mode)){page.add('span',null,mode==='actual_space'?'Сум ':'Сум',undefined,label);page.add('br',null,'',undefined,label);page.add('span',null,'ма',undefined,label);}
       if(mode==='dialog')page.add('div','msgbox','Подтвердить').attrs.class='x-window';
       if(mode==='lost_reply')throw new Error('Lost reply');
     };
     const result=await page.act({verb:'finish_wizard',ref:button.ref},snapshot);
-    assert.equal(result.status,mode==='success'?'SUCCEEDED':'AMBIGUOUS',mode+JSON.stringify(result.error));
+    assert.equal(result.status,['success','wrapped_label'].includes(mode)?'SUCCEEDED':'AMBIGUOUS',mode+JSON.stringify(result.error));
     assert.equal(page.events.filter(e=>e==='click').length,1);
-    assert.equal(result.trace.some(e=>e.event==='wizard_finish_graph_verified' && e.reopen_required && !e.settings_readback_verified),mode==='success');
+    assert.equal(result.trace.some(e=>e.event==='wizard_finish_graph_verified' && e.reopen_required && !e.settings_readback_verified),['success','wrapped_label'].includes(mode));
   }
 });
 
@@ -2339,5 +2350,96 @@ test('configured import definition coverage requires the entire owned bounded gr
       const narrow=await page.execute({mode:'observe',...scope});
       assert.deepEqual(narrow.output.wizard.import_columns.definition_coverage,columns.definition_coverage,mode);
     }
+  }
+});
+
+function mappingCoverageFixture(page) {
+  page.context.innerWidth=1000;page.context.innerHeight=800;
+  const form=page.add('div','MF;TF-1;WizrdMCF'),base='MF;TF-1;WizrdMCF;ColumnsMappingEngineOutputPortWizard;';
+  page.add('button',base+'btnAddMappingColumn','',undefined,form);
+  const body=page.add('div',base+'grdTargetColumns;tbl','',{x:100,y:200,width:600,height:400},form);body.attrs.id='bound-grid';
+  body.clientWidth=body.scrollWidth=600;body.clientHeight=body.scrollHeight=400;body.scrollLeft=body.scrollTop=0;
+  const container=page.add('div',null,'',{x:100,y:200,width:500,height:50},body);container.attrs.class='x-grid-item-container';
+  const filter=page.add('div',base+'TargetFilter','',undefined,form),input=filter.append(new Element('input'));input.value='';
+  const tableMode=page.add('div',base+'rbTable','',undefined,form);tableMode.attrs.class='x-form-cb-checked';
+  const linksMode=page.add('div',base+'rbLinks','',undefined,form);
+  const auto=page.add('button',base+'btnAutoSyncThroughColumns','',undefined,form);auto.attrs.class='x-btn-pressed';
+  const rows=[];
+  for(let index=0;index<2;index++) {
+    const row=page.add('table',null,'',{x:100,y:200+index*25,width:500,height:25},container);
+    Object.assign(row.attrs,{class:'x-grid-item','data-recordindex':String(index),'data-boundview':'bound-grid'});
+    for(const [j,prefix] of ['colName_','colDisplayName_','colSourceDisplayName_','colDataKind_','colDefaultUsageType_'].entries()) {
+      const cell=page.add('td',base+prefix+'Field'+index,j===3?'Непрерывный':j===4?'Не задано':'Field'+index,{x:100+j*100,y:row.box.y,width:100,height:25},row);
+      if(j===1 || j===2)page.add('span',null,'',cell.box,cell).attrs.class='bg-TBGDataType-dtInteger';
+    }
+    rows.push(row);
+  }
+  return {form,base,body,container,filter,input,tableMode,linksMode,auto,rows};
+}
+
+test('configured mapping coverage rejects clipped filtered virtualized or unmatched rows',async()=>{
+  for(const mode of ['valid','hidden_extra','gap','overflow','spacer','filter','mode','duplicate','offset','unmatched','wrong_boundview','clipped_cell','editor','mask','container_gap','body_extra','missing_dimensions','column_editor','horizontal_offset']) {
+    const page=new Page(),c=mappingCoverageFixture(page);
+    if(mode==='hidden_extra'){const row=page.add('table',null,'',c.rows[0].box,c.container);row.attrs.class='x-grid-item';row.style.display='none';}
+    if(mode==='gap')c.rows[1].attrs['data-recordindex']='2';
+    if(mode==='overflow')c.body.scrollHeight=401;
+    if(mode==='spacer')page.add('div',null,'',{x:100,y:200,width:10,height:10},c.container);
+    if(mode==='filter')c.input.value='Field';
+    if(mode==='mode')c.linksMode.attrs.class='x-form-cb-checked';
+    if(mode==='duplicate')c.rows[1].attrs['data-recordindex']='0';
+    if(mode==='offset')c.body.scrollTop=1;
+    if(mode==='unmatched')c.rows[1].children[0].remove();
+    if(mode==='wrong_boundview')c.rows[1].attrs['data-boundview']='other';
+    if(mode==='clipped_cell')c.rows[0].children[0].box.x=50;
+    if(mode==='editor')page.add('div',c.base+'grdTargetColumns;tbl;celleditor;cbx','',undefined,c.form);
+    if(mode==='mask')page.add('div',null,'Loading').attrs.class='x-mask-msg';
+    if(mode==='container_gap')c.container.box.height=55;
+    if(mode==='body_extra')page.add('div',null,'Extra',{x:100,y:260,width:100,height:20},c.body);
+    if(mode==='missing_dimensions')delete c.body.clientHeight;
+    if(mode==='column_editor')page.add('div','MF;TF-1;WizrdMCF;EditColumnDefForm','',undefined,c.form);
+    if(mode==='horizontal_offset')c.container.box.x=101;
+    const raw=await page.execute({mode:'observe'}),cols=raw.output.wizard.output_columns;
+    assert.equal(cols.definition_coverage.status,mode==='valid'?'complete_configured_rows':'partial',mode);
+    assert.equal(cols.complete,false);assert.equal(cols.definition_coverage.source_identity_verified,false);
+    assert.equal(cols.auto_sync.value,true);
+    if(mode==='valid'){assert.equal(cols.definition_coverage.count,2);assert.equal(cols.definition_coverage.first_row_ref,cols.fields[0].row_ref);}
+    for(const options of [{discover_roots:true},{root_ref:raw.output.wizard.root_ref}]) {
+      const read=await page.execute({mode:'observe',...options});
+      assert.deepEqual(read.output.wizard.output_columns,cols,mode);
+    }
+  }
+});
+
+test('relocated native graph namespace belongs to the active diagram instead of its old tab',async()=>{
+  for(const mode of ['valid','foreign','multiple_namespaces','duplicate_container','hidden_container','foreign_container_owner']) {
+    const page=new Page();page.tab.attrs['data-tid']='MF;cntMain;cntWorkspace;Workspace;t.br;tb-4';
+    const graph=page.add('div','MF;TF-4;ModelForm;cmpDiagram','',{x:0,y:50,width:900,height:650});
+    const body=page.add('div','MF;TF-1;Graph;source-key','',{x:200,y:100,width:100,height:50},graph);
+    page.add('span','MF;TF-1;Graph;source-key;Label;Label','Source',{x:200,y:100,width:80,height:20},body);
+    page.add('button','MF;TF-1;Graph;source-key;Setting','',{x:280,y:100,width:20,height:20},body);
+    page.add('div','MF;TF-1;Graph;source-key;Output_Data-0','',{x:285,y:140,width:10,height:10},body);
+    page.add('g','MF;TF-1;Graph;source-key|Output_Data-0|target|Input_Data-0','',{x:300,y:140,width:100,height:1},graph);
+    if(mode==='foreign'){
+      const foreign=page.add('div','MF;TF-1;Graph;foreign','',undefined,page.document.body);
+      page.add('span','MF;TF-1;Graph;foreign;Label;Label','Foreign',undefined,foreign);
+    }
+    if(mode==='multiple_namespaces')page.add('span','MF;TF-4;Graph;other;Label;Label','Other',undefined,graph);
+    if(mode==='duplicate_container')page.add('div','MF;TF-4;ModelForm;cmpDiagram');
+    if(mode==='hidden_container')graph.style.display='none';
+    if(mode==='foreign_container_owner'){const other=page.add('div','MF;TF-5;ModelForm');graph.remove();other.append(graph);}
+    const raw=await page.execute({mode:'observe'}),snapshot=raw.output,valid=['valid','foreign'].includes(mode);
+    assert.equal(snapshot.workflow_ref.prefix,'MF;TF-4');
+    assert.equal(snapshot.graph_identity.status,valid?'observed':['multiple_namespaces','duplicate_container'].includes(mode)?'ambiguous':'unobserved',mode);
+    if(valid){
+      assert.equal(snapshot.graph_identity.native_prefix,'MF;TF-1;Graph;');
+      assert.deepEqual(snapshot.nodes.map(n=>n.node_ref.node_label),['source-key']);assert.equal(snapshot.nodes[0].ports.length,1);
+      assert.equal(snapshot.links.length,1);assert.ok(snapshot.ui.elements.some(e=>e.graph_node?.part==='settings'));
+      assert.ok(!snapshot.ui.elements.some(e=>e.tid?.includes(';Graph;foreign')));
+      const narrow=await page.execute({mode:'observe',root_ref:snapshot.graph_identity.container_ref});
+      assert.deepEqual(narrow.output.graph_identity,snapshot.graph_identity);assert.deepEqual(narrow.output.nodes,snapshot.nodes);
+    }else {assert.equal(snapshot.nodes.length,0);assert.equal(snapshot.links.length,0);assert.ok(!snapshot.ui.elements.some(e=>e.scope==='graph'));}
+    const roots=await page.execute({mode:'observe',discover_roots:true});
+    assert.equal(roots.output.graph_identity.status,mode==='duplicate_container'?'ambiguous':'unobserved');
+    assert.ok(!roots.output.ui.elements.some(e=>e.scope==='graph'));
   }
 });

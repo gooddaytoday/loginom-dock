@@ -11,12 +11,16 @@ def fixture(selection=True):
     source = source_snapshot(); form = snapshot(); mapping = mapping_snapshot()
     done = copy.deepcopy(mapping); done['wizard']['stage'] = 'done'
     owner = source['wizard']['owner_context']; node = owner['node']['tid'].split('>')[-1]
+    done['wizard']['completion']={'fields':{'label':{'value':owner['node']['label']}}}
     graph = copy.deepcopy(source); graph['wizard'] = {'status': 'absent'}
     graph['navigation_context'] = {'status': 'observed', 'path': [{k:p[k] for k in ('tid','label')} for p in owner['path'][:-2]]}
-    body = {'ref':'body', 'graph_node':{'node_label':node,'part':'body'}, 'allowed_actions':['click']}
-    settings = {'ref':'settings', 'graph_node':{'node_label':node,'part':'settings'}, 'allowed_actions':['open_wizard']}
-    graph['ui']['elements'] = [body] if selection else [body, settings]
-    selected = copy.deepcopy(graph); selected['ui']['elements'] = [body, settings]
+    graph['graph_identity']={'status':'observed','container_ref':'diagram','container_tid':'MF;TF-1;ModelForm;cmpDiagram','native_prefix':'MF;TF-1;Graph;'}
+    body = {'ref':'body', 'scope':'graph', 'tid':'MF;TF-1;Graph;'+node, 'graph_node':{'node_label':node,'part':'body'}, 'allowed_actions':['click']}
+    settings = {'ref':'settings', 'scope':'graph', 'tid':'MF;TF-1;Graph;'+node+';Setting', 'graph_node':{'node_label':node,'part':'settings'}, 'allowed_actions':['open_wizard']}
+    label={'ref':'label','scope':'graph','tid':'MF;TF-1;Graph;'+node+';Label;Label','label':owner['node']['label'],
+           'graph_node':{'node_label':node,'part':'label','label_text':owner['node']['label']}}
+    graph['ui']['elements'] = [body,label] if selection else [body, settings,label]
+    selected = copy.deepcopy(graph); selected['ui']['elements'] = [body, settings,label]
     reopened = source_snapshot()
     for field in reopened['wizard']['import_source']['fields'].values():
         if 'input_ref' in field: field['input_ref'] += '-new'
@@ -41,6 +45,7 @@ def fixture(selection=True):
                                      'settings_applied':False})
         if verb == 'finish_wizard':
             outcome['trace'].append({'event':'wizard_finish_graph_verified', 'previous_owner':copy.deepcopy(owner['node']),
+                                     'label':owner['node']['label'],
                                      'node':body['graph_node'], 'node_ref':'body', 'reopen_required':True,
                                      'settings_readback_verified':False, 'package_saved':False})
         if verb == 'open_wizard':
@@ -86,6 +91,26 @@ class ImportRoundtripTests(unittest.TestCase):
                 self.assertEqual(len(proofs),1)
                 self.assertTrue(proofs[0]['rendered_import_settings_roundtrip_match'])
                 self.assertEqual(proofs[0]['configured_schema_roundtrip_match'],mode=='both')
+                self.assertFalse(proofs[0]['complete'])
+
+    def test_configured_mapping_requires_both_bounds_and_same_auto_sync(self):
+        for mode in ('both','before_only','after_only','count','partial','auto_changed'):
+            with self.subTest(mode=mode):
+                data=fixture()
+                configured=import_settings_tests.ImportSettingsEvidenceTests().configured_mapping_snapshot()['wizard']['output_columns']
+                for index in (2,8):
+                    if mode=='before_only' and index==8:continue
+                    if mode=='after_only' and index==2:continue
+                    for outcome in (data['tools'][index]['result'],data['events'][index]['outcome']):
+                        outcome['output']['wizard']['output_columns']=copy.deepcopy(configured)
+                        mapping=outcome['output']['wizard']['output_columns']
+                        if mode=='count' and index==8:mapping['definition_coverage']['count']=4
+                        if mode=='partial' and index==8:mapping['definition_coverage']['status']='partial'
+                        if mode=='auto_changed' and index==8:mapping['auto_sync']['value']=True
+                proofs=self.diagnose(data)
+                self.assertEqual(len(proofs),1)
+                self.assertTrue(proofs[0]['rendered_import_settings_roundtrip_match'])
+                self.assertEqual(proofs[0]['configured_mapping_roundtrip_match'],mode=='both')
                 self.assertFalse(proofs[0]['complete'])
 
     def test_missing_duplicate_and_unbound_fail(self):
@@ -157,8 +182,8 @@ class ImportRoundtripTests(unittest.TestCase):
         def replace(value):
             if isinstance(value,dict):
                 for key,item in value.items():
-                    if key=='label' and item=='Import':value[key]='Text, import diagnostic'
-                    elif key=='tid' and isinstance(item,str):value[key]=item.replace('>n','>Text_import_diagnostic')
+                    if key in ('label','label_text','value') and item=='Import':value[key]='Text, import diagnostic'
+                    elif key=='tid' and isinstance(item,str):value[key]=item.replace('>n','>Text_import_diagnostic').replace(';Graph;n',';Graph;Text_import_diagnostic')
                     elif key=='node_label' and item=='n':value[key]='Text_import_diagnostic'
                     else:replace(item)
             elif isinstance(value,list):
@@ -245,3 +270,51 @@ class ImportRoundtripTests(unittest.TestCase):
             if mode=='foreign':reply['session_id']='other'
             if mode=='unknown':reply['result']['error']['code']='OTHER'
             self.assertEqual(self.diagnose(changed),[],mode)
+
+    def test_graph_relocated_namespace_requires_active_container_binding(self):
+        data=fixture()
+        def relocate(value):
+            if isinstance(value,dict):
+                for key,item in value.items():
+                    if isinstance(item,str) and ';Graph;' not in item:value[key]=item.replace('MF;TF-1','MF;TF-4')
+                    else:relocate(item)
+            elif isinstance(value,list):
+                for item in value:relocate(item)
+        relocate(data)
+        self.assertEqual(len(self.diagnose(data)),1)
+        for mode in ('foreign_container','missing','ambiguous','foreign_body','foreign_settings',
+                     'changed_container','contradictory_label','duplicate_label','cosmetic_label_spaces','unauthenticated'):
+            with self.subTest(mode=mode):
+                changed=copy.deepcopy(data);index=5 if mode in ('foreign_settings','changed_container') else 4
+                for outcome in (changed['tools'][index]['result'],changed['events'][index]['outcome']):
+                    state=outcome['output'];identity=state['graph_identity'];elements=state['ui']['elements']
+                    if mode=='foreign_container':identity['container_tid']='MF;TF-1;ModelForm;cmpDiagram'
+                    if mode=='missing':state.pop('graph_identity')
+                    if mode=='ambiguous':identity['status']='ambiguous'
+                    if mode=='foreign_body':elements[0]['tid']='MF;TF-2;Graph;n'
+                    if mode=='foreign_settings':next(e for e in elements if e.get('graph_node',{}).get('part')=='settings')['tid']='MF;TF-2;Graph;n;Setting'
+                    if mode=='changed_container':identity['container_ref']='foreign-container'
+                    if mode=='unauthenticated':state['authenticated']=False
+                    label=next(e for e in elements if e.get('graph_node',{}).get('part')=='label')
+                    if mode=='contradictory_label':label['graph_node']['label_text']='Other'
+                    if mode=='duplicate_label':elements.append(copy.deepcopy(label))
+                    if mode=='cosmetic_label_spaces':label['label']='Im port'
+                proofs=self.diagnose(changed)
+                self.assertEqual(bool(proofs),mode=='cosmetic_label_spaces')
+
+    def test_graph_scope_must_agree_with_native_binding(self):
+        for part,index in (('body',4),('label',4),('settings',5)):
+            for scope in ('inactive_workflow','workflow',None):
+                data=fixture()
+                for outcome in (data['tools'][index]['result'],data['events'][index]['outcome']):
+                    element=next(e for e in outcome['output']['ui']['elements'] if e.get('graph_node',{}).get('part')==part)
+                    element['scope']=scope
+                self.assertEqual(self.diagnose(data),[],(part,scope))
+
+    def test_graph_helper_rejects_missing_or_malformed_workflow(self):
+        data=fixture();owner=ir._semantic_owner(data['tools'][0]['result']['output'])
+        for workflow in (None,[],{}, {'prefix':None},{'prefix':42}):
+            state=copy.deepcopy(data['tools'][4]['result']['output']);state['workflow_ref']=workflow
+            self.assertFalse(ir._graph(state,owner))
+        state=copy.deepcopy(data['tools'][4]['result']['output']);state.pop('workflow_ref')
+        self.assertFalse(ir._graph(state,owner));self.assertFalse(ir._graph(None,owner))

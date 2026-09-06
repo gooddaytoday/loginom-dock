@@ -280,6 +280,43 @@ def configured_schema_compare(snapshot, expected, expected_context=None):
         return {**result, 'reason': str(error) if isinstance(error, Unverifiable) else 'malformed_coverage'}
 
 
+def configured_mapping_compare(snapshot, expected, expected_context=None):
+    """Prove the bounded configured mapping list, never source identities/data."""
+    result = {'configured_import_mapping_match': False, 'complete': False,
+              'source_identity_verified': False, 'package_persistence_verified': False,
+              'missing_proofs': ['source_field_identity', 'apply_reopen_readback',
+                                 'package_persistence', 'execution_results']}
+    rendered = mapping_compare(snapshot, expected, expected_context)
+    if not rendered['rendered_import_mapping_match']:
+        return {**result, 'reason': rendered['reason']}
+    try:
+        mapping = snapshot['wizard']['output_columns']; coverage = mapping.get('definition_coverage')
+        keys = {'status', 'count', 'body_ref', 'container_ref', 'first_row_ref', 'last_row_ref',
+                'filter_ref', 'table_mode_ref', 'source_identity_verified'}
+        if not isinstance(coverage, dict) or set(coverage) != keys:
+            raise Unverifiable('mapping_coverage_missing_or_unknown_shape')
+        if coverage['status'] != 'complete_configured_rows' or coverage['source_identity_verified'] is not False:
+            raise Unverifiable('mapping_coverage_not_complete')
+        fields = mapping['fields']
+        if type(coverage['count']) is not int or coverage['count'] != len(fields):
+            raise Unverifiable('mapping_coverage_count_mismatch')
+        auto_sync = mapping.get('auto_sync')
+        if (not isinstance(auto_sync, dict) or set(auto_sync) != {'status', 'value', 'ref'}
+                or auto_sync['status'] != 'observed' or type(auto_sync['value']) is not bool):
+            raise Unverifiable('mapping_auto_sync_unobserved')
+        rows = [field['row_ref'] for field in fields]
+        refs = rows + [coverage[key] for key in ('body_ref', 'container_ref', 'filter_ref', 'table_mode_ref')] + [auto_sync['ref']]
+        if (any(not isinstance(ref, str) or not ref or ref.strip() != ref for ref in refs)
+                or len(set(refs)) != len(refs)):
+            raise Unverifiable('mapping_coverage_refs_missing_or_colliding')
+        if coverage['first_row_ref'] != rows[0] or coverage['last_row_ref'] != rows[-1]:
+            raise Unverifiable('mapping_coverage_endpoints_mismatch')
+        return {**result, 'configured_import_mapping_match': True, 'reason': 'configured_mapping_and_bounds_match',
+                'configured_row_count': len(fields), 'auto_sync': auto_sync['value'], 'context': rendered['context']}
+    except (KeyError, TypeError, AttributeError, ValueError, IndexError) as error:
+        return {**result, 'reason': str(error) if isinstance(error, Unverifiable) else 'malformed_mapping_coverage'}
+
+
 def diagnose(evidence, expected, prefix, *, expected_source_path=None):
     observations = []
     for receipt in settings_evidence.bound_receipts(evidence, prefix):
@@ -293,6 +330,8 @@ def diagnose(evidence, expected, prefix, *, expected_source_path=None):
                  else compare(snapshot, expected))
         if stage == 'text_import_format':
             proof = {**proof, 'configured_schema_diagnostics': configured_schema_compare(snapshot, expected)}
+        if stage == 'output_mapping':
+            proof = {**proof, 'configured_mapping_diagnostics': configured_mapping_compare(snapshot, expected)}
         observations.append({'session_id': receipt['call'].get('session_id'),
                              'tool_call_id': receipt['call'].get('tool_call_id'),
                              'stage': stage,

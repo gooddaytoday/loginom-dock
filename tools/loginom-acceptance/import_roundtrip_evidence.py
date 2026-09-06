@@ -1,6 +1,7 @@
 """Journal-bound rendered import roundtrip; not schema or persistence admission."""
 import import_settings_evidence as settings
 import copy
+import re
 import rename_effect
 from settings_evidence import bound_receipts
 
@@ -58,7 +59,8 @@ def _semantic_owner(snapshot):
 
 
 def _same_context(snapshot, baseline):
-    return (all(baseline.get(key) is not None and snapshot.get(key) == baseline[key] for key in
+    return (snapshot.get('authenticated') is True
+            and all(baseline.get(key) is not None and snapshot.get(key) == baseline[key] for key in
                 ('origin', 'loginom_build', 'workflow_ref', 'package_identity', 'active_tab_ref'))
             and baseline.get('dom_epoch', {}).get('document') is not None
             and snapshot.get('dom_epoch', {}).get('document') == baseline['dom_epoch']['document']
@@ -66,13 +68,45 @@ def _same_context(snapshot, baseline):
 
 
 def _graph(snapshot, owner):
+    if not isinstance(snapshot,dict):return False
+    workflow=snapshot.get('workflow_ref')
+    if not isinstance(workflow,dict) or not isinstance(workflow.get('prefix'),str):return False
     if (snapshot.get('wizard', {}).get('status') != 'absent'
             or snapshot.get('navigation_context', {}).get('status') != 'observed'
             or snapshot['navigation_context'].get('path') != owner['path'][:-2]):
         return False
+    identity=snapshot.get('graph_identity',{})
+    prefix=identity.get('native_prefix')
+    if (identity.get('status')!='observed' or not isinstance(identity.get('container_ref'),str)
+            or not identity['container_ref'] or identity.get('container_tid')!=workflow['prefix']+';ModelForm;cmpDiagram'
+            or not isinstance(prefix,str) or not re.fullmatch(r'MF;TF(?:-\d+)?;Graph;',prefix)):
+        return False
     bodies = [e for e in snapshot['ui'].get('elements', [])
               if e.get('graph_node') == {'node_label': owner['graph_key'], 'part': 'body'}]
-    return len(bodies) == 1
+    labels=[e for e in snapshot['ui'].get('elements',[]) if e.get('graph_node',{}).get('part')=='label'
+            and (e['graph_node'].get('node_label')==owner['graph_key'] or e['graph_node'].get('label_text')==owner['node']['label'])]
+    return (len(bodies)==len(labels)==1 and bodies[0].get('scope')==labels[0].get('scope')=='graph'
+            and bodies[0].get('tid')==prefix+owner['graph_key']
+            and labels[0].get('tid')==prefix+owner['graph_key']+';Label;Label'
+            and labels[0]['graph_node'].get('node_label')==owner['graph_key']
+            and labels[0]['graph_node'].get('label_text')==owner['node']['label'])
+
+
+def _issued_graph_binding(receipt,receipts,owner,baseline,identity):
+    """Bind issued graph elements to their actual delivered container snapshot."""
+    args=receipt['call'].get('arguments',{});ref=args.get('action',{}).get('ref')
+    candidates=[r['delivered']['output'] for r in receipts if r['reply_row']<receipt['call']['row']
+                and r['call'].get('session_id')==receipt['call'].get('session_id')
+                and r['delivered'].get('output',{}).get('observation_id')==args.get('observation_id')
+                and any(e.get('ref')==ref for e in r['delivered'].get('output',{}).get('ui',{}).get('elements',[]))]
+    if not candidates:return False
+    for snapshot in candidates:
+        if not _same_context(snapshot,baseline) or not _graph(snapshot,owner) or snapshot.get('graph_identity')!=identity:return False
+        element=next(e for e in snapshot['ui']['elements'] if e.get('ref')==ref)
+        part=element.get('graph_node',{}).get('part')
+        suffix='' if part=='body' else ';Setting' if part=='settings' else None
+        if suffix is None or element.get('scope')!='graph' or element.get('tid')!=identity['native_prefix']+owner['graph_key']+suffix:return False
+    return True
 
 
 def _page(snapshot, expected, source_path, stage):
@@ -104,6 +138,7 @@ def _transition_trace(receipt, before, after, owner):
         bodies = [e for e in after['ui'].get('elements', []) if e.get('graph_node') == record.get('node')
                   and e.get('ref') == record.get('node_ref')]
         return (record.get('previous_owner') == before['wizard']['owner_context']['node']
+                and record.get('label')==before['wizard'].get('completion',{}).get('fields',{}).get('label',{}).get('value')==owner['node']['label']
                 and record.get('node') == {'node_label':owner['graph_key'], 'part':'body'}
                 and len(bodies) == 1 and record.get('reopen_required') is True
                 and record.get('settings_readback_verified') is False and record.get('package_saved') is False)
@@ -175,7 +210,7 @@ def _attempt(start, receipts, evidence, expected, source_path):
                    ('open_wizard', 'text_import_file'), ('wizard_step', 'text_import_format'),
                    ('wizard_step', 'output_mapping')]
     current = 'text_import_file'; cursor = 0; selected = False
-    accepted = [start]; last = start; rejected_calls=[]; configured_formats={}
+    accepted = [start]; last = start; rejected_calls=[]; configured_formats={}; configured_mappings={}; graph_identity=None
     for receipt in receipts:
         if receipt['call']['row'] <= start['call']['row']:
             continue
@@ -193,6 +228,7 @@ def _attempt(start, receipts, evidence, expected, source_path):
             if not rejected or not fence<call['row']<rejected['row']<receipt['call']['row']:return None
             element=_delivered_element({'call':call},receipts)
             if not element or element.get('graph_node')!={'node_label':owner['graph_key'],'part':'body'}:return None
+            if not _issued_graph_binding({'call':call},receipts,owner,baseline,graph_identity):return None
             fence=rejected['row'];rejected_calls.append(call['tool_call_id'])
         if receipt['call'].get('session_id') != session:
             continue
@@ -208,6 +244,7 @@ def _attempt(start, receipts, evidence, expected, source_path):
             element = _issued(receipt, receipts)
             if not element or not _transition_trace(receipt, last['outcome']['output'], snapshot, owner):
                 return None
+            if current=='graph' and not _issued_graph_binding(receipt,receipts,owner,baseline,graph_identity):return None
             if current == 'graph' and verb == 'click' and not selected:
                 target = element.get('graph_node', {})
                 prior=last['outcome']['output']
@@ -226,6 +263,8 @@ def _attempt(start, receipts, evidence, expected, source_path):
         if stage == 'graph':
             if not _graph(snapshot, owner):
                 return None
+            if graph_identity is None:graph_identity=copy.deepcopy(snapshot['graph_identity'])
+            elif snapshot['graph_identity']!=graph_identity:return None
         else:
             if _semantic_owner(snapshot) != owner:
                 return None
@@ -235,6 +274,11 @@ def _attempt(start, receipts, evidence, expected, source_path):
                 # Use the last read of each format stage. Later partial or
                 # inconsistent bounds must not inherit an earlier true flag.
                 configured_formats['after' if cursor>=5 else 'before']=settings.configured_schema_compare(snapshot,expected).get('configured_import_schema_match') is True
+            if stage=='output_mapping':
+                mapping=settings.configured_mapping_compare(snapshot,expected)
+                configured_mappings['after' if cursor>=5 else 'before']=(
+                    {'count':mapping['configured_row_count'],'auto_sync':mapping['auto_sync']}
+                    if mapping.get('configured_import_mapping_match') is True else None)
         if verb == 'open_wizard':
             before = baseline['wizard']['import_source']['fields']
             after = snapshot['wizard']['import_source']['fields']
@@ -245,6 +289,7 @@ def _attempt(start, receipts, evidence, expected, source_path):
         if cursor == len(transitions):
             return {'rendered_import_settings_roundtrip_match': True, 'complete': False,
                     'configured_schema_roundtrip_match':configured_formats=={'before':True,'after':True},
+                    'configured_mapping_roundtrip_match':bool(configured_mappings.get('before')) and configured_mappings.get('before')==configured_mappings.get('after'),
                     'node_persistence_verified': False, 'package_persistence_verified': False,
                     'source_identity_verified': False, 'session_id': session,
                     'operations': [r['outcome']['operation_id'] for r in accepted],

@@ -160,7 +160,7 @@ function workspaceUiCapability(page, task) {
       calculator:';CalcDataWizard;btnAddExpr',grouping:';GroupDataWizard;grdUsedFields;tbl',
       field_parameters:';ReformColumnsWizard;grdTargetColumns;tbl',done:';DoneWizard;edtDisplayName'};
     const wizardButtons=['btnPrev','btnNext','btnDone','btnExecute','btnClose','btnError'];
-    const wizardSelectors=['[data-tid$=";NavigationBar;NavigationPanel"]','[data-tid*=";cnrNaviMode;b.s_"]','[data-tid$=";WizrdMCF"]','[data-tid$=";WizrdMCF;cardWizardPanel;p.h;p.t"]',
+    const wizardSelectors=['[data-tid$=";ModelForm;cmpDiagram"]','[data-tid$=";NavigationBar;NavigationPanel"]','[data-tid*=";cnrNaviMode;b.s_"]','[data-tid$=";WizrdMCF"]','[data-tid$=";WizrdMCF;cardWizardPanel;p.h;p.t"]',
       ...Object.values(wizardMarkers).flat().map(suffix=>'[data-tid$=";WizrdMCF'+suffix+'"]'),
       '[data-tid*=";WizrdMCF;CalcDataWizard;colExpressionName_"]','[data-tid*=";WizrdMCF;CalcDataWizard;colExpressionDisplayName_"]','[data-tid$=";WizrdMCF;CalcDataWizard;cmpExpression"]','[data-tid$=";WizrdMCF;CalcDataWizard;btnCalcMode"]','span.bg-TBGCalcMode-cmExpression,span.bg-TBGCalcMode-cmJavaScript',
       ...['edtDelimiterChar','edtTextQualifier','edtValueNull','edtDecimalSeparator'].flatMap(name=>{const owner='[data-tid$=";WizrdMCF;ImportTextFileParamsWizard;'+name+';ValueControl"]';return [owner,owner+' input',owner+' textarea'];}),
@@ -168,6 +168,9 @@ function workspaceUiCapability(page, task) {
         const owner='[data-tid$=";WizrdMCF;ImportTextFilePreviewWizard;'+name+'"]';return [owner,owner+' input',owner+' textarea'];}),
       '[data-tid$=";WizrdMCF;ImportTextFilePreviewWizard;edtFirstLineAsTitle;ValueControl"]',
       '[data-tid$=";WizrdMCF;ImportTextFilePreviewWizard;edtFirstLineAsTitle;ValueControl;DisplayEl"]',
+      ...['grdTargetColumns;tbl','TargetFilter','rbTable','rbLinks','btnAutoSyncThroughColumns'].flatMap(name=>{
+        const owner='[data-tid$=";WizrdMCF;ColumnsMappingEngineOutputPortWizard;'+name+'"]';return [owner,owner+' input'];}),
+      '[data-tid*=";WizrdMCF;ColumnsMappingEngineOutputPortWizard;grdTargetColumns;tbl;celleditor"]',
       ...['edtDisplayName','cbxNodeTitleMode'].flatMap(name=>{const owner='[data-tid$=";WizrdMCF;DoneWizard;'+name+'"]';return [owner,owner+' input'];}),
       ...['ColumnsMappingEngineOutputPortWizard','DerivedDataSourceOutputSocketWizard','DerivedDataSourceMappingEngineOutputPortWizard','ReformColumnsWizard'].flatMap(form=>
         ['colName_','colDisplayName_','colDataKind_','colDefaultUsageType_','colSourceDisplayName_','colCachingMethod_','colExcluded_'].map(key=>'[data-tid*=";WizrdMCF;'+form+';'+key+'"]')),
@@ -217,7 +220,7 @@ function workspaceUiCapability(page, task) {
       return false;
     };
     const short = (value, limit = 240) => String(value ?? '').replace(/\s+/g, ' ').trim().slice(0, limit);
-    const textOf = (element, fixedContext=false) => {
+    const textOf = (element, fixedContext=false, separator=' ') => {
       if (sensitive(element)) return '[REDACTED]';
       if (discoverRoots && !fixedContext) return short(element.getAttribute('aria-label') || element.getAttribute('title') || '');
       if (!fixedContext && requestedRoot && element!==requestedRoot && !requestedRoot.contains(element)
@@ -231,7 +234,7 @@ function workspaceUiCapability(page, task) {
           const value = textNode.textContent ?? ''; parts.push(value); length += value.length;
         }
       }
-      return short(parts.join(' '));
+      return short(parts.join(separator));
     };
     const identityOf = element => {
       const path = [];
@@ -262,18 +265,39 @@ function workspaceUiCapability(page, task) {
     const active = activeTabs.length === 1 ? activeTabs[0] : null;
     const match = /^MF;cntMain;cntWorkspace;Workspace;t\.br;tb(?:-(\d+))?$/.exec(getTid(active) ?? '');
     const workflow = match ? { tab_tid: getTid(active), prefix: match[1] ? `MF;TF-${match[1]}` : 'MF;TF' } : null;
+    const graphContainers=workflow?(tids.get(workflow.prefix+';ModelForm;cmpDiagram')??[]):[];
+    const activeGraphOwner=element=>{
+      if(!visible(element) || sensitive(element))return false;
+      const box=boxOf(element);if(box.x+box.width<=0 || box.y+box.height<=0
+        || Number.isFinite(globalThis.innerWidth) && box.x>=globalThis.innerWidth
+        || Number.isFinite(globalThis.innerHeight) && box.y>=globalThis.innerHeight)return false;
+      for(let parent=element.parentElement;parent && parent!==document.body;parent=parent.parentElement) {
+        charge();const owner=/^(MF;TF(?:-\d+)?)(?:;|$)/.exec(getTid(parent)??'')?.[1];
+        if(owner && owner!==workflow.prefix)return false;
+      }
+      return true;
+    };
+    const graphContainer=graphContainers.length===1 && activeGraphOwner(graphContainers[0])?graphContainers[0]:null;
+    const graphQueryable=!discoverRoots && graphContainer && (!requestedRoot || requestedRoot===graphContainer || requestedRoot.contains(graphContainer));
+    const nativeGraphElements=graphQueryable?all.filter(e=>{charge();return graphContainer.contains(e) && (getTid(e)??'').includes(';Graph;');}):[];
+    const namespaces=[...new Set(nativeGraphElements.filter(e=>{charge();return visible(e) && !sensitive(e);})
+      .map(e=>/^(MF;TF(?:-\d+)?;Graph;)/.exec(getTid(e)??'')?.[1]).filter(Boolean))];
+    const graphPrefix=graphContainer && namespaces.length===1?namespaces[0]:null;
+    const graphIdentity=graphPrefix?{status:'observed',container_ref:refOf(graphContainer),container_tid:getTid(graphContainer),native_prefix:graphPrefix}
+      :{status:graphContainers.length>1 || namespaces.length>1?'ambiguous':'unobserved'};
+    const ownedGraph=element=>!!graphPrefix && graphContainer.contains(element) && (getTid(element)??'').startsWith(graphPrefix);
     const scopeOf = element => {
       if (dialogRef(element)) return 'dialog';
+      if(/^(MF;TF(?:-\d+)?;Graph;)/.test(getTid(element)??''))return ownedGraph(element)?'graph':'inactive_workflow';
       let workflowAncestor = false, graphAncestor = false;
       for (let parent = element; parent && parent !== document.body; parent = parent.parentElement) {
         charge();
         const tid = getTid(parent) ?? '', owner = /^(MF;TF(?:-\d+)?);/.exec(tid)?.[1];
-        if (owner && owner !== workflow?.prefix) return 'inactive_workflow';
+        if (owner && owner !== workflow?.prefix && !ownedGraph(parent)) return 'inactive_workflow';
         if (owner) workflowAncestor = true;
-        if (workflow && tid === workflow.prefix + ';ModelForm;cmpDiagram') graphAncestor = true;
+        if (parent===graphContainer) graphAncestor = true;
       }
       if (graphAncestor && element.matches('textarea,input,[contenteditable="true"]')) return 'graph_editor';
-      if ((getTid(element) ?? '').startsWith(workflow?.prefix + ';Graph;')) return 'graph';
       return workflowAncestor ? 'workflow' : 'global';
     };
     const wizardForms=all.filter(element=>getTid(element)===workflow?.prefix+';WizrdMCF' && visible(element) && !sensitive(element));
@@ -378,6 +402,62 @@ function workspaceUiCapability(page, task) {
           });
         }
       }
+    }
+    if(wizard.output_columns) {
+      let coverage={status:'partial',source_identity_verified:false};
+      const base=wizard.root_tid+';ColumnsMappingEngineOutputPortWizard;';
+      const unique=key=>{const es=tids.get(base+key)??[];return es.length===1 && wizardForms[0].contains(es[0])
+        && visible(es[0]) && !sensitive(es[0])?es[0]:null;};
+      const body=unique('grdTargetColumns;tbl'),filter=unique('TargetFilter'),tableMode=unique('rbTable'),linksMode=unique('rbLinks');
+      const auto=unique('btnAutoSyncThroughColumns');
+      wizard.output_columns.auto_sync=auto?{status:'observed',value:auto.classList.contains('x-btn-pressed'),ref:refOf(auto)}:{status:'unobserved'};
+      if(body && filter && tableMode && linksMode) {
+        const containers=[...body.querySelectorAll('.x-grid-item-container')];charge();
+        const rows=[...body.querySelectorAll('table.x-grid-item')];charge();
+        const inputs=[...filter.querySelectorAll('input')].filter(e=>{charge();return visible(e) && !sensitive(e);});
+        const inside=(e,parent)=>{
+          if(!visible(e) || sensitive(e))return false;
+          const b=boxOf(e),p=boxOf(parent),vw=globalThis.innerWidth,vh=globalThis.innerHeight;
+          return [b.x,b.y,b.width,b.height,p.x,p.y,p.width,p.height,vw,vh].every(Number.isFinite)
+            && vw>0 && vh>0 && b.x>=0 && b.y>=0 && b.x+b.width<=vw && b.y+b.height<=vh
+            && b.x>=p.x && b.y>=p.y && b.x+b.width<=p.x+p.width && b.y+b.height<=p.y+p.height;
+        };
+        const dimensions=[body.clientWidth,body.clientHeight,body.scrollWidth,body.scrollHeight,body.scrollLeft,body.scrollTop];
+        const fields=wizard.output_columns.fields;
+        const noEditors=!all.some(e=>{charge();return ((getTid(e)??'').startsWith(base+'grdTargetColumns;tbl;celleditor')
+          || getTid(e)===wizard.root_tid+';EditColumnDefForm') && visible(e);});
+        const noMasks=!select('.bg-mask-message,.x-mask-msg').some(visible);
+        if(containers.length===1 && rows.length>0 && rows.length<=8 && rows.length===fields.length
+          && dimensions.every(Number.isFinite) && body.clientWidth>0 && body.clientHeight>0
+          && body.scrollWidth<=body.clientWidth && body.scrollHeight<=body.clientHeight && body.scrollLeft===0 && body.scrollTop===0
+          && inputs.length===1 && String(inputs[0].value??'')==='' && tableMode.classList.contains('x-form-cb-checked')
+          && !linksMode.classList.contains('x-form-cb-checked') && noEditors && noMasks && inside(body,body)) {
+          const container=containers[0],cb=boxOf(container),bb=boxOf(body);
+          const direct=[...container.children];charge();
+          const bodyChildren=[...body.children];charge();
+          const boundId=body.getAttribute('id');
+          const valid=boundId && inside(container,body) && cb.y===bb.y && cb.x===bb.x
+            && direct.length===rows.length && direct.every(e=>rows.includes(e))
+            && bodyChildren.every(e=>e===container || !visible(e))
+            && rows.every((row,index)=>{
+              charge();const rb=boxOf(row),previous=index?boxOf(rows[index-1]):null;
+              const matches=fields.filter(f=>f.row_ref===refOf(row));
+              const nameCells=all.filter(e=>{charge();return row.contains(e) && (getTid(e)??'').startsWith(base+'colName_');});
+              if(row.parentElement!==container || row.getAttribute('data-recordindex')!==String(index)
+                || row.getAttribute('data-boundview')!==boundId || !inside(row,container)
+                || rb.y!==(previous?previous.y+previous.height:cb.y) || matches.length!==1 || matches[0].status!=='observed'
+                || nameCells.length!==1)return false;
+              const key=getTid(nameCells[0]).slice((base+'colName_').length);
+              return ['colName_','colDisplayName_','colSourceDisplayName_','colDataKind_','colDefaultUsageType_'].every(prefix=>{
+                const es=tids.get(base+prefix+key)??[];
+                return es.length===1 && row.contains(es[0]) && inside(es[0],row);
+              });
+            }) && boxOf(rows.at(-1)).y+boxOf(rows.at(-1)).height===cb.y+cb.height;
+          if(valid)coverage={status:'complete_configured_rows',count:rows.length,body_ref:refOf(body),container_ref:refOf(container),
+            first_row_ref:refOf(rows[0]),last_row_ref:refOf(rows.at(-1)),filter_ref:refOf(inputs[0]),table_mode_ref:refOf(tableMode),source_identity_verified:false};
+        }
+      }
+      wizard.output_columns.definition_coverage=coverage;
     }
     if(wizard.status==='observed' && wizard.stage==='done') {
       const base=wizard.root_tid+';DoneWizard;';
@@ -660,7 +740,7 @@ function workspaceUiCapability(page, task) {
         kind:'region',label:textOf(element),scope:scopeOf(element),visible:true,enabled:enabled(element),allowed_actions:[],
         signature:{tag:element.tagName.toLowerCase()},bounding_box:boxOf(element)}));
       return {origin:location.origin,authenticated:!!tids.get('MF;cntMain;tlbMainToolbar;btnAvatar')?.some(visible),
-        loginom_build:globalThis.bg?.app?.Version ?? null,workflow_ref:workflow,active_identity:active ? textOf(active) : null,
+        loginom_build:globalThis.bg?.app?.Version ?? null,workflow_ref:workflow,graph_identity:graphIdentity,active_identity:active ? textOf(active) : null,
         dom_epoch:{document:state.epoch,revision:state.revision},observation_kind:'roots',wizard,
         ...(storageName===null?{}:{observation_filter:{storage_name:storageName}}),
         scan:{complete:true,mutation_counts:{...state.mutations},visited_elements:dom.length,detail_elements:0,max_elements:maxElements,max_work:maxWork,max_ms:maxMs},
@@ -716,18 +796,17 @@ function workspaceUiCapability(page, task) {
       // Loginom message-box buttons are anchors without an ARIA button role;
       // their pinned test identifiers end with tlb;yes / tlb;no, not btn*.
       || ((getTid(element) ?? '').startsWith('msgbox') && /;tlb;(?:yes|no|ok|cancel)$/.test(getTid(element)) && !!dialogRef(element));
-    const graphPrefix = workflow ? workflow.prefix + ';Graph;' : null;
-    const graphElements = graphPrefix ? all.filter(element => (getTid(element) ?? '').startsWith(graphPrefix)) : [];
+    const graphElements = graphPrefix ? all.filter(element=>ownedGraph(element) && visible(element) && !sensitive(element)) : [];
     const labels = [...new Set(graphElements.filter(element => /;Label;Label$/.test(getTid(element)) && visible(element))
       .map(element => getTid(element).slice(graphPrefix.length).replace(/;Label;Label$/, '')).filter(label => label && label !== 'Переменные_сценария'))].sort();
     const graphLabels=new Set(labels);
     const graphNodeOf=element=>{
       const tid=getTid(element)??'';
-      if(!graphPrefix || !tid.startsWith(graphPrefix))return null;
+      if(!ownedGraph(element))return null;
       const body=tid.slice(graphPrefix.length),parts=body.split(';'),label=parts[0];
-      if(!graphLabels.has(label) || (tids.get(graphPrefix+label)??[]).filter(visible).length!==1)return null;
+      if(!graphLabels.has(label) || graphElements.filter(e=>getTid(e)===graphPrefix+label).length!==1)return null;
       const part=parts.length===1?'body':parts.slice(1).join(';')==='Label;Label'?'label':parts.length===2 && parts[1]==='Setting'?'settings':null;
-      return part?{node_label:label,part}:null;
+      return part?{node_label:label,part,...(part==='label'?{label_text:textOf(element,false,'')}: {})}:null;
     };
     const priority = { graph_editor: 0, dialog: 1, graph: 2, workflow: 3, global: 4 };
     const controlPriority = element => {
@@ -931,7 +1010,7 @@ function workspaceUiCapability(page, task) {
         allowed_actions: expressionWritable ? ['replace_expression'] : allowed && !valueTruncated ? ['click', 'double_click', 'right_click', 'press', 'drag', ...(editable ? ['fill',...(wizardFields.has(element)?['set_wizard_field']:[])] : []), ...(checkState ? ['set_checked'] : []), ...(wizardStep?['wizard_step']:[]), ...(openWizard?['open_wizard']:[]), ...(finishWizard?['finish_wizard']:[]), ...(columnClose?[columnClose.mode+'_'+columnClose.scope+'_column']:[]), ...(expressionApply?['apply_expression_parameters']:[]), ...(expressionCancel?['cancel_expression_parameters']:[]), ...(combo?.kind==='option'?['select_wizard_option']:[]), ...(scroll && interaction.state === 'point_observed' ? ['scroll'] : [])] : [] };
     });
     const nodes = labels.slice(0, 200).map(label => {
-      const nodeTid = graphPrefix + label, node = tids.get(nodeTid)?.[0];
+      const nodeTid = graphPrefix + label, matches=graphElements.filter(e=>getTid(e)===nodeTid),node=matches.length===1?matches[0]:null;
       return { node_ref: { kind: 'node', node_label: label, workflow_ref: workflow }, bounding_box: node ? boxOf(node) : null,
         ports: graphElements.filter(element => (getTid(element) ?? '').startsWith(nodeTid + ';') && /;(?:Input|Output)_[^;]+$/.test(getTid(element)))
           .slice(0, 100).map(element => ({ tid: getTid(element), bounding_box: boxOf(element), ui_ref: refOf(element) })) };
@@ -1066,7 +1145,7 @@ function workspaceUiCapability(page, task) {
       }
     }
     return { origin: location.origin, authenticated: !!tids.get('MF;cntMain;tlbMainToolbar;btnAvatar')?.some(visible), loginom_build: globalThis.bg?.app?.Version ?? null,
-      workflow_ref: workflow, active_tab_ref:active?refOf(active):null, active_identity: active ? textOf(active) : null, package_identity: packageIdentity,
+      workflow_ref: workflow, graph_identity:graphIdentity, active_tab_ref:active?refOf(active):null, active_identity: active ? textOf(active) : null, package_identity: packageIdentity,
       file_storage:fileStorage,wizard,navigation_context:navigationContext,
       dom_epoch: {document:state.epoch,revision:state.revision},
       ...(selectedRoot ? {observation_root:{ref:rootRef,identity:identityOf(selectedRoot),detail_scope:'elements_and_cells',global_scan:false,global_guards:'fixed_native_queries'}} : {}),
@@ -1116,8 +1195,8 @@ function workspaceUiCapability(page, task) {
     const handle = await locator.elementHandle({ timeout: timeout() });
     if (!handle) fail('UI_REFERENCE_STALE', 'Observed control is detached');
     handles.push(handle);
-    const graphPrefix = task.snapshot.workflow_ref?.prefix + ';Graph;';
-    const graphBody = current.tid?.startsWith(graphPrefix) ? current.tid.slice(graphPrefix.length) : null;
+    const graphPrefix = task.snapshot.graph_identity?.status==='observed'?task.snapshot.graph_identity.native_prefix:null;
+    const graphBody = graphPrefix && current.scope==='graph' && current.tid?.startsWith(graphPrefix) ? current.tid.slice(graphPrefix.length) : null;
     const isGraphLink = graphBody !== null && graphBody.split('|').length === 4 && !graphBody.includes(';');
     const valid = await handle.evaluate((element, ref) => element.isConnected && globalThis[Symbol.for('loginom-dock.workspace-ui.identity.v1')]?.ids.get(element) === ref, current.ref);
     // Playwright treats zero-height/width SVG geometry as invisible even when
@@ -1197,6 +1276,8 @@ function workspaceUiCapability(page, task) {
           || !same(task.snapshot.active_identity,current.active_identity) || !same(task.snapshot.package_identity,current.package_identity)))
           fail('WIZARD_CONTEXT_CHANGED','Wizard settings or package changed; observe again');
         const refs = task.action.verb === 'drag' ? [task.action.source_ref, task.action.target_ref] : [task.action.ref];
+        if(refs.some(ref=>current.ui.elements.some(e=>e.ref===ref && ['graph','graph_editor'].includes(e.scope)))
+          && !same(task.snapshot.graph_identity,current.graph_identity))fail('UI_CONTEXT_CHANGED','The graph container or native namespace changed; observe again');
         if (current.ui.masks.length) {
           const foreground = current.ui.dialogs.reduce((top, dialog) => !top || dialog.z_index >= top.z_index ? dialog : top, null);
           const targetsForeground = foreground && refs.every(ref => {
@@ -1357,7 +1438,7 @@ function workspaceUiCapability(page, task) {
             && same(fresh.workflow_ref,current.workflow_ref) && same(fresh.package_identity,current.package_identity)
             && fresh.active_tab_ref===current.active_tab_ref && !!current.active_tab_ref && fresh.ui.dialogs.length===0;
           const targetNode=fresh=>{
-            const labels=fresh.ui.elements.filter(e=>e.graph_node?.part==='label' && e.label===finish.completion.fields.label.value);
+            const labels=fresh.ui.elements.filter(e=>e.graph_node?.part==='label' && e.graph_node.label_text===finish.completion.fields.label.value);
             if(labels.length!==1)return null;
             return fresh.ui.elements.find(e=>e.graph_node?.part==='body' && e.graph_node.node_label===labels[0].graph_node.node_label)??null;
           };

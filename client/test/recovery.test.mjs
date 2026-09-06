@@ -926,3 +926,29 @@ test('root discovery failures never trigger recursive scan retries',async()=>{
   assert.equal((await engine.observe({scope:'roots'})).status,'NOT_APPLIED');assert.equal(attempts,1);
   assert.equal((await engine.observe({scope:'graph'})).status,'NOT_APPLIED');assert.equal(attempts,3);
 });
+
+test('relocated native graph recovery preserves workflow and scopes repair to its owned diagram',async()=>{
+  const page=partialInputAdd();page.prefix='MF;TF-4';page.tabTid='MF;cntMain;cntWorkspace;Workspace;t.br;tb-4';page.graphPrefix='MF;TF-1';
+  const engine=runtime(page);
+  const first=await engine.run('link.create',linkParameters(page),{operationId:'relocated-partial'});
+  assert.equal(first.status,'AMBIGUOUS');
+  const observed=await engine.observe();
+  const target=uiElement(observed,e=>e.tid?.endsWith(';Приёмник;Label;Label'));
+  const clicked=await engine.uiAct({verb:'click',ref:target.ref},{observationId:observationId(observed),operationId:'relocated-inspect',recoveryOperationId:'relocated-partial'});
+  assert.equal(clicked.status,'SUCCEEDED');
+  const recovered=await engine.recover('relocated-partial',{strategy:'complete_link',recoveryOperationId:'relocated-repair'});
+  assert.equal(recovered.status,'SUCCEEDED',JSON.stringify(recovered.error));
+  assert.ok(recovered.output.link_ref.tid.startsWith('MF;TF-1;Graph;'));
+  assert.equal(page.prefix,'MF;TF-4');assert.equal(page.drops,2);
+});
+
+test('pending graph repair rejects an observation bound to a different diagram before a gesture',async()=>{
+  const page=partialInputAdd(),engine=runtime(page);
+  assert.equal((await engine.run('link.create',linkParameters(page),{operationId:'binding-guard'})).status,'AMBIGUOUS');
+  const snapshot=page.uiSnapshot.bind(page);
+  page.uiSnapshot=()=>{const value=snapshot();value.graph_identity.container_tid='MF;TF-9;ModelForm;cmpDiagram';return value;};
+  const observed=await engine.observe(),target=uiElement(observed,e=>e.tid?.endsWith(';Приёмник;Label;Label'));
+  const before=page.events.length;
+  await assert.rejects(()=>engine.uiAct({verb:'click',ref:target.ref},{observationId:observationId(observed),operationId:'binding-guard-click',recoveryOperationId:'binding-guard'}),/outside the pending operation/);
+  assert.equal(page.events.length,before);
+});
