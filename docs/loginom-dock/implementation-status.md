@@ -1,3 +1,32 @@
+**2026-09-06 — структурированное чтение типов импорта.**
+Runtime wizard.import_columns читает до 8 rendered ColumnDefsTuning columns:
+name/label/type/data_kind/used и cell_refs, связывая 5 property rows одним native
+column index. Отсутствующие, скрытые, дублированные ячейки/checkbox и неизвестный
+тип возвращают unobserved_or_ambiguous. Более 8 columns: truncated=true;
+complete/settings_applied всегда false. Это draft UI, не полная выходная схема
+и не принятие результата импорта. Metadata refs сами не разрешают действия.
+Фиксированные native selectors и bounded text чтение обеспечивают одинаковый
+readback при roots/narrow. После изменения import format derived columns могут
+пересчитаться: set_wizard_field выдаёт новый readback без утверждения правильности
+схемы, сохраняя прежние guards контекста/исходных настроек/значения поля.
+
+Live подтверждение: roots и narrow SUCCEEDED, import_columns полностью совпали;
+Id integer, Region string, Quantity integer, UnitPrice real, Comment string,
+все used=true. Это старый ручной Package1; Hermes пакет не проверен этими значениями.
+В начале диагностики прежняя форма была hidden-offset (y=-9929), поэтому чтение
+её DOM по одному width не было свежим видимым UI evidence. Повторный Settings из
+другой вкладки сообщил «Узел заблокирован». Переключение на существующую вкладку
+TF-1 «Настройка» восстановило оригинальную видимую форму (y=71); новое live
+подтверждение снято уже там. Не открывать повторно узел, если его мастер уже в
+другой вкладке. Native hidden-offset формы не определять видимыми по width alone.
+
+Тесты: связь property rows/column index, разные типы соседних columns, used false,
+hidden/missing/duplicate type/checkbox, bounded columns, roots equality и
+recomputed types при format commit без schema acceptance. 295 client/118 Python/10 packaging PASS. UI оставлен в TF-1 ImportTextFileParamsWizard,
+editor/dialog закрыты, Package1 не сохранён. Другие вкладки test/Файлы/Сценарий
+не закрывались. Hermes нет. Далее UI type-cell editor/refresh и независимый
+import schema readback, затем P3–P9; прежние audits не переписывать.
+
 **2026-09-06 — terminal091427: null исправлен, следующий участок — типы импорта.**
 Run20260906-091427-84760c13/session4963 TERMINAL: source2da9e622,139 API calls,
 returncode0/no timeout, runtime/harness unchanged. Единственный audit49/58FAIL,

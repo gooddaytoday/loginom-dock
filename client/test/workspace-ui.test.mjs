@@ -2029,3 +2029,41 @@ test('import input completion waits through delayed preview masks and never repe
     } else assert.ok(!result.trace.some(e=>e.event==='wizard_draft_value_verified'),mode);
   }
 });
+
+function importColumnFixture(page,form,index,name='Quantity',type='Целый') {
+  const prefix='MF;TF-1;WizrdMCF;ImportTextFileParamsWizard;ColumnDefsTuning;grdSettings;grd-1;normalHeaderCt;'+index;
+  const box={x:250+index*80,y:250,width:70,height:20};
+  page.add('div',prefix,name,box,form);
+  const cells=[name,name,type,'Непрерывный',''].map((v,i)=>page.add('td',prefix+'_'+i,v,{...box,y:280+i*25},form));
+  const check=cells[4].append(new Element('img',{class:'x-grid-checkcolumn x-grid-checkcolumn-checked'},'',box));
+  return {cells,check,prefix};
+}
+
+test('import column readback binds five properties to the same column index',async()=>{
+  const page=new Page(),c=importFormatField(page),col=importColumnFixture(page,c.form,0);
+  const second=importColumnFixture(page,c.form,1,'UnitPrice','Вещественный');
+  const read=async()=> (await page.observe()).wizard.import_columns;
+  const initial=await read();
+  const roots=await page.execute({mode:'observe',discover_roots:true});
+  assert.deepEqual(roots.output.wizard.import_columns,initial);
+  assert.equal(initial.complete,false);assert.equal(initial.settings_applied,false);
+  assert.deepEqual(initial.fields.map(e=>[e.name,e.type,e.used]),[['Quantity','integer',true],['UnitPrice','real',true]]);
+  col.check.attrs.class='x-grid-checkcolumn';assert.equal((await read()).fields[0].used,false);
+  col.check.style.display='none';assert.equal((await read()).fields[0].status,'unobserved_or_ambiguous');col.check.style.display='';
+  second.cells[2].style.display='none';assert.equal((await read()).fields[1].status,'unobserved_or_ambiguous');second.cells[2].style.display='';
+  page.add('td',second.prefix+'_2','Строковый',second.cells[2].box,c.form);
+  assert.equal((await read()).fields[1].status,'unobserved_or_ambiguous');
+  for(let i=2;i<9;i++)importColumnFixture(page,c.form,i,'Field'+i);
+  const bounded=await read();assert.equal(bounded.fields.length,8);assert.equal(bounded.truncated,true);
+});
+
+test('format edit exposes recomputed column types without claiming schema acceptance',async()=>{
+  const page=new Page(),c=importFormatField(page),col=importColumnFixture(page,c.form,0,'Quantity','Строковый');
+  const snapshot=await page.observe(),field=snapshot.ui.elements.find(e=>e.wizard_field?.name==='null_marker');
+  page.onPress=key=>{if(key==='Tab')col.cells[2].ownText='Целый';};
+  const result=await page.act({verb:'set_wizard_field',ref:field.ref,text:'\\N'},snapshot);
+  assert.equal(result.status,'SUCCEEDED',JSON.stringify(result.error));
+  assert.equal(result.output.wizard.import_columns.fields[0].type,'integer');
+  assert.equal(result.output.wizard.import_columns.settings_applied,false);
+  assert.equal(result.output.wizard.import_columns.complete,false);
+});

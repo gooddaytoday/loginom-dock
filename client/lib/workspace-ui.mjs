@@ -168,6 +168,7 @@ function workspaceUiCapability(page, task) {
       ...['DerivedDataSourceOutputSocketWizard','DerivedDataSourceMappingEngineOutputPortWizard','ReformColumnsWizard'].flatMap(form=>
         ['colName_','colDisplayName_','colDataKind_','colDefaultUsageType_','colSourceDisplayName_','colCachingMethod_','colExcluded_'].map(key=>'[data-tid*=";WizrdMCF;'+form+';'+key+'"]')),
       '[data-tid$=";WizrdMCF;EditReformColumnDefForm"]',
+      '[data-tid*=";WizrdMCF;ImportTextFileParamsWizard;ColumnDefsTuning;grdSettings;grd-1;normalHeaderCt;"]',
       ...['edtName','edtDisplayName','cbxDataType','cbxDataKind','cbxUsageType','cntMain;cbxCachingMethod'].flatMap(name=>{const owner='[data-tid$=";WizrdMCF;EditReformColumnDefForm;'+name+'"]';return [owner,owner+' input'];}),
       '[data-tid$=";WizrdMCF;EditReformColumnDefForm;cntMain;chbExcluded"]','[data-tid$=";WizrdMCF;EditReformColumnDefForm;cntMain;chbExcluded;DisplayEl"]',
       '[data-tid$=";WizrdMCF;EditColumnDefForm"]',
@@ -511,6 +512,28 @@ function workspaceUiCapability(page, task) {
         return [name,{status:'observed',value:value.slice(0,256),value_length_utf16:value.length,truncated:value.length>256,
           enabled:enabled(input),read_only:input.readOnly===true,source_tid:ownerTid,input_ref:refOf(input),owner_ref:refOf(owners[0]),value_kind:'displayed_input_text',native_max_length_utf16:nativeMax}];
       }))};
+      // E2E sColumnDefsTuning: properties are rows; field identity is a column
+      // index. These are rendered draft settings, never complete output schema.
+      const columnBase=base+'ColumnDefsTuning;grdSettings;grd-1;normalHeaderCt;';
+      const headers=all.filter(e=>{charge();const tid=getTid(e);return tid?.startsWith(columnBase)
+        && /^\d{1,4}$/.test(tid.slice(columnBase.length)) && visible(e) && !sensitive(e);});
+      const indexes=[...new Set(headers.map(e=>getTid(e).slice(columnBase.length)))];
+      const types={'Целый':'integer','Вещественный':'real','Строковый':'string','Логический':'boolean','Дата/Время':'datetime','Переменный':'variant'};
+      const columns=indexes.slice(0,8).map(index=>{
+        const cells=[0,1,2,3,4].map(row=>(tids.get(columnBase+index+'_'+row)??[])
+          .filter(e=>visible(e) && !sensitive(e) && wizardForms[0].contains(e)));
+        const unique=headers.filter(e=>getTid(e)===columnBase+index).length===1 && cells.every(es=>es.length===1);
+        if(!unique)return {index:Number(index),status:'unobserved_or_ambiguous'};
+        const values=cells.slice(0,4).map(es=>textOf(es[0],true));
+        const checks=cells[4][0].querySelectorAll('.x-grid-checkcolumn');charge();
+        const used=checks.length===1 && visible(checks[0]) && !sensitive(checks[0]) ? checks[0].classList.contains('x-grid-checkcolumn-checked'):null;
+        if(values.some(v=>!v || v.length>120) || !types[values[2]] || used===null)
+          return {index:Number(index),status:'unobserved_or_ambiguous'};
+        return {index:Number(index),status:'observed',name:values[0],label:values[1],type:types[values[2]],data_kind:values[3],used,
+          cell_refs:Object.fromEntries(['name','label','type','data_kind','used'].map((key,i)=>[key,refOf(cells[i][0])]))};
+      });
+      wizard.import_columns={status:columns.length?'rendered_draft_columns':'unobserved',fields:columns,
+        truncated:indexes.length>8,complete:false,settings_applied:false};
     }
     if (discoverRoots) {
       const regions=regionElements.filter(element=>visible(element) && !sensitive(element) && scopeOf(element)!=='inactive_workflow')
@@ -1343,6 +1366,10 @@ function workspaceUiCapability(page, task) {
           const after=observed.ui.elements.find(item=>item.ref===before.ref);
           const expected=JSON.parse(JSON.stringify(current.wizard));
           const expressionParameter=before.wizard_field.scope==='expression_parameter';
+          // Format changes may recompute the derived column definitions.
+          // Their new values are exposed for separate verification, not admitted
+          // as the requested schema by a successful format-field edit.
+          if(before.wizard_field.scope==='import_format')expected.import_columns=observed.wizard.import_columns;
           const fields=expressionParameter?expected.expression_parameters.fields:before.wizard_field.scope==='output_column'?expected.column_parameters.fields:expected.settings.fields;
           // Native name editing can update a still-linked display label. Accept
           // only the original label or this exact name, and expose the readback.

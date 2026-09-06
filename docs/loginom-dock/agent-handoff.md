@@ -1,3 +1,11 @@
+**Checkpoint:** wizard.import_columns: до8 columns с name/label/type/kind/used,
+cell_refs, missing/ambiguous fail-closed, complete/settings_applied=false. Roots
+и narrow live совпали для5 полей. Format edit допускает обновление derived
+columns с отдельным readback, не принимает schema. 295 client/118 Python/10 packaging PASS. UI действительно открыт в TF-1 «Настройка», source wizard;
+раньше форма была hidden-offset, повторный open из другой вкладки давал lock.
+Package1 не сохранён, Hermes нет. Далее native type-cell editor/refresh + import
+schema verification и P3–P9. Подробности сверху status, audits не переписывать.
+
 **Checkpoint:**091427/session4963 TERMINAL audit49/58FAIL frozen SHA
 cd46b075d08102acf1786e56df5ddad533b0dbce286ae37c23a312b4ba563e58. Native null
 \N length2/codepoints92,78 прошёл535ms; Amount=Quantity * UnitPrice прочитано,
