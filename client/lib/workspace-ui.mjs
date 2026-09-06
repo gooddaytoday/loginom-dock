@@ -272,6 +272,7 @@ function workspaceUiCapability(page, task) {
         controls:Object.fromEntries(wizardButtons.map(name=>{const found=matching(';'+name);return [name,
           {status:found.length===1?'observed':found.length?'ambiguous':'unobserved',enabled:found.length===1?enabled(found[0]):null}];}))};
     }
+    const wizardFields=new Map(),wizardCombos=new Map();
     if(wizard.status==='observed' && wizard.stage==='calculator') {
       // This native dialog is a sibling of the wizard, not its descendant.
       // E2E sCalculator.edit: expose bounded UI values, never applied proof.
@@ -281,18 +282,24 @@ function workspaceUiCapability(page, task) {
         wizard.expression_parameters={status:forms.length===1?'observed':'ambiguous',applied_verified:false};
         if(forms.length===1) {
           wizard.expression_parameters.root_ref=refOf(forms[0]);
+          const selected=all.filter(e=>{charge();return (getTid(e)??'').startsWith(wizard.root_tid+';CalcDataWizard;colExpressionName_') && visible(e) && !sensitive(e) && e.closest('table')?.classList.contains('x-grid-item-selected');});
+          const selectedExpression=selected.length===1?{ref:refOf(selected[0]),tid:getTid(selected[0]),label:textOf(selected[0],true)}:null;
+          wizard.expression_parameters.selected_expression=selectedExpression;
           wizard.expression_parameters.fields=Object.fromEntries(Object.entries({name:'edtName',label:'edtDisplayName',type_label:'cbxDataType'}).map(([name,key])=>{
             const owners=(tids.get(base+';'+key)??[]).filter(e=>forms[0].contains(e) && visible(e) && !sensitive(e));
             const inputs=owners.length===1?dom.filter(e=>{charge();return owners[0].contains(e) && e.matches('input') && visible(e) && !sensitive(e);}):[];
             if(owners.length!==1 || inputs.length!==1)return [name,{status:owners.length>1 || inputs.length>1?'ambiguous':'unobserved'}];
-            const value=String(inputs[0].value??'');
+            const value=String(inputs[0].value??''),input=inputs[0];
+            const rawMax=input.getAttribute('maxlength'),nativeMax=rawMax!==null && /^\d+$/.test(rawMax) && Number.isSafeInteger(Number(rawMax))?Number(rawMax):null;
+            if(['name','label'].includes(name) && selectedExpression && value.length<=256 && !/[\0\r\n]/.test(value) && enabled(input) && !input.readOnly)
+              wizardFields.set(input,{name,scope:'expression_parameter',max_length_utf16:Math.min(256,nativeMax??256),stage:wizard.stage,
+                root_ref:refOf(forms[0]),wizard_root_ref:wizard.root_ref,owner_ref:refOf(owners[0]),selected_expression:selectedExpression});
             return [name,{status:'observed',value:value.slice(0,256),value_length_utf16:value.length,truncated:value.length>256,
               input_ref:refOf(inputs[0]),owner_ref:refOf(owners[0]),enabled:enabled(inputs[0]),read_only:inputs[0].readOnly===true}];
           }));
         }
       }
     }
-    const wizardFields=new Map(),wizardCombos=new Map();
     if(wizard.status==='observed' && wizard.stage==='text_import_format') {
       const base=wizard.root_tid+';ImportTextFileParamsWizard;';
       const fields={delimiter:'edtDelimiterChar',text_qualifier:'edtTextQualifier',null_marker:'edtValueNull',decimal_separator:'edtDecimalSeparator'};
@@ -912,6 +919,12 @@ function workspaceUiCapability(page, task) {
             timeout();
             if(task.action.text)await page.keyboard.type(task.action.text,{delay:0});
             else await first.press('Backspace',{timeout:timeout()});
+            if(before.wizard_field.scope==='expression_parameter') {
+              if(!await first.evaluate(element=>document.activeElement===element))fail('WIZARD_FIELD_CHANGED','Expression field lost focus before edit completion');
+              // Loginom updates a linked display label on input completion.
+              // Commit the draft input before reading coupled parameter values.
+              await first.press('Tab',{timeout:timeout()});
+            }
           }
         }
         else if (task.action.verb === 'fill') {
@@ -976,7 +989,14 @@ function workspaceUiCapability(page, task) {
           const before=current.ui.elements.find(item=>item.ref===task.action.ref);
           const after=observed.ui.elements.find(item=>item.ref===before.ref);
           const expected=JSON.parse(JSON.stringify(current.wizard));
-          Object.assign(expected.settings.fields[before.wizard_field.name],{value:task.action.text,value_length_utf16:task.action.text.length,truncated:false});
+          const expressionParameter=before.wizard_field.scope==='expression_parameter';
+          const fields=expressionParameter?expected.expression_parameters.fields:expected.settings.fields;
+          // Native name editing can update a still-linked display label. Accept
+          // only the original label or this exact name, and expose the readback.
+          if(expressionParameter && before.wizard_field.name==='name' && fields.label.value===fields.name.value
+            && observed.wizard.expression_parameters?.fields?.label?.value===task.action.text)
+            Object.assign(fields.label,{value:task.action.text,value_length_utf16:task.action.text.length,truncated:false});
+          Object.assign(fields[before.wizard_field.name],{value:task.action.text,value_length_utf16:task.action.text.length,truncated:false});
           if(!observed.authenticated || observed.origin!==current.origin || observed.loginom_build!==current.loginom_build
             || !same(observed.workflow_ref,current.workflow_ref) || !same(observed.package_identity,current.package_identity)
             || !same(observed.active_identity,current.active_identity) || !same(observed.wizard,expected)
@@ -984,7 +1004,7 @@ function workspaceUiCapability(page, task) {
             || !after || !same(after.identity,before.identity) || !same(after.wizard_field,before.wizard_field)
             || after.value_truncated || after.value!==task.action.text)
             fail('WIZARD_FIELD_NOT_CONFIRMED','The draft value was not confirmed in the same wizard field; inspect before retry');
-          record('wizard_draft_value_verified',{ref:after.ref,field:after.wizard_field.name,settings_applied:false});
+          record('wizard_draft_value_verified',{ref:after.ref,field:after.wizard_field.name,scope:after.wizard_field.scope??'import_format',settings_applied:false});
         }
         if(task.action.verb==='replace_expression') {
           const before=current.ui.elements.find(item=>item.ref===task.action.ref);

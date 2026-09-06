@@ -1,3 +1,32 @@
+## 2026-09-06 — типизированный ввод имени и метки выражения
+
+set_wizard_field расширен на два наблюдаемых input ExprDataEditForm: name/label.
+Descriptor scope=expression_parameter содержит форму, wizard root, owner input,
+единственную выбранную строку выражения и native maxlength (cap256). Type combobox
+не получает эту операцию. Изменение использует существующие executor receipts,
+контекст/epoch/hit/focus guards, клавиатуру и точный draft readback. При проверке
+сохраняются выбранная строка, форма, исходные refs, type и прочие настройки.
+Это контекст редактирования текущего окна; не отдельное доказательство того,
+каким действием оно было открыто, node ownership или применения параметров.
+
+Живая проверка label Amount→Amount diagnostic→Amount прошла. Проверка имени
+выявила отложенное обновление связанной метки при завершении ввода: первый
+вариант возвращал исходную label, следующее действие корректно отказало
+WIZARD_FIELD_CHANGED. Добавлен Tab только после проверки удержания фокуса на
+исходном input; итоговое чтение выполняется после завершения ввода. Разрешено
+только штатное обновление label с прежнего имени на точное новое имя, когда
+до изменения label совпадала с name. Остальные изменения дают AMBIGUOUS.
+Повторный live name AmountProbe→Amount→AmountProbe→Amount подтвердил точные
+name/label values и сохранённый Вещественный type; текущий draft снова Amount.
+Ни btnApply, ни сохранение мастера этой операцией не выполняются; applied_verified=false.
+
+274 client /110 Python /10 packaging PASS. Проверены отложенное обновление label
+на Tab, неверная label, смена selected row/type, потеря фокуса. Live evidence:
+.dock/post-mvp-p0/expression-name-live-result.txt; тесты expression-field-*-tests.txt.
+Следующее — apply/cancel параметров с readback строки/типа и повторным открытием,
+затем wizard/node binding и полный P3–P9. Active Hermes нет; модель для следующей
+автономной проверки остаётся ChatGPT subscription/Luna/medium.
+
 ## 2026-09-06 — живой разбор Калькулятора и чтение параметров выражения
 
 Run20260906-041246-c86bd419 source90d23a39 завершился; session12618 закрыт.

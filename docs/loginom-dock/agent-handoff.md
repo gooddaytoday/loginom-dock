@@ -1,3 +1,11 @@
+**Checkpoint:** set_wizard_field теперь поддерживает expression_parameter
+name/label с текущими form/wizard/selected row/input refs и exact draft readback.
+Live обнаружен deferred linked label update: после keyboard input добавлен
+focus-checked Tab; live name roundtrip AmountProbe/Amount прошёл, draft Amount.
+274 client /110 Python /10 packaging PASS. Далее params apply/cancel с row/type
+readback/reopen, затем wizard/node binding и P3–P9. Active Hermes нет.
+Диагностическая ExprDataEditForm остаётся открытой; applied_verified=false.
+
 **Checkpoint:** run041246-c86bd419 terminal, session12618 закрыт,48/58 FAIL,
 49 API calls, upstream TTFB120s timeout. Graph priority автономно ещё не принят.
 Codex напрямую настроил/выполнил Calculator:6 ожидаемых сумм, внутреннее Amount,

@@ -85,6 +85,7 @@ class Handle {
   async dblclick() { this.page.events.push('double_click'); this.page.document.activeElement = this.element; }
   async press(key) {
     this.page.events.push(key);
+    this.page.onPress?.(key,this.element);
     if (key === 'ControlOrMeta+A') this.page.selectedAll = true;
     if (key === 'Backspace' && this.page.selectedAll) this.element.value = '';
     if (key === 'Enter') this.page.committed = this.element.value;
@@ -1495,4 +1496,36 @@ test('Calculator parameter dialog is read outside the wizard subtree with bounde
   assert.equal((await page.observe()).wizard.expression_parameters.fields.name.status,'unobserved');
   page.add('input',null,'',undefined,inputs[2].parentElement);
   assert.equal((await page.observe()).wizard.expression_parameters.fields.type_label.status,'ambiguous');
+});
+
+test('typed Calculator parameter editing binds dialog, selected row and exact draft values',async()=>{
+  for(const variation of ['label','linked_name','wrong_label','selection_changed','type_changed','focus_lost']) {
+    const page=new Page(),wizard=page.add('div','MF;TF-1;WizrdMCF');
+    page.add('button','MF;TF-1;WizrdMCF;CalcDataWizard;btnAddExpr','',undefined,wizard);
+    const row=page.add('table',null,'',undefined,wizard);row.attrs.class='x-grid-item-selected';
+    const selected=page.add('td','MF;TF-1;WizrdMCF;CalcDataWizard;colExpressionName_Expr1','Expr1',undefined,row);
+    const base='MF;TF-1;WizrdMCF;ExprDataEditForm',dialog=page.add('div',base);dialog.attrs.class='x-window';
+    const inputs={};
+    for(const [key,value] of [['edtName','Expr1'],['edtDisplayName','Expr1'],['cbxDataType','Вещественный']]) {
+      const owner=page.add('div',base+';'+key,'',undefined,dialog),input=page.add('input',null,'',undefined,owner);input.value=value;input.box={x:300,y:200+Object.keys(inputs).length*40,width:100,height:25};inputs[key]=input;
+    }
+    const snapshot=await page.observe(),name=variation==='linked_name'?'name':'label';
+    const target=snapshot.ui.elements.find(e=>e.wizard_field?.scope==='expression_parameter' && e.wizard_field.name===name);
+    assert.ok(target);assert.ok(!snapshot.ui.elements.find(e=>e.ref===snapshot.wizard.expression_parameters.fields.type_label.input_ref).allowed_actions.includes('set_wizard_field'));
+    const type=page.keyboard.type;
+    page.onPress=(key)=>{if(key==='Tab' && variation==='linked_name')inputs.edtDisplayName.value=inputs.edtName.value;};
+    page.keyboard.type=async(...args)=>{await type(...args);
+      if(variation==='focus_lost')page.document.activeElement=page.document.body;
+      if(variation==='wrong_label')inputs.edtDisplayName.value='AmountAmount';
+      if(variation==='selection_changed')selected.attrs['data-tid']='MF;TF-1;WizrdMCF;CalcDataWizard;colExpressionName_Expr2';
+      if(variation==='type_changed')inputs.cbxDataType.value='Целый';
+    };
+    const outcome=await page.act({verb:'set_wizard_field',ref:target.ref,text:'Amount'},snapshot);
+    assert.equal(outcome.status,['label','linked_name'].includes(variation)?'SUCCEEDED':'AMBIGUOUS',variation+JSON.stringify(outcome.error));
+    if(outcome.status==='SUCCEEDED') {
+      assert.equal(outcome.output.wizard.expression_parameters.fields[name].value,'Amount');
+      assert.equal(outcome.output.wizard.expression_parameters.applied_verified,false);
+      assert.ok(outcome.trace.some(e=>e.event==='wizard_draft_value_verified' && e.scope==='expression_parameter'));
+    }
+  }
 });
