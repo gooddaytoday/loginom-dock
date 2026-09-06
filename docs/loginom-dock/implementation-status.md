@@ -1,3 +1,35 @@
+**2026-09-06 — terminal090018 и обнаружение областей после oversized scan.**
+Run20260906-090018-599aab8a/session45339 завершён: source34b720e0,47 API calls,
+returncode0, no timeout, runtime/harness unchanged. Единственный audit50/58FAIL,
+SHA909998224ec298a46605c28b3de82363400b8acd3eb2e221864a3df88ee0e4cb.
+Не переписывать. Failed: transfer_only_observed_file_storage_navigation и семь
+unimplemented domain gates. CSV verify/inspect SUCCEEDED. До import_format
+Hermes НЕ дошёл, поэтому автономная проверка предыдущего исправления ещё впереди.
+После Navigator он запросил scope graph/dialogs; оба full scan UI_SCAN_LIMIT,
+между ними stale cursor. Текущие named scopes фильтруют уже снятый snapshot,
+не ограничивают DOM traversal до сбора — это подтверждённое ограничение.
+
+Теперь новая broad observation после NOT_APPLIED/UI_SCAN_LIMIT один раз
+выполняет native roots discovery. Ответ имеет observation_kind=roots и page.scope
+roots, trace observation_scope_fallback с requested_scope; исходное превышение
+не становится доказательством полного графа/диалогов. Cursor/explicit root не
+меняют область автоматически. Повторного fallback для roots нет. Region refs
+не дают gestures, только последующее узкое чтение. Итоговый ответ записывается
+в immutable observation journal перед paging; продолжение cursor снова roots.
+Tests: all/graph/dialogs/palette, roots paging, запрет gesture по region, одна
+journal запись и отсутствие рекурсивных повторов. 293 client /118 Python /10 packaging PASS.
+
+UI-first: в отдельном диагностическом Loginom build49202 открыто дерево
+навигации, прочитан глобальный MF;MapTreeForm;...>Модуль1>Сценарий;TreeText,
+нативный click вернул «Сценарий · Package1/Модуль1». Native roots + narrow read
+успешны; выбранное первым локальное FileStorageForm;MapTreeForm дерево не выдало
+workflow entry в первых UI records, не считать это доказательством отсутствия.
+Полный scan этой отдельной сессии прошёл, поэтому live интегрированный fallback
+ещё не принят. Manual UI теперь workflow, Package1 НЕ сохранён; сохранение
+последних draft import settings через этот переход не подтверждено. Hermes нет.
+Далее full Luna replay с новым кодом и самостоятельные P3 settings/results,
+P3–P9 открыты. Не считать generic gesture/model completion domain acceptance.
+
 **2026-09-06 — исправлено завершение ввода формата CSV.**
 После подтверждённого UI воспроизведения исходной смены delimiter tab→semicolon
 set_wizard_field для import_format завершает ввод Tab и наблюдает готовность

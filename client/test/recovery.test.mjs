@@ -885,3 +885,44 @@ test('abandon recovery observes the same roots or narrow region instead of the w
     assert.equal(page.drops,1);
   }
 });
+
+test('oversized broad observations return paged read-only roots and journal the delivered scope',async()=>{
+  for(const scope of ['all','graph','dialogs','palette']) {
+    const page=linkPage(),evaluate=page.evaluate,records=[];let broad=0,roots=0;
+    page.evaluate=async function(fn,arg) {
+      if(arg && 'discoverRoots' in arg && !arg.discoverRoots) {
+        broad++;const error=new Error('oversized document');error.code='UI_SCAN_LIMIT';throw error;
+      }
+      const result=await evaluate.call(this,fn,arg);
+      if(result?.ui && arg?.discoverRoots) {
+        roots++;result.observation_kind='roots';result.nodes=[];result.links=[];
+        result.ui.elements=Array.from({length:45},(_,i)=>({ref:'ui-region-'+i,tid:'Region-'+i,
+          identity:{anchor_tid:'Region-'+i,path:[]},kind:'region',scope:'workflow',label:'Region '+i,allowed_actions:[]}));
+        result.ui.truncated.nodes=true;result.ui.truncated.links=true;
+      }
+      return result;
+    };
+    const engine=runtime(page,{onRecord:async r=>records.push(r)});
+    const first=await engine.observe({scope});
+    assert.equal(first.status,'SUCCEEDED');assert.equal(first.output.observation_kind,'roots');
+    assert.equal(first.output.page.scope,'roots');assert.equal(first.output.ui.truncated.nodes,true);
+    assert.ok(first.output.ui.elements.length);assert.ok(first.output.page.next_cursor);
+    assert.equal(broad,1);assert.equal(roots,1);assert.equal(records.length,1);
+    assert.deepEqual(records[0].outcome.trace.at(-1),{event:'observation_scope_fallback',requested_scope:scope,delivered_scope:'roots',reason:'UI_SCAN_LIMIT'});
+    await assert.rejects(engine.uiAct({verb:'click',ref:first.output.ui.elements[0].ref},{observationId:observationId(first),operationId:'not-a-control'}),/does not support/);
+    const next=await engine.observe({cursor:first.output.page.next_cursor});
+    assert.equal(next.status,'SUCCEEDED');assert.equal(next.output.observation_id,first.output.observation_id);
+    assert.equal(broad,1);assert.equal(roots,2);
+  }
+});
+
+test('root discovery failures never trigger recursive scan retries',async()=>{
+  const page=linkPage(),evaluate=page.evaluate;let attempts=0;
+  page.evaluate=async function(fn,arg){
+    if(arg && 'discoverRoots' in arg){attempts++;const e=new Error('limit');e.code='UI_SCAN_LIMIT';throw e;}
+    return evaluate.call(this,fn,arg);
+  };
+  const engine=runtime(page);
+  assert.equal((await engine.observe({scope:'roots'})).status,'NOT_APPLIED');assert.equal(attempts,1);
+  assert.equal((await engine.observe({scope:'graph'})).status,'NOT_APPLIED');assert.equal(attempts,3);
+});

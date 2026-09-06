@@ -1,3 +1,12 @@
+**Checkpoint:**090018/session45339 TERMINAL audit50/58FAIL frozen SHA
+909998224ec298a46605c28b3de82363400b8acd3eb2e221864a3df88ee0e4cb. CSV verify passed,
+import не начат: full graph/dialogs scan UI_SCAN_LIMIT. New broad observe теперь
+один раз fallback roots, честные scope/kind/trace, journal и paging; explicitroot/
+cursor/roots без fallback. 293 client/118 Python/10 packaging PASS.
+Manual Navigator global TreeText Сценарий click вернул workflow Package1/Модуль1;
+Package1 не сохранён, draft import persistence не подтверждено, Hermes нет.
+Далее full Luna/ChatGPT/medium + P3–P9. Старые audits не переписывать.
+
 **Checkpoint:** import_format typed input теперь Tab + bounded readiness в том
 же wizard/context, exact value, stable epoch/wizard, no masks, original input hit.
 Live native delimiter tab → Dock ; → Dock null \N SUCCEEDED524ms (null length2).

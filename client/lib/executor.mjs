@@ -1240,10 +1240,20 @@ export function createActionRuntime({ pinned, execute, artifactStore, allowCandi
       const selectedRoot = cursor===undefined ? rootRef : observations.rootForCursor(cursor);
       if (scope === 'bootstrap') return execute(makeWorkspaceBootstrapCode({ origin: targetOrigin, build: targetBuild }), { signal, timeout: 5000 });
       const observationOperationId=randomUUID();
-      const outcome = await execute(makeWorkspaceUiCode({ mode: 'observe', operation_id:observationOperationId, root_ref:selectedRoot, storage_name:selectedStorageName, discover_roots:scope==='roots' || (cursor!==undefined && observations.kindForCursor(cursor)==='roots'), expected_build: targetBuild, expected_origin: targetOrigin }), { signal, timeout: 35000 });
+      let outcome = await execute(makeWorkspaceUiCode({ mode: 'observe', operation_id:observationOperationId, root_ref:selectedRoot, storage_name:selectedStorageName, discover_roots:scope==='roots' || (cursor!==undefined && observations.kindForCursor(cursor)==='roots'), expected_build: targetBuild, expected_origin: targetOrigin }), { signal, timeout: 35000 });
+      let deliveredScope=scope;
+      if(cursor===undefined && selectedRoot===undefined && scope!=='roots'
+          && outcome.status==='NOT_APPLIED' && outcome.error?.code==='UI_SCAN_LIMIT') {
+        signal?.throwIfAborted();
+        outcome=await execute(makeWorkspaceUiCode({mode:'observe',operation_id:observationOperationId,
+          discover_roots:true,expected_build:targetBuild,expected_origin:targetOrigin}),{signal,timeout:35000});
+        deliveredScope='roots';
+        outcome.trace.push({event:'observation_scope_fallback',requested_scope:scope??'all',
+          delivered_scope:'roots',reason:'UI_SCAN_LIMIT'});
+      }
       await onRecord({operation_id:observationOperationId,phase:'observation_completed',outcome:structuredClone(outcome)});
       outcome.output.operation = view(pending).output;
-      return cursor === undefined ? observations.retain(outcome, { scope }) : observations.next(cursor, outcome);
+      return cursor === undefined ? observations.retain(outcome, { scope:deliveredScope }) : observations.next(cursor, outcome);
     },
     async uiAct(action, { observationId, operationId, recoveryOperationId, signal } = {}) {
       signal?.throwIfAborted(); checkId(operationId);
