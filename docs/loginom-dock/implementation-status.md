@@ -1,3 +1,31 @@
+**Checkpoint 2026-09-06 — output columns readback и ручное переименование/тип.**
+В живом output-port mapping двойной клик colName_Quantity открыл sibling
+EditColumnDefForm. Исходный Quantity aggregate имел тип Вещественный: для fixture
+явно задан Integer вместе с именем QuantitySum. Amount переименован AmountSum
+(Вещественный), Count → RowCount (Целый). Имена вводились через input + Tab,
+тип выбирался из observed cbxDataType boundlist, затем btnApply. Метки остались
+Quantity|Сумма, Сумма|Сумма, Количество. E2E sDataMapping.ts:55–155 описывает
+EditColumnDefForm, edtName/edtDisplayName/cbxDataType и btnApply/btnCancel.
+
+Runtime wizard.output_columns раскрывает до 64 rendered rows socket mapping:
+name/label/type и refs одной строки. Native fixed queries сохраняют readback при
+narrow wizard read. Summary rows исключаются, duplicate names/mismatched row/
+unknown icon/truncated name дают ambiguous. complete=false, settings_applied=false:
+это не полный mapping source→target, не proof применения и не port ownership.
+Тип берётся из единственного известного data-type icon в ячейке метки, не из
+текста имени или догадки по значениям.
+
+Live narrow read до сохранения: Region string, QuantitySum integer, AmountSum real,
+RowCount integer. Ручной Done → graph → right-click output port → ConfigurePort
+→ fresh narrow read подтвердил те же четыре поля с новыми DOM refs. Настройки
+порта сохранены; пакет Package1 по-прежнему не сохранён. Нет Hermes acceptance.
+Private evidence .dock/post-mvp-p0/output-columns-live-result.txt; test logs
+output-columns-{client,python,packaging}-tests.txt. 281 client /115 Python /10 packaging PASS. Active Hermes нет.
+Далее typed EditColumnDefForm editing/apply/cancel и отдельный port identity/
+open/finish/readback, Grouping row/aggregate drivers, полный P3–P9 остаётся открытым.
+Текущий live UI: output-port mapping Quantity, Сумма по Region ОТКРЫТ,
+EditColumnDefForm закрыт, четыре поля уже переименованы и сохранены в порте.
+
 **Checkpoint 2026-09-06 — прямой разбор Grouping и отдельного output-port mapping.**
 Codex добавил Группировку справа от выбранного Сумма; подтверждена автоматическая
 связь Сумма|Output_Data-0|Группировка|Input_Data-0. После drop узел уже выбран,

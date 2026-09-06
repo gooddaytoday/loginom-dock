@@ -1725,3 +1725,26 @@ test('output port mapping is recognized narrowly and conflicting visible variant
     assert.equal(narrow.output.wizard.stage_status,conflict?'ambiguous':'observed');
   }
 });
+
+test('output columns bind names labels and types to real rows, excluding summary duplicates',async()=>{
+  for(const mode of ['valid','duplicate','wrong_row','unknown_type','long_name']) {
+    const page=new Page(),base='MF;TF-1;WizrdMCF;',form=page.add('div',base.slice(0,-1));
+    page.add('button',base+'DerivedDataSourceOutputSocketWizard;btnAddMappingColumn','',undefined,form);
+    const stem=base+'DerivedDataSourceOutputSocketWizard;',table=page.add('table',null,'',undefined,form);
+    const row=page.add('tr',null,'',undefined,table);
+    page.add('td',stem+'colName_QuantitySum',mode==='long_name'?'x'.repeat(250):'QuantitySum',undefined,row);
+    const labelRow=mode==='wrong_row'?page.add('table',null,'',undefined,form):row;
+    const label=page.add('td',stem+'colDisplayName_QuantitySum','Quantity|Сумма',undefined,labelRow);
+    page.add('span',null,'',undefined,label).attrs.class=mode==='unknown_type'?'unknown':'bg-TBGDataType-dtInteger';
+    const summary=page.add('tr',null,'',undefined,table);summary.attrs.class=mode==='duplicate'?'':'x-grid-row-summary';
+    page.add('td',stem+'colName_QuantitySum','',undefined,summary);
+    page.add('td',stem+'colDisplayName_QuantitySum','',undefined,summary);
+    const full=await page.observe(),narrow=await page.execute({mode:'observe',root_ref:full.wizard.root_ref});
+    assert.equal(narrow.status,'SUCCEEDED');
+    assert.deepEqual(narrow.output.wizard.output_columns,full.wizard.output_columns);
+    const columns=narrow.output.wizard.output_columns;
+    assert.equal(columns.complete,false);assert.equal(columns.settings_applied,false);
+    if(mode==='valid'){assert.equal(columns.fields.length,1);assert.equal(columns.fields[0].type,'integer');assert.equal(columns.fields[0].name,'QuantitySum');}
+    else assert.ok(columns.fields.every(f=>f.status!=='observed'),mode);
+  }
+});

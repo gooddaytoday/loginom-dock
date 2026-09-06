@@ -165,6 +165,7 @@ function workspaceUiCapability(page, task) {
       '[data-tid*=";WizrdMCF;CalcDataWizard;colExpressionName_"]','[data-tid*=";WizrdMCF;CalcDataWizard;colExpressionDisplayName_"]','[data-tid$=";WizrdMCF;CalcDataWizard;cmpExpression"]','[data-tid$=";WizrdMCF;CalcDataWizard;btnCalcMode"]','span.bg-TBGCalcMode-cmExpression,span.bg-TBGCalcMode-cmJavaScript',
       ...['edtDelimiterChar','edtTextQualifier','edtValueNull','edtDecimalSeparator'].flatMap(name=>{const owner='[data-tid$=";WizrdMCF;ImportTextFileParamsWizard;'+name+';ValueControl"]';return [owner,owner+' input',owner+' textarea'];}),
       ...['edtDisplayName','cbxNodeTitleMode'].flatMap(name=>{const owner='[data-tid$=";WizrdMCF;DoneWizard;'+name+'"]';return [owner,owner+' input'];}),
+      '[data-tid*=";WizrdMCF;DerivedDataSourceOutputSocketWizard;colName_"]','[data-tid*=";WizrdMCF;DerivedDataSourceOutputSocketWizard;colDisplayName_"]',
       '[data-tid$=";WizrdMCF;ExprDataEditForm"]',
       ...['edtName','edtDisplayName','cbxDataType'].flatMap(name=>{const owner='[data-tid$=";WizrdMCF;ExprDataEditForm;'+name+'"]';return [owner,owner+' input'];}),
       ...wizardButtons.map(name=>'[data-tid$=";WizrdMCF;'+name+'"]')].join(',');
@@ -307,6 +308,28 @@ function workspaceUiCapability(page, task) {
         }
       }
       if(wizard.status==='observed')wizard.owner_context=ownerContext;
+    }
+    if(wizard.status==='observed' && wizard.stage==='output_mapping') {
+      const base=wizard.root_tid+';DerivedDataSourceOutputSocketWizard;';
+      const cells=all.filter(e=>{charge();return (getTid(e)??'').startsWith(base+'colName_') && wizardForms[0].contains(e)
+        && visible(e) && !sensitive(e) && !e.closest('.x-grid-row-summary');});
+      if(cells.length) {
+        wizard.output_columns={status:cells.length>64?'bounded':'rendered_rows',complete:false,settings_applied:false,fields:[]};
+        if(cells.length<=64) {
+          const keys=cells.map(e=>getTid(e).slice((base+'colName_').length));
+          wizard.output_columns.fields=cells.map((cell,index)=>{
+            const key=keys[index],row=cell.closest('table');
+            const labels=(tids.get(base+'colDisplayName_'+key)??[]).filter(e=>row && e.closest('table')===row && !e.closest('.x-grid-row-summary') && visible(e) && !sensitive(e));
+            const name=textOf(cell,true),label=labels.length===1?textOf(labels[0],true):'';
+            const icons=labels.length===1?[...labels[0].querySelectorAll('[class*="bg-TBGDataType-dt"]')]:[];
+            const types=Object.entries({String:'string',Integer:'integer',Float:'real',Boolean:'boolean',DateTime:'datetime',Variant:'variant'})
+              .filter(([kind])=>icons.length===1 && icons[0].classList.contains('bg-TBGDataType-dt'+kind));
+            if(keys.filter(k=>k===key).length!==1 || labels.length!==1 || types.length!==1 || !name || name.length>=240 || label.length>=240)
+              return {status:'ambiguous',field_key:key.slice(0,240)};
+            return {status:'observed',name,label,type:types[0][1],name_ref:refOf(cell),label_ref:refOf(labels[0]),row_ref:refOf(row)};
+          });
+        }
+      }
     }
     if(wizard.status==='observed' && wizard.stage==='done') {
       const base=wizard.root_tid+';DoneWizard;';

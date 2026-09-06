@@ -1,3 +1,11 @@
+**Checkpoint:** output_columns readback связывает rendered name/label/type одной
+строки socket mapping, без summary duplicates, completeness/applied остаются false.
+Direct UI EditColumnDefForm: QuantitySum integer (исходный sum был real), AmountSum
+real, RowCount integer; Region string. Port Done→reopen→native read подтвердил поля.
+Порт сохранён, пакет Package1 НЕ сохранён. Output mapping ОТКРЫТ, editor закрыт.
+281 client /115 Python /10 packaging PASS. Active Hermes нет.
+Далее typed field editor + port binding/lifecycle и Grouping drivers; P3–P9 открыты.
+
 **Checkpoint:** direct Grouping UI: Region key, Quantity/Amount sums, special0
 count. Summary rows duplicate real field tids; FactorEditDialog uses owner checked
 class, not hidden input.checked. Saved node Quantity, Сумма по Region via typed
