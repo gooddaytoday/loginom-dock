@@ -163,6 +163,8 @@ function workspaceUiCapability(page, task) {
       ...Object.values(wizardMarkers).map(suffix=>'[data-tid$=";WizrdMCF'+suffix+'"]'),
       '[data-tid*=";WizrdMCF;CalcDataWizard;colExpressionName_"]','[data-tid$=";WizrdMCF;CalcDataWizard;cmpExpression"]','[data-tid$=";WizrdMCF;CalcDataWizard;btnCalcMode"]','span.bg-TBGCalcMode-cmExpression,span.bg-TBGCalcMode-cmJavaScript',
       ...['edtDelimiterChar','edtTextQualifier','edtValueNull','edtDecimalSeparator'].flatMap(name=>{const owner='[data-tid$=";WizrdMCF;ImportTextFileParamsWizard;'+name+';ValueControl"]';return [owner,owner+' input',owner+' textarea'];}),
+      '[data-tid$=";WizrdMCF;ExprDataEditForm"]',
+      ...['edtName','edtDisplayName','cbxDataType'].flatMap(name=>{const owner='[data-tid$=";WizrdMCF;ExprDataEditForm;'+name+'"]';return [owner,owner+' input'];}),
       ...wizardButtons.map(name=>'[data-tid$=";WizrdMCF;'+name+'"]')].join(',');
     if (requestedRoot || discoverRoots) {
       // Native fixed queries discover global blockers/context without walking
@@ -269,6 +271,26 @@ function workspaceUiCapability(page, task) {
         stage:stages.length===1?stages[0]:null,stage_status:stages.length===1?'observed':stages.length?'ambiguous':'unrecognized',
         controls:Object.fromEntries(wizardButtons.map(name=>{const found=matching(';'+name);return [name,
           {status:found.length===1?'observed':found.length?'ambiguous':'unobserved',enabled:found.length===1?enabled(found[0]):null}];}))};
+    }
+    if(wizard.status==='observed' && wizard.stage==='calculator') {
+      // This native dialog is a sibling of the wizard, not its descendant.
+      // E2E sCalculator.edit: expose bounded UI values, never applied proof.
+      const base=wizard.root_tid+';ExprDataEditForm';
+      const forms=(tids.get(base)??[]).filter(e=>visible(e) && !sensitive(e));
+      if(forms.length) {
+        wizard.expression_parameters={status:forms.length===1?'observed':'ambiguous',applied_verified:false};
+        if(forms.length===1) {
+          wizard.expression_parameters.root_ref=refOf(forms[0]);
+          wizard.expression_parameters.fields=Object.fromEntries(Object.entries({name:'edtName',label:'edtDisplayName',type_label:'cbxDataType'}).map(([name,key])=>{
+            const owners=(tids.get(base+';'+key)??[]).filter(e=>forms[0].contains(e) && visible(e) && !sensitive(e));
+            const inputs=owners.length===1?dom.filter(e=>{charge();return owners[0].contains(e) && e.matches('input') && visible(e) && !sensitive(e);}):[];
+            if(owners.length!==1 || inputs.length!==1)return [name,{status:owners.length>1 || inputs.length>1?'ambiguous':'unobserved'}];
+            const value=String(inputs[0].value??'');
+            return [name,{status:'observed',value:value.slice(0,256),value_length_utf16:value.length,truncated:value.length>256,
+              input_ref:refOf(inputs[0]),owner_ref:refOf(owners[0]),enabled:enabled(inputs[0]),read_only:inputs[0].readOnly===true}];
+          }));
+        }
+      }
     }
     const wizardFields=new Map(),wizardCombos=new Map();
     if(wizard.status==='observed' && wizard.stage==='text_import_format') {

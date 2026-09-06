@@ -1,3 +1,13 @@
+**Checkpoint:** run041246-c86bd419 terminal, session12618 закрыт,48/58 FAIL,
+49 API calls, upstream TTFB120s timeout. Graph priority автономно ещё не принят.
+Codex напрямую настроил/выполнил Calculator:6 ожидаемых сумм, внутреннее Amount,
+формула сохранена; метка после fill удвоилась и исправлена keyboard/readback.
+Повторное открытие active узла требует deactivation confirmation; no tid здесь
+значит «Да, больше не спрашивать». Params dialog sibling мастера, не descendant.
+Добавлен bounded wizard.expression_parameters draft readback;273/110/10 PASS,
+live narrow read Amount/Amount/Вещественный. Далее bound set/apply/readback,
+потом полный P3–P9. Active Hermes нет; direct UI оставлен в ExprDataEditForm.
+
 **Checkpoint:** graph_node metadata связывает body/label/settings с видимым
 именованным узлом; first-page priority settings→body→label перед Vertex.
 Прямой live body click показал Setting; label click этого не доказал.

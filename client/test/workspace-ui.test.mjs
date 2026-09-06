@@ -1473,3 +1473,26 @@ test('graph paging leads with identified node controls before anonymous SVG vert
   assert.ok(first.output.page.next_cursor,'remaining SVG geometry remains paged');
   assert.ok(snapshot.ui.elements.filter(e=>e.tid.endsWith(';Vertex')).every(e=>!e.graph_node));
 });
+
+test('Calculator parameter dialog is read outside the wizard subtree with bounded ambiguity-safe fields',async()=>{
+  const page=new Page(),wizard=page.add('div','MF;TF-1;WizrdMCF');
+  page.add('button','MF;TF-1;WizrdMCF;CalcDataWizard;btnAddExpr','',undefined,wizard);
+  const base='MF;TF-1;WizrdMCF;ExprDataEditForm',dialog=page.add('div',base);
+  dialog.attrs.class='x-window';
+  const inputs=[];
+  for(const [key,value] of [['edtName','Amount'],['edtDisplayName','AmountAmount'],['cbxDataType','Вещественный']]) {
+    const owner=page.add('div',base+';'+key,'',undefined,dialog),input=page.add('input',null,'',undefined,owner);input.value=value;inputs.push(input);
+  }
+  const roots=await page.execute({mode:'observe',discover_roots:true});
+  const root=roots.output.ui.elements.find(e=>e.tid==='MF;TF-1;WizrdMCF');
+  const read=await page.execute({mode:'observe',root_ref:root.ref});
+  const params=read.output.wizard.expression_parameters;
+  assert.equal(params.applied_verified,false);assert.equal(params.fields.name.value,'Amount');
+  assert.equal(params.fields.label.value,'AmountAmount');assert.equal(params.fields.type_label.value,'Вещественный');
+  inputs[1].value='x'.repeat(257);
+  assert.equal((await page.observe()).wizard.expression_parameters.fields.label.truncated,true);
+  inputs[0].attrs.type='password';
+  assert.equal((await page.observe()).wizard.expression_parameters.fields.name.status,'unobserved');
+  page.add('input',null,'',undefined,inputs[2].parentElement);
+  assert.equal((await page.observe()).wizard.expression_parameters.fields.type_label.status,'ambiguous');
+});

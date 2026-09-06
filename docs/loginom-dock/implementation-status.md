@@ -1,3 +1,47 @@
+## 2026-09-06 — живой разбор Калькулятора и чтение параметров выражения
+
+Run20260906-041246-c86bd419 source90d23a39 завершился; session12618 закрыт.
+Frozen audit48/58 FAIL, SHA
+c74ffe8c296519597a979cbfb8490f7e504e80af0d32d7964e018586e478f9d3.
+49 API calls, usage completed=false/failed=true/provider=model=null; preflight
+и launcher закрепили openai-codex/gpt-5.6-luna/medium. Из технического error
+прочитан только TimeoutError: Codex stream produced no bytes within120s.
+До wizard Hermes не дошёл; graph priority автономно ещё не принят. Это
+транспортная остановка, не доказательство дефекта новой выдачи графа.
+
+В отдельной сессии Codex добавил Calculator к диагностическому импорту;
+автосвязь source→Calculator наблюдалась в DOM. Поля Quantity/UnitPrice доступны.
+Через ExprDataEditForm изменено внутреннее имя Expr1→Amount, тип Вещественный;
+введена Quantity * UnitPrice через клавиатуру. Next перешёл прямо в done,
+Execute запустил узел. Выходной порт active и быстрый просмотр показали шесть
+ожидаемых сумм37,50/14,50/10,00/0,00/-8,00/8,00 вместе с исходными полями.
+Это ручная диагностика, не независимый domain verifier/full Hermes acceptance.
+
+После ввода name и label через fill метка оказалась AmountAmount; причина
+удвоения не установлена. Повторное открытие подтвердило имя Amount и тип
+Вещественный. Метка исправлена клавиатурой с точным readback Amount; формула
+при повторном открытии Quantity * UnitPrice. Автоматическая метка узла также
+изменяется по выражению, не связывать node identity с прежним Calculator label.
+При открытии настроек активного узла сначала появляется подтверждение
+деактивации; wizard ещё отсутствует. В этом диалоге tid msgbox;tlb;no означает
+«Да, больше не спрашивать», а cancel — «Нет». Решать по видимому смыслу,
+не по суффиксу tid. Использовано обычное yes без изменения будущих подсказок.
+
+ExprDataEditForm — x-window sibling мастера под MF, не descendant WizrdMCF.
+Добавлено wizard.expression_parameters с root_ref и bounded name/label/type_label
+readback (input/owner refs, enabled/read_only, truncation). Fixed native queries
+включают exact форму и её inputs при узком чтении мастера. Applied_verified=false;
+нет доказательства принадлежности выбранному выражению, apply или persistence.
+Ссылки в metadata не дают права действия без delivered ui.elements.
+Live capability narrow root read подтвердил Amount/Amount/Вещественный.
+273 client /110 Python /10 packaging PASS; test проверил внешнюю форму, distinct
+name/label, cap256, sensitive input и неоднозначный type input.
+Evidence .dock/post-mvp-p0/expression-params-*-tests.txt и expression-params-live-result.txt.
+Источники: e2e-tests/bg/helpers/wizards/transform/calculator_helpers.ts,
+bg/sels/transform/sCalculator.ts, bg/helpers/workflow/previewTable.ts.
+Далее bound parameter set/apply/readback и полный P3–P9. Диагностический
+браузер оставлен с открытой формой параметров Amount; active Hermes нет.
+
 ## 2026-09-06 — граф выдаёт связанные с узлом controls перед служебными Vertex
 
 Прямая UI-диагностика на отдельном черновике подтвердила: повторяющиеся
