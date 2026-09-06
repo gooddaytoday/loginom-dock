@@ -1819,3 +1819,24 @@ test('output editor apply and cancel verify all row properties after one click',
     assert.equal(page.events.filter(e=>e==='click').length,1);
   }
 });
+
+test('output-port context binds distinct node and port breadcrumbs and rejects wrong ownership',async()=>{
+  for(const mode of ['valid','input_port','wrong_folder','missing_workflow','duplicate']) {
+    const page=new Page(),base='MF;TF-1;',wizard=page.add('div',base+'WizrdMCF');
+    page.add('button',base+'WizrdMCF;DerivedDataSourceOutputSocketWizard;btnAddMappingColumn','',undefined,wizard);
+    const panel=page.add('div',base+'NavigationBar;NavigationPanel');let path='';
+    const items=[['Package','maptree-icon-package'],['Workflow',mode==='missing_workflow'?'':'maptree-icon-workflow'],['Group','bg-vendor-icon-groupdata'],
+      ['Outputs',mode==='wrong_folder'?'maptree-icon-modelinputports':'maptree-icon-modeloutputports'],
+      ['Result',mode==='input_port'?'bg-vendor-icon-inputdatasourcesocketdef':'bg-vendor-icon-deriveddatasourceoutputsocketdef'],['Settings','maptree-icon-wizard']];
+    for(const [label,icon] of items){path+=(path?'>':'')+label;const tid=base+'cnrNaviMode;b.s_'+path;
+      const crumb=page.add('a',tid,label,undefined,panel);page.add('span',null,'',undefined,crumb).attrs.class=icon;
+      if(mode==='duplicate' && label==='Result')page.add('a',tid,label,undefined,panel);
+    }
+    const full=await page.observe(),narrow=await page.execute({mode:'observe',root_ref:full.wizard.root_ref});
+    const context=narrow.output.wizard.port_context;
+    assert.deepEqual(context,full.wizard.port_context);assert.notEqual(narrow.output.wizard.owner_context.status,'observed');
+    assert.equal(context.opening_verified,false);
+    if(mode==='valid'){assert.equal(context.status,'observed');assert.equal(context.node.label,'Group');assert.equal(context.port.label,'Result');assert.equal(context.kind,'output_data');}
+    else assert.notEqual(context.status,'observed',mode);
+  }
+});

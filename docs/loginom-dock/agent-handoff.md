@@ -1,3 +1,11 @@
+**Checkpoint:** wizard.port_context разделяет node/port по native breadcrumb
+chain; live narrow read observed для output port узла Quantity, Сумма по Region,
+node owner unobserved. opening_verified=false, graph-port index и lifecycle ещё
+не подтверждены. Apply/cancel сверяют неизменность port_context. 284 client /
+115 Python /10 packaging PASS. Active Hermes нет. UI прежний: output mapping открыт, последняя
+label QuantitySum не сохранена на уровне порта, Package1 не сохранён. Далее port
+open/finish/readback, Grouping, full P3–P9; соблюдать UI-first правило проекта.
+
 **Checkpoint:** apply_output_column/cancel_output_column проверяют 5 свойств
 selected row после одного click; cancel также original row_ref. Live apply181ms,
 cancel51ms PASS. Output row теперь включает data_kind/usage/selected.

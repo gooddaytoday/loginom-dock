@@ -1,3 +1,20 @@
+**Checkpoint 2026-09-06 — контекст выходного порта по реальной навигации.**
+После непосредственного изучения Loginom добавлен wizard.port_context: отдельные
+node/port refs, labels и полный bounded breadcrumb path. Требуется цепочка
+workflow → node → output ports → data output → wizard с native icons. Контекст
+узла при этом остаётся unobserved. opening_verified=false: чтение навигации
+не доказывает исходный graph-port click, сохранение или повторное открытие.
+Apply/cancel output field дополнительно требуют неизменного port_context.
+
+Live narrow read текущего DerivedDataSourceOutputSocketWizard: SUCCEEDED,
+node Quantity, Сумма по Region, port Выходной набор данных; owner_context
+unobserved, port_context observed. UI не изменён: мастер порта открыт, последнее
+изменение label QuantitySum ещё не сохранено на уровне порта; Package1 не сохранён.
+Тесты отвергают input port, неправильную папку, отсутствие workflow и дубликаты;
+full/narrow reads совпадают. 284 client /115 Python /10 packaging PASS. Active Hermes нет.
+Далее typed port open/finish/readback, Grouping и полный P3–P9. Правило UI-first
+остаётся обязательным в AGENTS.md, плане §18 и handoff.
+
 **Checkpoint 2026-09-06 — apply/cancel output column с пятью свойствами строки.**
 output_columns дополнен data_kind, usage и selected, прочитанными в той же real
 row через colDataKind_/colDefaultUsageType_, summary rows исключены. Missing

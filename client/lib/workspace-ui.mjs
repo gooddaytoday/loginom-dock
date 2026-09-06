@@ -285,6 +285,7 @@ function workspaceUiCapability(page, task) {
       // proving which graph click opened the wizard requires an action receipt.
       const panels=(tids.get(workflow.prefix+';NavigationBar;NavigationPanel')??[]).filter(e=>visible(e) && !sensitive(e));
       let ownerContext={status:panels.length>1?'ambiguous':'unobserved',opening_verified:false};
+      let portContext={status:panels.length>1?'ambiguous':'unobserved',opening_verified:false};
       if(panels.length===1) {
         const prefix=workflow.prefix+';cnrNaviMode;b.s_';
         const crumbs=all.filter(e=>{charge();return (getTid(e)??'').startsWith(prefix) && panels[0].contains(e) && visible(e) && !sensitive(e);});
@@ -293,6 +294,8 @@ function workspaceUiCapability(page, task) {
           const items=crumbs.map(e=>({ref:refOf(e),tid:getTid(e),label:textOf(e,true),
             wizard_icon:e.querySelectorAll('.maptree-icon-wizard').length===1,
             workflow_icon:e.querySelectorAll('.maptree-icon-workflow').length===1,
+            outputs_icon:e.querySelectorAll('.maptree-icon-modeloutputports').length===1,
+            output_data_icon:e.querySelectorAll('.bg-vendor-icon-deriveddatasourceoutputsocketdef,.bg-vendor-icon-outputdatasourcesocketdef').length===1,
             vendor_icon:e.querySelectorAll('[class*="bg-vendor-icon-"]').length===1}));
           const unique=new Set(items.map(i=>i.tid)).size===items.length;
           const chain=items.every((item,index)=>item.tid.length<=2048 && item.label.length<240
@@ -303,6 +306,13 @@ function workspaceUiCapability(page, task) {
           else if(last.workflow_icon) {
             navigationContext={status:'observed',kind:'workflow',path:items.map(({tid,label})=>({tid,label}))};
           }
+          else if(last.wizard_icon && items.filter(i=>i.wizard_icon).length===1 && node?.output_data_icon && node.label
+            && items.at(-3)?.outputs_icon && items.at(-4)?.vendor_icon && items.at(-4)?.label && items.at(-5)?.workflow_icon) {
+            const parent=items.at(-4);
+            portContext={status:'observed',opening_verified:false,kind:'output_data',panel_ref:refOf(panels[0]),
+              node:{ref:parent.ref,tid:parent.tid,label:parent.label},port:{ref:node.ref,tid:node.tid,label:node.label},
+              path:items.map(({ref,tid,label})=>({ref,tid,label}))};
+          }
           else if(last.wizard_icon && items.filter(i=>i.wizard_icon).length===1 && node?.vendor_icon && node.label && items.at(-3)?.workflow_icon) {
             ownerContext={status:'observed',opening_verified:false,panel_ref:refOf(panels[0]),
               node:{ref:node.ref,tid:node.tid,label:node.label},
@@ -311,6 +321,7 @@ function workspaceUiCapability(page, task) {
         }
       }
       if(wizard.status==='observed')wizard.owner_context=ownerContext;
+      if(wizard.status==='observed' && wizard.stage==='output_mapping')wizard.port_context=portContext;
     }
     if(wizard.status==='observed' && wizard.stage==='output_mapping') {
       const base=wizard.root_tid+';DerivedDataSourceOutputSocketWizard;';
@@ -1167,7 +1178,8 @@ function workspaceUiCapability(page, task) {
           const wanted=cancel?params.selected_column:{name:fields.name.value,label:fields.label.value,type:types[fields.type_label.value],data_kind:fields.data_kind.value,usage:fields.usage.value};
           const sameContext=fresh=>fresh.authenticated && fresh.origin===current.origin && fresh.loginom_build===current.loginom_build
             && same(fresh.workflow_ref,current.workflow_ref) && same(fresh.package_identity,current.package_identity)
-            && fresh.active_tab_ref===current.active_tab_ref && fresh.wizard.root_ref===current.wizard.root_ref && fresh.wizard.stage==='output_mapping';
+            && fresh.active_tab_ref===current.active_tab_ref && fresh.wizard.root_ref===current.wizard.root_ref && fresh.wizard.stage==='output_mapping'
+            && same(fresh.wizard.port_context,current.wizard.port_context);
           const matches=fresh=>(fresh.wizard.output_columns?.fields??[]).filter(row=>row.status==='observed' && row.selected
             && ['name','label','type','data_kind','usage'].every(k=>wanted[k] && row[k]===wanted[k])
             && (!cancel || row.row_ref===wanted.row_ref));
