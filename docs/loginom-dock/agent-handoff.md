@@ -1,3 +1,11 @@
+**Checkpoint:** run031541-528cd48f terminal, session89188 закрыт,50/58 FAIL,
+64 API calls. Save_as /test/packages отклонён: старый catalog allowed_roots
+только /user/data/packages. Сборщик теперь принимает --package-root, требует
+новый --version и bump save revision;269 client /110 Python /10 packaging PASS. Далее VPS
+build/stage/readback нового2026.09.06-agent.3-candidate с /test/packages, затем
+полный Luna/ChatGPT/medium run с НОВЫМ URI/SHA. Не обходить roots guard.
+Cursor fix live ещё не принят; active Hermes нет; полный P3–P9 открыт.
+
 **Checkpoint:** run030443-0696fd47 terminal, session52276 закрыт,51/58 FAIL,
 42 API calls. Calculator не достигнут: call91 на вкладку сценария отклонён
 из-за перекрытия при нормальной геометрии. Cursor fix live ещё не принят.

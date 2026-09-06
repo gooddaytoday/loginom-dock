@@ -6,6 +6,21 @@ import { createHash } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 import { ACTION_CATALOG_ROOT, pinActionCatalog, validateCompatibility } from '../../client/lib/action-catalog.mjs';
 
+import { validateEffect } from '../../client/lib/effect-contracts.mjs';
+
+export function configurePackageRoots(catalog, roots) {
+  if(roots===undefined)return catalog;
+  const result=structuredClone(catalog),matches=result.actions.filter(action=>action.action_key==='package.save_as');
+  if(matches.length!==1 || matches[0].effect?.kind!=='save' || matches[0].effect?.resource!=='package')throw new Error('Exactly one package.save_as save contract is required');
+  const action=matches[0],effect={...action.effect,allowed_roots:[...roots]};
+  validateEffect(effect);
+  if(JSON.stringify(effect.allowed_roots)!==JSON.stringify(action.effect.allowed_roots)) {
+    if(typeof action.revision!=='string' || !/^[1-9]\d*$/.test(action.revision) || !Number.isSafeInteger(Number(action.revision)+1))throw new Error('Save revision cannot be incremented');
+    action.revision=String(Number(action.revision)+1);action.effect=effect;
+  }
+  return result;
+}
+
 const sha256 = value => createHash('sha256').update(value).digest('hex');
 const canonical = value => JSON.stringify(value, null, 2) + '\n';
 const parse = async path => JSON.parse(await readFile(path, 'utf8'));
@@ -68,6 +83,7 @@ async function main() {
   const { values } = parseArgs({ options: {
     input: { type: 'string' }, out: { type: 'string' }, 'e2e-manifest': { type: 'string' },
     candidate: { type: 'boolean', default: false },
+    'package-root': {type:'string',multiple:true},
     version: { type: 'string' }, 'loginom-build': { type: 'string' }, compatibility: { type: 'string' },
   } });
   if (!values.out) throw new Error('--out is required');
@@ -77,6 +93,10 @@ async function main() {
   await mkdir(out, { recursive: true, mode: 0o700 });
   if ((await readdir(out)).length) throw new Error('Output directory must be empty');
   let actions = await parse(join(input, 'actions.json'));
+  if(values['package-root']) {
+    if(!values.version || values.version.replace(/-candidate$/,'')===actions.catalog_version.replace(/-candidate$/,''))throw new Error('--package-root requires an explicit new --version');
+    actions=configurePackageRoots(actions,values['package-root']);
+  }
   let selectors = await parse(join(input, 'selectors.json'));
   let index = await parse(join(input, 'source-index.json'));
   const compatibility = await parse(resolve(values.compatibility ?? join(scriptDirectory, '../../executor/catalog/compatibility.json')));

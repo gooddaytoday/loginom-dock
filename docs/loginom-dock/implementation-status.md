@@ -1,3 +1,34 @@
+## 2026-09-06 — найден корень /user в каталоге сохранения; подготовлена явная настройка
+
+Run20260906-031541-528cd48f terminal, session89188 закрыт. Source417a2ab7,
+runtime b5071ef0ac875f65bc481b710d928c87f7c454574115425de9ca630689bf32fd.
+ChatGPT subscription/openai-codex/gpt-5.6-luna/medium,64 API calls,
+completed=true/failed=false,exit0/timeout=false. Frozen audit50/58 FAIL, SHA
+96067822593abc58aeb60ff0ff37ce5999b9e7530975af0e6b75b8b61863cd57.
+Полная цепочка не выполнена; cursor fix live всё ещё не принят.
+
+Ошибки готовых действий: component.imports.text cardinality0, точка вне workflow,
+затем save_as /test/packages/Dock-acceptance-20260906-031541-528cd48f.lgp отклонён
+как находящийся вне allowed roots. Проверка источника установила: effect
+package.save_as в executor/catalog/actions.json разрешает только
+/user/data/packages. Это политика старого каталога, не вывод имени Loginom
+пользователя из ОС и не основание обходить roots guard.
+
+Сборщик получил повторяемый --package-root. Значения проходят validateEffect,
+изменяют только package.save_as в копии каталога, сохраняют stale и прочие
+действия, увеличивают numeric action revision при смене roots. Без аргумента
+сохраняется исходная политика. Override требует явного нового --version;
+результат остаётся candidate и входит в manifest digest. Тестируются /test/packages,
+произвольное имя пользователя, отсутствие мутации исходника, отсутствие повторного
+bump при той же политике, опасные/пустые/повторные roots и полный pin build fixture.
+269 client /110 Python /10 packaging PASS.
+
+Следующий обязательный шаг: собрать на VPS и stage/readback новый immutable
+candidate (предлагаемая версия2026.09.06-agent.3-candidate) с --package-root
+/test/packages, затем использовать НОВЫЕ manifest URI/SHA в полном Luna run.
+Старый candidate/production не изменены и по-прежнему отклонят /test/packages.
+Документация operations дополнена. Active Hermes/browser нет; весь P3–P9 открыт.
+
 ## 2026-09-06 — прогон остановился на перекрытой вкладке; добавлена диагностика слоя
 
 Run20260906-030443-0696fd47 terminal, session52276 закрыт; source7109eeb0,

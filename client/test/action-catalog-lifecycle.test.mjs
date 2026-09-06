@@ -8,7 +8,7 @@ import { fileURLToPath } from 'node:url';
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 import { ACCEPTANCE_CHECKS, EXECUTOR_REVISION } from '../lib/action-catalog.mjs';
-import { minimumExecutorRevision } from '../../deploy/loginom-dock/build-action-catalog.mjs';
+import { minimumExecutorRevision, configurePackageRoots } from '../../deploy/loginom-dock/build-action-catalog.mjs';
 
 const exec = promisify(execFile);
 const builder = fileURLToPath(new URL('../../deploy/loginom-dock/build-action-catalog.mjs', import.meta.url));
@@ -156,3 +156,27 @@ test('publisher verifies immutable bytes before admission and leaves the old poi
       assert.match(result.stdout, /"simulation_passed": true/);
     }
   });
+
+
+test('package destination override is explicit, bounded and does not assume an account name',()=>{
+  const source={actions:[{action_key:'package.save_as',revision:'1',status:'stale',effect:{kind:'save',resource:'package',allowed_roots:['/user/data/packages']}}]};
+  for(const root of ['/test/packages','/analyst/team packages']) {
+    const result=configurePackageRoots(source,[root]);
+    assert.deepEqual(result.actions[0].effect.allowed_roots,[root]);assert.equal(result.actions[0].revision,'2');
+    assert.equal(result.actions[0].status,'stale');assert.deepEqual(source.actions[0].effect.allowed_roots,['/user/data/packages']);
+    assert.equal(configurePackageRoots(result,[root]).actions[0].revision,'2');
+  }
+  assert.equal(configurePackageRoots(source,undefined),source);
+  for(const roots of [[],['/'],['/test/../user'],['relative'],['/test','/test'],['/test%2fsecret']])
+    assert.throws(()=>configurePackageRoots(source,roots),/destination roots/);
+});
+
+test('package roots change the pinned catalog only under an explicit new candidate version',async t=>{
+  const dir=await mkdtemp(join(tmpdir(),'dock-package-root-test-'));t.after(()=>rm(dir,{recursive:true,force:true}));
+  await assert.rejects(exec(process.execPath,[builder,'--out',join(dir,'missing-version'),'--package-root','/test/packages']),/explicit new/);
+  const out=join(dir,'candidate');
+  await exec(process.execPath,[builder,'--out',out,'--version','2026.09.06-test-root','--package-root','/test/packages']);
+  const text=await readFile(join(out,'actions.json'),'utf8'),catalog=JSON.parse(text),manifest=JSON.parse(await readFile(join(out,'manifest.json'),'utf8'));
+  assert.deepEqual(catalog.actions.find(a=>a.action_key==='package.save_as').effect.allowed_roots,['/test/packages']);
+  assert.equal(manifest.files['actions.json'],sha256(text));assert.equal(manifest.status,'candidate');
+});
