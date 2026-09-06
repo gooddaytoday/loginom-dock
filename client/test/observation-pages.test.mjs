@@ -188,3 +188,16 @@ test('wrong-observation ref hint names only an already delivered complete ref se
   assert.throws(()=>pages.assertIssued(one.output.observation_id,{source_ref:'ref-5',target_ref:'ref-89'}),e=>!e.message.includes('output.observation_id='));
   pages.clear();assert.throws(()=>pages.assertIssued(one.output.observation_id,{ref:'ref-5'}),e=>!e.message.includes(two.output.observation_id));
 });
+
+
+test('diagnostic mutation counters refresh without reviving a changed guard epoch',()=>{
+  const pages=createObservationPages(),source=fixture();
+  source.output.dom_epoch={document:'doc',revision:0};
+  source.output.scan={complete:true,mutation_counts:{ignored_cursor_blink:0}};
+  const first=pages.retain(structuredClone(source));
+  const fresh=structuredClone(source);fresh.output.scan.mutation_counts.ignored_cursor_blink=10;
+  const next=pages.next(first.output.page.next_cursor,fresh);
+  assert.equal(next.output.scan.mutation_counts.ignored_cursor_blink,10);
+  fresh.output.dom_epoch.revision=1;
+  assert.throws(()=>pages.next(next.output.page.next_cursor,fresh),/Workspace changed/);
+});

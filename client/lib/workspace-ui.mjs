@@ -79,7 +79,7 @@ function workspaceUiCapability(page, task) {
       state.revision = 0;
       // Diagnostic counters never waive the epoch guard. Retain no DOM nodes,
       // text, attribute values or arbitrary attribute/class names.
-      state.mutations={cursor_style:0,other_style:0,attributes:0,child_list:0,text:0,other:0,unclassified:0};
+      state.mutations={cursor_style:0,other_style:0,attributes:0,child_list:0,text:0,other:0,unclassified:0,ignored_cursor_blink:0};
       state.captureMutations=records=>{
         state.revision+=records.length;
         for(const record of records.slice(0,128)) {
@@ -90,11 +90,26 @@ function workspaceUiCapability(page, task) {
           } else if(record.type==='childList')kind='child_list';
           else if(record.type==='characterData')kind='text';
           state.mutations[kind]++;
+          // CodeMirror5 restartBlink toggles ONLY cursorDiv.style.visibility.
+          // Restrict the exemption to that owned container and empty/hidden
+          // inline style. Any geometry/style ABA has a nonmatching oldValue in
+          // its batch and still changes the epoch. No style strings are retained.
+          const target=record.target;
+          if(record.type==='attributes' && record.attributeName==='style' && target?.isConnected
+            && target.classList?.contains('CodeMirror-cursors')) {
+            const editor=target.closest('[data-tid$=";WizrdMCF;CalcDataWizard;cmpExpression"]');
+            const wrapper=target.closest('.CodeMirror');
+            const visibilityOnly=value=>value===null || typeof value==='string' && /^\s*(?:visibility\s*:\s*hidden\s*;?\s*)?$/.test(value);
+            if(editor && wrapper && editor.contains(wrapper) && wrapper.CodeMirror?.getWrapperElement?.()===wrapper
+              && visibilityOnly(record.oldValue) && visibilityOnly(target.getAttribute('style'))) {
+              state.revision--;state.mutations.ignored_cursor_blink++;
+            }
+          }
         }
         state.mutations.unclassified+=Math.max(0,records.length-128);
       };
       state.observer = new MutationObserver(records => state.captureMutations(records));
-      state.observer.observe(document.documentElement, {subtree:true,childList:true,attributes:true,characterData:true});
+      state.observer.observe(document.documentElement, {subtree:true,childList:true,attributes:true,attributeOldValue:true,characterData:true});
     }
     // Delivery of the observer callback may lag behind a new synchronous read.
     state.captureMutations(state.observer.takeRecords());

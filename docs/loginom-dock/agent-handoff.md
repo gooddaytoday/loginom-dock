@@ -1,3 +1,11 @@
+**Checkpoint:** run024410-296ed587 terminal, session71725 закрыт,49/58 FAIL,
+127 API calls. В пяти Calculator epoch refusals только cursor_style delta9–13.
+Добавлено узкое исключение visibility blink для owned CodeMirror-cursors со
+сравнением old/current styles; geometry/ABA/другие mutations сохраняют guard.
+Telemetry counters больше не меняют paging digest.266 client /110 Python /10 packaging PASS.
+Далее новый полный Luna/ChatGPT/medium run; node/apply/results и P3–P9 открыты.
+Active Hermes/browser нет; детали и ссылки на CodeMirror source сверху status.
+
 **Checkpoint:** run022803-33baaab3 terminal, session72000 закрыт, 50/58 FAIL.
 35 API calls; upstream Codex stream TTFB timeout120s, usage failed=true.
 Calculator не достигнут; mutation_counts работают на графе, причина epoch ещё

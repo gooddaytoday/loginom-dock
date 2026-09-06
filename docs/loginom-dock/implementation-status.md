@@ -1,3 +1,42 @@
+## 2026-09-06 — установлена причина Calculator epoch отказов; узкое исключение мигания
+
+Run 20260906-024410-296ed587 terminal, session71725 закрыт. Существующая
+ChatGPT subscription / openai-codex / gpt-5.6-luna / medium, 127 API calls,
+completed=true/failed=false, exit0/timeout=false; harness HEAD3d6a2686,
+runtime pin91402be94d5c89948ca3942fa408e9fbf6c0804f539ff63af5ad5a3c408da283.
+Frozen audit49/58 FAIL, SHA
+6cafc72c4e82492b876bc2efddc3fcdfa79da266a9a0c379efafaa09133f2327.
+Не пройдены matching replies, navigation и семь domain gates.
+
+Сравнение requested observation и отказа по mutation_counts показало:
+Calculator calls267/271/275/277/279 имеют только cursor_style delta11/11/9/13/10,
+остальные категории0. В импорте были другие реальные DOM изменения; их нельзя
+игнорировать по аналогии. Причина прежних повторных Calculator epoch отказов
+теперь подтверждена live диагностикой, но полного сценария нет.
+
+Первичный источник CodeMirror5 src/display/selection.js restartBlink переключает
+только cursorDiv.style.visibility между пустым значением и hidden;
+src/display/Display.js создаёт cursorDiv с классом CodeMirror-cursors.
+Источники: https://raw.githubusercontent.com/codemirror/codemirror5/master/src/display/selection.js
+и https://raw.githubusercontent.com/codemirror/codemirror5/master/src/display/Display.js.
+
+Добавлено узкое исключение из epoch: только подключённый CodeMirror-cursors
+внутри CalcDataWizard;cmpExpression, wrapper подтверждён public getWrapperElement,
+старый и текущий inline style содержат только пустоту или visibility:hidden.
+MutationObserver получает attributeOldValue; строки стилей не сохраняются и
+читаются только для этого точного случая. Геометрия/другие свойства, singular
+CodeMirror-cursor, чужой контейнер, text/child/class mutations по-прежнему
+меняют epoch. Geometry ABA в одном batch оставляет значимое изменение.
+Классификация ограничена128 записями; остаток остаётся значимым.
+
+mutation_counts исключены только из digest страниц как диагностика; при next
+обновляются до свежего receipt. dom_epoch и остальные scan fields остаются
+частью digest; guard state/issued refs не заменяются. Добавлены негативные тесты
+и проверка, что диагностические счётчики не делают неизменённую страницу stale.
+266 client /110 Python /10 packaging PASS; live исправленной версии ещё не запускался.
+Далее полный Luna run для проверки этой причины, затем node/settings binding,
+apply/results и весь P3–P9. Active Hermes/browser нет; production не менялся.
+
 ## 2026-09-06 — диагностический прогон прерван timeout потока модели
 
 Run 20260906-022803-33baaab3 terminal, session72000 закрыт; исходники заморожены

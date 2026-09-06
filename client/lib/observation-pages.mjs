@@ -6,6 +6,8 @@ const canonical = value => value && typeof value === 'object'
   ? Array.isArray(value) ? value.map(canonical) : Object.fromEntries(Object.keys(value).sort().map(key => [key, canonical(value[key])])) : value;
 const revision = snapshot => {
   const { operation, observation_id, recovery, gesture_applied, verification_required, ...state } = snapshot;
+  const {mutation_counts,...guardScan}=state.scan??{};
+  if(state.scan)state.scan=guardScan; // Telemetry is not a DOM identity/version.
   return createHash('sha256').update(JSON.stringify(canonical(state))).digest('hex');
 };
 const compactElement = item => {
@@ -153,6 +155,9 @@ export function createObservationPages({ maxBytes = 12000, maxRecords = 32, capa
         remove(entry.id);
         throw new Error('Workspace changed between observation pages; begin a new observation. If this repeats in a wizard, use scope roots, then read its freshly delivered WizrdMCF root_ref and observation_id. Do not reuse refs from the invalidated observation');
       }
+      // Only diagnostic counters refresh; guard state and issued refs remain
+      // the retained snapshot. All other scan fields still participate in revision.
+      if(fresh.output.scan?.mutation_counts)entry.snapshot.scan.mutation_counts=structuredClone(fresh.output.scan.mutation_counts);
       entry.receiptOperationId=fresh.operation_id;
       return { ...fresh, output: render(entry, page.offset) };
     },

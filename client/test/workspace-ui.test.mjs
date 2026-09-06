@@ -1346,7 +1346,7 @@ test('mutation diagnostics distinguish cursor styles without ignoring any epoch 
   const result=await page.act({verb:'click',ref:target.ref},before);
   assert.equal(result.status,'NOT_APPLIED');assert.equal(result.error.code,'UI_EPOCH_CHANGED');
   assert.equal(result.output.dom_epoch.revision,5);
-  assert.deepEqual(result.output.scan.mutation_counts,{cursor_style:1,other_style:1,attributes:1,child_list:1,text:1,other:0,unclassified:0});
+  assert.deepEqual(result.output.scan.mutation_counts,{cursor_style:1,other_style:1,attributes:1,child_list:1,text:1,other:0,unclassified:0,ignored_cursor_blink:0});
   assert.deepEqual(page.events,[]);
 });
 
@@ -1358,4 +1358,33 @@ test('mutation classification caps work while epoch counts every record',async()
   assert.equal(after.dom_epoch.revision,500);
   assert.equal(after.scan.mutation_counts.child_list,128);
   assert.equal(after.scan.mutation_counts.unclassified,372);
+});
+
+
+test('owned Calculator cursor visibility blinking does not stale an unrelated checked control',async()=>{
+  const page=new Page(),c=calculatorDocument(page);
+  const cursor=page.add('div',null,'',{x:0,y:0,width:0,height:0},c.wrapper);cursor.attrs.class='CodeMirror-cursors';
+  const button=page.add('button','Safe;btnAction','Act',{x:800,y:700,width:50,height:20});
+  const before=await page.observe(),target=before.ui.elements.find(e=>e.tid==='Safe;btnAction');
+  cursor.attrs.style='';
+  page.mutationObserver.pending.push({type:'attributes',attributeName:'style',target:cursor,oldValue:''},
+    {type:'attributes',attributeName:'style',target:cursor,oldValue:'visibility: hidden;'});
+  const result=await page.act({verb:'click',ref:target.ref},before);
+  assert.equal(result.status,'SUCCEEDED',JSON.stringify(result.error));
+  assert.equal(result.output.dom_epoch.revision,before.dom_epoch.revision);
+  assert.equal(result.output.scan.mutation_counts.ignored_cursor_blink,2);
+  assert.deepEqual(page.events,['click']);
+});
+
+test('cursor exemption rejects geometry ABA, individual cursor styles and unowned containers',async()=>{
+  for(const mode of ['geometry-aba','individual','unowned','content']) {
+    const page=new Page(),c=calculatorDocument(page);
+    const cursor=page.add('div',null,'',undefined,mode==='unowned'?page.document.body:c.wrapper);
+    cursor.attrs.class=mode==='individual'?'CodeMirror-cursor':'CodeMirror-cursors';cursor.attrs.style='';
+    const before=await page.observe();
+    const records=[{type:mode==='content'?'childList':'attributes',attributeName:'style',target:cursor,oldValue:'visibility: hidden;'}];
+    if(mode==='geometry-aba')records.push({type:'attributes',attributeName:'style',target:cursor,oldValue:'left: 100px;'});
+    page.mutationObserver.callback(records);
+    assert.ok((await page.observe()).dom_epoch.revision>before.dom_epoch.revision,mode);
+  }
 });
