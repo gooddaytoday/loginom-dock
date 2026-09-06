@@ -93,6 +93,30 @@ class RenderedResultsTest(unittest.TestCase):
         self.assertEqual(rr.diagnose(data,EXPECTED,'')['observations'],[])
 
 
+    def test_diagnostic_requires_unique_reply_within_session(self):
+        result={'status':'SUCCEEDED','operation_id':'read','output':snapshot()}
+        reply={'session_id':'s','tool_call_id':'c','row':2,'tool':'dock_workspace_observe','result':result}
+        evidence={'tools':[reply],
+                  'calls':[{'session_id':'s','tool_call_id':'c','row':1,'tool':'dock_workspace_observe','arguments':{}}],
+                  'events':[{'phase':'observation_completed','operation_id':'read','outcome':copy.deepcopy(result)}]}
+        self.assertEqual(len(rr.diagnose(evidence,EXPECTED,'')['observations']),3)
+        for conflict in ('identical','different_output','failed','different_tool'):
+            with self.subTest(conflict=conflict):
+                data=copy.deepcopy(evidence);duplicate=copy.deepcopy(reply);duplicate['row']=3
+                if conflict=='different_output':
+                    duplicate['result']['output']['ui']['table_cells'][0]['data_column']['declared_type']='real'
+                elif conflict=='failed':duplicate['result']={'status':'FAILED'}
+                elif conflict=='different_tool':duplicate['tool']='dock_ui_action'
+                data['tools'].append(duplicate)
+                self.assertEqual(rr.diagnose(data,EXPECTED,'')['observations'],[])
+        # A reused tool-call ID in another session must neither reject this
+        # receipt nor supply a matching call for that unrelated reply.
+        data=copy.deepcopy(evidence);foreign=copy.deepcopy(reply);foreign['session_id']='other'
+        data['tools'].insert(0,foreign)
+        self.assertEqual(len(rr.diagnose(data,EXPECTED,'')['observations']),3)
+        data['tools']=[foreign]
+        self.assertEqual(rr.diagnose(data,EXPECTED,'')['observations'],[])
+
     def test_literal_null_string_and_empty_result_are_not_guessed(self):
         expected=copy.deepcopy(EXPECTED);expected['import']['rows'][0]['Comment']='<null>'
         value=snapshot();value['ui']['table_cells'][9]['data_cell']['display_text']='<null>'

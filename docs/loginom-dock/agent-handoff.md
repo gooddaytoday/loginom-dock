@@ -1,3 +1,30 @@
+**2026-09-06 — live выбор типа/вида импорта и повторное открытие.**
+Runtime ab19b698 проверен напрямую через serialized workspace UI capability,
+в отдельном ручном Loginom Package1. В TF-4 format Quantity/index2:
+select_wizard_option string SUCCEEDED1063ms → string/Дискретный;
+integer SUCCEEDED1057ms → integer/Дискретный; kind Непрерывный
+SUCCEEDED1059ms → integer/Непрерывный. Каждый trace содержит один gesture и
+import_column_option_verified, header/5cell refs сохранились во время refresh.
+Открытие cell/picker выполнено диагностическим Playwright; это native driver
+proof, не автономная Hermes acceptance и не immutable executor receipt chain.
+
+Затем Next→output mapping→Next→Описание узла→Done вернул сценарий.
+Повторный native open settings того же source, Next→format: roots/narrow
+SUCCEEDED, пять полей Id integer, Region string, Quantity integer/Непрерывный,
+UnitPrice real, Comment string, все used=true. Это свежая форма с новыми refs.
+Package1 ещё не сохранён на сервер; полный settings/file/mapping verifier не
+готов. При первом open после Таблицы пришлось подтвердить деактивацию узла;
+после Done второй open уже без подтверждения (узел оставался неактивным).
+UI оставлен TF-4 text_import_format, editor закрыт. Hermes не запускался.
+
+Независимый анализатор rendered_results.diagnose исправлен: требуется один
+matching reply на session_id/tool_call_id. Identical/conflicting output/status/
+tool name duplicates отклоняются, чужие sessions не смешиваются. 119/119
+Python tests PASS; runtime unchanged после300/300 client и10/10 packaging.
+Старые audits не переписаны, domain gates остаются открыты. Далее независимый
+import apply/reopen verifier (file/settings/mappings/full schema), result и
+execution proof, package roundtrip по карте p3-verification-gap-review.md.
+
 **2026-09-06 — возобновление: цельные участки P3 и параллельная работа.**
 Пользователь одобрил UI-first разбор всей оставшейся цепочки, короткие проверки
 отдельных возможностей, завершение связных участков до полного Hermes replay

@@ -142,7 +142,9 @@ def diagnose(evidence, expected, prefix):
         calls=[c for c in evidence.get('calls',[]) if c.get('session_id')==tool.get('session_id')
                and c.get('tool_call_id')==tool.get('tool_call_id') and c.get('tool')==tool['tool']
                and type(c.get('row')) is int and type(tool.get('row')) is int and c['row']<tool['row']]
-        if len(calls)!=1:continue
+        twins=[t for t in evidence['tools'] if (t.get('session_id'),t.get('tool_call_id'))
+               ==(tool.get('session_id'),tool.get('tool_call_id'))]
+        if len(calls)!=1 or len(twins)!=1:continue
         op=reply.get('operation_id')
         if not op or op in seen:continue
         records=[e for e in evidence['events'] if e.get('phase')=='observation_completed' and e.get('operation_id')==op]
