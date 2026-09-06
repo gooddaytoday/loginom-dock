@@ -3,7 +3,7 @@
 export const uiActionSchema = {
   type: 'object', additionalProperties: false, required: ['verb'],
   properties: {
-    verb: { type: 'string', enum: ['click', 'double_click', 'right_click', 'fill', 'press', 'drag', 'scroll', 'set_checked', 'replace_expression', 'set_wizard_field', 'wizard_step', 'select_wizard_option', 'apply_expression_parameters', 'cancel_expression_parameters', 'open_wizard', 'finish_wizard', 'apply_output_column', 'cancel_output_column'] },
+    verb: { type: 'string', enum: ['click', 'double_click', 'right_click', 'fill', 'press', 'drag', 'scroll', 'set_checked', 'replace_expression', 'set_wizard_field', 'wizard_step', 'select_wizard_option', 'apply_expression_parameters', 'cancel_expression_parameters', 'open_wizard', 'finish_wizard', 'apply_output_column', 'cancel_output_column', 'apply_reform_column', 'cancel_reform_column'] },
     expected_stage: { type: 'string', enum: ['text_import_file','text_import_format','input_mapping','output_mapping','calculator','grouping','field_parameters','done'] },
     checked: { type: 'boolean' },
     delta_y: { type: 'integer', minimum: -1000, maximum: 1000 },
@@ -733,11 +733,13 @@ function workspaceUiCapability(page, task) {
         ? {node:graphNodeOf(element),workflow_path:navigationContext.path}:null;
       const finishWizard=tid===wizard.root_tid+';btnDone' && wizard.stage==='done' && wizard.completion?.ready && wizard.owner_context?.status==='observed'
         ? {root_ref:wizard.root_ref,owner:wizard.owner_context,completion:wizard.completion}:null;
-      const column=wizard.column_parameters;
+      const reformColumn=wizard.stage==='field_parameters',column=reformColumn?wizard.reform_parameters:wizard.column_parameters;
       const columnReady=column?.status==='observed' && column.selected_column?.data_kind && column.selected_column?.usage
-        && Object.values(column.fields??{}).length===5 && Object.values(column.fields).every(f=>f.status==='observed' && !f.truncated);
-      const columnClose=columnReady && [wizard.root_tid+';EditColumnDefForm;btnApply',wizard.root_tid+';EditColumnDefForm;btnCancel'].includes(tid)
-        ? {mode:tid.endsWith(';btnApply')?'apply':'cancel',root_ref:column.root_ref,wizard_root_ref:wizard.root_ref,original_row:column.selected_column}:null;
+        && (!reformColumn || column.selected_column.caching && typeof column.selected_column.excluded==='boolean')
+        && Object.values(column.fields??{}).length===(reformColumn?7:5) && Object.values(column.fields).every(f=>f.status==='observed' && !f.truncated);
+      const columnForm=reformColumn?'EditReformColumnDefForm':'EditColumnDefForm';
+      const columnClose=columnReady && [wizard.root_tid+';'+columnForm+';btnApply',wizard.root_tid+';'+columnForm+';btnCancel'].includes(tid)
+        ? {scope:reformColumn?'reform':'output',mode:tid.endsWith(';btnApply')?'apply':'cancel',root_ref:column.root_ref,wizard_root_ref:wizard.root_ref,original_row:column.selected_column}:null;
       const params=wizard.expression_parameters;
       const expressionParametersReady=params?.status==='observed' && wizard.expression_selection?.status==='observed' && params.selected_expression
         && Object.values(params.fields??{}).length===3 && Object.values(params.fields).every(f=>f.status==='observed' && !f.truncated);
@@ -767,7 +769,7 @@ function workspaceUiCapability(page, task) {
         enabled: isEnabled, visible: true, interaction, bounding_box: boxOf(element),
         // A bounded prefix is not a sufficient value precondition. A dedicated
         // large-field driver must establish its own complete read/write contract.
-        allowed_actions: expressionWritable ? ['replace_expression'] : allowed && !valueTruncated ? ['click', 'double_click', 'right_click', 'press', 'drag', ...(editable ? ['fill',...(wizardFields.has(element)?['set_wizard_field']:[])] : []), ...(checkState ? ['set_checked'] : []), ...(wizardStep?['wizard_step']:[]), ...(openWizard?['open_wizard']:[]), ...(finishWizard?['finish_wizard']:[]), ...(columnClose?[columnClose.mode==='apply'?'apply_output_column':'cancel_output_column']:[]), ...(expressionApply?['apply_expression_parameters']:[]), ...(expressionCancel?['cancel_expression_parameters']:[]), ...(combo?.kind==='option'?['select_wizard_option']:[]), ...(scroll && interaction.state === 'point_observed' ? ['scroll'] : [])] : [] };
+        allowed_actions: expressionWritable ? ['replace_expression'] : allowed && !valueTruncated ? ['click', 'double_click', 'right_click', 'press', 'drag', ...(editable ? ['fill',...(wizardFields.has(element)?['set_wizard_field']:[])] : []), ...(checkState ? ['set_checked'] : []), ...(wizardStep?['wizard_step']:[]), ...(openWizard?['open_wizard']:[]), ...(finishWizard?['finish_wizard']:[]), ...(columnClose?[columnClose.mode+'_'+columnClose.scope+'_column']:[]), ...(expressionApply?['apply_expression_parameters']:[]), ...(expressionCancel?['cancel_expression_parameters']:[]), ...(combo?.kind==='option'?['select_wizard_option']:[]), ...(scroll && interaction.state === 'point_observed' ? ['scroll'] : [])] : [] };
     });
     const nodes = labels.slice(0, 200).map(label => {
       const nodeTid = graphPrefix + label, node = tids.get(nodeTid)?.[0];
@@ -945,7 +947,7 @@ function workspaceUiCapability(page, task) {
       || task.action.verb==='set_wizard_field' && !same(before.wizard_field,current.wizard_field)
       || task.action.verb==='cancel_expression_parameters' && !same(before.expression_cancel,current.expression_cancel)
       || task.action.verb==='apply_expression_parameters' && !same(before.expression_apply,current.expression_apply)
-      || ['apply_output_column','cancel_output_column'].includes(task.action.verb) && !same(before.column_close,current.column_close)
+      || ['apply_output_column','cancel_output_column','apply_reform_column','cancel_reform_column'].includes(task.action.verb) && !same(before.column_close,current.column_close)
       || task.action.verb==='finish_wizard' && !same(before.wizard_finish,current.wizard_finish)
       || task.action.verb==='open_wizard' && !same(before.wizard_open,current.wizard_open)
       || task.action.verb==='wizard_step' && !same(before.wizard_step,current.wizard_step)
@@ -1032,7 +1034,7 @@ function workspaceUiCapability(page, task) {
         if (!current.authenticated) fail('LOGIN_REQUIRED', 'Loginom authentication is required before changing the workspace');
         if (!same(task.snapshot.dom_epoch, current.dom_epoch)) fail('UI_EPOCH_CHANGED', 'The document changed since this observation; observe again even if its visible state looks unchanged');
         if (!same(current.ui.dialogs.map(item => item.ref), task.snapshot.ui.dialogs.map(item => item.ref))) fail('UI_CONTEXT_CHANGED', 'The visible dialog changed; observe the workspace again');
-        if(['set_wizard_field','wizard_step','select_wizard_option','apply_expression_parameters','cancel_expression_parameters','open_wizard','finish_wizard','apply_output_column','cancel_output_column'].includes(task.action.verb) && (!same(task.snapshot.wizard,current.wizard)
+        if(['set_wizard_field','wizard_step','select_wizard_option','apply_expression_parameters','cancel_expression_parameters','open_wizard','finish_wizard','apply_output_column','cancel_output_column','apply_reform_column','cancel_reform_column'].includes(task.action.verb) && (!same(task.snapshot.wizard,current.wizard)
           || !same(task.snapshot.active_identity,current.active_identity) || !same(task.snapshot.package_identity,current.package_identity)))
           fail('WIZARD_CONTEXT_CHANGED','Wizard settings or package changed; observe again');
         const refs = task.action.verb === 'drag' ? [task.action.source_ref, task.action.target_ref] : [task.action.ref];
@@ -1072,7 +1074,7 @@ function workspaceUiCapability(page, task) {
           await page.mouse.click(targets[0].point.x, targets[0].point.y, { clickCount, button });
           mouseHeld = false;
         };
-        if (task.action.verb === 'click' || ['wizard_step','select_wizard_option','apply_expression_parameters','cancel_expression_parameters','open_wizard','finish_wizard','apply_output_column','cancel_output_column'].includes(task.action.verb)) await clickTarget(1);
+        if (task.action.verb === 'click' || ['wizard_step','select_wizard_option','apply_expression_parameters','cancel_expression_parameters','open_wizard','finish_wizard','apply_output_column','cancel_output_column','apply_reform_column','cancel_reform_column'].includes(task.action.verb)) await clickTarget(1);
         else if (task.action.verb === 'double_click') await clickTarget(2);
         else if (task.action.verb === 'right_click') await clickTarget(1, 'right');
         else if (task.action.verb === 'press') await first.press(task.action.key, { timeout: timeout() });
@@ -1173,7 +1175,7 @@ function workspaceUiCapability(page, task) {
         } else fail('UI_ACTION_INVALID', 'Unsupported UI gesture');
         if (effectPossible) record('ui_gesture_applied', { verb: task.action.verb });
         phase = 'observing'; timeout();
-        if(['apply_expression_parameters','cancel_expression_parameters','select_wizard_option','apply_output_column','cancel_output_column'].includes(task.action.verb))postActionRoot=current.wizard.root_ref;
+        if(['apply_expression_parameters','cancel_expression_parameters','select_wizard_option','apply_output_column','cancel_output_column','apply_reform_column','cancel_reform_column'].includes(task.action.verb))postActionRoot=current.wizard.root_ref;
         const readOpeningUi=async()=>{
           const roots=await readUi(true);
           postActionRoot=roots.wizard?.root_ref ?? roots.ui.elements.find(e=>e.tid===current.workflow_ref.prefix+';ModelForm;cmpDiagram')?.ref ?? roots.ui.elements.find(e=>e.scope==='dialog')?.ref ?? roots.ui.elements[0]?.ref;
@@ -1229,24 +1231,28 @@ function workspaceUiCapability(page, task) {
           record('wizard_open_verified',{node:opening.node,workflow_path:opening.workflow_path,wizard_root_ref:observed.wizard.root_ref,
             owner_node:owner.node,settings_applied:false});
         }
-        if(['apply_output_column','cancel_output_column'].includes(task.action.verb)) {
-          const cancel=task.action.verb==='cancel_output_column',params=current.wizard.column_parameters,fields=params.fields;
+        if(['apply_output_column','cancel_output_column','apply_reform_column','cancel_reform_column'].includes(task.action.verb)) {
+          const reform=task.action.verb.endsWith('_reform_column'),cancel=task.action.verb.startsWith('cancel_');
+          const paramsKey=reform?'reform_parameters':'column_parameters',rowsKey=reform?'reform_columns':'output_columns';
+          const params=current.wizard[paramsKey],fields=params.fields;
           const types={'Целый':'integer','Вещественный':'real','Строковый':'string','Логический':'boolean','Дата/Время':'datetime','Переменный':'variant'};
-          const wanted=cancel?params.selected_column:{name:fields.name.value,label:fields.label.value,type:types[fields.type_label.value],data_kind:fields.data_kind.value,usage:fields.usage.value};
+          const wanted=cancel?params.selected_column:{name:fields.name.value,label:fields.label.value,type:types[fields.type_label.value],data_kind:fields.data_kind.value,usage:fields.usage.value,...(reform?{caching:fields.caching.value,excluded:fields.excluded.value}:{})};
           const sameContext=fresh=>fresh.authenticated && fresh.origin===current.origin && fresh.loginom_build===current.loginom_build
             && same(fresh.workflow_ref,current.workflow_ref) && same(fresh.package_identity,current.package_identity)
-            && fresh.active_tab_ref===current.active_tab_ref && fresh.wizard.root_ref===current.wizard.root_ref && fresh.wizard.stage==='output_mapping'
+            && fresh.active_tab_ref===current.active_tab_ref && fresh.wizard.root_ref===current.wizard.root_ref && fresh.wizard.stage===(reform?'field_parameters':'output_mapping')
+            && same(fresh.wizard.owner_context,current.wizard.owner_context)
             && same(fresh.wizard.port_context,current.wizard.port_context);
-          const matches=fresh=>(fresh.wizard.output_columns?.fields??[]).filter(row=>row.status==='observed' && row.selected
+          const matches=fresh=>(fresh.wizard[rowsKey]?.fields??[]).filter(row=>row.status==='observed' && row.selected
             && ['name','label','type','data_kind','usage'].every(k=>wanted[k] && row[k]===wanted[k])
+            && (!reform || row.caching===wanted.caching && row.excluded===wanted.excluded)
             && (!cancel || row.row_ref===wanted.row_ref));
-          const closed=fresh=>!fresh.wizard.column_parameters && !fresh.ui.dialogs.some(d=>d.ref===params.root_ref);
+          const closed=fresh=>!fresh.wizard[paramsKey] && !fresh.ui.dialogs.some(d=>d.ref===params.root_ref);
           for(let attempt=0;attempt<12 && sameContext(observed) && (!closed(observed) || observed.ui.masks.length || matches(observed).length!==1);attempt++) {
             timeout();await page.waitForTimeout(Math.min(100,timeout()));observed=await readUi();
           }
           if(!sameContext(observed) || !closed(observed) || observed.ui.masks.length || observed.ui.dialogs.length || matches(observed).length!==1)
             fail('OUTPUT_COLUMN_NOT_CONFIRMED','The selected output row was not confirmed after closing its editor; inspect before retry');
-          record('output_column_row_verified',{mode:cancel?'cancel':'apply',row:matches(observed)[0],port_saved:false,package_saved:false});
+          record(reform?'reform_column_row_verified':'output_column_row_verified',{mode:cancel?'cancel':'apply',row:matches(observed)[0],node_saved:false,port_saved:false,package_saved:false});
         }
         if(['apply_expression_parameters','cancel_expression_parameters'].includes(task.action.verb)) {
           const cancelling=task.action.verb==='cancel_expression_parameters';

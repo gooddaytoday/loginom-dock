@@ -1948,3 +1948,38 @@ test('reform editor reads seven native parameters including disabled cache and o
     assert.equal(params.applied_verified,false);
   }
 });
+
+test('reform editor close verifies caching exclusion and original row after one click',async()=>{
+  for(const mode of ['apply','cancel','wrong_type','wrong_kind','cancel_replaced','lost_reply','wrong_cache','wrong_excluded']) {
+    const page=new Page(),base='MF;TF-1;WizrdMCF;',form=page.add('div',base.slice(0,-1));
+    const stem=base+'ReformColumnsWizard;';page.add('button',stem+'grdTargetColumns;tbl','',undefined,form);
+    let table;
+    const createRow=(name='Quantity',type='Integer',kind='Непрерывный')=>{
+      table=page.add('table',null,'',undefined,form);table.attrs.class='x-grid-item-selected';
+      page.add('td',stem+'colName_'+name,name,undefined,table);
+      const label=page.add('td',stem+'colDisplayName_'+name,'Sum',undefined,table);page.add('span',null,'',undefined,label).attrs.class='bg-TBGDataType-dt'+type;
+      page.add('td',stem+'colDataKind_'+name,kind,undefined,table);page.add('td',stem+'colDefaultUsageType_'+name,'Не задано',undefined,table);
+      page.add('td',stem+'colCachingMethod_'+name,'Отключено',undefined,table);
+      const excluded=page.add('td',stem+'colExcluded_'+name,'',undefined,table);page.add('img',null,'',undefined,excluded).attrs.class='x-grid-checkcolumn';
+    };createRow();
+    const dialog=page.add('div',base+'EditReformColumnDefForm');dialog.attrs.class='x-window';
+    for(const [key,value] of [['edtName','QuantitySum'],['edtDisplayName','Sum'],['cbxDataType','Целый'],['cbxDataKind','Непрерывный'],['cbxUsageType','Не задано'],['cntMain;cbxCachingMethod','Отключено']]) {
+      const owner=page.add('div',base+'EditReformColumnDefForm;'+key,'',undefined,dialog);page.add('input',null,'',undefined,owner).value=value;
+    }
+    const excluded=page.add('div',base+'EditReformColumnDefForm;cntMain;chbExcluded','',undefined,dialog);
+    page.add('span',base+'EditReformColumnDefForm;cntMain;chbExcluded;DisplayEl','',undefined,excluded).attrs.class='x-form-checkbox';
+    const cancel=mode.startsWith('cancel'),verb=cancel?'cancel_reform_column':'apply_reform_column';
+    page.add('button',base+'EditReformColumnDefForm;'+(cancel?'btnCancel':'btnApply'),'Close',{x:600,y:400,width:80,height:25},dialog);
+    const full=await page.observe(),read=await page.execute({mode:'observe',root_ref:full.wizard.reform_parameters.root_ref});
+    const target=read.output.ui.elements.find(e=>e.column_close);assert.ok(target);
+    const click=page.mouse.click;page.mouse.click=async(...args)=>{await click(...args);dialog.remove();
+      if(mode!=='cancel'){table.remove();createRow(cancel?'Quantity':'QuantitySum',mode==='wrong_type'?'Float':'Integer',mode==='wrong_kind'?'Дискретный':'Непрерывный');}
+      if(mode==='wrong_cache')table.querySelectorAll('[data-tid="'+stem+'colCachingMethod_QuantitySum"]')[0].ownText='При активации';
+      if(mode==='wrong_excluded')table.querySelectorAll('.x-grid-checkcolumn')[0].attrs.class+=' x-grid-checkcolumn-checked';
+      if(mode==='lost_reply')throw new Error('Lost reply');
+    };
+    const result=await page.act({verb,ref:target.ref},read.output);
+    assert.equal(result.status,['apply','cancel'].includes(mode)?'SUCCEEDED':'AMBIGUOUS',mode+JSON.stringify(result.error));
+    assert.equal(page.events.filter(e=>e==='click').length,1);
+  }
+});

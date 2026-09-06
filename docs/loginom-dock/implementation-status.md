@@ -1,3 +1,21 @@
+**Checkpoint 2026-09-06 — применение и отмена ReformColumns editor.**
+Добавлены apply_reform_column/cancel_reform_column через существующий guarded
+column_close: 7 observed draft properties, original selected row, cache/exclusion
+обязательны для готовности. Один click; post-read original wizard root, ожидание
+закрытия editor и обновлённой строки. Контекст включает origin/build/workflow/
+package/tab/wizard/stage/owner/port. Сверяются name/label/type/kind/usage/cache/
+excluded; cancel требует original row_ref. Результат явно node_saved=false,
+port_saved=false, package_saved=false. Tool description обновлено.
+
+Live manual label draft QuantitySum→Количество единиц; typed apply SUCCEEDED176ms
+подтвердил новую строку с integer/cache off/excluded false. Reopen, draft label
+Discard draft; typed cancel SUCCEEDED41ms вернул original row_ref и Количество
+единиц. Editor закрыт, ReformColumnsWizard открыт. Последняя метка применена в
+мастере, но сам node после этого НЕ сохранён. Package1 не сохранён, Hermes нет.
+Тесты: apply/cancel, wrong type/kind/cache/excluded, replaced cancel row, lost reply;
+максимум один click, 288 client /115 Python /10 packaging PASS. Далее node save/reopen и independent
+settings/results, Grouping drivers + full Luna/ChatGPT/medium P3–P9 acceptance.
+
 **Checkpoint 2026-09-06 — подтверждённый выбор типа в ReformColumns editor.**
 select_wizard_option поддерживает scope reform_column: выбор из native
 EditReformColumnDefForm;cbxDataType;boundlist связан с original form/input/owner и

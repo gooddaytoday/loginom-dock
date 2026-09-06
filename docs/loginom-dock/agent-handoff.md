@@ -1,3 +1,10 @@
+**Checkpoint:** apply_reform_column/cancel_reform_column проверяют 7 свойств
+строки после одного click, cancel требует original row_ref. Live apply176ms,
+cancel41ms PASS. Current label Количество единиц применена в wizard, node ещё
+НЕ сохранён. Editor закрыт, ReformColumnsWizard открыт, node inactive, Package1
+не сохранён; active Hermes нет. Далее node/persistence/settings/results gates,
+Grouping и full P3–P9. 288 client /115 Python /10 packaging PASS. Детали сверху status.
+
 **Checkpoint:** select_wizard_option поддерживает reform_column type с полным
 7-property readback и selected row. Live integer→real→integer PASS42/48ms,
 исходный тип восстановлен, Apply не выполнялся. Editor QuantitySum ОТКРЫТ,
