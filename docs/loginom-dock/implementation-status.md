@@ -1,3 +1,39 @@
+## 2026-09-06 — повторная Hermes проверка и самостоятельный разбор импорта
+
+Run 20260906-035739-62c8e272 на source96282e85 завершён, session17304 закрыт.
+Audit один раз: 50/58 FAIL, SHA
+8b7b517f0aa808d150d50e537270dfd7ef2578a2c60b290cb33275a640a9086e.
+48 API calls, openai-codex/gpt-5.6-luna/medium, completed=true, failed=false.
+Использован agent.3 с разрешённым /test/packages. Полный P3 не принят.
+Последняя ошибка call109: ref417 не выдан с observation17c4fc6a; graph page
+104 выдала вначале links/безымянные Graph;Vertex/переменные, а реальные узлы
+остались дальше. Root reads106–108 читали лишь отдельные Vertex. Это требует
+улучшить связь node metadata с доступными observed controls и порядок графового
+наблюдения; не разрешать невыданные refs и не повторять неизменённый run.
+
+Параллельно в ОТДЕЛЬНОЙ диагностической сессии Codex под test настроил импорт
+проверенного /test/Dock-upload-20260906-033638-57049220.csv. Реальный UI подтвердил:
+- delimiter dropdown «Точка с запятой», null literal \N, decimal literal .;
+  preview шесть строк, Id/Quantity целые, UnitPrice вещественный, Region/Comment
+  строки; пустой Comment отличается от <null>.
+- переходы file → format → output mapping → done; btnDone «Готово» закрывает
+  мастер и автоматически меняет дефолтную метку узла на имя файла. Нельзя
+  повторно искать этот узел только по прежнему «Текстовый файл».
+- после повторного открытия filename появляется асинхронно: видимый input
+  сначала пуст, затем получает сохранённый путь. Видимость не доказывает readiness.
+- в повторно открытом формате сохранены «Точка с запятой», \N, «Точка (.)»,
+  двойная кавычка. Первоначальный preview потерял дробные значения первых трёх
+  UnitPrice, хотя настройки выглядели правильными. После btnRefreshAll ожидаемые
+  12,50/7,25/2,50 восстановились. Причина не установлена; не объявлять продуктовый
+  дефект или applied/full-result proof по одним settings labels.
+
+Источники: e2e-tests/bg/helpers/wizard.ts, bg/sels/import/sImportTxt.ts,
+bg/sels/import/sColumnDefsTuning.ts; loginom-help/data/integration/import/txt/README.md.
+Evidence: .dock/post-mvp-p0/import-reopen-diagnostic.txt; UI оставлен открытым
+в отдельной диагностической сессии на формате импорта. Hermes не запускался повторно.
+Следующее: source/live graph selection contract, затем bound wizard lifecycle и
+post-apply refresh/readback. Все domain gates и P3–P9 остаются открыты.
+
 ## 2026-09-06 — прямая UI-диагностика навигации и исправление чтения закрытой панели
 
 Run 20260906-033638-57049220 завершён и audited один раз: 49/58 FAIL,

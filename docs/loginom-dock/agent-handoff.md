@@ -1,3 +1,13 @@
+**Checkpoint:** run035739-62c8e272 terminal, session17304 закрыт,50/58 FAIL,
+48 API calls Luna/ChatGPT/medium. Последний отказ: невыданный ref417; первая
+graph page перегружена Graph;Vertex, actual nodes дальше. Далее улучшить
+node→observed control и graph ordering после source/live проверки, не менять guard.
+Codex отдельно прошёл import apply/reopen: auto rename узла по CSV filename,
+асинхронное заполнение filename, сохранённые форматы; дробные preview значения
+восстановились лишь после RefreshAll. Причина последнего ещё неизвестна.
+Диагностический браузер оставлен в format wizard. Active Hermes нет; P3–P9 открыты.
+Подробности и frozen audit сверху implementation-status.md.
+
 **Правило пользователя от 6 сентября:** сначала Codex самостоятельно изучает
 нужный Loginom Web UI и формирует подход; при повторных ошибках Hermes возвращается
 в UI и диагностирует причину до нового неизменённого прогона. Сверять E2E/Help;
