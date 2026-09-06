@@ -1,3 +1,10 @@
+**Checkpoint:** поддержан DerivedDataSourceMappingEngineOutputPortWizard;
+output_columns.source читает rendered_source label/type либо explicit unmapped,
+identity_verified=false. Live QuantitySum source unmapped, остальные 4 source
+показаны. Node owner observed, port context unobserved. 285 client /115 Python /10 packaging PASS.
+UI не изменён: node mapping открыт, dropdown закрыт, Package1 не сохранён.
+Active Hermes нет. Далее integer conversion/mapping identity, Grouping и full P3–P9.
+
 **Checkpoint:** исправлено open_wizard для formatted graph key: exact native
 breadcrumb tid вместо сравнения с display label. Live Grouping SUCCEEDED1063ms;
 284 client /115 Python /10 packaging PASS. Active Hermes нет.

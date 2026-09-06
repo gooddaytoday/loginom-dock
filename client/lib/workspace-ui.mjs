@@ -156,7 +156,7 @@ function workspaceUiCapability(page, task) {
     const wizardMarkers={text_import_file:';ImportTextFilePreviewWizard;edtFileName',
       text_import_format:';ImportTextFileParamsWizard;edtValueNull',
       input_mapping:';TuneDataSourceInputPortWizard;btnAddMappingColumn',
-      output_mapping:[';ColumnsMappingEngineOutputPortWizard;btnAddMappingColumn',';DerivedDataSourceOutputSocketWizard;btnAddMappingColumn'],
+      output_mapping:[';ColumnsMappingEngineOutputPortWizard;btnAddMappingColumn',';DerivedDataSourceOutputSocketWizard;btnAddMappingColumn',';DerivedDataSourceMappingEngineOutputPortWizard;btnAddMappingColumn'],
       calculator:';CalcDataWizard;btnAddExpr',grouping:';GroupDataWizard;grdUsedFields;tbl',
       done:';DoneWizard;edtDisplayName'};
     const wizardButtons=['btnPrev','btnNext','btnDone','btnExecute','btnClose','btnError'];
@@ -165,8 +165,8 @@ function workspaceUiCapability(page, task) {
       '[data-tid*=";WizrdMCF;CalcDataWizard;colExpressionName_"]','[data-tid*=";WizrdMCF;CalcDataWizard;colExpressionDisplayName_"]','[data-tid$=";WizrdMCF;CalcDataWizard;cmpExpression"]','[data-tid$=";WizrdMCF;CalcDataWizard;btnCalcMode"]','span.bg-TBGCalcMode-cmExpression,span.bg-TBGCalcMode-cmJavaScript',
       ...['edtDelimiterChar','edtTextQualifier','edtValueNull','edtDecimalSeparator'].flatMap(name=>{const owner='[data-tid$=";WizrdMCF;ImportTextFileParamsWizard;'+name+';ValueControl"]';return [owner,owner+' input',owner+' textarea'];}),
       ...['edtDisplayName','cbxNodeTitleMode'].flatMap(name=>{const owner='[data-tid$=";WizrdMCF;DoneWizard;'+name+'"]';return [owner,owner+' input'];}),
-      '[data-tid*=";WizrdMCF;DerivedDataSourceOutputSocketWizard;colName_"]','[data-tid*=";WizrdMCF;DerivedDataSourceOutputSocketWizard;colDisplayName_"]',
-      ...['colDataKind_','colDefaultUsageType_'].map(key=>'[data-tid*=";WizrdMCF;DerivedDataSourceOutputSocketWizard;'+key+'"]'),
+      ...['DerivedDataSourceOutputSocketWizard','DerivedDataSourceMappingEngineOutputPortWizard'].flatMap(form=>
+        ['colName_','colDisplayName_','colDataKind_','colDefaultUsageType_','colSourceDisplayName_'].map(key=>'[data-tid*=";WizrdMCF;'+form+';'+key+'"]')),
       '[data-tid$=";WizrdMCF;EditColumnDefForm"]',
       ...['edtName','edtDisplayName','cbxDataType','cbxDataKind','cbxUsageType'].flatMap(name=>{const owner='[data-tid$=";WizrdMCF;EditColumnDefForm;'+name+'"]';return [owner,owner+' input'];}),
       '[data-tid$=";WizrdMCF;ExprDataEditForm"]',
@@ -324,7 +324,9 @@ function workspaceUiCapability(page, task) {
       if(wizard.status==='observed' && wizard.stage==='output_mapping')wizard.port_context=portContext;
     }
     if(wizard.status==='observed' && wizard.stage==='output_mapping') {
-      const base=wizard.root_tid+';DerivedDataSourceOutputSocketWizard;';
+      const mappingForms=['DerivedDataSourceOutputSocketWizard','DerivedDataSourceMappingEngineOutputPortWizard'].filter(name=>
+        (tids.get(wizard.root_tid+';'+name+';btnAddMappingColumn')??[]).filter(visible).length===1);
+      const base=wizard.root_tid+';'+(mappingForms.length===1?mappingForms[0]:'__unobserved__')+';';
       const cells=all.filter(e=>{charge();return (getTid(e)??'').startsWith(base+'colName_') && wizardForms[0].contains(e)
         && visible(e) && !sensitive(e) && !e.closest('.x-grid-row-summary');});
       if(cells.length) {
@@ -344,7 +346,17 @@ function workspaceUiCapability(page, task) {
               const cells=(tids.get(base+prefix+key)??[]).filter(e=>e.closest('table')===row && !e.closest('.x-grid-row-summary') && visible(e) && !sensitive(e));
               const text=cells.length===1?textOf(cells[0],true):null;return [name,text && text.length<240?text:null];
             }));
-            return {status:'observed',name,label,type:types[0][1],...extras,selected:row.classList.contains('x-grid-item-selected'),name_ref:refOf(cell),label_ref:refOf(labels[0]),row_ref:refOf(row)};
+            const sources=(tids.get(base+'colSourceDisplayName_'+key)??[]).filter(e=>e.closest('table')===row && !e.closest('.x-grid-row-summary') && visible(e) && !sensitive(e));
+            let source={status:sources.length>1?'ambiguous':'unobserved',identity_verified:false};
+            if(sources.length===1) {
+              const cell=sources[0],label=textOf(cell,true),icons=[...cell.querySelectorAll('[class*="bg-TBGDataType-dt"]')];
+              const nulls=cell.querySelectorAll('.bg-cell-null-value').length;
+              const types=Object.entries({String:'string',Integer:'integer',Float:'real',Boolean:'boolean',DateTime:'datetime',Variant:'variant'})
+                .filter(([kind])=>icons.length===1 && icons[0].classList.contains('bg-TBGDataType-dt'+kind));
+              source={status:!label && nulls===1 && !icons.length?'unmapped':label && label.length<240 && !nulls && types.length===1?'rendered_source':'ambiguous',identity_verified:false,cell_ref:refOf(cell)};
+              if(source.status==='rendered_source'){source.label=label;source.type=types[0][1];}
+            }
+            return {status:'observed',name,label,type:types[0][1],...extras,source,selected:row.classList.contains('x-grid-item-selected'),name_ref:refOf(cell),label_ref:refOf(labels[0]),row_ref:refOf(row)};
           });
         }
       }

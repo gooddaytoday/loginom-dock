@@ -1842,3 +1842,32 @@ test('output-port context binds distinct node and port breadcrumbs and rejects w
     else assert.notEqual(context.status,'observed',mode);
   }
 });
+
+test('node and socket output mapping read source cells without inventing source identity',async()=>{
+  for(const formName of ['DerivedDataSourceOutputSocketWizard','DerivedDataSourceMappingEngineOutputPortWizard']) {
+    for(const mode of ['mapped','unmapped','missing','blank','duplicate','wrong_row','contradiction','unknown_type','long_label']) {
+      const page=new Page(),base='MF;TF-1;WizrdMCF;',form=page.add('div',base.slice(0,-1)),stem=base+formName+';';
+      page.add('button',stem+'btnAddMappingColumn','',undefined,form);
+      const row=page.add('table',null,'',undefined,form);
+      const name=page.add('td',stem+'colName_Total','Total',undefined,row);
+      const label=page.add('td',stem+'colDisplayName_Total','Total',undefined,row);
+      page.add('span',null,'',undefined,label).attrs.class='bg-TBGDataType-dtFloat';
+      if(mode!=='missing') {
+        const parent=mode==='wrong_row'?page.add('table',null,'',undefined,form):row;
+        const source=page.add('td',stem+'colSourceDisplayName_Total',['unmapped','blank'].includes(mode)?'':mode==='long_label'?'x'.repeat(250):'Quantity|Сумма',undefined,parent);
+        if(['unmapped','contradiction'].includes(mode))page.add('div',null,'',undefined,source).attrs.class='bg-cell-null-value';
+        if(!['unmapped','blank'].includes(mode))page.add('span',null,'',undefined,source).attrs.class=mode==='unknown_type'?'bg-TBGDataType-dtUnknown':'bg-TBGDataType-dtFloat';
+        if(mode==='duplicate')page.add('td',stem+'colSourceDisplayName_Total','Other',undefined,row);
+        const summary=page.add('tr',null,'',undefined,row);summary.attrs.class='x-grid-row-summary';
+        page.add('td',stem+'colSourceDisplayName_Total','Summary',undefined,summary);
+      }
+      const full=await page.observe(),narrow=await page.execute({mode:'observe',root_ref:full.wizard.output_columns.fields[0].name_ref});
+      assert.equal(full.wizard.stage,'output_mapping');
+      assert.deepEqual(narrow.output.wizard.output_columns,full.wizard.output_columns);
+      const source=full.wizard.output_columns.fields[0].source;
+      assert.equal(source.status,mode==='mapped'?'rendered_source':mode==='unmapped'?'unmapped':['missing','wrong_row'].includes(mode)?'unobserved':'ambiguous',mode);
+      assert.equal(source.identity_verified,false);
+      if(mode==='mapped'){assert.equal(source.label,'Quantity|Сумма');assert.equal(source.type,'real');}
+    }
+  }
+});

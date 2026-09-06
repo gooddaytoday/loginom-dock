@@ -1,3 +1,23 @@
+**Checkpoint 2026-09-06 — источники выходных полей и mapping внутри узла.**
+Runtime распознаёт DerivedDataSourceMappingEngineOutputPortWizard как output_mapping
+наряду с socket/import markers. Output columns читаются из единственной видимой
+node/socket разновидности. Fixed native queries сохраняют full/narrow readback.
+Каждая строка дополнена source: rendered_source с label/type/cell_ref, unmapped
+только при явном bg-cell-null-value без текста/иконок; missing, duplicate,
+противоречивые признаки и неизвестный тип не превращаются в доказанную связь.
+identity_verified=false всегда: показанная метка не доказывает уникальный исходный
+столбец или сохранение. Summary rows и чужие таблицы исключаются.
+
+Live narrow read node mapping SUCCEEDED: Region source string, QuantitySum integer
+source unmapped, AmountSum source Сумма|Сумма real, RowCount source Количество integer,
+Quantity source Quantity|Сумма real. Node owner observed, port context unobserved.
+Полнота набора/применение по-прежнему false. UI не изменён, node mapping открыт,
+source dropdown закрыт, пакет не сохранён; Hermes не запущен.
+285 client /115 Python /10 packaging PASS; тест включает 18 вариантов node/socket source,
+missing/blank/null/duplicate/wrong-row/contradiction/unknown type/long label.
+Далее реальное преобразование суммы в integer и typed mapping/source identity,
+Grouping readback, полный Hermes data-pipeline и оставшийся P3–P9.
+
 **Checkpoint 2026-09-06 — открытие узлов с форматированными именами.**
 open_wizard больше не сравнивает display label с graph TID key: проверяет точный
 owner.node.tid = исходный workflow breadcrumb tid + native graph key. Сохраняются
