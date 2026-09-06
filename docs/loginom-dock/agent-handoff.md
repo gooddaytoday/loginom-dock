@@ -1,3 +1,10 @@
+**Checkpoint:** cancel_expression_parameters проверяет прежнюю selected row
+(name/label/type + row_ref), а не draft. Live cancel SUCCEEDED67ms, reopen Сумма.
+275 client /110 Python /10 packaging PASS. Далее тип через observed cbxDataType
+boundlist и original-input readback; список изучен live (6 типов), закрыт.
+Проверить post-read исчезающего boundlist у typed combo. Active Hermes нет;
+форма параметров Amount/Сумма/Вещественный открыта; полный P3–P9 остаётся целью.
+
 **Checkpoint:** apply_expression_parameters выполняет один observed btnApply,
 после закрытия внешнего окна читает исходный wizard root, ждёт row + masks,
 сверяет name/label/type. Новое expression_selection по selected table/type icon.

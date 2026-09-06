@@ -1,3 +1,28 @@
+## 2026-09-06 — подтверждаемая отмена параметров выражения
+
+Добавлен cancel_expression_parameters через тот же UI executor/receipt.
+Только наблюдаемый btnCancel формы с прочитанной исходной выбранной строкой.
+Один click, bounded wait закрытия формы и снятия масок; проверяются исходные
+name/label/type и тот же row_ref. Используется строка вне диалога, а не
+изменённые draft values. Изменение значения или подмена row incarnation дают
+AMBIGUOUS; node_settings_applied/package_saved остаются false.
+
+Прямая live проверка: label Сумма→Discard typed cancellation, typed cancel
+SUCCEEDED67ms; прежние Amount/Сумма/Вещественный и row_ref подтверждены.
+Ручное повторное открытие показало Сумма. Это отмена параметров существующего
+выражения; не приёмка удаления вновь созданного выражения или отмены всего мастера.
+275 client /110 Python /10 packaging PASS, существующая apply matrix расширена
+cancel success/changed value/replaced row. Evidence expression-cancel-*-tests.txt
+и .dock/post-mvp-p0/expression-cancel-live-result.txt. Active Hermes нет.
+
+Следующий выбор типа изучен напрямую: cbxDataType;trg_picker открывает exact
+ExprDataEditForm;cbxDataType;boundlist;Логический/Дата/Время/Вещественный/Целый/
+Строковый/Переменный. Подписи содержат ведущие пробелы от иконок. Использовать
+существующий observed combo driver с readback исходного input, не печатать тип.
+Нужно также проверить post-read после закрытия boundlist: typed действие должно
+читать исходный wizard, а не исчезнувший список. Диагностическая форма остаётся
+открытой с Amount/Сумма/Вещественный, список закрыт. Full P3–P9 открыты.
+
 ## 2026-09-06 — применение параметров с проверкой строки выражения
 
 Добавлен typed verb apply_expression_parameters через существующий dock_ui_action.

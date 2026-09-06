@@ -3,7 +3,7 @@
 export const uiActionSchema = {
   type: 'object', additionalProperties: false, required: ['verb'],
   properties: {
-    verb: { type: 'string', enum: ['click', 'double_click', 'right_click', 'fill', 'press', 'drag', 'scroll', 'set_checked', 'replace_expression', 'set_wizard_field', 'wizard_step', 'select_wizard_option', 'apply_expression_parameters'] },
+    verb: { type: 'string', enum: ['click', 'double_click', 'right_click', 'fill', 'press', 'drag', 'scroll', 'set_checked', 'replace_expression', 'set_wizard_field', 'wizard_step', 'select_wizard_option', 'apply_expression_parameters', 'cancel_expression_parameters'] },
     expected_stage: { type: 'string', enum: ['text_import_file','text_import_format','input_mapping','output_mapping','calculator','grouping','done'] },
     checked: { type: 'boolean' },
     delta_y: { type: 'integer', minimum: -1000, maximum: 1000 },
@@ -551,10 +551,12 @@ function workspaceUiCapability(page, task) {
         && wizard.controls[tid.split(';').at(-1)]?.status==='observed'
         ? {direction:tid.endsWith(';btnNext')?'next':'previous',root_ref:wizard.root_ref,stage:wizard.stage}:null;
       const params=wizard.expression_parameters;
-      const expressionApply=tid===wizard.root_tid+';ExprDataEditForm;btnApply' && params?.status==='observed'
-        && wizard.expression_selection?.status==='observed' && params.selected_expression
-        && Object.values(params.fields??{}).length===3 && Object.values(params.fields).every(f=>f.status==='observed' && !f.truncated)
+      const expressionParametersReady=params?.status==='observed' && wizard.expression_selection?.status==='observed' && params.selected_expression
+        && Object.values(params.fields??{}).length===3 && Object.values(params.fields).every(f=>f.status==='observed' && !f.truncated);
+      const expressionApply=tid===wizard.root_tid+';ExprDataEditForm;btnApply' && expressionParametersReady
         ? {root_ref:params.root_ref,wizard_root_ref:wizard.root_ref,selected_expression:params.selected_expression}:null;
+      const expressionCancel=tid===wizard.root_tid+';ExprDataEditForm;btnCancel' && expressionParametersReady
+        ? {root_ref:params.root_ref,wizard_root_ref:wizard.root_ref,selected_expression:params.selected_expression,original_row:wizard.expression_selection}:null;
       const expressionWritable=identity && isEnabled && calculatorEditor?.status==='observed' && calculatorEditor.mode==='expression'
         && calculatorEditor.selected_expression && calculatorEditor.document.full_text_verified && calculatorEditor.document.writable;
       const fullValue = editable && !sensitive(element) ? String(element.value ?? (element.isContentEditable ? element.textContent : '') ?? '') : undefined;
@@ -568,12 +570,13 @@ function workspaceUiCapability(page, task) {
         ...(combo ? {wizard_combo:combo} : {}),
         ...(wizardStep ? {wizard_step:wizardStep} : {}),
         ...(expressionApply ? {expression_apply:expressionApply} : {}),
+        ...(expressionCancel ? {expression_cancel:expressionCancel} : {}),
         ...(wizardFields.has(element) ? {wizard_field:wizardFields.get(element)} : {}),
         signature: { tag, tid, role, type: element.getAttribute('type'), name: element.getAttribute('name'), label, ...fieldValue, dialog_ref: dialogRef(element), scroll, check_state:checkState },
         enabled: isEnabled, visible: true, interaction, bounding_box: boxOf(element),
         // A bounded prefix is not a sufficient value precondition. A dedicated
         // large-field driver must establish its own complete read/write contract.
-        allowed_actions: expressionWritable ? ['replace_expression'] : allowed && !valueTruncated ? ['click', 'double_click', 'right_click', 'press', 'drag', ...(editable ? ['fill',...(wizardFields.has(element)?['set_wizard_field']:[])] : []), ...(checkState ? ['set_checked'] : []), ...(wizardStep?['wizard_step']:[]), ...(expressionApply?['apply_expression_parameters']:[]), ...(combo?.kind==='option'?['select_wizard_option']:[]), ...(scroll && interaction.state === 'point_observed' ? ['scroll'] : [])] : [] };
+        allowed_actions: expressionWritable ? ['replace_expression'] : allowed && !valueTruncated ? ['click', 'double_click', 'right_click', 'press', 'drag', ...(editable ? ['fill',...(wizardFields.has(element)?['set_wizard_field']:[])] : []), ...(checkState ? ['set_checked'] : []), ...(wizardStep?['wizard_step']:[]), ...(expressionApply?['apply_expression_parameters']:[]), ...(expressionCancel?['cancel_expression_parameters']:[]), ...(combo?.kind==='option'?['select_wizard_option']:[]), ...(scroll && interaction.state === 'point_observed' ? ['scroll'] : [])] : [] };
     });
     const nodes = labels.slice(0, 200).map(label => {
       const nodeTid = graphPrefix + label, node = tids.get(nodeTid)?.[0];
@@ -749,6 +752,7 @@ function workspaceUiCapability(page, task) {
       || !current.allowed_actions.includes(task.action.verb)
       || task.action.verb==='replace_expression' && !same(before.calculator_editor,current.calculator_editor)
       || task.action.verb==='set_wizard_field' && !same(before.wizard_field,current.wizard_field)
+      || task.action.verb==='cancel_expression_parameters' && !same(before.expression_cancel,current.expression_cancel)
       || task.action.verb==='apply_expression_parameters' && !same(before.expression_apply,current.expression_apply)
       || task.action.verb==='wizard_step' && !same(before.wizard_step,current.wizard_step)
       || task.action.verb==='select_wizard_option' && !same(before.wizard_combo,current.wizard_combo)) fail('UI_REFERENCE_STALE', 'The observed control changed; observe the workspace again');
@@ -834,7 +838,7 @@ function workspaceUiCapability(page, task) {
         if (!current.authenticated) fail('LOGIN_REQUIRED', 'Loginom authentication is required before changing the workspace');
         if (!same(task.snapshot.dom_epoch, current.dom_epoch)) fail('UI_EPOCH_CHANGED', 'The document changed since this observation; observe again even if its visible state looks unchanged');
         if (!same(current.ui.dialogs.map(item => item.ref), task.snapshot.ui.dialogs.map(item => item.ref))) fail('UI_CONTEXT_CHANGED', 'The visible dialog changed; observe the workspace again');
-        if(['set_wizard_field','wizard_step','select_wizard_option','apply_expression_parameters'].includes(task.action.verb) && (!same(task.snapshot.wizard,current.wizard)
+        if(['set_wizard_field','wizard_step','select_wizard_option','apply_expression_parameters','cancel_expression_parameters'].includes(task.action.verb) && (!same(task.snapshot.wizard,current.wizard)
           || !same(task.snapshot.active_identity,current.active_identity) || !same(task.snapshot.package_identity,current.package_identity)))
           fail('WIZARD_CONTEXT_CHANGED','Wizard settings or package changed; observe again');
         const refs = task.action.verb === 'drag' ? [task.action.source_ref, task.action.target_ref] : [task.action.ref];
@@ -869,7 +873,7 @@ function workspaceUiCapability(page, task) {
           await page.mouse.click(targets[0].point.x, targets[0].point.y, { clickCount, button });
           mouseHeld = false;
         };
-        if (task.action.verb === 'click' || ['wizard_step','select_wizard_option','apply_expression_parameters'].includes(task.action.verb)) await clickTarget(1);
+        if (task.action.verb === 'click' || ['wizard_step','select_wizard_option','apply_expression_parameters','cancel_expression_parameters'].includes(task.action.verb)) await clickTarget(1);
         else if (task.action.verb === 'double_click') await clickTarget(2);
         else if (task.action.verb === 'right_click') await clickTarget(1, 'right');
         else if (task.action.verb === 'press') await first.press(task.action.key, { timeout: timeout() });
@@ -970,7 +974,7 @@ function workspaceUiCapability(page, task) {
         } else fail('UI_ACTION_INVALID', 'Unsupported UI gesture');
         if (effectPossible) record('ui_gesture_applied', { verb: task.action.verb });
         phase = 'observing'; timeout();
-        if(task.action.verb==='apply_expression_parameters')postActionRoot=current.wizard.root_ref;
+        if(['apply_expression_parameters','cancel_expression_parameters'].includes(task.action.verb))postActionRoot=current.wizard.root_ref;
         let observed;
         try { observed = await readUi(); }
         catch(error) {
@@ -981,23 +985,24 @@ function workspaceUiCapability(page, task) {
           observed=await readUi(true);
           record('ui_root_closed_after_gesture',{verification_required:true});
         }
-        if(task.action.verb==='apply_expression_parameters') {
-          const desired=current.wizard.expression_parameters.fields;
+        if(['apply_expression_parameters','cancel_expression_parameters'].includes(task.action.verb)) {
+          const cancelling=task.action.verb==='cancel_expression_parameters';
+          const desired=cancelling?Object.fromEntries(['name','label','type_label'].map(k=>[k,{value:current.wizard.expression_selection[k]}])):current.wizard.expression_parameters.fields;
           const contextChecks=fresh=>({authenticated:fresh.authenticated,origin:fresh.origin===current.origin,build:fresh.loginom_build===current.loginom_build,
             workflow:same(fresh.workflow_ref,current.workflow_ref),package:same(fresh.package_identity,current.package_identity),
             active:same(fresh.active_identity,current.active_identity),wizard:fresh.wizard.root_ref===current.wizard.root_ref,stage:fresh.wizard.stage==='calculator'});
           const sameContext=fresh=>Object.values(contextChecks(fresh)).every(Boolean);
           const closed=fresh=>!fresh.wizard.expression_parameters && !fresh.ui.dialogs.some(d=>d.ref===current.wizard.expression_parameters.root_ref);
-          const rowMatches=fresh=>{const row=fresh.wizard.expression_selection;return row?.status==='observed' && row.name===desired.name.value && row.label===desired.label.value && row.type_label===desired.type_label.value;};
+          const rowMatches=fresh=>{const row=fresh.wizard.expression_selection;return row?.status==='observed' && row.name===desired.name.value && row.label===desired.label.value && row.type_label===desired.type_label.value && (!cancelling || row.row_ref===current.wizard.expression_selection.row_ref);};
           for(let attempt=0;attempt<12 && sameContext(observed) && (!closed(observed) || !rowMatches(observed) || observed.ui.masks.length);attempt++) {
             await page.waitForTimeout(Math.min(100,timeout()));observed=await readUi();
           }
           const row=observed.wizard.expression_selection;
-          record('expression_apply_checks',{...contextChecks(observed),dialog_closed:closed(observed),no_masks:observed.ui.masks.length===0,no_dialogs:observed.ui.dialogs.length===0,row_matches:rowMatches(observed)});
+          record('expression_apply_checks',{mode:cancelling?'cancel':'apply',...contextChecks(observed),dialog_closed:closed(observed),no_masks:observed.ui.masks.length===0,no_dialogs:observed.ui.dialogs.length===0,row_matches:rowMatches(observed)});
           if(!sameContext(observed) || !closed(observed) || observed.ui.masks.length || observed.ui.dialogs.length
-            || row?.status!=='observed' || row.name!==desired.name.value || row.label!==desired.label.value || row.type_label!==desired.type_label.value)
-            fail('EXPRESSION_PARAMETERS_NOT_CONFIRMED','Expression row did not confirm name, label and type after apply; inspect before retry');
-          record('expression_parameters_row_verified',{name:row.name,label:row.label,type_label:row.type_label,node_settings_applied:false,package_saved:false});
+            || !rowMatches(observed))
+            fail(cancelling?'EXPRESSION_CANCEL_NOT_CONFIRMED':'EXPRESSION_PARAMETERS_NOT_CONFIRMED','Expression row did not confirm name, label and type after closing parameters; inspect before retry');
+          record(cancelling?'expression_parameters_cancel_verified':'expression_parameters_row_verified',{name:row.name,label:row.label,type_label:row.type_label,node_settings_applied:false,package_saved:false});
         }
         if(task.action.verb==='select_wizard_option') {
           const choice=current.ui.elements.find(item=>item.ref===task.action.ref).wizard_combo;
