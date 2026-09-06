@@ -1239,6 +1239,7 @@ function wizardStepFixture(page,direction='next') {
 test('wizard step clicks once and verifies only the requested stage in the same form',async()=>{
   for(const direction of ['next','previous']) {
     const page=new Page(),c=wizardStepFixture(page,direction),snapshot=await page.observe();
+    page.waitForTimeout=async()=>{};
     const button=snapshot.ui.elements.find(e=>e.wizard_step);
     assert.equal(button.wizard_step.direction,direction);
     const click=page.mouse.click;page.mouse.click=async(...args)=>{await click(...args);c.advance();};
@@ -1257,8 +1258,31 @@ test('wizard transition waits through a transient mask without repeating its cli
     mask=page.add('div',null,'Processing');mask.attrs.class='bg-mask-message';};
   page.waitForTimeout=async()=>{waits++;mask.remove();};
   const result=await page.act({verb:'wizard_step',ref:button.ref,expected_stage:'input_mapping'},snapshot);
-  assert.equal(result.status,'SUCCEEDED',JSON.stringify(result.error));assert.equal(waits,1);
+  assert.equal(result.status,'SUCCEEDED',JSON.stringify(result.error));assert.equal(waits,4);
   assert.equal(page.events.filter(e=>e==='click').length,1);
+});
+
+test('wizard step waits for delayed layout epochs and bounds a continuously changing destination',async()=>{
+  for(const mode of ['delayed','continuous','replaced']) {
+    const page=new Page(),c=wizardStepFixture(page),snapshot=await page.observe();
+    const button=snapshot.ui.elements.find(e=>e.wizard_step);let waits=0;
+    const click=page.mouse.click;page.mouse.click=async(...args)=>{await click(...args);c.advance();};
+    page.waitForTimeout=async()=>{
+      waits++;
+      if(mode==='continuous' || mode==='delayed' && waits<=2)page.mutationObserver.callback([{}]);
+      if(mode==='replaced' && waits===1){c.form.remove();wizardStepFixture(page).advance();}
+    };
+    const result=await page.act({verb:'wizard_step',ref:button.ref,expected_stage:'input_mapping'},snapshot);
+    assert.equal(result.status,mode==='delayed'?'SUCCEEDED':'AMBIGUOUS',JSON.stringify(result.error));
+    assert.equal(page.events.filter(e=>e==='click').length,1);
+    if(mode==='delayed'){
+      assert.equal(waits,5);assert.ok(result.trace.some(e=>e.event==='wizard_step_settled' && e.quiet_samples===3));
+      assert.equal(result.output.dom_epoch.revision,snapshot.dom_epoch.revision+2);
+    } else {
+      assert.equal(result.error.code,mode==='continuous'?'WIZARD_STEP_NOT_SETTLED':'WIZARD_STEP_NOT_CONFIRMED');
+      assert.ok(waits<=12);assert.ok(!result.trace.some(e=>e.event==='wizard_step_verified'));
+    }
+  }
 });
 
 test('wizard step never confirms an unchanged stage, a closed form or its replacement',async()=>{

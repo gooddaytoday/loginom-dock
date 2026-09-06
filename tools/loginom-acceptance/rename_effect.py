@@ -3,6 +3,14 @@ import copy
 import re
 
 
+def element_anchor(element):
+    # A compact exact data-tid identity may be absent; contradictory identity
+    # must never be overridden by the visible tid.
+    if 'identity' not in element:return element.get('tid')
+    identity=element.get('identity')
+    return identity.get('anchor_tid') if isinstance(identity,dict) else None
+
+
 def compact_receipt_equal(record, reply):
     """Bind every delivered value to the immutable receipt, without erasing data.
 
@@ -32,6 +40,10 @@ def compact_receipt_equal(record, reply):
     rows.extend(('links',link) for link in source.get('links',[]))
     for item in ui.get('elements',[]):
         value={k:v for k,v in item.items() if k not in ('signature','bounding_box')}
+        identity=item.get('identity')
+        if (isinstance(item.get('tid'),str) and item['tid'] and isinstance(identity,dict)
+            and identity.get('anchor_tid')==item['tid'] and identity.get('path')==[]
+            and set(identity)<= {'anchor_tid','path'}):value.pop('identity')
         if item.get('signature') is not None:value['signature']={k:v for k,v in item['signature'].items() if k=='tag'}
         rows.append(('elements',value))
     collections=('elements','dialogs','masks','messages','table_cells')
@@ -105,7 +117,7 @@ def prove(tools, calls, events, after_row, expected):
         if not match:continue
         reply,before,element=match
         prefix=(before.get('workflow_ref') or {}).get('prefix')
-        if not prefix or element.get('signature',{}).get('tag')!='textarea' or element.get('identity',{}).get('anchor_tid')!=prefix+';ModelForm;cmpDiagram':continue
+        if not prefix or element.get('signature',{}).get('tag')!='textarea' or element_anchor(element)!=prefix+';ModelForm;cmpDiagram':continue
         if action.get('verb')=='fill' and action.get('text')==expected:
             fills.append((call,reply,before));continue
         if action.get('verb')!='press' or action.get('key')!='Enter' or element.get('value')!=expected:continue
@@ -129,7 +141,7 @@ def prove(tools, calls, events, after_row, expected):
                     checked=bound(c) if c['tool'].endswith('dock_ui_action') else None
                     if not checked:safe=False;break
                     a=c['arguments']['action'];el=checked[2]
-                    anchor=el.get('identity',{}).get('anchor_tid')
+                    anchor=element_anchor(el)
                     node=old[2]['prefix']+';Graph;'+old[0]
                     if anchor not in (node,node+';Label;Label') or not (a.get('verb') in ('click','double_click') or a.get('verb')=='press' and a.get('key')=='F2'):
                         safe=False;break

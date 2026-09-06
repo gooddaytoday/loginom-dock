@@ -11,6 +11,26 @@ const fixture = (count = 90) => ({ status: 'SUCCEEDED', output: {
   })), dialogs: [], masks: [], messages: [], table_cells: [], truncated: { elements: false, nodes: false, links: false, ports: false } },
 } });
 
+test('only a redundant exact tid identity is omitted while private guards remain intact', () => {
+  const source = fixture(6), elements = source.output.ui.elements;
+  for (const e of elements) e.identity = { anchor_tid: e.tid, path: [] };
+  delete elements[1].tid; elements[1].signature.tag = 'textarea';
+  elements[2].identity.anchor_tid = 'contradictory';
+  elements[3].identity.path = ['child'];
+  elements[4].identity.extra = 'retain';
+  delete elements[5].identity.path;
+  const before = structuredClone(source), pages = createObservationPages({ maxRecords: 3 });
+  const first = pages.retain(structuredClone(source));
+  assert.equal(Object.hasOwn(first.output.ui.elements[0], 'identity'), false);
+  assert.deepEqual(first.output.ui.elements[1].identity, elements[1].identity);
+  assert.deepEqual(first.output.ui.elements[2].identity, elements[2].identity);
+  assert.deepEqual(pages.get(first.output.observation_id).ui.elements, before.output.ui.elements);
+  assert.throws(() => pages.assertIssued(first.output.observation_id, { ref: elements[3].ref }), /not been delivered/);
+  const second = pages.next(first.output.page.next_cursor, structuredClone(source));
+  second.output.ui.elements.forEach((e, i) => assert.deepEqual(e.identity, elements[i + 3].identity));
+  assert.doesNotThrow(() => pages.assertIssued(first.output.observation_id, { ref: elements[3].ref }));
+});
+
 test('pages are bounded, retain guards privately, and issue only delivered refs', () => {
   const pages = createObservationPages(), source = fixture();
   const first = pages.retain(structuredClone(source), { scope: 'palette' });

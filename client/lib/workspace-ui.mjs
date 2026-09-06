@@ -1574,6 +1574,20 @@ function workspaceUiCapability(page, task) {
           }
           if(!unchangedContext(observed) || observed.ui.masks.length || observed.wizard.stage!==task.action.expected_stage)
             fail('WIZARD_STEP_NOT_CONFIRMED','The requested destination stage was not confirmed after one click; inspect before retry');
+          // A native stage can become visible before delayed tooltip/layout work
+          // finishes. Keep the same single click, but capture a quiet epoch before
+          // handing out pages; never ignore mutations or revive stale cursors.
+          let quietSamples=0;
+          for(let attempt=0;attempt<12 && quietSamples<3;attempt++) {
+            timeout();await page.waitForTimeout(Math.min(200,timeout()));
+            const fresh=await readUi();
+            if(!unchangedContext(fresh) || fresh.ui.masks.length || fresh.wizard.stage!==task.action.expected_stage)
+              fail('WIZARD_STEP_NOT_CONFIRMED','The destination changed while settling after one click; inspect before retry');
+            quietSamples=same(fresh.dom_epoch,observed.dom_epoch)?quietSamples+1:0;
+            observed=fresh;
+          }
+          if(quietSamples<3)fail('WIZARD_STEP_NOT_SETTLED','The destination kept changing after one click; observe the current wizard before continuing');
+          record('wizard_step_settled',{quiet_samples:quietSamples,interval_ms:200,dom_epoch:observed.dom_epoch});
           record('wizard_step_verified',{from_stage:current.wizard.stage,to_stage:observed.wizard.stage,
             root_ref:observed.wizard.root_ref,settings_applied:false,syntax_validity:'unverified'});
         }

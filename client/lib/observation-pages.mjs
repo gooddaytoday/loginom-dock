@@ -12,6 +12,9 @@ const revision = snapshot => {
 };
 const compactElement = item => {
   const { signature, bounding_box, ...rest } = item;
+  if (typeof item.tid === 'string' && item.tid && item.identity?.anchor_tid === item.tid
+      && Array.isArray(item.identity.path) && item.identity.path.length === 0
+      && Object.keys(item.identity).every(key => ['anchor_tid', 'path'].includes(key))) delete rest.identity;
   return { ...rest, ...(signature ? { signature: { tag: signature.tag } } : {}) };
 };
 const compactOperation = operation => operation && ({

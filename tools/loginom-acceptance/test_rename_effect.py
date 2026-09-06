@@ -24,6 +24,48 @@ def fixture():
     return tools,calls,events
 
 class RenameEffect(unittest.TestCase):
+    def test_exact_compact_identity_fallback_does_not_override_contradictions(self):
+        self.assertEqual(rename_effect.element_anchor({'tid':'exact'}),'exact')
+        self.assertEqual(rename_effect.element_anchor({'tid':'exact','identity':{'anchor_tid':'other'}}),'other')
+        self.assertIsNone(rename_effect.element_anchor({'tid':'exact','identity':None}))
+        self.assertIsNone(rename_effect.element_anchor({'tid':'exact','identity':{}}))
+        data=fixture()
+        for tool in data[0]:
+            element=tool['result']['output']['ui']['elements'][0]
+            element['tid']=element.pop('identity')['anchor_tid']
+        for event,tool in zip(data[2],data[0][1:]):event['outcome']=copy.deepcopy(tool['result'])
+        self.assertIsNotNone(self.proof(data))
+        data[0][0]['result']['output']['ui']['elements'][0]['identity']={'anchor_tid':'foreign'}
+        self.assertIsNone(self.proof(data))
+
+    def test_actual_runtime_all_pages_compact_only_redundant_identity(self):
+        raw=fixture()[0][0]['result'];raw.update(status='SUCCEEDED',operation_id='observe')
+        elements=[]
+        for i in range(8):
+            elements.append({'ref':f'ui-{i}','tid':f'tid-{i}','signature':{'tag':'textarea'},
+                             'identity':{'anchor_tid':f'tid-{i}','path':[]}})
+        del elements[1]['tid']
+        elements[2]['identity']['anchor_tid']='contradiction'
+        elements[3]['identity']['path']=['child']
+        elements[4]['identity']['extra']='preserve'
+        del elements[5]['identity']['path']
+        raw['output']['ui']['elements']=elements
+        script="""import {createObservationPages} from './client/lib/observation-pages.mjs';
+let text='';for await(const part of process.stdin)text+=part;
+const raw=JSON.parse(text),p=createObservationPages({maxRecords:3});let page=p.retain(structuredClone(raw)),pages=[];
+while(true){pages.push(page);if(!page.output.page.next_cursor)break;page=p.next(page.output.page.next_cursor,structuredClone(raw));}
+console.log(JSON.stringify(pages));"""
+        result=subprocess.run(['node','--input-type=module','-e',script],cwd=Path(__file__).resolve().parents[2],input=json.dumps(raw),text=True,capture_output=True,check=True)
+        pages=json.loads(result.stdout);self.assertGreater(len(pages),1)
+        for page in pages:self.assertTrue(rename_effect.journal_equal(raw,page))
+        delivered=[e for page in pages for e in page['output']['ui']['elements']]
+        self.assertNotIn('identity',delivered[0])
+        for i in range(1,6):self.assertEqual(delivered[i]['identity'],elements[i]['identity'])
+        bad=copy.deepcopy(pages[0]);bad['output']['ui']['elements'][0]['identity']={'anchor_tid':'forged','path':[]}
+        self.assertFalse(rename_effect.journal_equal(raw,bad))
+        bad=copy.deepcopy(pages[0]);bad['output']['ui']['elements'][1].pop('identity')
+        self.assertFalse(rename_effect.journal_equal(raw,bad))
+
     def proof(self,data):return rename_effect.prove(*data,8,'Источник')
     def test_real_fill_and_commit_receipts(self):self.assertIsNotNone(self.proof(fixture()))
     def test_host_observation_metadata_does_not_change_journal_effect(self):
