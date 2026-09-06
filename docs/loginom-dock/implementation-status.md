@@ -1,3 +1,34 @@
+**2026-09-06 — UI-first контракт редактора типа импортируемого поля.**
+В действительно видимом TF-1 ImportTextFileParamsWizard проверено редактирование
+Quantity (column2). E2E bg/helpers/columnDefsTuning.ts:350–361 использует single
+click по SettingCell(col,ParamRow.Type), затем SelectDropDownItem. Native type
+cell `...;ColumnDefsTuning;grdSettings;grd-1;normalHeaderCt;2_2` после открытия
+имеет x-grid-cell-selected. Её inner div становится visibility:hidden; чтение
+скрытого старого текста НЕ должно считаться типом текущего поля. Floating editor
+`...;grdSettings;grd-1;tbl;celleditor;cbx` содержит focused input, picker suffix
+`;trg_picker`, варианты `;boundlist;<label>`. E2E допускает индекс celleditor.
+
+Проверен список: Логический, Дата/Время, Вещественный, Целый, Строковый, Переменный.
+Клик по варианту сразу применяет ячейку и закрывает редактор; отдельного Apply
+нет. Quantity integer→string→integer проверен. Важно: сразу после string selection
+type уже Строковый, kind ещё Непрерывный; после обновления kind стал Дискретный.
+Возврат integer оставил Дискретный. Поэтому нельзя доказывать unchanged data_kind
+немедленным readback и нельзя считать одно совпадение текста завершением refresh.
+Выбор kind выполняется тем же редактором после click row3. Его варианты:
+Неопределенное, Непрерывный, Дискретный. Kind восстановлен явным выбором Непрерывный.
+Финальный read: Quantity Целый/Непрерывный; editor/dropdown закрыты. Package1 не
+сохранён, значения других полей не менялись. Active Hermes нет.
+
+Далее реализация: binding уникального selected type/kind cell + column index и
+видимого input редактора; prior hidden cell value не использовать как applied
+proof. Поддержать закрытие редактора после выбора, bounded ожидание устойчивых
+исходных context/column identity и post-read type + data_kind + used/name/label.
+Для type change data_kind — наблюдаемый связанный эффект; если требовался иной
+kind, его нужно выставить отдельно, не скрывать изменение. Проверить missing/
+duplicate selection, replacement, delayed update и lost reply без повторного
+выбора. Только потом следующий полный Luna/ChatGPT/medium replay. P3–P9 открыты;
+типовой driver ещё НЕ реализован, runtime остаётся8ba79c28.
+
 **2026-09-06 — структурированное чтение типов импорта.**
 Runtime wizard.import_columns читает до 8 rendered ColumnDefsTuning columns:
 name/label/type/data_kind/used и cell_refs, связывая 5 property rows одним native

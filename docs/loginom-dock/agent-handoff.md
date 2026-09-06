@@ -1,3 +1,13 @@
+**Checkpoint:** UI type editor import изучен: selected td x-grid-cell-selected,
+старый inner скрыт visibility:hidden; плавающий tbl;celleditor;cbx input/picker.
+Single click по type cell достаточно, option click сразу apply+close. Type
+integer→string меняет kind на discrete с задержкой, integer обратно kind не
+восстанавливает. Явный kind(row3)→Непрерывный восстановил исходное состояние.
+Manual Quantity Целый/Непрерывный, editor закрыт, TF-1 import format открыт,
+Package1 не сохранён, Hermes нет. Далее typed type/kind binding + settled
+post-read, без чтения hidden old value и без повторов после lost reply. Driver
+ещё не реализован; runtime8ba79c28. Подробности сверху status, P3–P9 открыты.
+
 **Checkpoint:** wizard.import_columns: до8 columns с name/label/type/kind/used,
 cell_refs, missing/ambiguous fail-closed, complete/settings_applied=false. Roots
 и narrow live совпали для5 полей. Format edit допускает обновление derived
