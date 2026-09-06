@@ -2291,3 +2291,53 @@ test('import picker leads compact page and is issued only through its delivered 
   assert.equal(rootPage.output.wizard.import_column_editor.picker_ref,ref);
   assert.throws(()=>pager.assertIssued(rootPage.output.observation_id,{verb:'click',ref}),/not been delivered/);
 });
+
+function importCoverageFixture(page) {
+  const c=importFormatField(page),base='MF;TF-1;WizrdMCF;ImportTextFileParamsWizard;ColumnDefsTuning;grdSettings;grd-1';
+  const grid=page.add('div',base,'',{x:100,y:200,width:600,height:180},c.form);
+  const header=page.add('div',base+';normalHeaderCt','',{x:100,y:200,width:600,height:25},grid);
+  const body=page.add('div',base+';tbl','',{x:100,y:225,width:600,height:155},grid);
+  grid.clientWidth=grid.scrollWidth=header.clientWidth=header.scrollWidth=body.clientWidth=body.scrollWidth=600;
+  const cols=[];
+  for(let index=0;index<3;index++) {
+    const col=importColumnFixture(page,c.form,index,'Field'+index),h=c.form.querySelector('[data-tid="'+col.prefix+'"]');
+    h.remove();header.append(h);h.box={x:100+index*135,y:200,width:135,height:25};
+    h.attrs.class='x-column-header'+(index===0?' x-column-header-first':'')+(index===2?' x-column-header-last':'');
+    col.cells.forEach((cell,row)=>{cell.remove();body.append(cell);cell.box={x:100+index*135,y:225+row*25,width:135,height:25};col.check.box=cell.box;});
+    cols.push({...col,header:h});
+  }
+  return {...c,base,grid,header,body,cols};
+}
+
+test('configured import definition coverage requires the entire owned bounded grid',async()=>{
+  for(const mode of ['valid','missing_bounds','hidden_extra','gap','overflow','duplicate','foreign_owner','editor','clipped_header','clipped_cell','missing_last','hidden_cell','duplicate_cell','sensitive_header','unknown_header','too_many']) {
+    const page=new Page(),c=importCoverageFixture(page);
+    if(mode==='missing_bounds')delete c.body.clientWidth;
+    if(mode==='hidden_extra'){const h=page.add('div',c.base+';normalHeaderCt;3','',c.cols[0].header.box,c.header);h.attrs.class='x-column-header';h.style.display='none';}
+    if(mode==='gap')c.cols[1].header.attrs['data-tid']=c.base+';normalHeaderCt;4';
+    if(mode==='overflow')c.header.scrollWidth=601;
+    if(mode==='duplicate')page.add('div',c.cols[0].header.attrs['data-tid'],'',c.cols[0].header.box,c.header).attrs.class='x-column-header';
+    if(mode==='foreign_owner'){c.cols[0].header.remove();c.form.append(c.cols[0].header);}
+    if(mode==='editor')page.add('div',c.base+';tbl;celleditor;cbx','',c.cols[0].header.box,c.form);
+    if(mode==='clipped_header')c.cols[2].header.box.x=950;
+    if(mode==='clipped_cell')c.cols[2].cells[4].box.x=800;
+    if(mode==='missing_last')c.cols[2].header.attrs.class='x-column-header';
+    if(mode==='hidden_cell')c.cols[0].cells[1].style.display='none';
+    if(mode==='duplicate_cell')page.add('td',c.cols[0].prefix+'_1','Field0',c.cols[0].cells[1].box,c.body);
+    if(mode==='sensitive_header')c.cols[0].header.attrs['aria-label']='secret';
+    if(mode==='unknown_header')page.add('div',null,'',c.cols[0].header.box,c.header).attrs.class='x-column-header';
+    if(mode==='too_many')for(let i=3;i<9;i++)page.add('div',c.base+';normalHeaderCt;'+i,'',c.cols[0].header.box,c.header).attrs.class='x-column-header';
+    const raw=await page.execute({mode:'observe'}),columns=raw.output.wizard.import_columns;
+    assert.equal(columns.definition_coverage.status,mode==='valid'?'complete_configured_columns':'partial',mode);
+    assert.equal(columns.complete,false);assert.equal(columns.definition_coverage.source_schema_verified,false);
+    if(mode==='valid'){
+      assert.equal(columns.definition_coverage.count,3);assert.ok(columns.definition_coverage.container_ref);
+      assert.equal(columns.definition_coverage.first_header_ref,columns.fields[0].header_ref);
+      assert.equal(columns.definition_coverage.last_header_ref,columns.fields[2].header_ref);
+    }
+    for(const scope of [{discover_roots:true},{root_ref:raw.output.wizard.root_ref}]) {
+      const narrow=await page.execute({mode:'observe',...scope});
+      assert.deepEqual(narrow.output.wizard.import_columns.definition_coverage,columns.definition_coverage,mode);
+    }
+  }
+});

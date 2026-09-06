@@ -173,6 +173,7 @@ function workspaceUiCapability(page, task) {
         ['colName_','colDisplayName_','colDataKind_','colDefaultUsageType_','colSourceDisplayName_','colCachingMethod_','colExcluded_'].map(key=>'[data-tid*=";WizrdMCF;'+form+';'+key+'"]')),
       '[data-tid$=";WizrdMCF;EditReformColumnDefForm"]',
       '[data-tid*=";WizrdMCF;ImportTextFileParamsWizard;ColumnDefsTuning;grdSettings;grd-1;normalHeaderCt;"]',
+      ...['',';normalHeaderCt',';tbl'].map(suffix=>'[data-tid$=";WizrdMCF;ImportTextFileParamsWizard;ColumnDefsTuning;grdSettings;grd-1'+suffix+'"]'),
       '[data-tid*=";WizrdMCF;ImportTextFileParamsWizard;ColumnDefsTuning;grdSettings;grd-1;tbl;celleditor"][data-tid$=";cbx"]',
       '[data-tid*=";WizrdMCF;ImportTextFileParamsWizard;ColumnDefsTuning;grdSettings;grd-1;tbl;celleditor"][data-tid$=";cbx;trg_picker"]',
       ...['edtName','edtDisplayName','cbxDataType','cbxDataKind','cbxUsageType','cntMain;cbxCachingMethod'].flatMap(name=>{const owner='[data-tid$=";WizrdMCF;EditReformColumnDefForm;'+name+'"]';return [owner,owner+' input'];}),
@@ -608,8 +609,47 @@ function workspaceUiCapability(page, task) {
 
         }
       }
+      // Configured definitions are complete only when the whole bounded native
+      // grid is visible. This says nothing about source bytes or output schema.
+      const gridTid=base+'ColumnDefsTuning;grdSettings;grd-1';
+      let coverage={status:'partial',source_schema_verified:false};
+      const grids=tids.get(gridTid)??[],headerContainers=tids.get(gridTid+';normalHeaderCt')??[],bodies=tids.get(gridTid+';tbl')??[];
+      const contained=(element,container)=>{
+        if(!visible(element) || sensitive(element))return false;
+        const b=boxOf(element),c=boxOf(container),vw=globalThis.innerWidth,vh=globalThis.innerHeight;
+        return [b.x,b.y,b.width,b.height,c.x,c.y,c.width,c.height,vw,vh].every(Number.isFinite)
+          && vw>0 && vh>0 && b.x>=0 && b.y>=0 && b.x+b.width<=vw && b.y+b.height<=vh
+          && b.x>=c.x && b.y>=c.y && b.x+b.width<=c.x+c.width && b.y+b.height<=c.y+c.height;
+      };
+      const noOverflow=e=>Number.isFinite(e.clientWidth) && Number.isFinite(e.scrollWidth)
+        && e.clientWidth>0 && e.scrollWidth<=e.clientWidth;
+      if(grids.length===1 && headerContainers.length===1 && bodies.length===1) {
+        const grid=grids[0],container=headerContainers[0],body=bodies[0];
+        const nativeHeaders=[...container.querySelectorAll('.x-column-header')];charge();
+        const indexed=all.filter(e=>{charge();return (getTid(e)??'').startsWith(columnBase)
+          && /^\d+$/.test(getTid(e).slice(columnBase.length));});
+        const ordered=[...indexed].sort((a,b)=>Number(getTid(a).slice(columnBase.length))-Number(getTid(b).slice(columnBase.length)));
+        const count=ordered.length;
+        const first=nativeHeaders.filter(e=>{charge();return e.classList.contains('x-column-header-first');});
+        const last=nativeHeaders.filter(e=>{charge();return e.classList.contains('x-column-header-last');});
+        const everyCell=ordered.every((header,index)=>[0,1,2,3,4].every(row=>{
+          const peers=tids.get(columnBase+index+'_'+row)??[];
+          return peers.length===1 && body.contains(peers[0]) && contained(peers[0],body);
+        }));
+        if(count>0 && count<=8 && nativeHeaders.length===count && columns.length===count
+          && wizardForms[0].contains(grid) && grid.contains(container) && grid.contains(body)
+          && contained(grid,grid) && contained(container,grid) && contained(body,grid)
+          && noOverflow(grid) && noOverflow(container) && noOverflow(body) && !all.some(e=>{charge();const tid=getTid(e);return tid?.startsWith(editorBase)
+            && /^celleditor(?:-\d+)?;cbx$/.test(tid.slice(editorBase.length)) && visible(e);})
+          && ordered.every((header,index)=>getTid(header)===columnBase+index && nativeHeaders.includes(header)
+            && contained(header,container) && columns[index]?.index===index && columns[index].status==='observed'
+            && ['Неопределенное','Непрерывный','Дискретный'].includes(columns[index].data_kind))
+          && everyCell && first.length===1 && first[0]===ordered[0] && last.length===1 && last[0]===ordered[count-1])
+          coverage={status:'complete_configured_columns',count,grid_ref:refOf(grid),container_ref:refOf(container),
+            body_ref:refOf(body),first_header_ref:refOf(first[0]),last_header_ref:refOf(last[0]),source_schema_verified:false};
+      }
       wizard.import_columns={status:columns.length?'rendered_draft_columns':'unobserved',fields:columns,
-        truncated:indexes.length>8,complete:false,settings_applied:false};
+        truncated:indexes.length>8,complete:false,settings_applied:false,definition_coverage:coverage};
     }
     if (discoverRoots) {
       const regions=regionElements.filter(element=>visible(element) && !sensitive(element) && scopeOf(element)!=='inactive_workflow')

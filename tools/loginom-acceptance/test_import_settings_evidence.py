@@ -61,6 +61,58 @@ def mapping_snapshot():
 
 
 class ImportSettingsEvidenceTests(unittest.TestCase):
+    def configured_snapshot(self):
+        state = snapshot(); columns = state['wizard']['import_columns']
+        for field in columns['fields']: field['header_ref'] = 'header-' + str(field['index'])
+        columns['definition_coverage'] = {'status': 'complete_configured_columns', 'count': 5,
+                                          'grid_ref': 'grid', 'container_ref': 'container', 'body_ref': 'body',
+                                          'first_header_ref': 'header-0', 'last_header_ref': 'header-4',
+                                          'source_schema_verified': False}
+        return state
+
+    def test_configured_schema_bounds_are_not_source_schema(self):
+        state = self.configured_snapshot()
+        proof = ise.configured_schema_compare(state, EXPECTED)
+        self.assertTrue(proof['configured_import_schema_match'])
+        self.assertFalse(proof['source_schema_verified']); self.assertFalse(proof['complete'])
+        self.assertFalse(proof['package_persistence_verified'])
+        state['wizard']['import_columns']['fields'].reverse()
+        self.assertTrue(ise.configured_schema_compare(state, EXPECTED, proof['context'])['configured_import_schema_match'])
+
+    def test_configured_schema_rejects_partial_forged_bounds_and_collisions(self):
+        changes = ({'status': 'partial'}, {'count': 4}, {'count': True}, {'grid_ref': ''},
+                   {'container_ref': 'grid'}, {'body_ref': 'header-0'}, {'first_header_ref': 'header-1'},
+                   {'last_header_ref': 'header-3'}, {'source_schema_verified': True}, {'extra': True})
+        for change in changes:
+            with self.subTest(change=change):
+                state = self.configured_snapshot(); state['wizard']['import_columns']['definition_coverage'].update(change)
+                self.assertFalse(ise.configured_schema_compare(state, EXPECTED)['configured_import_schema_match'])
+                self.assertTrue(ise.compare(state, EXPECTED)['rendered_import_settings_match'])
+        for mode in ('missing', 'header_collision', 'missing_header', 'context', 'editor', 'mask', 'index', 'schema'):
+            state = self.configured_snapshot(); columns = state['wizard']['import_columns']
+            context = ise.configured_schema_compare(state, EXPECTED)['context']
+            if mode == 'missing': columns.pop('definition_coverage')
+            if mode == 'header_collision': columns['fields'][1]['header_ref'] = columns['fields'][0]['header_ref']
+            if mode == 'missing_header': columns['fields'][0].pop('header_ref')
+            if mode == 'context': state['active_tab_ref'] = 'other'
+            if mode == 'editor': state['wizard']['import_column_editor'] = {}
+            if mode == 'mask': state['ui']['masks'] = [{}]
+            if mode == 'index': columns['fields'][0]['index'] = 8
+            if mode == 'schema': columns['fields'][0]['type'] = 'real'
+            self.assertFalse(ise.configured_schema_compare(state, EXPECTED, context)['configured_import_schema_match'], mode)
+
+    def test_configured_schema_diagnostic_requires_bound_native_coverage(self):
+        state = self.configured_snapshot()
+        call = {'session_id':'s', 'tool_call_id':'c', 'tool':'dock_workspace_observe', 'row':1}
+        outcome = {'status':'SUCCEEDED', 'operation_id':'op', 'output':state}
+        evidence = {'calls':[call], 'tools':[{**call, 'row':2, 'result':outcome}],
+                    'events':[{'phase':'observation_completed', 'operation_id':'op', 'outcome':copy.deepcopy(outcome)}]}
+        proof = ise.diagnose(evidence, EXPECTED, '')['observations'][0]
+        self.assertTrue(proof['rendered_import_settings_match'])
+        self.assertTrue(proof['configured_schema_diagnostics']['configured_import_schema_match'])
+        evidence['tools'][0]['result']['output']['wizard']['import_columns']['definition_coverage']['count'] = 4
+        self.assertEqual(ise.diagnose(evidence, EXPECTED, '')['observations'], [])
+
     def test_source_is_ui_only_with_explicit_path(self):
         report = ise.source_compare(source_snapshot(), EXPECTED, '/test/source.csv')
         self.assertTrue(report['rendered_import_source_match'])

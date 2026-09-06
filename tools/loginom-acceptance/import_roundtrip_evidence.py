@@ -175,7 +175,7 @@ def _attempt(start, receipts, evidence, expected, source_path):
                    ('open_wizard', 'text_import_file'), ('wizard_step', 'text_import_format'),
                    ('wizard_step', 'output_mapping')]
     current = 'text_import_file'; cursor = 0; selected = False
-    accepted = [start]; last = start; rejected_calls=[]
+    accepted = [start]; last = start; rejected_calls=[]; configured_formats={}
     for receipt in receipts:
         if receipt['call']['row'] <= start['call']['row']:
             continue
@@ -231,6 +231,10 @@ def _attempt(start, receipts, evidence, expected, source_path):
                 return None
             if stage != 'done' and not _page(snapshot, expected, source_path, stage):
                 return None
+            if stage=='text_import_format':
+                # Use the last read of each format stage. Later partial or
+                # inconsistent bounds must not inherit an earlier true flag.
+                configured_formats['after' if cursor>=5 else 'before']=settings.configured_schema_compare(snapshot,expected).get('configured_import_schema_match') is True
         if verb == 'open_wizard':
             before = baseline['wizard']['import_source']['fields']
             after = snapshot['wizard']['import_source']['fields']
@@ -240,6 +244,7 @@ def _attempt(start, receipts, evidence, expected, source_path):
         accepted.append(receipt); last = receipt
         if cursor == len(transitions):
             return {'rendered_import_settings_roundtrip_match': True, 'complete': False,
+                    'configured_schema_roundtrip_match':configured_formats=={'before':True,'after':True},
                     'node_persistence_verified': False, 'package_persistence_verified': False,
                     'source_identity_verified': False, 'session_id': session,
                     'operations': [r['outcome']['operation_id'] for r in accepted],

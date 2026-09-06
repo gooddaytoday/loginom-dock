@@ -240,6 +240,46 @@ def mapping_compare(snapshot, expected, expected_context=None):
         return {**result, 'reason': str(error) if isinstance(error, Unverifiable) else 'malformed_evidence_or_fixture'}
 
 
+def configured_schema_compare(snapshot, expected, expected_context=None):
+    """Validate native bounds for configured columns, never source-file schema.
+
+    The bounds and cells must come from the same immutable native snapshot.
+    A detached caller-supplied coverage object is not evidence; diagnose binds
+    this comparison through the existing unique call/reply/journal receipts.
+    """
+    result = {'configured_import_schema_match': False, 'complete': False,
+              'source_schema_verified': False, 'package_persistence_verified': False,
+              'missing_proofs': ['source_artifact_binding', 'source_schema',
+                                 'output_mapping', 'apply_reopen_readback', 'package_persistence']}
+    rendered = compare(snapshot, expected, expected_context)
+    if not rendered['rendered_import_settings_match']:
+        return {**result, 'reason': rendered['reason']}
+    try:
+        columns = snapshot['wizard']['import_columns']
+        coverage = columns.get('definition_coverage')
+        keys = {'status', 'count', 'grid_ref', 'container_ref', 'body_ref',
+                'first_header_ref', 'last_header_ref', 'source_schema_verified'}
+        if not isinstance(coverage, dict) or set(coverage) != keys:
+            raise Unverifiable('configured_coverage_missing_or_unknown_shape')
+        if coverage['status'] != 'complete_configured_columns' or coverage['source_schema_verified'] is not False:
+            raise Unverifiable('configured_coverage_not_complete')
+        fields = sorted(columns['fields'], key=lambda field: field['index'])
+        if type(coverage['count']) is not int or coverage['count'] != len(fields):
+            raise Unverifiable('configured_coverage_count_mismatch')
+        structural = [coverage[key] for key in ('grid_ref', 'container_ref', 'body_ref')]
+        headers = [field.get('header_ref') for field in fields]
+        refs = structural + headers
+        if (any(not isinstance(ref, str) or not ref or ref.strip() != ref for ref in refs)
+                or len(set(refs)) != len(refs)):
+            raise Unverifiable('configured_coverage_refs_missing_or_colliding')
+        if coverage['first_header_ref'] != headers[0] or coverage['last_header_ref'] != headers[-1]:
+            raise Unverifiable('configured_coverage_endpoints_mismatch')
+        return {**result, 'configured_import_schema_match': True, 'reason': 'configured_columns_and_bounds_match',
+                'configured_column_count': len(fields), 'context': rendered['context']}
+    except (KeyError, TypeError, AttributeError, ValueError, IndexError) as error:
+        return {**result, 'reason': str(error) if isinstance(error, Unverifiable) else 'malformed_coverage'}
+
+
 def diagnose(evidence, expected, prefix, *, expected_source_path=None):
     observations = []
     for receipt in settings_evidence.bound_receipts(evidence, prefix):
@@ -251,6 +291,8 @@ def diagnose(evidence, expected, prefix, *, expected_source_path=None):
         proof = (source_compare(snapshot, expected, expected_source_path) if stage == 'text_import_file'
                  else mapping_compare(snapshot, expected) if stage == 'output_mapping'
                  else compare(snapshot, expected))
+        if stage == 'text_import_format':
+            proof = {**proof, 'configured_schema_diagnostics': configured_schema_compare(snapshot, expected)}
         observations.append({'session_id': receipt['call'].get('session_id'),
                              'tool_call_id': receipt['call'].get('tool_call_id'),
                              'stage': stage,

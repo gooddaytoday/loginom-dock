@@ -1,3 +1,41 @@
+**2026-09-06 — подтверждены границы настроенной схемы импорта.**
+Root UI-first manualTF4format: exact grdSettings;grd-1 содержит unique
+normalHeaderCt и tbl, header indexes0..4; native x-column-header-first на0,
+x-column-header-last на4. Grid/header/body clientWidth=scrollWidth=1051,
+все headers/cells полностью видимы. Новая import_columns.definition_coverage
+выдаёт complete_configured_columns,count,grid/container/body/first/last refs
+только при этих проверенных условиях, contiguous indexes1–8 fields, known kinds,
+без hidden/extra/duplicate/foreign/editor/overflow/clipping. Иначе partial.
+Existing complete=false/settings_applied=false/source_schema_verified=false
+сохранены. Fixed native selectors обеспечивают roots/narrow равенство.
+
+Независимый configured_schema_compare переиспользует exact rendered settings
+compare и проверяет coverage shape/count/distinct refs/endpoints/context.
+Native финальный snapshot .dock/post-mvp-p0/import-definition-coverage-final-snapshot.json
+прошёл configured_import_schema_match=true,count5. Это direct native proof,
+не immutable Hermes journal и не схема исходного файла/сохранность пакета.
+Diagnostic format receipts получают configured_schema_diagnostics. У successful
+rendered roundtrip отдельный configured_schema_roundtrip_match true только при
+положительном последнем format read ДО и ПОСЛЕ open. Partial/missing/count mismatch
+не меняет прежний rendered verdict, но новый флаг false. Domain gates не менялись.
+
+306client/151Python/10packaging PASS, diffcheck чистый. Один первоначальный full
+client run дал старый scan-budget timing failure568ms при500ms; последующие
+полные прогоны прошли без изменения лимита. Причину по нагрузке не утверждать.
+
+UI output mapping отдельно изучен:5table rows recordindex0..4, body1172x707,
+scrollWidth=clientWidth/scrollHeight=clientHeight, empty TargetFilter, контейнер
+translate3d(0,0,0). Нет явного total row count/last-record marker. Ctrl+End после
+cell click и послеfocus body не выбрал последнийrecord; End переместил фокус
+в последнийcell первойстроки. Не считать это boundary proof; mapping coverage
+остаётся неподтверждённой. Настройки не менялись. Возврат в TF4format,
+Result view, UnitPrice real/continuous, исходные значения правильны после refresh.
+
+Hermes не запускался. ManualPackage1 не сохранён, production без изменений.
+Далее — доказательство полноты output mappings и связь с configured schema,
+затем apply/reopen короткий Hermes replay всего готового участка. После этого
+execution/results и save/close/reopen/reexecution. Полный P3–P9 открыт.
+
 **2026-09-06 — upload navigation, graph owner и обновление типов импорта.**
 Run `20260906-124648-4dd1a15b` / session19830 TERMINAL: source205dae6d,
 ChatGPT/openai-codex/gpt-5.6-luna/medium,30 API calls,returncode0,no timeout,

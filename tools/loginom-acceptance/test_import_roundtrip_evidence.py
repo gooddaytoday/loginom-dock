@@ -2,6 +2,7 @@ import copy
 import unittest
 import import_roundtrip_evidence as ir
 from test_import_settings_evidence import EXPECTED, snapshot, source_snapshot, mapping_snapshot
+import test_import_settings_evidence as import_settings_tests
 
 PATH = '/test/source.csv'
 
@@ -67,6 +68,25 @@ class ImportRoundtripTests(unittest.TestCase):
             self.assertEqual(len(proofs), 1)
             self.assertTrue(proofs[0]['rendered_import_settings_roundtrip_match'])
             self.assertFalse(proofs[0]['complete']); self.assertFalse(proofs[0]['package_persistence_verified'])
+
+    def test_configured_schema_requires_both_format_stages(self):
+        for mode in ('both','before_only','after_only','bad_count','partial'):
+            with self.subTest(mode=mode):
+                data=fixture()
+                configured=import_settings_tests.ImportSettingsEvidenceTests().configured_snapshot()['wizard']['import_columns']
+                for index in (1,7):
+                    if mode=='before_only' and index==7:continue
+                    if mode=='after_only' and index==1:continue
+                    for outcome in (data['tools'][index]['result'],data['events'][index]['outcome']):
+                        outcome['output']['wizard']['import_columns']=copy.deepcopy(configured)
+                        coverage=outcome['output']['wizard']['import_columns']['definition_coverage']
+                        if mode=='bad_count' and index==7:coverage['count']=4
+                        if mode=='partial' and index==7:coverage['status']='partial'
+                proofs=self.diagnose(data)
+                self.assertEqual(len(proofs),1)
+                self.assertTrue(proofs[0]['rendered_import_settings_roundtrip_match'])
+                self.assertEqual(proofs[0]['configured_schema_roundtrip_match'],mode=='both')
+                self.assertFalse(proofs[0]['complete'])
 
     def test_missing_duplicate_and_unbound_fail(self):
         for mode in ('missing_call', 'missing_reply', 'missing_event', 'duplicate_call', 'duplicate_reply',
