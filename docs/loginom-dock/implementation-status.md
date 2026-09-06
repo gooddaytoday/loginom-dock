@@ -1,3 +1,25 @@
+**Checkpoint 2026-09-06 — выбор типа выражения после прямой UI-диагностики.**
+`select_wizard_option` расширен на `ExprDataEditForm;cbxDataType`: наблюдаемая
+опция связана с исходным input, окном параметров и выбранным выражением.
+После одного клика чтение идёт из исходного мастера, поскольку floating boundlist
+закрывается. Это исправление также проверено для узкого чтения списка импорта.
+Проверяется весь прежний wizard с единственным ожидаемым изменением type_label;
+подмена input, выбранной строки или имени не даёт подтверждения.
+
+В живом Loginom список оказался sibling окна параметров; мастер под окном имеет
+modal_background mask. Разрешена только типизированная опция, связанная с текущим
+foreground-окном; busy mask и перекрытие точки клика по-прежнему блокируют действие.
+Live: Amount / Сумма, Вещественный → Целый (SUCCEEDED58ms) → Вещественный
+(SUCCEEDED64ms), по одному клику. Окно осталось открытым, список закрыт.
+Это draft readback, не применение к узлу, сохранение пакета или Hermes acceptance.
+Источники: E2E calculator_helpers.ts:731 и sCalculator.ts:243;
+Help data/processors/transformation/calc/README.md:51; direct DOM/typed action.
+Проверки: 276 client /110 Python /10 packaging PASS.
+Private evidence: .dock/post-mvp-p0/expression-type-live-result.txt,
+expression-type-{client,python,packaging}-tests.txt. Active Hermes нет.
+Далее wizard/node ownership, применение и повторное открытие настроек,
+независимые domain proofs полного data-pipeline; P3–P9 остаются открытыми.
+
 ## 2026-09-06 — подтверждаемая отмена параметров выражения
 
 Добавлен cancel_expression_parameters через тот же UI executor/receipt.

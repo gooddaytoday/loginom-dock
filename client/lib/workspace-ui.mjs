@@ -310,6 +310,9 @@ function workspaceUiCapability(page, task) {
             if(['name','label'].includes(name) && selectedExpression && value.length<=256 && !/[\0\r\n]/.test(value) && enabled(input) && !input.readOnly)
               wizardFields.set(input,{name,scope:'expression_parameter',max_length_utf16:Math.min(256,nativeMax??256),stage:wizard.stage,
                 root_ref:refOf(forms[0]),wizard_root_ref:wizard.root_ref,owner_ref:refOf(owners[0]),selected_expression:selectedExpression});
+            if(name==='type_label' && selectedExpression && value.length<=256 && enabled(input))
+              wizardCombos.set(base+';'+key,{name,scope:'expression_parameter',owner_ref:refOf(owners[0]),input_ref:refOf(input),
+                root_ref:wizard.root_ref,parameter_root_ref:refOf(forms[0]),selected_expression:selectedExpression,value});
             return [name,{status:'observed',value:value.slice(0,256),value_length_utf16:value.length,truncated:value.length>256,
               input_ref:refOf(inputs[0]),owner_ref:refOf(owners[0]),enabled:enabled(inputs[0]),read_only:inputs[0].readOnly===true}];
           }));
@@ -844,10 +847,15 @@ function workspaceUiCapability(page, task) {
         const refs = task.action.verb === 'drag' ? [task.action.source_ref, task.action.target_ref] : [task.action.ref];
         if (current.ui.masks.length) {
           const foreground = current.ui.dialogs.reduce((top, dialog) => !top || dialog.z_index >= top.z_index ? dialog : top, null);
-          const targetsForeground = foreground && refs.every(ref => current.ui.elements.find(element => element.ref === ref)?.signature.dialog_ref === foreground.ref);
+          const targetsForeground = foreground && refs.every(ref => {
+            const element=current.ui.elements.find(element=>element.ref===ref);
+            return element?.signature.dialog_ref===foreground.ref || task.action.verb==='select_wizard_option'
+              && element?.wizard_combo?.kind==='option' && element.wizard_combo.field.scope==='expression_parameter'
+              && element.wizard_combo.field.parameter_root_ref===foreground.ref;
+          });
           const dialogBlocked = !foreground || current.ui.masks.some(mask => mask.dialog_ref === foreground.ref || mask.kind !== 'modal_background');
           // A modal confirmation intentionally masks the workspace behind it.
-          // Only its own controls can proceed; their exact painted hit point is
+          // Only its own controls or a bound parameter option can proceed; the hit point is
           // still checked below, so a mask over the button cannot be bypassed.
           if (!targetsForeground || dialogBlocked) fail('UI_MASKED', 'The workspace is masked; only an unblocked foreground dialog can be changed');
         }
@@ -974,7 +982,7 @@ function workspaceUiCapability(page, task) {
         } else fail('UI_ACTION_INVALID', 'Unsupported UI gesture');
         if (effectPossible) record('ui_gesture_applied', { verb: task.action.verb });
         phase = 'observing'; timeout();
-        if(['apply_expression_parameters','cancel_expression_parameters'].includes(task.action.verb))postActionRoot=current.wizard.root_ref;
+        if(['apply_expression_parameters','cancel_expression_parameters','select_wizard_option'].includes(task.action.verb))postActionRoot=current.wizard.root_ref;
         let observed;
         try { observed = await readUi(); }
         catch(error) {
@@ -1006,11 +1014,17 @@ function workspaceUiCapability(page, task) {
         }
         if(task.action.verb==='select_wizard_option') {
           const choice=current.ui.elements.find(item=>item.ref===task.action.ref).wizard_combo;
-          const field=observed.wizard.settings?.fields?.[choice.field.name];
+          const expressionParameter=choice.field.scope==='expression_parameter';
+          const field=(expressionParameter?observed.wizard.expression_parameters:observed.wizard.settings)?.fields?.[choice.field.name];
+          const expected=JSON.parse(JSON.stringify(current.wizard));
+          if(expressionParameter)expected.expression_parameters.fields[choice.field.name].value=choice.label;
+          if(expressionParameter)expected.expression_parameters.fields[choice.field.name].value_length_utf16=choice.label.length;
           if(!observed.authenticated || observed.origin!==current.origin || observed.loginom_build!==current.loginom_build
             || !same(observed.workflow_ref,current.workflow_ref) || !same(observed.package_identity,current.package_identity)
             || !same(observed.active_identity,current.active_identity) || observed.wizard.root_ref!==choice.field.root_ref
-            || observed.wizard.stage!==current.wizard.stage || !same(observed.ui.dialogs,current.ui.dialogs) || observed.ui.masks.length
+            || observed.wizard.stage!==current.wizard.stage || !same(observed.ui.dialogs,current.ui.dialogs)
+            || (expressionParameter?!same(observed.ui.masks,current.ui.masks):observed.ui.masks.length>0)
+            || expressionParameter && !same(observed.wizard,expected)
             || field?.status!=='observed' || field.truncated || field.value!==choice.label
             || field.input_ref!==choice.field.input_ref || field.owner_ref!==choice.field.owner_ref)
             fail('WIZARD_OPTION_NOT_CONFIRMED','The selected option label was not read back in its original wizard field; inspect before retry');

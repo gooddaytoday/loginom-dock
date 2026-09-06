@@ -1301,6 +1301,10 @@ test('wizard combo binding survives a narrow floating list read without scanning
   assert.equal(result.status,'SUCCEEDED');
   assert.ok(result.output.ui.elements.some(e=>e.allowed_actions.includes('select_wizard_option')));
   assert.equal(result.output.wizard.settings.fields.null_marker.value,'old');
+  const option=result.output.ui.elements.find(e=>e.wizard_combo?.kind==='option');
+  const click=page.mouse.click;page.mouse.click=async(...args)=>{await click(...args);c.input.value='NULL';c.list.remove();};
+  const selected=await page.act({verb:'select_wizard_option',ref:option.ref},result.output);
+  assert.equal(selected.status,'SUCCEEDED',JSON.stringify(selected.error));
 });
 
 test('wizard option refuses a moved or disabled owner and does not confirm a different input',async()=>{
@@ -1568,5 +1572,41 @@ test('expression apply checks the resulting selected row after its separate dial
     assert.equal(page.clickedPoints.length,1);
     if(variation==='cancel_success')assert.ok(outcome.trace.some(e=>e.event==='expression_parameters_cancel_verified'));
     if(variation==='success')assert.ok(outcome.trace.some(e=>e.event==='expression_parameters_row_verified' && e.node_settings_applied===false));
+  }
+});
+
+
+test('Calculator type selection reads the original form after closing a narrow list and rejects collateral changes',async()=>{
+  for(const variation of ['success','background_mask','busy_mask','wrong_type','name_changed','selection_changed','replaced_input']) {
+    const page=new Page(),wizard=page.add('div','MF;TF-1;WizrdMCF');
+    page.add('button','MF;TF-1;WizrdMCF;CalcDataWizard;btnAddExpr','',undefined,wizard);
+    const row=page.add('table',null,'',undefined,wizard);row.attrs.class='x-grid-item-selected';
+    page.add('td','MF;TF-1;WizrdMCF;CalcDataWizard;colExpressionName_Expr1','Expr1',undefined,row);
+    const base='MF;TF-1;WizrdMCF;ExprDataEditForm',dialog=page.add('div',base);dialog.attrs.class='x-window';
+    const inputs={};let typeOwner;
+    for(const [key,value] of [['edtName','Expr1'],['edtDisplayName','Expr1'],['cbxDataType','Вещественный']]) {
+      const owner=page.add('div',base+';'+key,'',undefined,dialog),input=page.add('input',null,'',undefined,owner);
+      input.value=value;input.box={x:300,y:200+Object.keys(inputs).length*40,width:100,height:25};inputs[key]=input;
+      if(key==='cbxDataType')typeOwner=owner;
+    }
+    if(variation==='background_mask'){wizard.attrs.class='bg-mask-message';wizard.attrs['bg-mask-text']='Загрузка';}
+    if(variation==='busy_mask')dialog.attrs.class='x-window bg-mask-message';
+    const list=page.add('div',base+';cbxDataType;boundlist','',{x:500,y:300,width:150,height:60});
+    page.add('div',base+';cbxDataType;boundlist;Целый','    Целый',{x:510,y:310,width:130,height:20},list);
+    const snapshot=await page.observe(),initial=snapshot.ui.elements.find(e=>e.wizard_combo?.kind==='option');
+    assert.ok(initial);
+    const narrow=await page.execute({mode:'observe',root_ref:initial.wizard_combo.list_ref});
+    const option=narrow.output.ui.elements.find(e=>e.wizard_combo?.kind==='option');
+    const click=page.mouse.click;page.mouse.click=async(...args)=>{await click(...args);list.remove();
+      inputs.cbxDataType.value=variation==='wrong_type'?'Строковый':'Целый';
+      if(variation==='name_changed')inputs.edtName.value='Other';
+      if(variation==='selection_changed')row.attrs.class='';
+      if(variation==='replaced_input'){inputs.cbxDataType.remove();page.add('input',null,'',undefined,typeOwner).value='Целый';}
+    };
+    const result=await page.act({verb:'select_wizard_option',ref:option.ref},narrow.output);
+    assert.equal(result.status,['success','background_mask'].includes(variation)?'SUCCEEDED':variation==='busy_mask'?'NOT_APPLIED':'AMBIGUOUS',variation+JSON.stringify(result.error));
+    if(variation==='busy_mask')assert.equal(result.error.code,'UI_MASKED');
+    else if(!['success','background_mask'].includes(variation))assert.equal(result.error.code,'WIZARD_OPTION_NOT_CONFIRMED');
+    assert.equal(page.events.filter(e=>e==='click').length,variation==='busy_mask'?0:1);
   }
 });

@@ -1,3 +1,10 @@
+**Checkpoint:** type_label выбирается через existing select_wizard_option.
+Live Вещественный→Целый→Вещественный SUCCEEDED58/64ms; Amount/Сумма неизменны.
+Floating option принадлежит foreground параметрам при background mask мастера;
+post-read из wizard после закрытия boundlist. 276 client /110 Python /10 packaging PASS.
+Далее node/wizard binding, apply/reopen и domain proofs P3–P9. Active Hermes нет.
+Диагностический ExprDataEditForm открыт, тип Вещественный, список закрыт.
+
 **Checkpoint:** cancel_expression_parameters проверяет прежнюю selected row
 (name/label/type + row_ref), а не draft. Live cancel SUCCEEDED67ms, reopen Сумма.
 275 client /110 Python /10 packaging PASS. Далее тип через observed cbxDataType
