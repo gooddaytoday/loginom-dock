@@ -1,3 +1,19 @@
+**2026-09-06 — выбор папки в хранилище, UI-first.** В отдельной диагностической
+сессии Loginom build49202 проверены click по `colName_test` (строка получает
+`x-grid-item-selected`, каталог остаётся `/`) и double-click (переход `/test`).
+Источники: E2E `bg/helpers/filestorage.ts:253` и Help `data/location_user_files.md`.
+Runtime выдаёт `storage_entry` с row_ref, selected и kind=folder только при
+единственной видимой ячейке типа «Папка» в той же строке. Неизвестный/скрытый/
+дублированный тип не доказывает папку. Independent audit допускает одиночный
+выбор лишь при bound pre/post receipts, неизменных origin/build/tab/workflow,
+каталоге и navigation identity, той же выделенной строке на пути назначения.
+Direct serialized Dock click SUCCEEDED42ms подтвердил `/` → `/` и ту же строку.
+Первый click старого Hermes080744 имел unreadable breadcrumbs: новое правило
+не легализует его, прежний audit47/58 не переписывался. Это не автономная приёмка.
+Проверки: 290 client, 118 Python, 10 packaging PASS.
+Диагностический UI оставлен в `/test`, Package1 не сохранён. Далее новый полный
+Hermes ChatGPT/Luna/medium; все неподтверждённые P3–P9 gates остаются открытыми.
+
 **Checkpoint 2026-09-06 — paged receipts и целевой CSV.**
 Direct UI exact Dock sequence delimiter raw ;→null \N прошла SUCCEEDED198ms для
 null; неудача Hermes input пока не воспроизведена и не объявляется исправленной.

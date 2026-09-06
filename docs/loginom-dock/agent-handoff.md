@@ -1,3 +1,11 @@
+**Checkpoint:** folder selection UI-first: single click выделяет test при `/`,
+doubleclick открывает `/test`. Runtime storage_entry читает row_ref/selected и
+same-row folder type. Audit singleclick требует bound pre/post, неизменный
+каталог/context, selected same row на пути destination; incomplete old080744
+pre-read остаётся FAIL, audit не переписывать. 290 client/118 Python/10 packaging PASS.
+Manual UI storage `/test`, Package1 не сохранён; Hermes не запущен. Далее полный
+Luna/ChatGPT/medium agent.3 run, P3–P9 остаются открытыми.
+
 **Checkpoint:** direct delimiter ;→null \N PASS198ms, input failure ещё не reproduced.
 Исправлен projector metadata active_tab_ref/navigation_context и independent equality;
 upload verifier выбирает exact file-ref page той же session вместо единственной page.

@@ -695,6 +695,31 @@ def file_storage_inspect(evidence, checks, destination):
                  and tid.split(';FileStorageForm;colName_',1)[1] in path_tids
                  and any(item.get('label') in path_names for item in targets))
         result=reply['result'] if reply else {}
+        if action.get('verb')=='click' and not allowed and len(targets)==1:
+            # A selection is not a directory transition. Require both bound
+            # observations, the same folder incarnation and an unchanged path.
+            target=targets[0]
+            pre_pages=[t for t in observations if target in t['result'].get('output',{}).get('ui',{}).get('elements',[])]
+            pre=pre_pages[0]['result'].get('output',{}) if len(pre_pages)==1 else {}
+            post=result.get('output',{})
+            before=pre.get('file_storage',{})
+            after=post.get('file_storage',{})
+            matched=[t for t in post.get('ui',{}).get('elements',[]) if t.get('ref')==target.get('ref')]
+            entry=target.get('storage_entry',{})
+            folder_path=before.get('directory','').rstrip('/')+'/'+str(target.get('label',''))
+            allowed=(len(pre_pages)==1 and bound(pre_pages[0])
+                     and bool(re.fullmatch(r'MF;TF(?:-\d+)?;FileStorageForm;colName_.+',tid or ''))
+                     and tid.split(';FileStorageForm;colName_',1)[1] in path_tids
+                     and target.get('label') in path_names
+                     and (destination==folder_path or destination.startswith(folder_path+'/'))
+                     and before.get('status')=='observed' and before.get('source')=='visible_breadcrumbs'
+                     and bool(before.get('navigation_identity')) and before==after
+                     and all(pre.get(k) is not None and pre.get(k)==post.get(k)
+                             for k in ('origin','loginom_build','workflow_ref','active_tab_ref'))
+                     and entry.get('kind')=='folder' and bool(entry.get('row_ref'))
+                     and len(matched)==1 and matched[0].get('identity')==target.get('identity')
+                     and matched[0].get('tid')==tid and matched[0].get('label')==target.get('label')
+                     and matched[0].get('storage_entry')=={**entry,'selected':True})
         trace=result.get('trace',[])
         epoch_refusal=(result.get('status')=='NOT_APPLIED' and result.get('phase')=='preconditions'
                        and result.get('effect_possible') is False and result.get('cleanup_complete') is True

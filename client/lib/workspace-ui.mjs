@@ -752,7 +752,15 @@ function workspaceUiCapability(page, task) {
       const fullValue = editable && !sensitive(element) ? String(element.value ?? (element.isContentEditable ? element.textContent : '') ?? '') : undefined;
       const value = fullValue?.slice(0, 2048), valueTruncated = fullValue !== undefined && fullValue.length > 2048;
       const fieldValue = value === undefined ? {} : {value, value_truncated:valueTruncated, value_length_utf16:fullValue.length};
+      // E2E filestorage: click selects a row; doubleClick opens the folder.
+      // Read the type from the same row, never infer it from a filename.
+      const storageRow=/^MF;TF(?:-\d+)?;FileStorageForm;colName_.+$/.test(tid ?? '') ? element.closest('.x-grid-item') : null;
+      const storageTypes=storageRow ? all.filter(other=>{charge();return storageRow.contains(other)
+        && getTid(other)===tid.replace(';colName_',';colFileType_') && visible(other) && !sensitive(other);}) : [];
+      const storageEntry=storageRow ? {row_ref:refOf(storageRow),selected:storageRow.classList.contains('x-grid-item-selected'),
+        kind:storageTypes.length===1 && textOf(storageTypes[0])==='Папка' ? 'folder':'unknown'} : null;
       return { ref: refOf(element), tid, identity, kind, role, label, scope: scopeOf(element), ...fieldValue,
+        ...(storageEntry ? {storage_entry:storageEntry} : {}),
         ...(graphNodeOf(element) ? {graph_node:graphNodeOf(element)} : {}),
         ...(scroll ? { scroll } : {}),
         ...(checkState ? {check_state:checkState} : {}),

@@ -1983,3 +1983,18 @@ test('reform editor close verifies caching exclusion and original row after one 
     assert.equal(page.events.filter(e=>e==='click').length,1);
   }
 });
+
+test('storage row selection reads folder type from its own visible unique cell', async () => {
+  const page=new Page(),row=page.add('table',null);
+  row.attrs.class='x-grid-item';
+  const cell=row.append(new Element('td',{'data-tid':'MF;TF-1;FileStorageForm;colName_test'},'test'));
+  const type=row.append(new Element('td',{'data-tid':'MF;TF-1;FileStorageForm;colFileType_test'},'Папка'));
+  const read=async()=> (await page.observe()).ui.elements.find(e=>e.tid===cell.getAttribute('data-tid')).storage_entry;
+  const before=await read();assert.equal(before.kind,'folder');assert.equal(before.selected,false);assert.ok(before.row_ref);
+  row.attrs.class+=' x-grid-item-selected';
+  assert.deepEqual(await read(),{...before,selected:true});
+  type.style.display='none';assert.equal((await read()).kind,'unknown');type.style.display='';
+  const duplicate=row.append(new Element('td',type.attrs,'Папка'));
+  assert.equal((await read()).kind,'unknown');duplicate.remove();
+  type.ownText='Текстовый файл';assert.equal((await read()).kind,'unknown');
+});

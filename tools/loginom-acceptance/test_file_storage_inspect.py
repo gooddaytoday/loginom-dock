@@ -51,3 +51,50 @@ class FileStorageInspectTest(unittest.TestCase):
             changed=copy.deepcopy(data);changed['tools'][1]['result'][key]=value
             changed['events'][0]['outcome']=copy.deepcopy(changed['tools'][1]['result'])
             self.assertFalse(file_storage_inspect(changed,[],'/analyst/data')['all_assertions_passed'])
+
+    def selection_fixture(self):
+        data=self.fixture()
+        target={'ref':'folder','tid':'MF;TF-1;FileStorageForm;colName_data','label':'data',
+                'identity':{'anchor_tid':'MF;TF-1;FileStorageForm;colName_data','path':[]},
+                'storage_entry':{'row_ref':'folder-row','kind':'folder','selected':False}}
+        pre=data['tools'][0]
+        pre['result'].update(operation_id='initial-op')
+        pre['result']['output'].update(origin='https://loginom.test',loginom_build='build',
+            workflow_ref={'prefix':'MF;TF-1'},active_tab_ref='tab',ui={'elements':[target]},
+            file_storage={'status':'observed','directory':'/analyst','source':'visible_breadcrumbs',
+                          'navigation_identity':{'anchor_tid':'nav'},'listing_complete':False})
+        data['calls'].insert(0,{'session_id':'s','tool_call_id':'initial','tool':pre['tool'],'row':0,'arguments':{}})
+        data['events'].append({'phase':'observation_completed','operation_id':'initial-op','outcome':copy.deepcopy(pre['result'])})
+        pre['result']['output']['operation']=copy.deepcopy(data['tools'][-1]['result']['output']['operation'])
+        data['calls'][1]['arguments']['action']['ref']='folder'
+        post=data['tools'][1]['result']['output']=copy.deepcopy(pre['result']['output'])
+        post.pop('operation');post['observation_id']='after'
+        post['ui']['elements'][0]['storage_entry']['selected']=True
+        self.sync_selection(data)
+        return data
+
+    def sync_selection(self,data):
+        for reply in data['tools'][:2]:
+            outcome=copy.deepcopy(reply['result'])
+            if reply['tool']==PREFIX+'dock_workspace_observe':outcome['output'].pop('operation',None)
+            for event in data['events']:
+                if event['operation_id']==outcome['operation_id']:event['outcome']=outcome
+
+    def test_folder_selection_requires_bound_unchanged_directory_and_selected_row(self):
+        self.assertTrue(file_storage_inspect(self.selection_fixture(),[],'/analyst/data')['all_assertions_passed'])
+        def after(d):return d['tools'][1]['result']['output']
+        mutations=[
+            lambda d:after(d)['file_storage'].update(directory='/other'),
+            lambda d:after(d).update(active_tab_ref='other'),
+            lambda d:after(d)['ui']['elements'][0]['storage_entry'].update(selected=False),
+            lambda d:after(d)['ui']['elements'][0]['storage_entry'].update(row_ref='replacement'),
+            lambda d:after(d)['ui']['elements'].append(copy.deepcopy(after(d)['ui']['elements'][0])),
+            lambda d:d['tools'][0]['result']['output']['file_storage'].update(status='unobserved'),
+            lambda d:d['tools'][0]['result']['output']['ui']['elements'][0]['storage_entry'].update(kind='unknown'),
+        ]
+        for mutate in mutations:
+            data=self.selection_fixture();mutate(data);self.sync_selection(data)
+            self.assertFalse(file_storage_inspect(data,[],'/analyst/data')['all_assertions_passed'])
+        data=self.selection_fixture();data['events'].pop()
+        self.assertFalse(file_storage_inspect(data,[],'/analyst/data')['all_assertions_passed'])
+        self.assertFalse(file_storage_inspect(self.selection_fixture(),[],'/other/data')['all_assertions_passed'])
