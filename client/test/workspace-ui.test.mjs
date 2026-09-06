@@ -1610,3 +1610,31 @@ test('Calculator type selection reads the original form after closing a narrow l
     assert.equal(page.events.filter(e=>e==='click').length,variation==='busy_mask'?0:1);
   }
 });
+
+test('wizard owner context uses bounded active-tab breadcrumbs and survives narrow wizard reads',async()=>{
+  for(const mode of ['valid','duplicate','broken_chain','wrong_tab','no_wizard_icon','no_vendor_icon','too_many','long_path']) {
+    const page=new Page(),wizard=page.add('div','MF;TF-1;WizrdMCF');
+    page.add('button','MF;TF-1;WizrdMCF;CalcDataWizard;btnAddExpr','',undefined,wizard);
+    const tab=mode==='wrong_tab'?'MF;TF-2':'MF;TF-1';
+    const panel=page.add('div',tab+';NavigationBar;NavigationPanel');
+    const labels=['Сервер','Пакеты','Package1','Модуль1','Сценарий','Сумма','Настройка'];let path='';
+    for(const [index,label] of labels.entries()) {
+      path+=(index?'>':'')+(mode==='long_path'?'x'.repeat(220):label);
+      const tid=tab+';cnrNaviMode;b.s_'+(mode==='broken_chain' && index===3?'Other':path);
+      const crumb=page.add('a',tid,label,undefined,panel);
+      if(index===5 && mode!=='no_vendor_icon')page.add('span',null,'',undefined,crumb).attrs.class='bg-vendor-icon-calcdata';
+      if(index===6 && mode!=='no_wizard_icon')page.add('span',null,'',undefined,crumb).attrs.class='maptree-icon-wizard';
+      if(index===5 && mode==='duplicate')page.add('a',tid,label,undefined,panel);
+    }
+    if(mode==='too_many')for(let i=0;i<33;i++)page.add('a',tab+';cnrNaviMode;b.s_extra'+i,'Extra',undefined,panel);
+    const full=await page.observe();
+    const wizardRef=full.wizard.root_ref;
+    const narrow=await page.execute({mode:'observe',root_ref:wizardRef});
+    assert.equal(narrow.status,'SUCCEEDED',mode);
+    assert.deepEqual(narrow.output.wizard.owner_context,full.wizard.owner_context,mode);
+    const context=narrow.output.wizard.owner_context;
+    assert.equal(context.opening_verified,false);
+    if(mode==='valid'){assert.equal(context.status,'observed');assert.equal(context.node.label,'Сумма');assert.equal(context.path.length,7);}
+    else assert.notEqual(context.status,'observed',mode);
+  }
+});

@@ -1,3 +1,31 @@
+**Checkpoint 2026-09-06 — навигационный контекст мастера и ручное apply/reopen.**
+Codex изучил NavigationPanel: кнопки cnrNaviMode;b.s_ содержат последовательный
+путь, penultimate item с bg-vendor-icon-* представляет узел, последний с
+maptree-icon-wizard — настройки. E2E navigation.GetCurrentTabPath использует
+эти кнопки (bg/helpers/navigation.ts:25–60, bg/selectors.ts:133).
+
+Добавлен wizard.owner_context: только единственная видимая панель активной
+вкладки, уникальная последовательная цепочка, icon evidence, полные короткие
+метки. Лимиты 32 элемента, 2048 символов на tid, 4096 суммарно для tid/label.
+Неоднозначный/неполный/чрезмерный контекст не считается observed. Fixed native
+queries сохраняют его при narrow wizard read. opening_verified=false: контекст
+НЕ доказывает, какой graph click открыл мастер; нужны typed open + receipt.
+
+Прямая UI-диагностика: отменены неизменённые параметры, Next → Описание узла.
+DoneWizard показал Автоматическая метка / Сумма, пока navigation ещё содержал
+AmountAmount. После Done граф появился с узлом Сумма и прежней входной связью.
+Закрытие wizard предшествует готовности графа: немедленное чтение дало пустые
+nodes/path и прежний title; следующая стабильная проверка подтвердила граф.
+Повторное открытие через body Сумма → Setting показало Amount / Сумма /
+Вещественный. Live capability narrow read: owner_context observed, тот же путь.
+Это ручной apply/reopen, не автономная Hermes acceptance и не package save.
+Private evidence: .dock/post-mvp-p0/wizard-owner-live-result.txt;
+277 client /110 Python /10 packaging PASS,
+wizard-owner-{client,python,packaging}-tests.txt.
+Далее typed node→wizard opening с owner/path verification, затем applied settings
+и независимые P3 domain gates. Полный P3–P9 остаётся открытым; active Hermes нет.
+Диагностический Calculator открыт, внешнее окно параметров закрыто.
+
 **Checkpoint 2026-09-06 — выбор типа выражения после прямой UI-диагностики.**
 `select_wizard_option` расширен на `ExprDataEditForm;cbxDataType`: наблюдаемая
 опция связана с исходным input, окном параметров и выбранным выражением.

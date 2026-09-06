@@ -1,3 +1,11 @@
+**Checkpoint:** wizard.owner_context читает bounded breadcrumbs текущей вкладки;
+opening_verified=false до typed opening receipt. Live manual Done переименовал
+AmountAmount→Сумма; graph ready позже wizard close. Body Сумма→Setting reopen
+подтвердил Amount/Сумма/Вещественный, narrow owner_context observed.
+277 client /110 Python /10 packaging PASS.
+Далее typed node→wizard open, применение/readback и domain proofs P3–P9.
+Active Hermes нет; Calculator открыт, ExprDataEditForm закрыт. Детали сверху status.
+
 **Checkpoint:** type_label выбирается через existing select_wizard_option.
 Live Вещественный→Целый→Вещественный SUCCEEDED58/64ms; Amount/Сумма неизменны.
 Floating option принадлежит foreground параметрам при background mask мастера;

@@ -160,7 +160,7 @@ function workspaceUiCapability(page, task) {
       calculator:';CalcDataWizard;btnAddExpr',grouping:';GroupDataWizard;grdUsedFields;tbl',
       done:';DoneWizard;edtDisplayName'};
     const wizardButtons=['btnPrev','btnNext','btnDone','btnExecute','btnClose','btnError'];
-    const wizardSelectors=['[data-tid$=";WizrdMCF"]','[data-tid$=";WizrdMCF;cardWizardPanel;p.h;p.t"]',
+    const wizardSelectors=['[data-tid$=";NavigationBar;NavigationPanel"]','[data-tid*=";cnrNaviMode;b.s_"]','[data-tid$=";WizrdMCF"]','[data-tid$=";WizrdMCF;cardWizardPanel;p.h;p.t"]',
       ...Object.values(wizardMarkers).map(suffix=>'[data-tid$=";WizrdMCF'+suffix+'"]'),
       '[data-tid*=";WizrdMCF;CalcDataWizard;colExpressionName_"]','[data-tid*=";WizrdMCF;CalcDataWizard;colExpressionDisplayName_"]','[data-tid$=";WizrdMCF;CalcDataWizard;cmpExpression"]','[data-tid$=";WizrdMCF;CalcDataWizard;btnCalcMode"]','span.bg-TBGCalcMode-cmExpression,span.bg-TBGCalcMode-cmJavaScript',
       ...['edtDelimiterChar','edtTextQualifier','edtValueNull','edtDecimalSeparator'].flatMap(name=>{const owner='[data-tid$=";WizrdMCF;ImportTextFileParamsWizard;'+name+';ValueControl"]';return [owner,owner+' input',owner+' textarea'];}),
@@ -272,6 +272,34 @@ function workspaceUiCapability(page, task) {
         stage:stages.length===1?stages[0]:null,stage_status:stages.length===1?'observed':stages.length?'ambiguous':'unrecognized',
         controls:Object.fromEntries(wizardButtons.map(name=>{const found=matching(';'+name);return [name,
           {status:found.length===1?'observed':found.length?'ambiguous':'unobserved',enabled:found.length===1?enabled(found[0]):null}];}))};
+    }
+    if(wizard.status==='observed') {
+      // E2E navigation.GetCurrentTabPath: inspect the current tab's visible
+      // breadcrumb buttons, not document.title. This is observed context only;
+      // proving which graph click opened the wizard requires an action receipt.
+      const panels=(tids.get(workflow.prefix+';NavigationBar;NavigationPanel')??[]).filter(e=>visible(e) && !sensitive(e));
+      wizard.owner_context={status:panels.length>1?'ambiguous':'unobserved',opening_verified:false};
+      if(panels.length===1) {
+        const prefix=workflow.prefix+';cnrNaviMode;b.s_';
+        const crumbs=all.filter(e=>{charge();return (getTid(e)??'').startsWith(prefix) && panels[0].contains(e) && visible(e) && !sensitive(e);});
+        if(crumbs.length>32)wizard.owner_context.status='bounded';
+        else if(crumbs.length) {
+          const items=crumbs.map(e=>({ref:refOf(e),tid:getTid(e),label:textOf(e,true),
+            wizard_icon:e.querySelectorAll('.maptree-icon-wizard').length===1,
+            vendor_icon:e.querySelectorAll('[class*="bg-vendor-icon-"]').length===1}));
+          const unique=new Set(items.map(i=>i.tid)).size===items.length;
+          const chain=items.every((item,index)=>item.tid.length<=2048 && item.label.length<240
+            && (!index || item.tid.startsWith(items[index-1].tid+'>')));
+          const last=items.at(-1),node=items.at(-2);
+          if(items.reduce((size,item)=>size+item.tid.length+item.label.length,0)>4096)wizard.owner_context.status='bounded';
+          else if(!unique || !chain)wizard.owner_context.status='ambiguous';
+          else if(last.wizard_icon && items.filter(i=>i.wizard_icon).length===1 && node?.vendor_icon && node.label) {
+            wizard.owner_context={status:'observed',opening_verified:false,panel_ref:refOf(panels[0]),
+              node:{ref:node.ref,tid:node.tid,label:node.label},
+              path:items.map(({ref,tid,label})=>({ref,tid,label}))};
+          }
+        }
+      }
     }
     if(wizard.status==='observed' && wizard.stage==='calculator') {
       const base=wizard.root_tid+';CalcDataWizard;';
