@@ -1,3 +1,11 @@
+**Checkpoint:** ReformColumns typed finish566ms→open1325ms→fresh native read
+подтвердил сохранённые integer/Количество единиц/cache off/excluded false.
+Package1 не сохранён, manual wizard открыт без editor. Full pipeline task теперь
+явно требует конечные типы из unchanged expected.json и допускает нужный явный
+conversion после Grouping с проверкой обоих выходов. Далее full Hermes agent.3
+ChatGPT/Luna/medium test /test. После model_started runtime/harness не менять;
+точный run/handle фиксируется в private checkpoint. Все P3–P9 gates остаются целью.
+
 **Checkpoint:** apply_reform_column/cancel_reform_column проверяют 7 свойств
 строки после одного click, cancel требует original row_ref. Live apply176ms,
 cancel41ms PASS. Current label Количество единиц применена в wizard, node ещё

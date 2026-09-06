@@ -1,3 +1,21 @@
+**Checkpoint 2026-09-06 — ReformColumns finish/open/readback и следующий полный прогон.**
+После apply label Количество единиц выполнен manual Next→typed finish_wizard
+SUCCEEDED566ms, возврат к Изменение. Manual body selection→typed open_wizard
+SUCCEEDED1325ms, новый wizard root; fresh narrow read подтвердил все четыре
+строки, QuantitySum integer/Количество единиц, caching off/excluded false.
+Сохранение узла доказано в ручном UI маршруте; package save/reopen не выполнено.
+Independent settings_evidence пока проверяет только Calculator; не объявлять
+ReformColumns/full P3 принятыми по этим direct browser probes.
+
+ТЗ full data-pipeline уточнено под неизменный expected.json: явно перечислены
+итоговые типы; разрешено необходимое явное преобразование суммы после Grouping,
+проверка промежуточного и конечного выходов обязательна. Значения/типы/семь
+независимых gates не ослаблялись. Это устраняет разрыв между текстом ТЗ и fixture.
+Следующий full Hermes прогон использует agent.3, test, /test, ChatGPT/Luna/medium;
+после старта runtime/harness заморожены до terminal. Manual browser больше не
+трогать во время прогона. Diagnostic Package1 оставлен в ReformColumnsWizard,
+editor закрыт, узел inactive; пакет не сохранён. Полный P3–P9 остаётся открытым.
+
 **Checkpoint 2026-09-06 — применение и отмена ReformColumns editor.**
 Добавлены apply_reform_column/cancel_reform_column через существующий guarded
 column_close: 7 observed draft properties, original selected row, cache/exclusion
