@@ -1748,3 +1748,28 @@ test('output columns bind names labels and types to real rows, excluding summary
     else assert.ok(columns.fields.every(f=>f.status!=='observed'),mode);
   }
 });
+
+test('output column typed editing preserves the selected row and all other parameters',async()=>{
+  for(const mode of ['name','label','type_changed','selection_changed','missing_type']) {
+    const page=new Page(),base='MF;TF-1;WizrdMCF;',form=page.add('div',base.slice(0,-1));
+    page.add('button',base+'DerivedDataSourceOutputSocketWizard;btnAddMappingColumn','',undefined,form);
+    const table=page.add('table',null,'',undefined,form);table.attrs.class='x-grid-item-selected';
+    page.add('td',base+'DerivedDataSourceOutputSocketWizard;colName_Quantity','Quantity',undefined,table);
+    const label=page.add('td',base+'DerivedDataSourceOutputSocketWizard;colDisplayName_Quantity','Quantity|Сумма',undefined,table);
+    page.add('span',null,'',undefined,label).attrs.class='bg-TBGDataType-dtInteger';
+    const dialog=page.add('div',base+'EditColumnDefForm');dialog.attrs.class='x-window';const inputs={};
+    for(const [key,value] of [['edtName','Quantity'],['edtDisplayName','Quantity|Сумма'],['cbxDataType','Целый'],['cbxDataKind','Непрерывный'],['cbxUsageType','Не задано']]) {
+      const owner=page.add('div',base+'EditColumnDefForm;'+key,'',undefined,dialog),input=page.add('input',null,'',undefined,owner);
+      input.value=value;input.box={x:300,y:200+Object.keys(inputs).length*40,width:120,height:25};inputs[key]=input;
+    }
+    if(mode==='missing_type')inputs.cbxDataType.remove();
+    const full=await page.observe(),read=await page.execute({mode:'observe',root_ref:full.wizard.column_parameters.root_ref});
+    const target=read.output.ui.elements.find(e=>e.wizard_field?.scope==='output_column' && e.wizard_field.name===(mode==='label'?'label':'name'));
+    if(mode==='missing_type'){assert.equal(target,undefined);continue;}
+    assert.ok(target);
+    page.onPress=key=>{if(key==='Tab'){if(mode==='type_changed')inputs.cbxDataType.value='Вещественный';if(mode==='selection_changed')table.attrs.class='';}};
+    const result=await page.act({verb:'set_wizard_field',ref:target.ref,text:'QuantitySum'},read.output);
+    assert.equal(result.status,['name','label'].includes(mode)?'SUCCEEDED':'AMBIGUOUS',mode+JSON.stringify(result.error));
+    if(['name','label'].includes(mode))assert.ok(result.trace.some(e=>e.event==='wizard_draft_value_verified' && e.scope==='output_column' && e.settings_applied===false));
+  }
+});

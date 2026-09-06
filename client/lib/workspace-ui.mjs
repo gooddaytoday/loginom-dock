@@ -166,6 +166,8 @@ function workspaceUiCapability(page, task) {
       ...['edtDelimiterChar','edtTextQualifier','edtValueNull','edtDecimalSeparator'].flatMap(name=>{const owner='[data-tid$=";WizrdMCF;ImportTextFileParamsWizard;'+name+';ValueControl"]';return [owner,owner+' input',owner+' textarea'];}),
       ...['edtDisplayName','cbxNodeTitleMode'].flatMap(name=>{const owner='[data-tid$=";WizrdMCF;DoneWizard;'+name+'"]';return [owner,owner+' input'];}),
       '[data-tid*=";WizrdMCF;DerivedDataSourceOutputSocketWizard;colName_"]','[data-tid*=";WizrdMCF;DerivedDataSourceOutputSocketWizard;colDisplayName_"]',
+      '[data-tid$=";WizrdMCF;EditColumnDefForm"]',
+      ...['edtName','edtDisplayName','cbxDataType','cbxDataKind','cbxUsageType'].flatMap(name=>{const owner='[data-tid$=";WizrdMCF;EditColumnDefForm;'+name+'"]';return [owner,owner+' input'];}),
       '[data-tid$=";WizrdMCF;ExprDataEditForm"]',
       ...['edtName','edtDisplayName','cbxDataType'].flatMap(name=>{const owner='[data-tid$=";WizrdMCF;ExprDataEditForm;'+name+'"]';return [owner,owner+' input'];}),
       ...wizardButtons.map(name=>'[data-tid$=";WizrdMCF;'+name+'"]')].join(',');
@@ -359,6 +361,35 @@ function workspaceUiCapability(page, task) {
       }
     }
     const wizardFields=new Map(),wizardCombos=new Map();
+    if(wizard.status==='observed' && wizard.stage==='output_mapping') {
+      const base=wizard.root_tid+';EditColumnDefForm';
+      const forms=(tids.get(base)??[]).filter(e=>visible(e) && !sensitive(e));
+      if(forms.length) {
+        wizard.column_parameters={status:forms.length===1?'observed':'ambiguous',applied_verified:false};
+        if(forms.length===1) {
+          const selected=(wizard.output_columns?.fields??[]).filter(field=>field.status==='observed' && dom.some(e=>{charge();return state.ids.get(e)===field.name_ref && e.closest('table')?.classList.contains('x-grid-item-selected');}));
+          const selection=selected.length===1?selected[0]:null;
+          wizard.column_parameters.root_ref=refOf(forms[0]);wizard.column_parameters.selected_column=selection;
+          wizard.column_parameters.fields=Object.fromEntries(Object.entries({name:'edtName',label:'edtDisplayName',type_label:'cbxDataType',data_kind:'cbxDataKind',usage:'cbxUsageType'}).map(([name,key])=>{
+            const owners=(tids.get(base+';'+key)??[]).filter(e=>forms[0].contains(e) && visible(e) && !sensitive(e));
+            const inputs=owners.length===1?dom.filter(e=>{charge();return owners[0].contains(e) && e.matches('input') && visible(e) && !sensitive(e);}):[];
+            if(inputs.length!==1)return [name,{status:inputs.length>1?'ambiguous':'unobserved'}];
+            const input=inputs[0],value=String(input.value??''),rawMax=input.getAttribute('maxlength');
+            const nativeMax=rawMax!==null && /^\d+$/.test(rawMax) && Number.isSafeInteger(Number(rawMax))?Number(rawMax):256;
+            if(['name','label'].includes(name) && selection && value.length<=256 && enabled(input) && !input.readOnly)
+              wizardFields.set(input,{name,scope:'output_column',max_length_utf16:Math.min(nativeMax,256),stage:wizard.stage,
+                root_ref:refOf(forms[0]),wizard_root_ref:wizard.root_ref,owner_ref:refOf(owners[0]),selected_column:selection});
+            return [name,{status:'observed',value:value.slice(0,256),value_length_utf16:value.length,truncated:value.length>256,
+              input_ref:refOf(input),owner_ref:refOf(owners[0]),enabled:enabled(input),read_only:input.readOnly===true}];
+          }));
+        }
+      }
+    }
+
+    if(wizard.column_parameters && (Object.values(wizard.column_parameters.fields??{}).length!==5
+      || Object.values(wizard.column_parameters.fields??{}).some(f=>f.status!=='observed' || f.truncated))) {
+      for(const [input,field] of wizardFields)if(field.scope==='output_column')wizardFields.delete(input);
+    }
     if(wizard.status==='observed' && wizard.stage==='calculator') {
       // This native dialog is a sibling of the wizard, not its descendant.
       // E2E sCalculator.edit: expose bounded UI values, never applied proof.
@@ -1032,7 +1063,7 @@ function workspaceUiCapability(page, task) {
             timeout();
             if(task.action.text)await page.keyboard.type(task.action.text,{delay:0});
             else await first.press('Backspace',{timeout:timeout()});
-            if(before.wizard_field.scope==='expression_parameter') {
+            if(['expression_parameter','output_column'].includes(before.wizard_field.scope)) {
               if(!await first.evaluate(element=>document.activeElement===element))fail('WIZARD_FIELD_CHANGED','Expression field lost focus before edit completion');
               // Loginom updates a linked display label on input completion.
               // Commit the draft input before reading coupled parameter values.
@@ -1172,7 +1203,7 @@ function workspaceUiCapability(page, task) {
           const after=observed.ui.elements.find(item=>item.ref===before.ref);
           const expected=JSON.parse(JSON.stringify(current.wizard));
           const expressionParameter=before.wizard_field.scope==='expression_parameter';
-          const fields=expressionParameter?expected.expression_parameters.fields:expected.settings.fields;
+          const fields=expressionParameter?expected.expression_parameters.fields:before.wizard_field.scope==='output_column'?expected.column_parameters.fields:expected.settings.fields;
           // Native name editing can update a still-linked display label. Accept
           // only the original label or this exact name, and expose the readback.
           if(expressionParameter && before.wizard_field.name==='name' && fields.label.value===fields.name.value

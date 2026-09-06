@@ -1,3 +1,11 @@
+**Checkpoint:** column_parameters читает пять свойств EditColumnDefForm;
+set_wizard_field name/label связан с selected output row, focus-checked Tab и
+exact readback всех остальных свойств. При missing/ambiguous поле ввода не выдаётся.
+Live name/label roundtrips PASS, исходные QuantitySum / Quantity|Сумма восстановлены.
+Type/usage/kind read-only, typed apply/cancel ещё нет. 282 client /115 Python /10 packaging PASS. Active Hermes нет.
+Current EditColumnDefForm QuantitySum ОТКРЫТ без изменений, output mapping под ним.
+Далее dropdown/apply/cancel + port lifecycle, Grouping drivers, full P3–P9.
+
 **Checkpoint:** output_columns readback связывает rendered name/label/type одной
 строки socket mapping, без summary duplicates, completeness/applied остаются false.
 Direct UI EditColumnDefForm: QuantitySum integer (исходный sum был real), AmountSum

@@ -1,3 +1,24 @@
+**Checkpoint 2026-09-06 — подтверждаемый ввод в EditColumnDefForm.**
+Добавлены bounded wizard.column_parameters: name/label/type_label/data_kind/usage,
+форма и selected_column исходной output row. Native fixed queries читают sibling
+окно даже при narrow root. Имя/метка предлагают existing set_wizard_field только
+при однозначно прочитанных всех пяти свойствах и selected row; ограничение
+native maxlength сохраняется. Изменение через keyboard завершается focus-checked
+Tab; exact wizard readback проверяет выбранную строку и остальные свойства.
+Type/kind/usage пока read-only в этом контракте, typed select/apply/cancel не добавлены.
+Tool description обновлён, чтобы Hermes применял set_wizard_field к output editor.
+
+Direct live QuantitySum editor: label Quantity|Сумма→Diagnostic label→Quantity|Сумма
+SUCCEEDED65/56ms; name QuantitySum→QuantityProbe→QuantitySum SUCCEEDED65/61ms.
+Все остальные значения/selected row сохранились. Usage Не задано disabled, но
+наблюдается и проверяется. applied_verified=false: это draft input proof,
+не BtnApply, не сохранение порта или пакета, не Hermes acceptance.
+Private evidence .dock/post-mvp-p0/output-editor-live-result.txt и
+output-editor-{client,python,packaging,unit}-tests.txt. 282 client /115 Python /10 packaging PASS. Active Hermes нет.
+Далее typed dropdown/apply/cancel + port owner/open/finish/reopen, Grouping drivers,
+полный P3–P9 остаётся открытым. Current UI: EditColumnDefForm QuantitySum ОТКРЫТ,
+имя QuantitySum, метка Quantity|Сумма, тип Целый, вид Непрерывный; изменений draft нет.
+
 **Checkpoint 2026-09-06 — output columns readback и ручное переименование/тип.**
 В живом output-port mapping двойной клик colName_Quantity открыл sibling
 EditColumnDefForm. Исходный Quantity aggregate имел тип Вещественный: для fixture
