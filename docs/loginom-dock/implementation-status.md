@@ -1,3 +1,25 @@
+**Checkpoint 2026-09-06 — apply/cancel output column с пятью свойствами строки.**
+output_columns дополнен data_kind, usage и selected, прочитанными в той же real
+row через colDataKind_/colDefaultUsageType_, summary rows исключены. Missing
+свойство не даёт готовности typed close. Добавлены apply_output_column и
+cancel_output_column на observed EditColumnDefForm btnApply/btnCancel. Один click,
+после закрытия dialog — read исходного wizard root; bounded wait до row + masks.
+Сверяются name/label/type/data_kind/usage и selected. Cancel требует original
+row_ref, не принимает заменённую строку с теми же значениями. Контекст origin/build,
+workflow/package/tab/wizard сохраняется. Ни один результат не означает port save.
+
+Live: label Quantity|Сумма→QuantitySum, apply SUCCEEDED181ms с row readback пяти
+свойств. Reopen field, draft label Discard this label, cancel SUCCEEDED51ms;
+прежняя QuantitySum и original row_ref подтверждены. Editor закрыт. В текущем
+мастере порта label QuantitySum применена, сам порт после этой смены ещё НЕ сохранён.
+Остальные поля Region/AmountSum/RowCount и типы прежние. Пакет не сохранён.
+Tests: wrong type/kind, cancel replaced row, lost reply, успех apply/cancel;
+в каждом случае максимум один click. Private evidence output-apply-live-result.txt,
+output-apply-{client,python,packaging,unit}-tests.txt в .dock/post-mvp-p0/.
+Далее port owner/open/finish/readback, Grouping fields/aggregates, полный Hermes
+data-pipeline на Luna/ChatGPT/medium с agent.3. Active Hermes нет; full P3–P9 открыт.
+Current live output mapping Quantity, Сумма по Region ОТКРЫТ, EditColumnDefForm закрыт.
+
 **Checkpoint 2026-09-06 — typed выбор типа output-column editor.**
 Existing select_wizard_option расширен на EditColumnDefForm;cbxDataType.
 Observed option/list связаны с original input, parameter form, wizard и selected
@@ -13,7 +35,7 @@ SUCCEEDED51ms, по одному клику, остальные значения
 Для типов, меняющих data_kind автоматически, точное ожидаемое поведение ещё нужно
 исследовать; текущий contract не подтверждает побочное изменение другого свойства.
 Private evidence .dock/post-mvp-p0/output-type-live-result.txt и
-output-type-{client,python,packaging,unit}-tests.txt. 282 client /115 Python /10 packaging PASS. Active Hermes нет.
+output-type-{client,python,packaging,unit}-tests.txt. 282 client /115 Python /10 packaging PASS. 283 client /115 Python /10 packaging PASS. Active Hermes нет.
 Далее typed apply/cancel выбранного output column с полным row readback,
 затем port owner/lifecycle/reopen и Grouping drivers, full P3–P9.
 Current EditColumnDefForm QuantitySum ОТКРЫТ, dropdown закрыт, исходный тип Целый,

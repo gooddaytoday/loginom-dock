@@ -1,3 +1,10 @@
+**Checkpoint:** apply_output_column/cancel_output_column проверяют 5 свойств
+selected row после одного click; cancel также original row_ref. Live apply181ms,
+cancel51ms PASS. Output row теперь включает data_kind/usage/selected.
+Current output mapping ОТКРЫТ, field editor закрыт. QuantitySum label теперь
+QuantitySum применена в мастере, сам порт после смены label ещё НЕ сохранён.
+283 client /115 Python /10 packaging PASS. Active Hermes нет. Далее port identity/lifecycle/readback + Grouping и full P3–P9.
+
 **Checkpoint:** select_wizard_option поддерживает тип EditColumnDefForm с
 original input/form/selected row, full 5-property draft readback и modal mask guard.
 Live integer→real→integer SUCCEEDED43/51ms, один клик каждый, побочных изменений нет.
