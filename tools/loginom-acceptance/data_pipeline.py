@@ -11,6 +11,7 @@ import json
 import rendered_results
 import settings_evidence
 import import_settings_evidence
+import import_roundtrip_evidence
 
 FIXTURES = tuple('fixtures/data-pipeline/'+name for name in ('sales.csv','expected.json','task.txt'))
 DOMAIN_GATES = ('wizard_settings_readback', 'calculator_expression_and_mappings',
@@ -70,10 +71,11 @@ def audit(evidence, checks, request, prefix, mutations, storage_audit, rejected_
     # Deliberate missing-verifier gates, not synthetic proof fields accepted from
     # model output. Implement each using native, pinned evidence before admission.
     for gate in DOMAIN_GATES:check('unimplemented_verifier_'+gate,False)
-    return {'all_assertions_passed':False,'assertions':checks,'goal':'data-pipeline',
+    return {'all_assertions_passed':False,'assertions':checks,'goal':request.get('goal_id','data-pipeline'),
             'acceptance_status':'diagnostic_only_domain_verifiers_incomplete',
             'rendered_result_diagnostics':rendered_results.diagnose(evidence,json.loads(Path(__file__).with_name('fixtures').joinpath('data-pipeline/expected.json').read_text()),prefix),
             'import_settings_diagnostics':import_settings_evidence.diagnose(evidence,json.loads(Path(__file__).with_name('fixtures').joinpath('data-pipeline/expected.json').read_text()),prefix,expected_source_path=declared_source_path(request)),
+            'import_roundtrip_diagnostics':import_roundtrip_evidence.diagnose(evidence,json.loads(Path(__file__).with_name('fixtures').joinpath('data-pipeline/expected.json').read_text()),prefix,expected_source_path=declared_source_path(request)),
             'settings_roundtrip_diagnostics':settings_evidence.diagnose(evidence,json.loads(Path(__file__).with_name('fixtures').joinpath('data-pipeline/expected.json').read_text())['calculator'],prefix),
             'transfer_verified':transfer_passed,'pre_action_rejections':len(rejected),'missing_domain_verifiers':list(DOMAIN_GATES),
             'limitations':['Full P3 task requested; typed domain evidence audit is not implemented. No P3 acceptance claim is possible.']}

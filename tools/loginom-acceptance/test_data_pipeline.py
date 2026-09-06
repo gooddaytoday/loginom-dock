@@ -65,3 +65,15 @@ class DataPipelineTest(unittest.TestCase):
             changed=copy.deepcopy(request);mutate(changed)
             self.assertIsNone(data_pipeline.declared_source_path(changed))
         self.assertIsNone(data_pipeline.declared_source_path({}))
+
+    def test_short_import_goal_pins_upload_and_never_claims_full_p3(self):
+        template=Path(data_pipeline.__file__).with_name('goals').joinpath('import-roundtrip.txt').read_text()
+        prompt=data_pipeline.upload_probe.prompt(template,'/analyst/packages/a.lgp','/analyst','20260905-120000-1234abcd')
+        self.assertNotIn('__',prompt)
+        self.assertIn('/analyst/Dock-upload-20260905-120000-1234abcd.csv',prompt)
+        self.assertIn('finish_wizard',prompt);self.assertIn('open_wizard',prompt)
+        evidence,request=UploadVerifyTest().fixture();request['goal_id']='import-roundtrip'
+        report=data_pipeline.audit(evidence,[],request,PREFIX,MUTATIONS,file_storage_inspect,rejected_before_browser)
+        self.assertEqual(report['goal'],'import-roundtrip')
+        self.assertFalse(report['all_assertions_passed'])
+        self.assertEqual(report['missing_domain_verifiers'],list(data_pipeline.DOMAIN_GATES))

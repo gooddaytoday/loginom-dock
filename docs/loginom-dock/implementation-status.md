@@ -1,3 +1,24 @@
+**2026-09-06 — journal sequence импорта и короткая Hermes проверка.**
+Добавлен import_roundtrip_evidence.diagnose: три baseline страницы source,
+format,mapping → typed wizard_step done → finish_wizard graph → optional один
+click по exact body из finish → open_wizard → source/format/mapping. Только
+unique bound_receipts, refs из delivered observation и по одному typed trace
+для step/finish/open. Same session/document/origin/build/workflow/package/tab,
+semantic owner/path; новые4 source input refs после открытия. Неучтённые или
+перекрывающиеся мутации, duplicate replies, missing/stale/foreign отвергаются.
+Вердикт rendered_import_settings_roundtrip_match не подтверждает полную схему,
+source identity, package persistence или P3. Подключён отдельной diagnostic.
+
+Добавлен goal import-roundtrip в существующий run/audit/fixture pipeline:
+один CSV, один импорт, baseline/apply/reopen, без построения всей цепочки.
+Сохраняются upload verification, explicit test/storage, pinned manifest/runtime,
+ChatGPT openai-codex/gpt-5.6-luna/medium. Полные P0–P9 требования не меняются.
+Все новые verifier modules включены в frozen auditor dependencies. Real
+preflight прошёл, model_started=false; 140/140 Python tests PASS.
+Следующий шаг — короткий live run с source freeze и audit ровно один раз.
+На момент этой записи model run не начат; UI manual TF-4 output_mapping,
+Package1 не сохранён. Production не менялся; P3–P9 открыты.
+
 **2026-09-06 — independent source/mapping diagnostics.**
 import_settings_evidence теперь сравнивает все3 страницы отдельно через
 bound_receipts: source_compare с explicit expected_source_path, compare format,
