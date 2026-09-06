@@ -1,3 +1,11 @@
+**Checkpoint:** reform_parameters читает 7 draft properties + selected row.
+Live owner checkbox false→true→false подтверждён (input.checked всегда false).
+Narrow read SUCCEEDED, QuantitySum integer, caching disabled, excluded=false.
+Editor EditReformColumnDefForm ОТКРЫТ с исходными значениями; Apply не выполнялся.
+Hermes нет, Package1 не сохранён. Далее typed type/apply/cancel с 7-property guard,
+full settings/results и P3–P9. Подробности сверху implementation-status.
+287 client /115 Python /10 packaging PASS.
+
 **Checkpoint:** field_parameters stage + wizard.reform_columns читает type,
 кэширование и exclusion, missing check=null. Live reopen Изменение подтвердил
 QuantitySum integer и все поля включёнными/без cache. Node inactive после явного

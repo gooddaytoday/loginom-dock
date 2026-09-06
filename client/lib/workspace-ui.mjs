@@ -167,6 +167,9 @@ function workspaceUiCapability(page, task) {
       ...['edtDisplayName','cbxNodeTitleMode'].flatMap(name=>{const owner='[data-tid$=";WizrdMCF;DoneWizard;'+name+'"]';return [owner,owner+' input'];}),
       ...['DerivedDataSourceOutputSocketWizard','DerivedDataSourceMappingEngineOutputPortWizard','ReformColumnsWizard'].flatMap(form=>
         ['colName_','colDisplayName_','colDataKind_','colDefaultUsageType_','colSourceDisplayName_','colCachingMethod_','colExcluded_'].map(key=>'[data-tid*=";WizrdMCF;'+form+';'+key+'"]')),
+      '[data-tid$=";WizrdMCF;EditReformColumnDefForm"]',
+      ...['edtName','edtDisplayName','cbxDataType','cbxDataKind','cbxUsageType','cntMain;cbxCachingMethod'].flatMap(name=>{const owner='[data-tid$=";WizrdMCF;EditReformColumnDefForm;'+name+'"]';return [owner,owner+' input'];}),
+      '[data-tid$=";WizrdMCF;EditReformColumnDefForm;cntMain;chbExcluded"]','[data-tid$=";WizrdMCF;EditReformColumnDefForm;cntMain;chbExcluded;DisplayEl"]',
       '[data-tid$=";WizrdMCF;EditColumnDefForm"]',
       ...['edtName','edtDisplayName','cbxDataType','cbxDataKind','cbxUsageType'].flatMap(name=>{const owner='[data-tid$=";WizrdMCF;EditColumnDefForm;'+name+'"]';return [owner,owner+' input'];}),
       '[data-tid$=";WizrdMCF;ExprDataEditForm"]',
@@ -393,6 +396,29 @@ function workspaceUiCapability(page, task) {
         const name=String(cell.textContent??''),label=labels.length===1?String(labels[0].textContent??''):null;
         if(labels.length===1 && types.length===1 && name.length<=256 && label.length<=256)
           wizard.expression_selection={status:'observed',row_ref:refOf(row),name,label,type_label:types[0][1]};
+      }
+    }
+    if(wizard.status==='observed' && wizard.stage==='field_parameters') {
+      const base=wizard.root_tid+';EditReformColumnDefForm';
+      const forms=(tids.get(base)??[]).filter(e=>visible(e) && !sensitive(e));
+      if(forms.length) {
+        wizard.reform_parameters={status:forms.length===1?'observed':'ambiguous',applied_verified:false};
+        if(forms.length===1) {
+          const form=forms[0],selected=(wizard.reform_columns?.fields??[]).filter(f=>f.status==='observed' && f.selected);
+          const fields=Object.fromEntries(Object.entries({name:'edtName',label:'edtDisplayName',type_label:'cbxDataType',data_kind:'cbxDataKind',usage:'cbxUsageType',caching:'cntMain;cbxCachingMethod'}).map(([name,key])=>{
+            const owners=(tids.get(base+';'+key)??[]).filter(e=>form.contains(e) && visible(e) && !sensitive(e));
+            const inputs=owners.length===1?dom.filter(e=>{charge();return owners[0].contains(e) && e.matches('input') && visible(e) && !sensitive(e);}):[];
+            if(inputs.length!==1)return [name,{status:inputs.length>1?'ambiguous':'unobserved'}];
+            const input=inputs[0],value=String(input.value??'');
+            return [name,{status:'observed',value:value.slice(0,256),truncated:value.length>256,input_ref:refOf(input),owner_ref:refOf(owners[0]),enabled:enabled(input),read_only:input.readOnly===true}];
+          }));
+          const owners=(tids.get(base+';cntMain;chbExcluded')??[]).filter(e=>form.contains(e) && visible(e) && !sensitive(e));
+          const displays=(tids.get(base+';cntMain;chbExcluded;DisplayEl')??[]).filter(e=>owners.length===1 && owners[0].contains(e) && visible(e) && !sensitive(e));
+          fields.excluded=owners.length===1 && displays.length===1 && displays[0].matches('.x-form-checkbox')
+            ?{status:'observed',value:owners[0].classList.contains('x-form-cb-checked'),owner_ref:refOf(owners[0]),display_ref:refOf(displays[0]),enabled:enabled(displays[0])}
+            :{status:owners.length>1 || displays.length>1?'ambiguous':'unobserved'};
+          Object.assign(wizard.reform_parameters,{root_ref:refOf(form),selected_column:selected.length===1?selected[0]:null,fields});
+        }
       }
     }
     const wizardFields=new Map(),wizardCombos=new Map();

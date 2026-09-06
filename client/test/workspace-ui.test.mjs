@@ -1898,3 +1898,35 @@ test('field parameters read row types caching and exclusion separately from port
     assert.deepEqual(narrow.output.wizard.reform_columns,columns);
   }
 });
+
+test('reform editor reads seven native parameters including disabled cache and owner checkbox state',async()=>{
+  for(const mode of ['valid','checked','missing_display','duplicate_display','duplicate_form','long_name']) {
+    const page=new Page(),base='MF;TF-1;WizrdMCF;',form=page.add('div',base.slice(0,-1)),stem=base+'ReformColumnsWizard;';
+    page.add('div',stem+'grdTargetColumns;tbl','',undefined,form);
+    const row=page.add('table',null,'',undefined,form);row.attrs.class='x-grid-item-selected';
+    page.add('td',stem+'colName_QuantitySum','QuantitySum',undefined,row);
+    const label=page.add('td',stem+'colDisplayName_QuantitySum','QuantitySum',undefined,row);
+    page.add('span',null,'',undefined,label).attrs.class='bg-TBGDataType-dtInteger';
+    const dialog=page.add('div',base+'EditReformColumnDefForm');dialog.attrs.class='x-window';
+    const root=base+'EditReformColumnDefForm;';
+    for(const [key,value] of [['edtName',mode==='long_name'?'x'.repeat(257):'QuantitySum'],['edtDisplayName','QuantitySum'],['cbxDataType','Целый'],['cbxDataKind','Непрерывный'],['cbxUsageType','Не задано'],['cntMain;cbxCachingMethod','Отключено']]) {
+      const owner=page.add('div',root+key,'',undefined,dialog),input=page.add('input',null,'',undefined,owner);input.value=value;
+      if(key.endsWith('cbxCachingMethod'))input.disabled=true;
+    }
+    const owner=page.add('div',root+'cntMain;chbExcluded','',undefined,dialog);owner.attrs.class=mode==='checked'?'x-form-cb-checked':'';
+    const hidden=page.add('input',null,'',undefined,owner);hidden.checked=false;
+    if(mode!=='missing_display')page.add('span',root+'cntMain;chbExcluded;DisplayEl','',undefined,owner).attrs.class='x-form-checkbox';
+    if(mode==='duplicate_display')page.add('span',root+'cntMain;chbExcluded;DisplayEl','',undefined,owner).attrs.class='x-form-checkbox';
+    if(mode==='duplicate_form')page.add('div',base+'EditReformColumnDefForm');
+    const full=await page.observe(),params=full.wizard.reform_parameters;
+    if(mode==='duplicate_form'){assert.equal(params.status,'ambiguous');assert.equal(params.fields,undefined);continue;}
+    assert.equal(params.selected_column.name,'QuantitySum');assert.equal(Object.keys(params.fields).length,7);
+    assert.equal(params.fields.caching.enabled,false);assert.equal(params.fields.caching.value,'Отключено');
+    assert.equal(params.fields.name.truncated,mode==='long_name');
+    assert.equal(params.fields.excluded.status,mode==='missing_display'?'unobserved':mode==='duplicate_display'?'ambiguous':'observed');
+    if(['valid','checked'].includes(mode))assert.equal(params.fields.excluded.value,mode==='checked');
+    const narrow=await page.execute({mode:'observe',root_ref:params.root_ref});
+    assert.deepEqual(narrow.output.wizard.reform_parameters,params);
+    assert.equal(params.applied_verified,false);
+  }
+});

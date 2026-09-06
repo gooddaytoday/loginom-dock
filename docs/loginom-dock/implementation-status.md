@@ -1,3 +1,24 @@
+**Checkpoint 2026-09-06 — семь параметров редактора ReformColumns.**
+Добавлен read-only wizard.reform_parameters для EditReformColumnDefForm: name,
+label, type_label, data_kind, usage, caching, excluded; original selected row и
+form/input refs. Бounded text <=256, duplicate/missing owners/inputs не считаются
+наблюдаемыми. Disabled caching читается со значением и enabled=false. Checkbox
+excluded читается по единственному DisplayEl .x-form-checkbox и owner классу
+x-form-cb-checked; native input.checked не используется. Fixed native queries
+обеспечивают одинаковый full/narrow read вне wizard subtree.
+
+Live doubleclick QuantitySum открыл editor. Проверка excluded false→true→false
+показала owner x-form-cb-checked при неизменном input.checked=false. Исходное
+значение восстановлено; Apply не выполнялся. Новый narrow reader SUCCEEDED:
+QuantitySum/QuantitySum/Целый/Непрерывный/Не задано/Отключено/false; caching disabled.
+Selected row привязана к исходной QuantitySum. applied_verified=false, typed
+name/type/apply/cancel для этого редактора ещё НЕ добавлены.
+Current editor EditReformColumnDefForm QuantitySum ОТКРЫТ, dropdown закрыт,
+значения исходные; underlying ReformColumnsWizard открыт, node inactive.
+Package1 не сохранён, Hermes не запущен. Далее typed type selection и apply/cancel
+с проверкой семи свойств, полный settings/results evidence и P3–P9.
+287 client /115 Python /10 packaging PASS.
+
 **Checkpoint 2026-09-06 — чтение мастера Параметры полей.**
 Добавлен stage field_parameters по ReformColumnsWizard;grdTargetColumns;tbl.
 Общий bounded reader строк выдаёт отдельный wizard.reform_columns: name/label/type,
