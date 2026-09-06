@@ -1,3 +1,24 @@
+**2026-09-06 — короткий import run120105 завершён, UnitPrice остаётся string.**
+Run20260906-120105-4973c565/session75023 TERMINAL, source78bc5486,
+132 API calls, returncode0/no timeout; runtime_source_unchanged/harness_unchanged
+true. Один frozen audit23/32FAIL SHA
+ a5ecd69341c28ca75341343dc35029b1f5a3869753d1730e5583b48ec8b9d372.
+Не переписывать. Failed knowledge scope, exactly_one_upload_and_verify,
+семь unimplemented domain gates. Upload row32 rejected BEFORE effect (FAILED
+request.validate/request_rejected true/effect_possible false/no operation),
+row68 same operation_id submit, row78 verify bytes/completion true. Текущий
+аудит не исключил первую pre-effect попытку; отдельно исследовать почему.
+
+Typed finish row264 и open row278 SUCCEEDED, fresh source matches, но после
+reopen UnitPrice string (expected real), остальные4 types match. Полная
+roundtrip diagnostic пустая. Type/kind driver не применялся: select option156
+выбирал delimiter «Точка с запятой», не тип. Поздние попытки click refs669/693
+не найдены в delivered elements; разбирать их ошибки и доступность type cell.
+Не запускать неизменённый replay. Далее UI-first воспроизведение выбора UnitPrice
+и доступности delivered refs, затем исправление/короткая проверка. Реальные
+изменения runtime пока не внесены. Manual browser не менялся, Hermes завершён,
+production без изменений. Полный P3–P9 остаётся открытым.
+
 **2026-09-06 — journal sequence импорта и короткая Hermes проверка.**
 Добавлен import_roundtrip_evidence.diagnose: три baseline страницы source,
 format,mapping → typed wizard_step done → finish_wizard graph → optional один
