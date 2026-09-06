@@ -59,3 +59,18 @@ class UploadVerifyTest(unittest.TestCase):
                        lambda d:d['calls'].append({**d['calls'][-1],'row':20,'tool_call_id':'repeat'})]:
             data,request=self.fixture();change(data)
             self.assertFalse(upload_verify.audit(data,[],request,PREFIX,MUTATIONS,file_storage_inspect)['all_assertions_passed'])
+
+    def test_verification_binds_target_page_among_other_pages_of_same_observation(self):
+        data,request=self.fixture()
+        read=next(t for t in data['tools'] if t.get('tool_call_id')=='file-read')
+        other=copy.deepcopy(read);other['tool_call_id']='earlier-page';other['row']=10
+        other['result']['operation_id']='earlier-page';other['result']['output']['ui']['elements']=[]
+        data['tools'].insert(data['tools'].index(read),other)
+        self.assertTrue(upload_verify.audit(data,[],request,PREFIX,MUTATIONS,file_storage_inspect)['all_assertions_passed'])
+        for change in ('duplicate','other_session','tamper'):
+            altered=copy.deepcopy(data)
+            selected=next(t for t in altered['tools'] if t.get('tool_call_id')=='file-read')
+            if change=='duplicate':altered['tools'].append(copy.deepcopy(selected))
+            if change=='other_session':selected['session_id']='other'
+            if change=='tamper':selected['result']['output']['ui']['elements'][0]['label']='other.csv'
+            self.assertFalse(upload_verify.audit(altered,[],request,PREFIX,MUTATIONS,file_storage_inspect)['all_assertions_passed'],change)

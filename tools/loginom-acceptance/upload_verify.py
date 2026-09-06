@@ -24,8 +24,12 @@ def audit(evidence, checks, request, prefix, mutations, storage_audit):
     artifacts=prepared[0].get('input_artifacts',[]) if len(prepared)==1 else []
     artifact=artifacts[0] if len(artifacts)==1 else {}
     descriptor=upload_probe.descriptor(request['run_id'],request['storage_directory'])
+    # One observation can have multiple delivered pages. Bind the exact page
+    # which issued this file ref, never the first page or a different session.
     reads=[t for t in before['tools'] if t['tool']==prefix+'dock_workspace_observe'
-           and t['result'].get('output',{}).get('observation_id')==args.get('observation_id')]
+           and t.get('session_id')==call.get('session_id')
+           and t['result'].get('output',{}).get('observation_id')==args.get('observation_id')
+           and any(item.get('ref')==args.get('file_ref') for item in t['result'].get('output',{}).get('ui',{}).get('elements',[]))]
     read=reads[0]['result'] if len(reads)==1 else {}
     output=read.get('output',{})
     targets=[r for r in output.get('ui',{}).get('elements',[]) if r.get('ref')==args.get('file_ref')]

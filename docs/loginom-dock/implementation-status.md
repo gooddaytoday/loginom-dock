@@ -1,3 +1,29 @@
+**Checkpoint 2026-09-06 — paged receipts и целевой CSV.**
+Direct UI exact Dock sequence delimiter raw ;→null \N прошла SUCCEEDED198ms для
+null; неудача Hermes input пока не воспроизведена и не объявляется исправленной.
+Current manual import format: delimiter raw ;, null \N, decimal Точка (.), пакет
+не сохранён, Hermes не запущен.
+
+В frozen run080744 raw receipts содержат active_tab_ref/navigation_context, но
+observation-pages исключал их из delivered metadata. Independent compact_receipt_equal
+также не знал этих двух полей, поэтому корректно отвергал неполную проекцию.
+Теперь оба поля сохраняются на каждой странице и сверяются с raw receipt; тест
+native paginator→independent comparator отвергает удаление/подмену tab/path.
+Это также возвращает downstream settings verifier необходимый контекст вкладки.
+
+upload_verify ранее требовал ровно одну страницу для observation_id, хотя целевой
+CSV был выдан только на второй странице. Теперь выбирает ровно одну страницу
+с exact file_ref в той же session; raw receipt, bytes, target name/TID и transfer
+completion по-прежнему проверяются. Тесты empty first page, duplicate target page,
+other session и tampered filename. Старый audit НЕ переписан; live новая приёмка
+ещё не выполнялась. 289 client /117 Python /10 packaging PASS.
+
+Оставшийся navigation gate: Hermes сделал два single click по observed colName_test
+перед doubleclick; verifier допускает только doubleclick по папке. Нужно отдельно
+обосновать readback неизменной директории после selection прежде чем расширять gate.
+Далее навигационный verifier и новый full Luna/ChatGPT/medium прогон с исправленным
+scoped recovery. Все 7 P3 domain gates и P4–P9 остаются открытыми.
+
 **Checkpoint 2026-09-06 — scoped recovery после full-run отказов.**
 Точный direct Dock set_wizard_field null_marker ?→\N в диагностическом Loginom
 прошёл SUCCEEDED247ms. Отличие от Hermes ещё не установлено: в его прогоне перед

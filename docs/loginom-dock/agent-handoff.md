@@ -1,3 +1,11 @@
+**Checkpoint:** direct delimiter ;→null \N PASS198ms, input failure ещё не reproduced.
+Исправлен projector metadata active_tab_ref/navigation_context и independent equality;
+upload verifier выбирает exact file-ref page той же session вместо единственной page.
+289 client /117 Python /10 packaging PASS, old audit080744 не переписан. Остался storage navigation gate:
+два legitimate-looking single click colName_test перед doubleclick; нужны post-read
+условия selection. Manual import format открыт с ;/\N/decimal dot, Package1 не
+сохранён, Hermes нет. Далее navigation verifier + new full Luna run; P3–P9 открыт.
+
 **Checkpoint:** exact direct Dock null ?→\N PASS247ms, первопричина Hermes input
 ещё не найдена (перед ним raw delimiter ;). Исправлена отдельная recovery ошибка:
 свежий снимок теперь того же roots/narrow/filter scope, fingerprint включает wizard.

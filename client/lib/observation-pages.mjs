@@ -60,7 +60,7 @@ export function createObservationPages({ maxBytes = 12000, maxRecords = 32, capa
   };
   const render = (entry, offset) => {
     const snapshot = entry.snapshot;
-    const output = Object.fromEntries(['origin', 'authenticated', 'loginom_build', 'workflow_ref', 'active_identity', 'package_identity', 'workarea', 'verification_required', 'gesture_applied', 'scan', 'dom_epoch', 'observation_root', 'observation_kind', 'file_storage', 'observation_filter', 'wizard']
+    const output = Object.fromEntries(['origin', 'authenticated', 'loginom_build', 'workflow_ref', 'active_identity', 'active_tab_ref', 'navigation_context', 'package_identity', 'workarea', 'verification_required', 'gesture_applied', 'scan', 'dom_epoch', 'observation_root', 'observation_kind', 'file_storage', 'observation_filter', 'wizard']
       .filter(key => key in snapshot).map(key => [key, structuredClone(snapshot[key])]));
     output.operation = compactOperation(snapshot.operation);
     if (snapshot.recovery) output.recovery = compactOperation(snapshot.recovery);

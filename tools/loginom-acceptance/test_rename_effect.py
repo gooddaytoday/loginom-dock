@@ -100,6 +100,7 @@ class ContinuationProjection(unittest.TestCase):
     def test_all_pages_match_their_native_receipt_and_reject_changed_offset_content(self):
         root=Path(__file__).resolve().parents[2]
         raw={'status':'SUCCEEDED','operation_id':'read','output':{'nodes':[],'links':[],
+          'active_tab_ref':'tab-incarnation-1','navigation_context':{'status':'observed','kind':'workflow','path':[{'tid':'path','label':'Scenario'}]},
           'file_storage':{'status':'observed','directory':'/test'},
           'ui':{'elements':[{'ref':f'ui-{i}','label':f'cell {i}','signature':{'tag':'td','private':'hidden'}} for i in range(70)],
                 'dialogs':[],'masks':[],'messages':[],'table_cells':[], 'truncated':{}}}}
@@ -114,7 +115,10 @@ console.log(JSON.stringify(out));"""
         self.assertEqual([p['output']['page']['offset'] for p in pages],[0,32,64])
         for reply in pages:
             self.assertTrue(rename_effect.journal_equal(raw,reply))
-            for mutate in [lambda r:r['output']['page'].update(offset=True),
+            for mutate in [lambda r:r['output'].update(active_tab_ref='other-tab'),
+                           lambda r:r['output']['navigation_context'].update(path=[]),
+                           lambda r:r['output'].pop('active_tab_ref'),
+                           lambda r:r['output']['page'].update(offset=True),
                            lambda r:r['output']['page'].update(offset=-1),
                            lambda r:r['output']['page'].update(offset=999),
                            lambda r:r['output']['page'].update(offset=r['output']['page']['offset']+1),
