@@ -1,3 +1,14 @@
+**Checkpoint:**091427/session4963 TERMINAL audit49/58FAIL frozen SHA
+cd46b075d08102acf1786e56df5ddad533b0dbce286ae37c23a312b4ba563e58. Native null
+\N length2/codepoints92,78 прошёл535ms; Amount=Quantity * UnitPrice прочитано,
+но Loginom сообщил string result incompatible real. Обе связи есть. Далее
+ImportTextFileParamsWizard/ColumnDefsTuning structured read + type edit/readback:
+columns0..4, rows0name/1label/2type/3kind/4use. В manual типы верны; Hermes типы
+ещё не доказаны. Delimiter меняет derived columns — учесть whole-wizard guard.
+Audit также отметил duplicate reply Dock call181 и transfer navigation.
+Manual import format открыт, Package1 не сохранён, Hermes нет. Без нового
+разбора full replay не повторять. Детали сверху status, P3–P9 открыты.
+
 **Checkpoint:**090018/session45339 TERMINAL audit50/58FAIL frozen SHA
 909998224ec298a46605c28b3de82363400b8acd3eb2e221864a3df88ee0e4cb. CSV verify passed,
 import не начат: full graph/dialogs scan UI_SCAN_LIMIT. New broad observe теперь

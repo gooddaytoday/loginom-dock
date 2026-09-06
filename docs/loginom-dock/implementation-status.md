@@ -1,3 +1,39 @@
+**2026-09-06 — terminal091427: null исправлен, следующий участок — типы импорта.**
+Run20260906-091427-84760c13/session4963 TERMINAL: source2da9e622,139 API calls,
+returncode0/no timeout, runtime/harness unchanged. Единственный audit49/58FAIL,
+SHA cd46b075d08102acf1786e56df5ddad533b0dbce286ae37c23a312b4ba563e58.
+Не переписывать. Failed: every_dock_call_has_one_matching_reply (Dock call181
+имеет два matching reply; причину ещё разобрать), transfer navigation и семь
+unimplemented domain gates. Missing tool_describe replies не являются Dock calls.
+
+Автономный runtime: row133 null_marker SUCCEEDED535ms, import_format_input_settled;
+value_length_utf16=2, codepoints92/78. Fresh rows135/137 сохранили значение.
+CSV verify/inspect прошли. Граф read200/202 показал обе связи Источник→Расчёт→Итог
+с truncated.links=false (автосвязи add). Amount real создан, полный CodeMirror
+документ Quantity * UnitPrice прочитан row248. Однако UI message row238 сообщил:
+«В результате вычисления выражения "Amount" получено значение строкового типа,
+оно несовместимо с заданным типом Вещественный». Имена всех пяти полей присутствуют.
+Это ошибка типа результата; конкретные ошибочные исходные типы ещё не доказаны.
+Hermes вернулся в импорт. Его set_checked target948 — edtVariantAsGeneralType,
+не header; fill983 — фильтр «Фильтрация», не редактор типа. Результат не принят.
+
+UI-first после terminal: открыт диагностический ImportTextFileParamsWizard
+старого Package1. ColumnDefsTuning native cells:
+`...;grdSettings;grd-1;normalHeaderCt;<column>_<row>`: row0=name,1=label,2=type,
+3=data kind,4=use. Header `<column>`. В ЭТОМ ручном пакете columns0..4 имеют
+Id integer, Region string, Quantity integer, UnitPrice real, Comment string.
+Не переносить эти значения на Hermes пакет. E2E bg/sels/import/sColumnDefsTuning.ts
+и sImportTxt.ts; Help integration/import/txt/README.md: RefreshData пересчитывает
+типы/виды, RefreshAll также имена/метки; тип ячейки задаёт преобразование текста.
+
+Далее structured bounded чтение ColumnDefsTuning, привязка свойств к column index,
+затем UI-verified изменение типа/пересчёт и независимый readback. Видимые столбцы
+не доказывают полноту. Важно: смена delimiter обновляет derived columns, а
+set_wizard_field сравнивает весь wizard; новые metadata должны учитывать этот
+разрешённый эффект, сохраняя контекст и остальные исходные настройки.
+Manual import format открыт, типы не менялись, Package1 не сохранён, Hermes нет.
+Полный прогон до этого разбора не повторять. Все непринятые P3–P9 gates открыты.
+
 **2026-09-06 — terminal090018 и обнаружение областей после oversized scan.**
 Run20260906-090018-599aab8a/session45339 завершён: source34b720e0,47 API calls,
 returncode0, no timeout, runtime/harness unchanged. Единственный audit50/58FAIL,
