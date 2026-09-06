@@ -1165,8 +1165,10 @@ function workspaceUiCapability(page, task) {
             timeout();await page.waitForTimeout(Math.min(200,timeout()));observed=await readOpeningUi();
           }
           const owner=observed.wizard?.owner_context;
+          // Graph and breadcrumb tids share the native formatted key; display
+          // labels retain commas/spaces and may wrap differently on the canvas.
           if(!contextMatches(observed) || observed.ui.masks.length || observed.wizard?.status!=='observed'
-            || owner?.status!=='observed' || owner.node.label!==opening.node.node_label
+            || owner?.status!=='observed' || owner.node.tid!==opening.workflow_path.at(-1)?.tid+'>'+opening.node.node_label
             || !same(owner.path.slice(0,-2).map(({tid,label})=>({tid,label})),opening.workflow_path))
             fail('WIZARD_OPEN_NOT_CONFIRMED','The intended node wizard was not confirmed after one click; inspect the current view before retry');
           record('wizard_open_verified',{node:opening.node,workflow_path:opening.workflow_path,wizard_root_ref:observed.wizard.root_ref,

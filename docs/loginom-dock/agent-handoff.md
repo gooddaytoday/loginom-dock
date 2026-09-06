@@ -1,3 +1,14 @@
+**Checkpoint:** исправлено open_wizard для formatted graph key: exact native
+breadcrumb tid вместо сравнения с display label. Live Grouping SUCCEEDED1063ms;
+284 client /115 Python /10 packaging PASS. Active Hermes нет.
+ВАЖНО: после port Done + node reopen Next обнаружена mapping page
+DerivedDataSourceMappingEngineOutputPortWizard (пока не поддержана runtime).
+QuantitySum integer без источника; автосинхронизация добавила Quantity real с
+Quantity|Сумма. Help запрещает mapping real→integer, потребуется явное
+преобразование типа, fixture не ослаблять. UI оставлен на этой node mapping page,
+source dropdown закрыт Escape. Package1 не сохранён. Детали сверху status.
+Далее mapping/source evidence + корректная цепочка преобразования, full P3–P9.
+
 **Checkpoint:** wizard.port_context разделяет node/port по native breadcrumb
 chain; live narrow read observed для output port узла Quantity, Сумма по Region,
 node owner unobserved. opening_verified=false, graph-port index и lifecycle ещё

@@ -1,3 +1,30 @@
+**Checkpoint 2026-09-06 — открытие узлов с форматированными именами.**
+open_wizard больше не сравнивает display label с graph TID key: проверяет точный
+owner.node.tid = исходный workflow breadcrumb tid + native graph key. Сохраняются
+проверки tab/workflow/package/path. Тесты покрывают пробелы/запятую и чужой key с
+той же видимой меткой. Live Grouping Quantity_Сумма_по_Region → owner label
+Quantity, Сумма по Region: SUCCEEDED1063ms, один click. 284 client /115 Python /
+10 packaging PASS. Это подтверждает открытие, не настройки или full acceptance.
+
+Прямое продолжение UI выявило важный дефект диагностического сценария. После
+ручного Done порта (сохранена label QuantitySum) и reopen узла Next открывает
+DerivedDataSourceMappingEngineOutputPortWizard, а не Done. Здесь пять строк:
+Region←Region, QuantitySum integer←NULL, AmountSum real←Сумма|Сумма,
+RowCount integer←Количество, дополнительная Quantity real←Quantity|Сумма.
+Dropdown входного поля QuantitySum показывает «Нет подходящих столбцов».
+Help data/data/compatibility.md: real→integer через mapping запрещён;
+ports/table-interface.md исключает несовместимые/уже связанные источники;
+automapping-of-fields.md объясняет добавление несвязанного входного поля.
+Нельзя считать смену типа/имени доказательством вычислений: требуется явное
+преобразование суммы в integer с реальным readback и сохранением исходного
+требования fixture. Полная последовательность преобразования ещё не проверена.
+
+Current UI: node mapping DerivedDataSourceMappingEngineOutputPortWizard открыт,
+source dropdown закрыт Escape; изменения этой страницы не сохранены. Package1
+не сохранён, Hermes не запущен. Runtime пока не распознаёт эту третью mapping
+разновидность; следующий шаг — изучить и реализовать mapping/source evidence и
+явное преобразование типа, затем full data-pipeline Luna/ChatGPT/medium. P3–P9 открыт.
+
 **Checkpoint 2026-09-06 — контекст выходного порта по реальной навигации.**
 После непосредственного изучения Loginom добавлен wizard.port_context: отдельные
 node/port refs, labels и полный bounded breadcrumb path. Требуется цепочка
