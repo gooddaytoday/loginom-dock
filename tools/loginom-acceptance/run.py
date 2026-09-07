@@ -20,6 +20,7 @@ from preflight import preflight, runtime_pin
 from destinations import storage_segments, render_goal
 import upload_probe
 import data_pipeline
+from hermes_auth_guard import POLICY as AUTH_POLICY
 
 WORK = Path(__file__).resolve().parent
 REPO = WORK.parents[1]
@@ -114,8 +115,8 @@ def exported_events(dock_home, secrets):
 def validate_inputs(args):
     if sys.platform != "darwin":
         raise ValueError("This active acceptance iteration is approved only on the current Mac")
-    profile=getattr(args,'model_profile','chatgpt-luna')
-    if profile not in ('chatgpt-luna','xiaomi-mimo') or profile=='xiaomi-mimo' and getattr(args,'goal',None)!='data-pipeline':
+    profile=getattr(args,'model_profile','chatgpt-sol')
+    if profile not in ('chatgpt-sol','xiaomi-mimo') or profile=='xiaomi-mimo' and getattr(args,'goal',None)!='data-pipeline':
         raise ValueError('Xiaomi comparison is authorized only for the full data-pipeline goal')
     max_turns_limit=300 if getattr(args,'goal','basic-graph')=='data-pipeline' else 100
     if not 30 <= args.timeout <= 3600 or not 1 <= args.max_turns <= max_turns_limit:
@@ -136,10 +137,11 @@ def validate_inputs(args):
 def execute(args):
     os.umask(0o077)
     validate_inputs(args)
-    profile=getattr(args,'model_profile','chatgpt-luna')
-    provider,model=('xiaomi','mimo-v2.5') if profile=='xiaomi-mimo' else ('openai-codex','gpt-5.6-luna')
+    profile=getattr(args,'model_profile','chatgpt-sol')
+    provider,model=('xiaomi','mimo-v2.5') if profile=='xiaomi-mimo' else ('openai-codex','gpt-5.6-sol')
+    reasoning = 'medium' if profile == 'xiaomi-mimo' else 'low'
     model_env=xiaomi_connection(args.hermes_home) if profile=='xiaomi-mimo' else {}
-    connection_values = connection(args.hermes_home) if profile=='chatgpt-luna' else {'version':1,'providers':{}}
+    connection_values = connection(args.hermes_home) if profile=='chatgpt-sol' else {'version':1,'providers':{}}
     dock = json.loads(args.dock_config.read_text())
     secrets = [*connection_values.get("providers",{}).get("openai-codex",{}).get("tokens",{}).values(), model_env.get("XIAOMI_API_KEY"), dock.get("api_key")]
     goal_id = getattr(args, "goal", "basic-graph")
@@ -171,7 +173,7 @@ def execute(args):
     if goal_id in ('data-pipeline','import-roundtrip'):
         harness_inputs.update({name:sha(WORK / name) for name in data_pipeline.FIXTURES})
     info = {"schema_version": 2, "storage_directory":getattr(args,"storage_directory",None), "scope": "source_runtime", "model_started": False,
-            "provider": provider, "model": model, "reasoning_effort": "medium", "hermes_version": "0.21.0",
+            "provider": provider, "model": model, "reasoning_effort": reasoning, "hermes_version": "0.21.0",
             "model_profile": profile, "provider_selection": "explicit CLI; effective usage identity checked after the run",
             "fallback_allowed": False, "dependencies": dependencies,
             "runtime_source_pin": frozen, "source_inventory": source["source"],
@@ -186,10 +188,19 @@ def execute(args):
             "budget": {"timeout_seconds": args.timeout, "max_turns": args.max_turns},
             "series": {"planned_attempts": 1, "variant": fault, "pass_criteria": "audit.py declared variant contract"},
             "manifest_uri": args.manifest_uri, "manifest_sha256": args.manifest_sha256}
+    if profile == 'chatgpt-sol':
+        info['auth_policy'] = AUTH_POLICY
+        with tempfile.TemporaryDirectory(prefix='dock-auth-guard-') as guard_temp:
+            guarded_version = subprocess.run([str(args.hermes_python), str(WORK / 'hermes_auth_guard.py'),
+                str(args.hermes_source), str(Path(guard_temp) / 'receipt.json'),
+                '--version'], capture_output=True, text=True, timeout=30,
+                env=environment({}, Path(guard_temp), Path(guard_temp)))
+        if guarded_version.returncode or not re.search(r'(?<![0-9.])v?0\.21\.0(?![0-9.])', guarded_version.stdout):
+            raise ValueError('Guarded Hermes version check failed')
     if not args.run:
         write(args.output, info)
         print(json.dumps({"preflight": "passed", "model_started": False, "hermes_version": "0.21.0",
-                          "provider": provider, "model": model, "reasoning_effort": "medium", "client_revision": frozen["client_revision"]}))
+                          "provider": provider, "model": model, "reasoning_effort": reasoning, "client_revision": frozen["client_revision"]}))
         return 0
     run_id = time.strftime("%Y%m%d-%H%M%S") + "-" + uuid.uuid4().hex[:8]
     run = args.runs_root.resolve() / run_id
@@ -224,7 +235,7 @@ def execute(args):
               "connect_timeout": 180, "timeout": 360, "enabled": True,
               "env": {"DOCK_ACCEPTANCE_RUN_DIR": str(run),
                       "DOCK_ACCEPTANCE_EXECUTOR_SHA256": frozen["inputs"]["client/lib/executor.mjs"]}}},
-              "agent": {"max_turns": args.max_turns, "reasoning_effort": "medium"},
+              "agent": {"max_turns": args.max_turns, "reasoning_effort": reasoning},
               "memory": {"provider": "none"}, "plugins": {"enabled": []},
               "display": {"compact": True}, "checkpoints": {"enabled": False}}
     write(hermes_home / "config.yaml", config)
@@ -243,12 +254,15 @@ def execute(args):
             raise ValueError("Source changed before model launch")
         write(hermes_home / "auth.json", connection_values)
         env = environment(model_env, hermes_home, run)
-        argv = [str(args.hermes), "--provider", provider, "--model", model, "--reasoning", "medium",
+        argv = [str(args.hermes), "--provider", provider, "--model", model, "--reasoning", reasoning,
                 "--toolsets", "loginom-dock", "--skills", "loginom", "--usage-file", str(run / "private/usage.json"), "-z", prompt]
+        if profile == 'chatgpt-sol':
+            argv = [str(args.hermes_python), str(WORK / 'hermes_auth_guard.py'), str(args.hermes_source),
+                    str(run / 'private/auth-guard.json'), *argv[1:]]
         child = subprocess.Popen(argv, cwd=run, env=env, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, start_new_session=True)
         started = True
         status = "FAILED_MODEL_OR_EXPORT"
-        print(json.dumps({"run_id": run_id, "stage": "model_started", "provider": provider, "model": model, "reasoning_effort": "medium"}), flush=True)
+        print(json.dumps({"run_id": run_id, "stage": "model_started", "provider": provider, "model": model, "reasoning_effort": reasoning}), flush=True)
         timed_out = False
         try:
             child.wait(timeout=args.timeout)
@@ -265,13 +279,18 @@ def execute(args):
         evidence = {"schema_version": 1, "run_id": run_id, "export_complete": True,
                     "runtime_source_unchanged": runtime_pin(REPO) == frozen,
                     "harness_unchanged": harness_unchanged(harness_inputs),
-                    "reasoning_effort": "medium",
+                    "reasoning_effort": reasoning,
                     "native_skill_unchanged": sha(native_skill_copy) == info["native_skill"]["sha256"],
                     "process": {"returncode": child.returncode, "timed_out": timed_out,
                                 "usage": {key: usage.get(key) for key in ("provider", "model", "api_calls", "completed", "failed")}},
                     "tools": tool_results, "calls": calls,
                     "events": exported_events(dock_home, secrets)}
         receipt = dock_home / "fault-receipt.json"
+        if profile == 'chatgpt-sol':
+            guard = run / 'private/auth-guard.json'
+            evidence['auth_guard'] = json.loads(guard.read_text()) if guard.is_file() else {}
+            evidence['auth_connection_unchanged'] = json.loads((hermes_home / 'auth.json').read_text()).get(
+                'providers', {}).get('openai-codex', {}).get('tokens') == connection_values['providers']['openai-codex']['tokens']
         if receipt.is_file():
             evidence["operator_fault_receipt"] = clean(json.loads(receipt.read_text()), secrets)
         write(run / "evidence.json", clean(evidence, secrets))
@@ -291,6 +310,8 @@ def main():
     parser.add_argument("--runs-root", type=Path, default=REPO / ".dock/post-mvp-p0/runs")
     parser.add_argument("--hermes-home", type=Path, default=Path(os.environ.get("HERMES_HOME", str(Path.home() / ".hermes"))))
     parser.add_argument("--hermes", type=Path, default=Path.home() / ".local/bin/hermes")
+    parser.add_argument('--hermes-python', type=Path, default=Path.home() / '.hermes/hermes-agent/venv/bin/python')
+    parser.add_argument('--hermes-source', type=Path, default=Path.home() / '.hermes/hermes-agent')
     parser.add_argument("--node", type=Path, default=Path.home() / ".loginom-dock/current/runtime/node")
     parser.add_argument("--browsers", type=Path, default=Path.home() / ".loginom-dock/runtime/browsers")
     parser.add_argument("--dock-config", type=Path, default=Path.home() / ".loginom-dock/config.json")
@@ -307,8 +328,8 @@ def main():
     parser.add_argument("--require-verification", action="store_true")
     parser.add_argument("--require-delivered-context", action="store_true",
                         help="Require automatic E2E/Help delivery bound to a failure and journal before successful continuation")
-    parser.add_argument("--model-profile",choices=["chatgpt-luna","xiaomi-mimo"],default="chatgpt-luna")
-    parser.add_argument("--goal", choices=["basic-graph", "auto-link-retain", "auto-link-remove", "palette-inventory", "checkbox-roundtrip", "context-menu-checkbox", "root-checkbox", "file-storage-inspect", "file-upload-probe", "file-upload-verify", "data-pipeline", "import-roundtrip"], default="basic-graph")
+    parser.add_argument("--model-profile",choices=["chatgpt-sol","xiaomi-mimo"],default="chatgpt-sol")
+    parser.add_argument("--goal", choices=["prepare-workspace", "basic-graph", "auto-link-retain", "auto-link-remove", "palette-inventory", "checkbox-roundtrip", "context-menu-checkbox", "root-checkbox", "file-storage-inspect", "file-upload-probe", "file-upload-verify", "data-pipeline", "import-roundtrip"], default="basic-graph")
     parser.add_argument("--allow-manual-reopen", action="store_true")
     args = parser.parse_args()
     if args.fault=="save_reopen" and not args.allow_manual_reopen:

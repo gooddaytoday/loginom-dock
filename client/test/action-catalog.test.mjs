@@ -37,7 +37,7 @@ async function fixture({ mutate } = {}) {
   // Deliberately synthetic unit-test evidence; never a publishable live report.
   const acceptance = { schema_version: 1, status: 'PASSED', manifest_sha256: sha256(manifestText),
     runtime: { ...testRuntime, capabilityAbi: 1, executorRevision: EXECUTOR_REVISION }, target: manifest.compatibility,
-    agent: { name: 'hermes', provider: 'openai-codex', model: 'gpt-5.6-luna', reasoning_effort: 'medium' },
+    agent: { name: 'hermes', provider: 'openai-codex', model: 'gpt-5.6-sol', reasoning_effort: 'low' },
     checks: Object.fromEntries(ACCEPTANCE_CHECKS.map(key => [key, true])), evidence_uri: 'unit-test:synthetic',
     evidence_sha256: 'e'.repeat(64), recorded_at: '2026-09-04T00:00:00Z' };
   const acceptanceText = canonical(acceptance), acceptanceSha = sha256(acceptanceText);

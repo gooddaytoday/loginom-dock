@@ -26,7 +26,7 @@ async function buildFixture(t) {
   // Synthetic contract evidence exists only in this test's temporary directory.
   const acceptance = { schema_version: 1, status: 'PASSED', manifest_sha256: sha256(manifestText),
     runtime: { clientRevision: 'd'.repeat(64), playwright: 'test', chromiumRevision: 'test', executorRevision: EXECUTOR_REVISION, capabilityAbi: 1 },
-    target: manifest.compatibility, agent: { name: 'hermes', provider: 'openai-codex', model: 'gpt-5.6-luna', reasoning_effort: 'medium' },
+    target: manifest.compatibility, agent: { name: 'hermes', provider: 'openai-codex', model: 'gpt-5.6-sol', reasoning_effort: 'low' },
     checks: Object.fromEntries(ACCEPTANCE_CHECKS.map(key => [key, true])),
     evidence_uri: 'unit-test:synthetic', evidence_sha256: 'e'.repeat(64), recorded_at: '2026-09-04T00:00:00Z' };
   const attestation = join(directory, 'synthetic-acceptance.json');

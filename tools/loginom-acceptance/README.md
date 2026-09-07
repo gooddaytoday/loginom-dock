@@ -1,3 +1,13 @@
+# Текущий профиль — 7 сентября 2026
+
+Новые запуски используют `--model-profile chatgpt-sol` по умолчанию:
+существующая подписка Hermes, `openai-codex / gpt-5.6-sol / low`, без fallback.
+Исторические Luna/medium evidence остаются читаемыми; новый admission их не принимает.
+`--goal prepare-workspace` проверяет только подготовку нового черновика;
+его независимый audit допускает чтение workspace, но запрещает запуск узлов,
+сохранение и остальные мутации. Полный контракт: [подготовка workspace](../../docs/loginom-dock/workspace-preparation.md).
+Датированные Luna/MiMo примеры ниже — история прежних запусков.
+
 ## Сравнение отображаемых результатов
 
 rendered_results.py сравнивает data_column/data_cell с полным expected fixture,

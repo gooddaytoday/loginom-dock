@@ -141,18 +141,27 @@ export async function createBridge(config, session) {
       }
       try {
         if (request.params.name === 'dock_prepare') {
+          const args = request.params.arguments ?? {};
+          validateActionParameters(prepareTool.inputSchema, args);
+          const preparationRequest = { operation_id: args.operation_id ?? 'prepare', intent: args.intent ?? 'new_draft',
+            package_path: args.package_path ?? null, workflow_ref: args.workflow_ref ?? null };
+          const workspaceOptions = actionRuntime ? { loginomUrl: config.loginomUrl,
+            compatibility: pinnedActions.compatibility, sessionId: session.metadata.sessionId,
+            operationId: preparationRequest.operation_id, intent: preparationRequest.intent,
+            packagePath: preparationRequest.package_path, workflowRef: preparationRequest.workflow_ref, timeoutMs: args.timeout_ms ?? 120000,
+            allowTestLogin: config.mode === 'executor-replay' && config.replayBootstrap, testLoginUser: config.replayLoginUser } : null;
+          if (workspaceOptions) makeWorkspacePrepareCode(workspaceOptions);
           const prepared = await skill.prepare();
           session.metadata.skillRevision = prepared.detail.revision;
           session.metadata.skillPath = prepared.main;
           let workspace = null;
           if (actionRuntime) {
             workspace = await browserGate(() => prepareWorkspaceSession({ metadata: session.metadata,
+              request: preparationRequest, signal: extra.signal,
               assertAllowed() { extra.signal.throwIfAborted(); actionRuntime.assertPreparationAllowed(); },
-              async prepare() {
+              async prepare({ recoverOnly }) {
                 if (!config.loginomUrl) throw new Error('Workspace preparation requires the configured Loginom URL');
-                const code = makeWorkspacePrepareCode({ loginomUrl: config.loginomUrl,
-                  compatibility: pinnedActions.compatibility,
-                  allowTestLogin: config.mode === 'executor-replay' && config.replayBootstrap, testLoginUser: config.replayLoginUser });
+                const code = makeWorkspacePrepareCode({ ...workspaceOptions, recoverOnly });
                 const response = await browser.callTool({ name: 'browser_run_code_unsafe', arguments: { code } }, undefined, { timeout: 125000 });
                 return parseWorkspacePreparation(response);
               },

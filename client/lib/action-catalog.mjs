@@ -276,9 +276,9 @@ export function validateReplayAcceptance(acceptance, { manifest, manifestSha256,
   }
   if (!isObject(acceptance.agent)) fail('replay acceptance agent identity is required');
   exactKeys(acceptance.agent, new Set(['name', 'provider', 'model', 'reasoning_effort']), 'acceptance.agent');
-  if (acceptance.agent.name !== 'hermes' || acceptance.agent.provider !== 'openai-codex' || acceptance.agent.model !== 'gpt-5.6-luna'
-      || acceptance.agent.reasoning_effort !== 'medium') {
-    fail('Acceptance requires Hermes with ChatGPT subscription, GPT-5.6 Luna and medium reasoning');
+  if (acceptance.agent.name !== 'hermes' || acceptance.agent.provider !== 'openai-codex' || acceptance.agent.model !== 'gpt-5.6-sol'
+      || acceptance.agent.reasoning_effort !== 'low') {
+    fail('Acceptance requires Hermes with ChatGPT subscription, GPT-5.6 Sol and low reasoning');
   }
   if (!isObject(acceptance.checks)) fail('replay acceptance checks are required');
   exactKeys(acceptance.checks, new Set(ACCEPTANCE_CHECKS), 'acceptance.checks');

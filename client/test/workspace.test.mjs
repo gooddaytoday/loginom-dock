@@ -1,7 +1,9 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { runInNewContext } from 'node:vm';
+import { runInNewContext, createContext, runInContext } from 'node:vm';
 import { makeWorkspacePrepareCode, makeWorkspaceBootstrapCode, parseWorkspacePreparation, prepareWorkspaceSession, requirePreparedWorkspace } from '../lib/workspace.mjs';
+import {prepareTool} from '../lib/skill.mjs';
+import {validateActionParameters} from '../lib/action-catalog.mjs';
 import { createSerialGate } from '../lib/clipboard.mjs';
 
 const build = '7.5.0-alpha+build.49202';
@@ -48,35 +50,61 @@ test('bootstrap stops the DOM walk at its budget and cannot claim readiness',asy
   assert.equal(scanned,4000);assert.equal(result.output.scan.complete,false);
   assert.equal(result.output.target_state,'indeterminate');
 });
-function pageFixture({ authenticated = false, workflow = false, actualBuild = build } = {}) {
-  const events = [];
-  let url = 'about:blank';
+function pageFixture({ authenticated = false, workflow = false, actualBuild = build, loseReply = false, blocked = false, entryDelay = 0, busyTicks = 0 } = {}) {
+  const events = [], tabs = [], packages = new Map();
+  let url = 'about:blank', active = null, openedPath = null;
+  const element = (tid, text = '') => ({tid,textContent:text,innerHTML:'',isConnected:true,
+    getAttribute: () => tid,getBoundingClientRect:()=>({width:100,height:100}),
+    classList:{contains:()=>false},matches:()=>false});
+  const add = path => {
+    const n=tabs.length+2,prefix='MF;TF-'+n;
+    const tab=element('MF;cntMain;cntWorkspace;Workspace;t.br;tb-'+n);
+    tab.classList.contains=()=>active===tab;
+    tab.graph=element(prefix+';ModelForm;cmpDiagram');tab.area=element(prefix+';ModelForm;pnlWorkarea');
+    tab.crumbs=['Server','Packages','Package'+n,'Module','Workflow'].map((text,i)=>element(prefix+';cnrNaviMode;b.s_'+i,text));
+    tabs.push(tab);active=tab;packages.set(tab,new PackageNode(path));
+  };
+  class PackageNode { constructor(path) {this.PackageFileName=path;this.PackageName='Draft';} }
+  if (workflow) add(null);
+  else {add(null);tabs[0].home=element('MF;TF-2;HomePage;btnCreateUnsavedPackage');tabs[0].graph=null;tabs[0].area=null;packages.delete(tabs[0]);}
+  const context=createContext({Date,Math,Map,Set,JSON,screen:{availWidth:1000,availHeight:900},
+    innerWidth:1000,innerHeight:800,outerWidth:1000,outerHeight:900,getComputedStyle:()=>({visibility:'visible'}),
+    location:{origin:'http://loginom.example',pathname:'/app'},
+    document:{querySelectorAll(selector) {
+      if(selector.startsWith('[data-tid^="MF;cntMain;cntWorkspace'))return tabs;
+      if(selector.startsWith('[role=')) {if(blocked)return [element('blocker')];if(busyTicks>0)return [{...element('busy'),matches:()=>true}];return [];}
+      const prefix=selector.match(/^\[data-tid\^=(".*")\]$/);
+      if(prefix)return tabs.flatMap(t=>t.crumbs).filter(e=>e.tid.startsWith(JSON.parse(prefix[1])));
+      const exact=selector.match(/^\[data-tid=(".*")\]$/);
+      if(exact && JSON.parse(exact[1]).endsWith(';HomePage;btnCreateUnsavedPackage') && entryDelay>0)return [];
+      return exact?tabs.flatMap(t=>[t.graph,t.area,t.home]).filter(e=>e && e.tid===JSON.parse(exact[1])):[];
+    }},bg:{app:{Version:actualBuild,PackageTreeNode:PackageNode,Application:{FInstance:{FMainForm:{Items:{Workspace:{
+      getActiveTab:()=>({Controller:{Node:{data:{node:packages.get(active)}}}}),
+    }}}}}}}});
   const locator = selector => ({
     async isVisible() {
       if (selector.includes('btnAvatar')) return authenticated;
       if (selector.includes('edtUsername')) return !authenticated;
       return true;
     },
-    async count() {
-      if (selector.includes('x-tab-active')) return workflow ? 1 : 0;
-      if (selector.includes('bg-mask-message')) return 0;
-      return 1;
-    },
+    async count() { return selector.includes('x-form-invalid')?0:1; },
     async click() {
-      events.push(selector.includes('btnLogin') ? 'login' : 'create_draft');
-      if (selector.includes('btnLogin')) authenticated = true;
-      if (selector.includes('btnCreateUnsavedPackage')) workflow = true;
+      if(selector.includes('btnLogin')) {events.push('login');authenticated=true;}
+      else if(selector.includes('btnCreateUnsavedPackage')) {
+        events.push('create_draft');if(active?.home)tabs.splice(tabs.indexOf(active),1);add(null);
+        if(loseReply){loseReply=false;throw new Error('lost response');}
+      } else if(selector.includes('btnOpen"')){events.push('open_package');add(openedPath);}
+      else if(selector.includes('t.br;tb'))active=tabs.find(t=>selector.includes(t.tid));
+      else {assert.equal(entryDelay,0,'menu must wait for homepage readiness');events.push('menu');}
     },
-    async fill(value) { events.push({ fill: value }); },
+    async fill(value) { events.push({ fill: value });if(selector.includes('edtFileName'))openedPath=value; },
     locator(child) { return locator(selector + ' ' + child); },
-    async getAttribute() { return 'MF;cntMain;cntWorkspace;Workspace;t.br;tb-2'; },
-    async waitFor() {},
   });
-  return { events, page: {
+  return { events, tabs, context, page: {
     url: () => url,
     async goto(value) { url = value; events.push('navigate'); },
-    async evaluate() { return actualBuild; },
-    locator, async waitForTimeout() {},
+    async evaluate(fn,args) {context.args=args;return runInContext(`(${fn.toString()})(args)`,context);},
+    locator, async waitForTimeout() {entryDelay=Math.max(0,entryDelay-1);busyTicks=Math.max(0,busyTicks-1);},
   } };
 }
 const execute = async (fixture, options = {}) => runInNewContext(makeWorkspacePrepareCode({
@@ -98,7 +126,8 @@ test('operator test login and authenticated normal preparation reach the same wo
   const normalState = await execute(normal);
   assert.equal(replayState.status, 'READY');
   assert.equal(normalState.status, 'READY');
-  assert.equal(JSON.stringify(replayState.workflow_ref), JSON.stringify(normalState.workflow_ref));
+  assert.equal(replayState.workflow_ref.prefix, normalState.workflow_ref.prefix);
+  assert.notEqual(replayState.workflow_ref.workflow_id, normalState.workflow_ref.workflow_id);
   assert.equal(replayState.workflow_ref.prefix, 'MF;TF-2');
   assert.equal(normalState.target.loginom_build, build);
   assert.ok(replay.events.includes('login'));
@@ -120,11 +149,12 @@ test('an incompatible operating system is rejected before any browser call', asy
   assert.deepEqual(fixture.events, []);
 });
 
-test('repeat preparation preserves an existing authenticated workflow', async () => {
+test('new preparation creates its own draft and preserves the existing workflow', async () => {
   const fixture = pageFixture({ authenticated: true, workflow: true });
   const state = await execute(fixture);
-  assert.equal(state.created_draft, false);
-  assert.deepEqual(fixture.events, ['navigate']);
+  assert.equal(state.created_draft, true);
+  assert.equal(fixture.tabs.length, 2);
+  assert.equal(state.preserved_workflows[0].graph_unchanged, true);
 });
 
 test('only a fully prepared workspace can admit action mutations', () => {
@@ -179,4 +209,122 @@ test('repeat preparation preserves an existing workspace and never navigates or 
     prepare(){effects++;},assertTarget(){effects++;},record(){effects++;},save(){effects++;}}),/already prepared/);
   assert.equal(effects,0);assert.deepEqual(metadata,before);
   requirePreparedWorkspace(metadata);
+});
+
+test('lost creation response and repeated ID reconcile one exact draft', async () => {
+  const fixture=pageFixture({authenticated:true,workflow:true,loseReply:true});
+  const first=await execute(fixture);
+  assert.equal(first.status,'NOT_READY');assert.equal(first.effect_possible,true);
+  const recovered=await execute(fixture,{recoverOnly:true});
+  assert.equal(recovered.status,'READY');assert.equal(recovered.replayed,true);
+  const again=await execute(fixture);
+  assert.equal(again.workflow_ref.tab_tid,recovered.workflow_ref.tab_tid);
+  assert.equal(fixture.events.filter(e=>e==='create_draft').length,1);
+  assert.equal(fixture.tabs.length,2);
+});
+
+test('operation identity cannot be reused for a different task or package', async () => {
+  const fixture=pageFixture({authenticated:true});await execute(fixture);
+  const state=await execute(fixture,{sessionId:'other'});
+  assert.equal(state.reason,'OPERATION_CONFLICT');assert.equal(fixture.tabs.length,1);
+});
+
+test('lost browser receipt cannot recreate a nonpersistent draft', async () => {
+  const fixture=pageFixture({authenticated:true});await execute(fixture);
+  runInContext('globalThis.__loginomDockPreparationV1 = undefined',fixture.context);
+  const state=await execute(fixture,{recoverOnly:true});
+  assert.equal(state.reason,'RECEIPT_LOST');assert.equal(fixture.tabs.length,1);
+});
+
+test('foreign graph changes and closed draft invalidate readiness', async () => {
+  const fixture=pageFixture({authenticated:true,workflow:true});await execute(fixture);
+  fixture.tabs[0].graph.innerHTML='changed';
+  assert.equal((await execute(fixture)).reason,'FOREIGN_WORKFLOW_CHANGED');
+  fixture.tabs.pop();assert.equal((await execute(fixture)).reason,'WORKFLOW_LOST');
+});
+
+test('blockers refuse preparation before any package creation', async () => {
+  const fixture=pageFixture({authenticated:true,blocked:true});
+  const state=await execute(fixture);assert.equal(state.reason,'UI_BLOCKED');
+  assert.equal(state.effect_possible,false);assert.equal(fixture.tabs.filter(t=>t.graph).length,0);
+});
+
+test('opening an exact package verifies its cached path without executing or saving', async () => {
+  const fixture=pageFixture({authenticated:true,workflow:true});
+  const state=await execute(fixture,{intent:'open_package',packagePath:'/operator/example.lgp'});
+  assert.equal(state.status,'READY');assert.equal(state.package_ref.path,'/operator/example.lgp');
+  assert.equal(state.ownership_verified,false);assert.equal(state.created_draft,false);
+  assert.equal(fixture.events.filter(e=>e==='open_package').length,1);
+  assert.equal(state.preserved_workflows[0].graph_unchanged,true);
+});
+
+test('preparation deadline returns the last named phase with no mutation', async () => {
+  const fixture=pageFixture({actualBuild:null});
+  const state=await execute(fixture,{timeoutMs:2});
+  assert.equal(state.reason,'DEADLINE');assert.equal(state.phase,'ui_build');
+  assert.equal(state.effect_possible,false);assert.equal(fixture.tabs.filter(t=>t.graph).length,0);
+});
+
+test('durable attempt prevents duplicate creation after save or transport failure', async () => {
+  const metadata={skillRevision:'skill'},request={operation_id:'op',intent:'new_draft',package_path:null};
+  let calls=0;
+  const args={metadata,request,assertAllowed(){},assertTarget(){},record:async()=>{},save:async()=>{},
+    prepare:async({recoverOnly})=>{calls++;assert.equal(recoverOnly,calls>1);throw new Error('transport lost');}};
+  await assert.rejects(prepareWorkspaceSession(args),/transport lost/);
+  await assert.rejects(prepareWorkspaceSession(args),/transport lost/);
+  assert.equal(metadata.workspaceReady,false);
+  await assert.rejects(prepareWorkspaceSession({...args,request:{...request,operation_id:'another'}}),/conflict/);
+  assert.equal(calls,2);
+});
+
+test('cancellation after creation preserves the receipt and never publishes READY', async () => {
+  const controller=new AbortController(),metadata={skillRevision:'skill'};
+  const state=await prepareWorkspaceSession({metadata,request:{operation_id:'cancel'},signal:controller.signal,
+    assertAllowed(){},assertTarget(){},record:async()=>{},save:async()=>{},
+    prepare:async()=>{controller.abort();return {status:'READY',effect_possible:true,created_draft:true};}});
+  assert.equal(state.reason,'CANCELLED');assert.equal(state.created_draft,true);
+  assert.equal(metadata.workspaceReady,false);assert.equal(metadata.workspacePreparation.effect_possible,true);
+});
+
+
+test('authenticated avatar alone does not authorize the package menu before homepage initialization',async()=>{
+  const fixture=pageFixture({authenticated:true,entryDelay:3});
+  const result=await execute(fixture);
+  assert.equal(result.status,'READY');
+  assert.ok(result.trace.some(t=>t.condition==='workspace_entry_ready' && t.satisfied));
+  assert.equal(fixture.events.filter(e=>e==='create_draft').length,1);
+});
+
+
+test('transient loading mask waits locally instead of asking the agent to retry',async()=>{
+  const fixture=pageFixture({authenticated:true,busyTicks:3});
+  const state=await execute(fixture);
+  assert.equal(state.status,'READY');assert.equal(fixture.events.filter(e=>e==='create_draft').length,1);
+});
+
+test('explicit existing workflow requires matching document, tab and navigation identity',async()=>{
+  const fixture=pageFixture({authenticated:true});const first=await execute(fixture);
+  const workflowRef={...first.workflow_ref,document_id:first.document_id};
+  validateActionParameters(prepareTool.inputSchema,{operation_id:'resume',intent:'existing_workflow',workflow_ref:workflowRef});
+  const returned=await execute(fixture,{operationId:'resume',intent:'existing_workflow',workflowRef});
+  assert.equal(returned.status,'READY');assert.equal(returned.created_draft,false);
+  assert.equal(returned.workflow_ref.tab_tid,first.workflow_ref.tab_tid);
+  assert.equal(fixture.events.filter(e=>e==='create_draft').length,1);
+  const lost=await execute(fixture,{operationId:'bad-ref',intent:'existing_workflow',workflowRef:{...workflowRef,document_id:'foreign'}});
+  assert.equal(lost.reason,'WORKFLOW_LOST');assert.equal(lost.effect_possible,false);
+});
+
+test('a new attempt after a no-effect refusal is uncertain until its own reply arrives',async()=>{
+  const metadata={skillRevision:'skill'},request={operation_id:'retry'};let attempt=0;
+  const args={metadata,request,assertAllowed(){},assertTarget(){},record:async()=>{},save:async()=>{},
+    prepare:async({recoverOnly})=>{
+      attempt++;
+      assert.equal(metadata.workspacePreparation.effect_possible,true);
+      if(attempt===1)return {status:'NOT_READY',effect_possible:false,created_draft:false};
+      if(attempt===2){assert.equal(recoverOnly,false);throw new Error('reply lost');}
+      assert.equal(recoverOnly,true);throw new Error('receipt missing');
+    }};
+  await prepareWorkspaceSession(args);
+  await assert.rejects(prepareWorkspaceSession(args),/reply lost/);
+  await assert.rejects(prepareWorkspaceSession(args),/receipt missing/);
 });

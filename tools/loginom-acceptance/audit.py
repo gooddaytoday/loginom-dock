@@ -18,6 +18,7 @@ from pathlib import Path
 
 GOAL = Path(__file__).parent / "goals/basic-graph.txt"
 from evidence import PREFIX, LOCAL_TOOLS, KNOWLEDGE_TOOLS
+from hermes_auth_guard import POLICY as AUTH_POLICY
 TOOLS = LOCAL_TOOLS | KNOWLEDGE_TOOLS
 MUTATIONS = {PREFIX + name for name in ("dock_action_run", "dock_ui_action", "dock_operation_recover", "dock_artifact_upload", "dock_artifact_verify")}
 EXPECTED = {
@@ -30,13 +31,19 @@ EXPECTED = {
 
 def approved_model(request,evidence):
     profile=request.get('model_profile','chatgpt-luna')
-    if profile=='chatgpt-luna':expected=('openai-codex','gpt-5.6-luna')
+    # Legacy profiles remain readable for historical evidence only.
+    reasoning = 'low' if profile == 'chatgpt-sol' else 'medium'
+    if profile in ('chatgpt-sol', 'chatgpt-luna'):
+        expected=('openai-codex','gpt-5.6-sol' if profile == 'chatgpt-sol' else 'gpt-5.6-luna')
+        if (request.get('auth_policy') != AUTH_POLICY
+                or evidence.get('auth_guard') != {'policy':AUTH_POLICY,'installed':True,'blocked_attempts':0}
+                or evidence.get('auth_connection_unchanged') is not True):return False
     elif profile=='xiaomi-mimo' and request.get('goal_id')=='data-pipeline':expected=('xiaomi','mimo-v2.5')
     else:return False
     process=evidence.get('process',{});usage=process.get('usage',{})
     return (process.get('returncode')==0 and process.get('timed_out') is False and (request.get('provider'),request.get('model'))==expected
             and (usage.get('provider'),usage.get('model'))==expected
-            and request.get('reasoning_effort')==evidence.get('reasoning_effort')=='medium')
+            and request.get('reasoning_effort')==evidence.get('reasoning_effort')==reasoning)
 
 
 def sha(data):
@@ -819,7 +826,7 @@ def audit(request, evidence, prompt):
         check("run_identity_and_owned_package", bool(re.fullmatch(r"\d{8}-\d{6}-[a-f0-9]{8}", run_id))
               and evidence["run_id"] == run_id and request["package_path"] == path)
         goal_id=request.get('goal_id','basic-graph')
-        if goal_id not in ('basic-graph','auto-link-retain','auto-link-remove','palette-inventory','checkbox-roundtrip','context-menu-checkbox','root-checkbox','file-storage-inspect','file-upload-probe','file-upload-verify','data-pipeline','import-roundtrip'):
+        if goal_id not in ('prepare-workspace','basic-graph','auto-link-retain','auto-link-remove','palette-inventory','checkbox-roundtrip','context-menu-checkbox','root-checkbox','file-storage-inspect','file-upload-probe','file-upload-verify','data-pipeline','import-roundtrip'):
             raise ValueError('Unsupported goal')
         goal=GOAL.with_name(goal_id+'.txt')
         expected=copy.deepcopy(EXPECTED)
@@ -834,6 +841,32 @@ def audit(request, evidence, prompt):
         check("approved_model_completed", approved_model(request,evidence))
         check("source_unchanged", evidence["runtime_source_unchanged"] is True)
         check("harness_unchanged", evidence["harness_unchanged"] is True)
+        if goal_id == 'prepare-workspace':
+            from prepare_binding import verified_prepare_v1
+            sessions = {c.get('session_id') for c in evidence['calls']}
+            prepared = verified_prepare_v1(evidence,PREFIX,next(iter(sessions)) if len(sessions)==1 else None,10**12)
+            check('exact_owned_draft_receipt', prepared is not None)
+            check('no_unrequested_mutations', all(c.get('tool') in {PREFIX+'dock_prepare', PREFIX+'dock_workspace_observe',
+                  PREFIX+'dock_action_describe', PREFIX+'dock_diagnostics', *KNOWLEDGE_TOOLS} for c in evidence['calls']))
+            observed = {e.get('operation_id') for e in evidence['events'] if e.get('phase')=='observation_completed'
+                        and e.get('outcome',{}).get('action_key')=='workspace.observe'
+                        and e.get('outcome',{}).get('effect_possible') is False
+                        and e.get('outcome',{}).get('cleanup_complete') is True}
+            check('no_execution_operations', all(e.get('event') == 'workspace_prepared'
+                  or e.get('phase')=='observation_completed' and e.get('operation_id') in observed
+                  or e.get('phase')=='verification_delivered' and e.get('operation_id') in observed
+                     and e.get('verification',{}).get('action_key')=='workspace.observe' for e in evidence['events']))
+            check('no_fault_injection', request.get('fault_injection') is False)
+            check('sol_low_profile',request.get('model_profile')=='chatgpt-sol')
+            if prepared:
+                state=prepared['workspace'];window=state.get('window',{})
+                check('actual_catalog_pin', prepared['executor']['session_manifest']['actionManifestDigest']==request['manifest_sha256'])
+                check('actual_journal_pins',all(e.get('runtime_revision')==request['runtime_source_pin']['client_revision']
+                      and e.get('session_id')==prepared['sessionId'] and e.get('manifest_sha256')==request['manifest_sha256'] for e in evidence['events']))
+                check('maximized_visible_window',abs(window.get('outer_width',0)-window.get('available_width',10000))<=8
+                      and abs(window.get('outer_height',0)-window.get('available_height',10000))<=8 and window.get('width',0)>800)
+                check('named_workspace_wait',any(t.get('condition')=='exact_workflow_ready' and t.get('satisfied') is True for t in state.get('trace',[])))
+            return {'all_assertions_passed':all(c['passed'] for c in checks),'assertions':checks,'goal':goal_id}
         variant = request["fault_injection"]
         check("supported_predeclared_variant", variant is False or variant in ("lost_receipt", "rename", "partial_link", "position", "save_reopen"))
         if variant=='save_reopen':
@@ -1023,6 +1056,9 @@ def audit_directory(run):
         frozen = frozen and all(request.get('harness_inputs', {}).get(name) == sha(Path(__file__).with_name(name).read_bytes())
                                 for name in ('checked_state.py', 'rename_effect.py'))
         report['assertions'].append({'name': 'checkbox_auditor_dependencies_frozen', 'passed': frozen})
+    if request.get('goal_id')=='prepare-workspace':
+        frozen = frozen and request.get('harness_inputs',{}).get('prepare_binding.py') == sha(Path(__file__).with_name('prepare_binding.py').read_bytes())
+        report['assertions'].append({'name':'preparation_auditor_frozen','passed':frozen})
     if request.get('schema_version')==2:
         frozen = frozen and request.get('harness_inputs',{}).get('destinations.py') == sha(Path(__file__).with_name('destinations.py').read_bytes())
         report['assertions'].append({'name':'destination_contract_frozen','passed':frozen})

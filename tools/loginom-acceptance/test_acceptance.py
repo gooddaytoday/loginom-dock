@@ -45,6 +45,9 @@ def fixture():
             "tools": tools, "calls": calls,
             "events": [{**common, "phase": "prepared", "checkpoint": {"path": path, "graph": copy.deepcopy(graph)}},
                        {**common, "phase": "completed", "outcome": copy.deepcopy(result)}]}
+    request['auth_policy'] = audit.AUTH_POLICY
+    data['auth_guard'] = {'policy':audit.AUTH_POLICY,'installed':True,'blocked_attempts':0}
+    data['auth_connection_unchanged'] = True
     return request, data, audit.GOAL.read_text().replace("__PACKAGE_PATH__", path)
 
 
@@ -147,3 +150,42 @@ class EvidenceTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+class ModelProfileTest(unittest.TestCase):
+    def test_sol_low_and_historical_luna_require_exact_matching_evidence(self):
+        request,data,_=fixture()
+        self.assertTrue(audit.approved_model(request,data))
+        request.update(model_profile='chatgpt-sol',model='gpt-5.6-sol',reasoning_effort='low')
+        data['reasoning_effort']='low';data['process']['usage']['model']='gpt-5.6-sol'
+        self.assertTrue(audit.approved_model(request,data))
+        for target,key,value in [(request,'model','gpt-5.6-luna'),(request,'reasoning_effort','medium'),
+                                 (data,'reasoning_effort','medium'),(data,'auth_connection_unchanged',False)]:
+            old=target[key];target[key]=value
+            self.assertFalse(audit.approved_model(request,data));target[key]=old
+
+class PrepareGoalAuditTest(unittest.TestCase):
+    def test_goal_audit_rejects_mutations_missing_receipts_and_wrong_window(self):
+        from test_prepare_binding import PreparationV1Test
+        request,data,_=fixture();goal=run.WORK/'goals/prepare-workspace.txt'
+        v1=PreparationV1Test().fixture();data.update(v1)
+        request.update(goal_id='prepare-workspace',model_profile='chatgpt-sol',model='gpt-5.6-sol',reasoning_effort='low',goal_sha256=audit.sha(goal.read_bytes()))
+        data['reasoning_effort']='low';data['process']['usage']['model']='gpt-5.6-sol'
+        result=data['tools'][0]['result'];result['executor']={'session_manifest':{'actionManifestDigest':request['manifest_sha256']}}
+        state=result['workspace'];state['window']={'width':1000,'outer_width':1000,'available_width':1000,'outer_height':900,'available_height':900}
+        state['trace']=[{'condition':'exact_workflow_ready','satisfied':True}]
+        event=data['events'][0];event.update(runtime_revision='a'*64,manifest_sha256='b'*64,state=copy.deepcopy(state))
+        self.assertTrue(audit.audit(request,data,goal.read_text())['all_assertions_passed'])
+        data['events'].append({**event,'event':None,'phase':'observation_completed','operation_id':'observe',
+            'outcome':{'action_key':'workspace.observe','effect_possible':False,'cleanup_complete':True}})
+        data['events'].append({**event,'event':None,'phase':'verification_delivered','operation_id':'observe',
+            'verification':{'action_key':'workspace.observe'}})
+        self.assertTrue(audit.audit(request,data,goal.read_text())['all_assertions_passed'])
+        mutated=copy.deepcopy(data);mutated['events'][-2]['outcome']['effect_possible']=True
+        self.assertFalse(audit.audit(request,mutated,goal.read_text())['all_assertions_passed'])
+        for mode in ['mutation','receipt','window','model']:
+            bad=copy.deepcopy(data)
+            if mode=='mutation':bad['calls'].append({'tool':audit.PREFIX+'dock_action_run','session_id':'agent'})
+            if mode=='receipt':bad['events']=[]
+            if mode=='window':bad['tools'][0]['result']['workspace']['window']['outer_width']=400
+            if mode=='model':bad['reasoning_effort']='medium'
+            self.assertFalse(audit.audit(request,bad,goal.read_text())['all_assertions_passed'],mode)

@@ -1,78 +1,207 @@
 // Fixed local lifecycle code. Catalogs never supply executable bootstrap code.
 async function prepareWorkspace(page, options) {
-  const deadline = Date.now() + 120000;
-  const remaining = () => Math.max(1, deadline - Date.now());
-  const tid = value => page.locator(`[data-tid=${JSON.stringify(value)}]`);
-  const wait = async probe => {
-    while (Date.now() < deadline) {
-      const value = await probe();
-      if (value) return value;
-      await page.waitForTimeout(100);
-    }
-    throw new Error('Loginom workspace preparation timed out');
+  const deadline = Date.now() + options.timeoutMs;
+  let phase = 'page', createdDraft = false, effectPossible = options.recoverOnly === true, target = null;
+  const trace = [];
+  let authenticated = false;
+  const remaining = () => {
+    if (Date.now() >= deadline) throw new Error('DEADLINE');
+    return deadline - Date.now();
   };
-  const current = page.url();
-  if (current === 'about:blank' || !current.startsWith(options.applicationBase)) {
-    await page.goto(options.url, { waitUntil: 'domcontentloaded', timeout: Math.min(60000, remaining()) });
-  }
-  // This public version constant is defined by the observed bg/app/Version.js.
-  // It identifies the frontend/UI build, not the server binary version.
-  const build = await wait(() => page.evaluate(() => globalThis.bg?.app?.Version ?? null));
-  const target = { profile_id: options.profileId, loginom_build: build,
-    platform: options.platform, browser: 'chromium' };
-  if (options.expectedBuild && build !== options.expectedBuild) {
-    return { status: 'INCOMPATIBLE', target, authenticated: false, created_draft: false };
-  }
-  const avatar = tid('MF;cntMain;tlbMainToolbar;btnAvatar');
-  const login = tid('LoginForm;Login;edtUsername');
-  await wait(async () => await avatar.isVisible().catch(() => false) || await login.isVisible().catch(() => false));
-  if (!(await avatar.isVisible().catch(() => false))) {
-    if (!options.allowTestLogin) {
-      return { status: 'LOGIN_REQUIRED', target, authenticated: false, created_draft: false };
+  const tid = value => page.locator(`[data-tid=${JSON.stringify(value)}]`);
+  const wait = async (name, probe) => {
+    phase = name;
+    while (remaining()) {
+      const value = await probe();
+      if (value) { trace.push({ condition: name, satisfied: true }); return value; }
+      await page.waitForTimeout(Math.min(100, remaining()));
     }
-    const password = tid('LoginForm;Login;edtPassword');
-    const submit = tid('LoginForm;Login;btnLogin');
-    if (await login.count() !== 1 || await password.count() !== 1 || await submit.count() !== 1) {
-      throw new Error('The verified test login form is unavailable');
+  };
+  const result = (status, reason, extra = {}) => ({ status, reason, phase, target,
+    authenticated, created_draft: createdDraft, effect_possible: effectPossible,
+    operation_id: options.operationId, session_id: options.sessionId, trace, ...extra });
+  // Only cached, read-only Loginom getters; never execute package or server methods.
+  const inspect = async mode => page.evaluate(({ mode, options }) => {
+    const key = '__loginomDockPreparationV1';
+    let state = globalThis[key];
+    if (!state || state.document !== document) state = globalThis[key] = {
+      document, id: globalThis.crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random().toString(36).slice(2)}`, receipts: new Map(),
+    };
+    const visible = e => !!e && !!e.getBoundingClientRect().width && !!e.getBoundingClientRect().height
+      && getComputedStyle(e).visibility !== 'hidden';
+    const allTabs = [...document.querySelectorAll('[data-tid^="MF;cntMain;cntWorkspace;Workspace;t.br;tb"]')];
+    const tabs = allTabs.filter(e => /^MF;cntMain;cntWorkspace;Workspace;t\.br;tb(?:-\d+)?$/.test(e.getAttribute('data-tid')));
+    const active = tabs.filter(e => e.classList.contains('x-tab-active'));
+    const tab = active.length === 1 ? active[0] : null;
+    const tabTid = tab?.getAttribute('data-tid');
+    const suffix = tabTid?.match(/;tb(-\d+)?$/)?.[1] ?? '';
+    const prefix = tab ? 'MF;TF' + suffix : null;
+    const exact = name => [...document.querySelectorAll('[data-tid='+JSON.stringify(name)+']')];
+    const graph = prefix && exact(prefix+';ModelForm;cmpDiagram');
+    const workarea = prefix && exact(prefix+';ModelForm;pnlWorkarea');
+    const home = prefix && exact(prefix+';HomePage;btnCreateUnsavedPackage');
+    const crumbs = prefix ? [...document.querySelectorAll('[data-tid^='+JSON.stringify(prefix+';cnrNaviMode;b.s_')+']')]
+      .map(e=>({tid:e.getAttribute('data-tid'),label:(e.textContent??'').trim()})) : [];
+    const blockers = [...document.querySelectorAll('[role="dialog"],.x-message-box,.bg-mask-message,.x-mask-msg,.x-form-invalid-under')].filter(visible);
+    const unsaved = blockers.some(e => /сохранить изменения в пакете/i.test(e.textContent??''));
+    const hardBlocked = blockers.some(e=>!e.matches('.bg-mask-message,.x-mask-msg'));
+    const openErrors = [...document.querySelectorAll('.bg-error-messages')].filter(visible);
+    const app = globalThis.bg?.app;
+    let node = app?.Application?.FInstance?.FMainForm?.Items?.Workspace?.getActiveTab()?.Controller?.Node?.data?.node;
+    let packageNode = null;
+    const seen = new Set();
+    for (let depth=0; node && depth<32 && !seen.has(node); depth++) {
+      seen.add(node);
+      if (app.PackageTreeNode && node instanceof app.PackageTreeNode) { packageNode=node; break; }
+      node=node.ParentNode;
     }
-    await login.locator('input').fill(options.testLoginUser, { timeout: remaining() });
-    await password.locator('input').fill('', { timeout: remaining() });
-    await submit.click({ timeout: remaining() });
-    await wait(() => avatar.isVisible());
+    let path = packageNode?.PackageFileName;
+    path = typeof path==='string' && path ? '/'+path.replaceAll('\\','/').replace(/^\/+/, '') : null;
+    const ready = !!tab && graph?.length===1 && visible(graph[0]) && workarea?.length===1 && visible(workarea[0])
+      && !!packageNode && crumbs.length>2 && crumbs.length<=32 && blockers.length===0;
+    const request = JSON.stringify({session:options.sessionId,intent:options.intent,packagePath:options.packagePath,workflowRef:options.workflowRef});
+    const knownWorkflow = options.intent==='existing_workflow' ? [...state.receipts.values()].find(r=>r.workflowId===options.workflowRef.workflow_id && r.tab) : null;
+    const receipt = state.receipts.get(options.operationId);
+    if (receipt && receipt.request !== request) return {error:'OPERATION_CONFLICT'};
+    if (mode==='reserve') {
+      if (receipt) return {error:'OPERATION_EXISTS'};
+      const preserved = tabs.map(t => {
+        const ending=t.getAttribute('data-tid').match(/;tb(-\d+)?$/)?.[1]??'';
+        const diagrams=exact('MF;TF'+ending+';ModelForm;cmpDiagram');
+        return diagrams.length===1 ? {tab:t,graph:diagrams[0],html:diagrams[0].innerHTML} : null;
+      }).filter(Boolean);
+      state.receipts.set(options.operationId,{request,before:tabs,preserved,phase:'reserved'});
+    }
+    const current = state.receipts.get(options.operationId);
+    if (mode==='effect') current.phase='effect_possible';
+    if (mode==='lookup') {
+      if (!receipt) return {exists:false,document_id:state.id};
+      if (receipt.tab) {
+        if (!tabs.includes(receipt.tab)) return {error:'WORKFLOW_LOST'};
+        return {exists:true,tab_tid:receipt.tab.getAttribute('data-tid'),phase:receipt.phase};
+      }
+      return {exists:true,phase:receipt.phase};
+    }
+    if (mode==='verify') {
+      if (options.intent==='existing_workflow' && (!knownWorkflow || packageNode!==knownWorkflow.packageNode || tab!==knownWorkflow.tab
+          || state.id!==options.workflowRef.document_id || tabTid!==options.workflowRef.tab_tid
+          || JSON.stringify(crumbs)!==JSON.stringify(options.workflowRef.navigation_path))) return {error:'WORKFLOW_CHANGED'};
+      if (options.intent==='open_package' && openErrors.length) return {error:'PACKAGE_OPEN_REJECTED'};
+      if (!ready) return null;
+      if (current?.tab && (tab!==current.tab || packageNode!==current.packageNode
+          || JSON.stringify(crumbs)!==JSON.stringify(current.crumbs))) return {error:'WORKFLOW_CHANGED'};
+      if (!current?.tab && options.intent==='new_draft') {
+        const added=tabs.filter(t=>!current?.before.includes(t));
+        if (added.length!==1 || added[0]!==tab) return null;
+      }
+      const preserved=(current?.preserved??[]).map(item=>({tab_tid:item.tab.getAttribute('data-tid'),
+        graph_unchanged:tabs.includes(item.tab) && item.graph.isConnected && item.graph.innerHTML===item.html}));
+      if (preserved.some(item=>!item.graph_unchanged)) return {error:'FOREIGN_WORKFLOW_CHANGED'};
+      if (options.intent==='new_draft' && path) return {error:'EXPECTED_UNSAVED_DRAFT'};
+      if (options.intent==='open_package' && path!==options.packagePath) return null;
+      if (!current) return {error:'RECEIPT_MISSING'};
+      current.tab=tab;current.packageNode=packageNode;current.crumbs=crumbs;current.phase='verified';
+      current.workflowId ??= knownWorkflow?.workflowId ?? state.id+'-'+(state.sequence=(state.sequence??0)+1);
+      return {document_id:state.id,workflow_ref:{tab_tid:tabTid,prefix,navigation_path:crumbs,workflow_id:current.workflowId},
+        package_ref:{path,name:packageNode.PackageName??null,persisted:path!==null},preserved_workflows:preserved,
+        ownership_verified:options.intent==='new_draft',target_verified:true,
+        interaction_readiness:'driver_verification_required',
+        window:{width:innerWidth,height:innerHeight,outer_width:outerWidth,outer_height:outerHeight,
+          available_width:screen.availWidth,available_height:screen.availHeight}};
+    }
+    return {document_id:state.id,requested_tab_present:!!knownWorkflow && tabs.includes(knownWorkflow.tab) && knownWorkflow.tab.getAttribute('data-tid')===options.workflowRef?.tab_tid,blocked:blockers.length>0,hard_blocked:hardBlocked,unsaved,ready,home_ready:home?.length===1 && visible(home[0]),package_path:path,tab_tid:tabTid};
+  }, {mode, options});
+  try {
+    const current = page.url() === 'about:blank' ? null : await page.evaluate(() => ({origin:location.origin,pathname:location.pathname}));
+    if (page.url() !== 'about:blank' && (current.origin !== options.origin || current.pathname !== options.pathname)) {
+      return result('NOT_READY','FOREIGN_PAGE');
+    }
+    if (page.url()==='about:blank') {
+      if (options.recoverOnly) return result('NOT_READY','DOCUMENT_LOST');
+      await page.goto(options.url,{waitUntil:'domcontentloaded',timeout:remaining()});
+    }
+    const build=await wait('ui_build',()=>page.evaluate(()=>globalThis.bg?.app?.Version??null));
+    target={profile_id:options.profileId,loginom_build:build,platform:options.platform,browser:'chromium'};
+    if (build!==options.expectedBuild) return result('INCOMPATIBLE','UI_BUILD_MISMATCH');
+    const avatar=tid('MF;cntMain;tlbMainToolbar;btnAvatar'), login=tid('LoginForm;Login;edtUsername');
+    await wait('login_or_workspace',async()=>await avatar.isVisible() || await login.isVisible());
+    if (!(await avatar.isVisible())) {
+      if (!options.allowTestLogin) return result('LOGIN_REQUIRED','AUTHENTICATION_REQUIRED');
+      await login.locator('input').fill(options.testLoginUser,{timeout:remaining()});
+      await tid('LoginForm;Login;edtPassword').locator('input').fill('',{timeout:remaining()});
+      await tid('LoginForm;Login;btnLogin').click({timeout:remaining()});
+      const authenticated=await wait('login_result',async()=>await avatar.isVisible() ? 'authenticated'
+        : await page.locator('.x-form-invalid-under:visible').count() ? 'rejected' : null);
+      if (authenticated==='rejected') return result('LOGIN_REQUIRED','LOGIN_REJECTED');
+    }
+    authenticated=true;
+    const old=await inspect('lookup');
+    if (old.error) return result('NOT_READY',old.error,{authenticated:true});
+    if (old.exists) {
+      if (old.tab_tid) await tid(old.tab_tid).click({timeout:remaining()});
+      else if (old.phase==='reserved') return result('NOT_READY','PREVIOUS_ATTEMPT_NOT_COMPLETED',{authenticated:true});
+      effectPossible=old.phase!=='reserved';
+    } else {
+      if (options.recoverOnly) return result('NOT_READY','RECEIPT_LOST',{authenticated:true});
+      const before=await wait('workspace_entry_ready',async()=>{const state=await inspect('observe');return state.hard_blocked || (!state.blocked && (state.ready || state.home_ready)) ? state : null;});
+      if (before.blocked) return result('NOT_READY',before.unsaved?'UNSAVED_CHANGES':'UI_BLOCKED',{authenticated:true});
+      if(options.intent==='existing_workflow' && (before.document_id!==options.workflowRef.document_id || !before.requested_tab_present)) return result('NOT_READY','WORKFLOW_LOST',{authenticated:true});
+      const reserved=await inspect('reserve');
+      if (reserved.error) return result('NOT_READY',reserved.error,{authenticated:true});
+      if (options.intent==='existing_workflow') {
+        await inspect('effect');effectPossible=true;
+        await tid(options.workflowRef.tab_tid).click({timeout:remaining()});
+      } else if (!(options.intent==='open_package' && before.ready && before.package_path===options.packagePath)) {
+      // Home-page and menu are the two pinned E2E entry points. Do not reuse the active workflow.
+      await tid('MF;cntMain;tlbMainToolbar;btnPackagesMenu').click({timeout:remaining()});
+      const button=tid('MF;MainMenuForm;'+(options.intent==='new_draft'?'btnCreateUnsavedPackage':'btnOpenPackage'));
+      await wait('package_menu_ready',()=>button.isVisible());
+      await inspect('effect');effectPossible=true;
+      await button.click({timeout:remaining()});
+      if (options.intent==='new_draft') createdDraft=true;
+      else {
+        const field=tid('OpenDialogForm;edtFileName').locator('input');
+        await wait('open_package_dialog',()=>field.isVisible());
+        await field.fill(options.packagePath,{timeout:remaining()});
+        await tid('OpenDialogForm;btnOpen').click({timeout:remaining()});
+      }
+      }
+    }
+    const verified=await wait('exact_workflow_ready',()=>inspect('verify'));
+    if (verified.error) return result('NOT_READY',verified.error,{authenticated:true});
+    createdDraft=options.intent==='new_draft';
+    return result('READY',null,{authenticated:true,...verified,replayed:old.exists===true});
+  } catch (error) {
+    return result('NOT_READY',error.message==='DEADLINE'?'DEADLINE':'PREPARATION_INTERRUPTED',
+      {created_draft:createdDraft,verification_required:effectPossible});
   }
-  const selected = () => page.locator('[data-tid^="MF;cntMain;cntWorkspace;Workspace;t.br;tb"].x-tab-active');
-  let createdDraft = false;
-  if (await selected().count() === 0) {
-    const draft = tid('MF;TF;HomePage;btnCreateUnsavedPackage');
-    await draft.waitFor({ state: 'visible', timeout: remaining() });
-    await draft.click({ timeout: remaining() });
-    createdDraft = true;
-  }
-  const workflow = await wait(async () => {
-    const tabs = selected();
-    if (await tabs.count() !== 1) return null;
-    const tabTid = await tabs.getAttribute('data-tid');
-    const match = /^MF;cntMain;cntWorkspace;Workspace;t\.br;tb(?:-(\d+))?$/.exec(tabTid ?? '');
-    if (!match) return null;
-    const prefix = match[1] ? `MF;TF-${match[1]}` : 'MF;TF';
-    if (!(await tid(`${prefix};ModelForm;cmpDiagram`).isVisible().catch(() => false))
-        || !(await tid(`${prefix};ModelForm;pnlWorkarea`).isVisible().catch(() => false))
-        || await page.locator('.bg-mask-message:visible').count()) return null;
-    return { tab_tid: tabTid, prefix };
-  });
-  // The graph appears just before ExtJS installs its drag handlers.
-  if (createdDraft) await page.waitForTimeout(500);
-  return { status: 'READY', target, authenticated: true, created_draft: createdDraft, workflow_ref: workflow };
 }
 
-export function makeWorkspacePrepareCode({ loginomUrl, compatibility, allowTestLogin = false, testLoginUser = null, platform = process.platform }) {
+export function makeWorkspacePrepareCode({ loginomUrl, compatibility, allowTestLogin = false, testLoginUser = null, platform = process.platform, sessionId = "standalone", operationId = "prepare", intent = "new_draft", packagePath = null, workflowRef = null, timeoutMs = 120000, recoverOnly = false }) {
   const url = new URL(loginomUrl);
   if (!['http:', 'https:'].includes(url.protocol) || url.username || url.password || url.hash
       || [...url.searchParams.keys()].some(key => /token|password|secret|auth|api.?key/i.test(key))) {
     throw new Error('Workspace preparation requires a credential-free Loginom URL');
   }
   if (allowTestLogin && (typeof testLoginUser !== 'string' || !testLoginUser.trim() || testLoginUser.length>200 || /[\x00-\x1f\x7f]/.test(testLoginUser))) throw new Error('Test login requires an explicit Loginom account');
-  const options = { url: url.href, applicationBase: url.origin + url.pathname,
+  if (!['new_draft', 'open_package', 'existing_workflow'].includes(intent)) throw new Error('Unknown preparation intent');
+  for (const value of [sessionId, operationId]) if (typeof value !== 'string' || !/^[a-zA-Z0-9_.:-]{1,128}$/.test(value)) throw new Error('Invalid preparation identity');
+  if (!Number.isInteger(timeoutMs) || timeoutMs < 1 || timeoutMs > 120000) throw new Error('Invalid preparation deadline');
+  if (intent === 'open_package' && (typeof packagePath !== 'string' || !/^\/[^\\\x00-\x1f]+\.lgp$/i.test(packagePath)
+      || packagePath.split('/').some(part => part === '..' || part === '.') || packagePath.includes('//'))) throw new Error('An exact absolute package path is required');
+  if (intent !== 'open_package' && packagePath !== null) throw new Error('A new draft cannot specify a stored package');
+  if (intent === 'existing_workflow') {
+    if (!workflowRef || Object.keys(workflowRef).some(k=>!['document_id','tab_tid','prefix','navigation_path','workflow_id'].includes(k))
+        || typeof workflowRef.workflow_id !== 'string' || !workflowRef.workflow_id || workflowRef.workflow_id.length>160
+        || typeof workflowRef.document_id !== 'string' || !workflowRef.document_id || workflowRef.document_id.length>128
+        || !/^MF;cntMain;cntWorkspace;Workspace;t\.br;tb(?:-\d+)?$/.test(workflowRef.tab_tid??'')
+        || workflowRef.prefix !== 'MF;TF'+(workflowRef.tab_tid.match(/;tb(-\d+)?$/)?.[1]??'')
+        || !Array.isArray(workflowRef.navigation_path) || !workflowRef.navigation_path.length || workflowRef.navigation_path.length>32
+        || workflowRef.navigation_path.some(p=>!p || typeof p.tid!=='string' || p.tid.length>2048 || typeof p.label!=='string' || p.label.length>240)) throw new Error('An exact document-bound workflow reference is required');
+  } else if (workflowRef !== null) throw new Error('Workflow reference requires existing_workflow intent');
+  if (!compatibility?.loginom_build) throw new Error('An exact Loginom build pin is required');
+  const options = { url: url.href, origin: url.origin, pathname: url.pathname,
+    sessionId, operationId, intent, packagePath, workflowRef, timeoutMs, recoverOnly,
     expectedBuild: compatibility?.loginom_build ?? null, profileId: compatibility?.profile_id,
     platform: ({ darwin: 'macos', linux: 'linux', win32: 'windows' })[platform] ?? platform,
     allowTestLogin: allowTestLogin === true, testLoginUser: allowTestLogin ? testLoginUser : null };
@@ -89,13 +218,15 @@ export function parseWorkspacePreparation(response) {
     const match = block.text.match(/^### Result\n([\s\S]*?)(?:\n### |$)/);
     let value;
     try { value = JSON.parse(match?.[1] ?? block.text); } catch { continue; }
-    if (!['READY', 'LOGIN_REQUIRED', 'INCOMPATIBLE'].includes(value?.status)
-        || typeof value.target?.loginom_build !== 'string'
+    if (!['READY', 'LOGIN_REQUIRED', 'INCOMPATIBLE', 'NOT_READY'].includes(value?.status)
+        || (value.target !== null && typeof value.target?.loginom_build !== 'string')
         || typeof value.authenticated !== 'boolean' || typeof value.created_draft !== 'boolean') continue;
-    if (value.status === 'READY' && (!value.authenticated || !value.workflow_ref?.tab_tid || !value.workflow_ref?.prefix)) continue;
+    if (value.status === 'READY' && (!value.authenticated || !value.target?.loginom_build || !value.document_id
+        || value.target_verified !== true || !value.workflow_ref?.tab_tid || !value.workflow_ref?.prefix || !value.workflow_ref?.workflow_id
+        || !Array.isArray(value.workflow_ref?.navigation_path) || !value.package_ref)) continue;
     return value;
   }
-  throw new Error('Workspace preparation returned no verified state');
+  throw new Error('Workspace preparation returned no verified state; repeat the same preparation operation to reconcile its receipt');
 }
 
 export function requirePreparedWorkspace(metadata) {
@@ -106,14 +237,32 @@ export function requirePreparedWorkspace(metadata) {
 
 // Called inside the same browser gate as actions. Readiness is not published to
 // another action until evidence and the session manifest have both been saved.
-export async function prepareWorkspaceSession({ metadata, assertAllowed, prepare, assertTarget, record, save }) {
+export async function prepareWorkspaceSession({ metadata, assertAllowed, prepare, assertTarget, record, save, request = null, signal }) {
   assertAllowed();
-  if (metadata.workspaceReady === true) {
+  if (metadata.workspaceReady === true && !request) {
     throw new Error('Workspace is already prepared. Use dock_workspace_observe for the current UI and dock_action_describe to reread input_artifacts. Preparation has not changed the workspace.');
+  }
+  const identity = request ? JSON.stringify(request) : null;
+  let previous = metadata.workspacePreparation;
+  if (previous && previous.identity !== identity) {
+    if (previous.operation_id === request?.operation_id || metadata.workspaceReady !== true || previous.state?.status !== 'READY') {
+      throw new Error('Preparation operation conflict: reconcile the existing request first');
+    }
+    previous = null;
   }
   metadata.workspaceReady = false;
   try {
-    const state = await prepare();
+    if (request) {
+      metadata.workspacePreparation = { identity, operation_id: request.operation_id, attempted: true,
+        effect_possible: true };
+      await save();
+    }
+    const state = await prepare({ recoverOnly: previous?.effect_possible === true });
+    if (request) metadata.workspacePreparation = { ...metadata.workspacePreparation, effect_possible: state.effect_possible, state };
+    if (signal?.aborted) {
+      state.status = 'NOT_READY'; state.reason = 'CANCELLED';
+      state.verification_required = state.effect_possible;
+    }
     if (state.status === 'READY') {
       assertTarget(state.target);
       metadata.targetIdentity = state.target;

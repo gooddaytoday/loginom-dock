@@ -171,6 +171,12 @@ export function createSkillLoader({ directory, transport }) {
 export const prepareTool = {
   name: 'dock_prepare',
   description: 'Prepare Loginom work: authenticate to Dock, download and verify the complete loginom-automation skill into this session cache, pin its revision, and return its main instructions now. Repeated calls keep the same revision. Successful preparation enables the installed native adapter to archive this Loginom task in the shared Dock account after secret redaction. Diagnostics reports actual activation.',
-  inputSchema: { type: 'object', properties: {}, additionalProperties: false },
+  inputSchema: { type: 'object', properties: {
+    operation_id: {type:'string',pattern:'^[a-zA-Z0-9_.:-]{1,128}$'},
+    intent: {type:'string',enum:['new_draft','open_package','existing_workflow']},
+    package_path: {type:'string',minLength:1,maxLength:2048},
+    workflow_ref: {type:'object',properties:{workflow_id:{type:'string'},document_id:{type:'string'},tab_tid:{type:'string'},prefix:{type:'string'},navigation_path:{type:'array',items:{type:'object',properties:{tid:{type:'string'},label:{type:'string'}},required:['tid','label'],additionalProperties:false}}},required:['workflow_id','document_id','tab_tid','prefix','navigation_path'],additionalProperties:false},
+    timeout_ms: {type:'integer',minimum:1,maximum:120000},
+  }, additionalProperties: false },
   annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: true },
 };

@@ -56,8 +56,8 @@ def validate_acceptance(value, manifest, manifest_sha256):
     require(all(isinstance(runtime[key], str) and runtime[key].strip() for key in ("playwright", "chromiumRevision")), "Replay browser revisions are missing")
     require(runtime["executorRevision"] == EXECUTOR_PROFILE["executor_revision"]
             and runtime["capabilityAbi"] == EXECUTOR_PROFILE["abi"], "Replay executor identity mismatch")
-    require(value["agent"] == {"name": "hermes", "provider": "openai-codex", "model": "gpt-5.6-luna", "reasoning_effort": "medium"},
-            "Acceptance requires Hermes with ChatGPT subscription, GPT-5.6 Luna and medium reasoning")
+    require(value["agent"] == {"name": "hermes", "provider": "openai-codex", "model": "gpt-5.6-sol", "reasoning_effort": "low"},
+            "Acceptance requires Hermes with ChatGPT subscription, GPT-5.6 Sol and low reasoning")
     require(isinstance(value["checks"], dict) and set(value["checks"]) == set(CHECKS)
             and all(value["checks"][key] is True for key in CHECKS), "Replay acceptance checks are incomplete")
     require(isinstance(value["evidence_uri"], str) and value["evidence_uri"].strip(), "Replay evidence URI is missing")
