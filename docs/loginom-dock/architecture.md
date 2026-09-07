@@ -1,3 +1,49 @@
+# Loginom Dock: существующие механизмы и целевая архитектура
+
+## Решение 7 сентября 2026 — первый аналитический выпуск
+
+Действующая целевая схема определена в
+[каноническом плане](../plans/2026-09-02-loginom-dock-implementation-plan.md#node-level-operations):
+агент планирует граф и параметры; локальный клиент выполняет полный цикл одного
+узла и возвращает выход; сервер предоставляет знания. Единая операция node.apply
+выбирает отдельный обработчик типа на общих UI-драйверах. Массовое предварительное
+создание графа и общий recipe interpreter не требуются.
+
+Первый выпуск — восемь аналитических типов. Первый вход в мастер и техническое
+recovery включены в локальный цикл. В обычном пути агент проверяет выход без
+повторного открытия мастера; roundtrip обработчика и финальная проверка пакета
+являются отдельными проверками. Контракты типов загружаются пакетно и кешируются;
+неподдержанные режимы используют ограниченный UI-резерв внутри executor.
+Сохранение пакета — после импорта, готовой ветви и в конце, локальный checkpoint
+— после каждого принятого узла.
+
+Все будущие Hermes-прогоны — openai-codex / gpt-5.6-sol / low.
+Локальный контракт подготовки 01 реализован и описан в
+[workspace-preparation.md](workspace-preparation.md); node.apply остаётся следующим этапом.
+Эта целевая схема **ещё не реализована целиком**: ниже описаны существующие
+механизмы и датированные итерации. Прежний импортный handler остаётся пилотом
+с уже открытым мастером и обязательным Done/reopen/readback. Профиль запуска,
+аудит и admission переведены на Sol/low при реализации 01. Приёмка нового черновика
+17/17 относится к полному рабочему дереву указанного в контракте runtime,
+не автоматически к выделенному коммиту. Следующий шаг — 02 и общие контракты 03;
+весь V1 и полный node.apply ещё не приняты. Новых прогонов эта правка не добавляет.
+
+### Bounded text-import operation and explicit readiness (2026-09-07)
+
+`node.configure_text_import` runs a fixed local procedure under the existing
+mutation gate. Hermes supplies one node reference, a resolved verified upload
+operation and typed source/format/column settings. Private steps have durable
+preparation/receipts and fresh document-bound observations; they are not model
+tool calls. Unknown effects stay pending without automatic replay.
+
+Every read requires a named predicate and a bounded deadline. Polling ends on
+semantic readiness; repeated whole-DOM quiet samples are not required. The saved
+node incarnation is checked twice after Done, and the normal pre-gesture epoch,
+identity and interaction guards remain mandatory. The independent auditor binds
+the external operation, upload, internal journal and Done/reopen/readback sequence.
+The bounded import goal passed autonomous Hermes acceptance (54/54); execution,
+package persistence and the remaining P3 nodes are outside this pilot.
+
 ### Import settings acceptance binding (2026-09-06)
 
 The independent P3 `wizard_settings_readback` verifier binds the pinned CSV and
@@ -392,10 +438,22 @@ UI-паттернов. Это уточнение заменяет обещани
 операции в первом MVP одним обновлением данных. Ограниченные UI-жесты следующего
 раздела являются отдельными инструментами агента и поставляются в runtime.
 
+7 сентября пользователь согласовал полный локальный цикл одного узла:
+добавление/поиск → связи → первое открытие → настройка портов и узла →
+завершение → выполнение → чтение выхода. Агент выбирает граф и параметры,
+затем оценивает выход. Штатного повторного открытия мастера нет; специальные
+roundtrip-тесты обработчика и финальная проверка пакета остаются отдельными.
+Первый выпуск охватывает восемь аналитических типов; остальные режимы доступны
+через ограниченный UI-резерв и остаются в дорожной карте. Общий interpreter
+сценария не является зависимостью выпуска. Это целевая архитектура: реализованный
+импортный пилот пока сохраняет прежний контракт. Точные границы:
+[канонический план](../plans/2026-09-02-loginom-dock-implementation-plan.md#node-level-operations).
+
 При продолжении реализации вводятся следующие обязательные границы. Candidate
 manifest и содержимое остаются неизменяемыми после replay. Допуск в production —
 отдельная attestation, связывающая точный manifest SHA с runtime, сборкой Loginom,
-Hermes/Xiaomi MiMo 2.5 и обязательными проверками. Повышение `stale` при повторной
+Hermes/openai-codex/gpt-5.6-sol/low и обязательными проверками нового выпуска.
+Старые MiMo/Luna attestations сохраняют прежние pins. Повышение `stale` при повторной
 сборке запрещено; pointer переключается после проверки и readback. Provenance
 проверяется вместе с полнотой зависимостей используемых селекторов/helpers.
 

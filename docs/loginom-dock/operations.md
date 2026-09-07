@@ -1,9 +1,47 @@
+## 7 сентября 2026 — staged-каталог пилота импорта
+
+На VPS собран кандидат `2026.09.07-node-import.1-candidate` из явно отобранных
+исходников в `/opt/loginom-dock/releases/20260907-catalog-node-import1`.
+Stage и read-back выполнены; `activated=false`. URI:
+`viking://resources/loginom-dock/catalogs/executor-preview/releases/2026.09.07-node-import.1-candidate/manifest.json`,
+SHA256 `dcef4bc665c53185eca66e674b126b21fae3b21077bc5cdc293769afc053321f`.
+Кандидат использован в отдельной source-приёмке импорта (54/54 PASS,
+`20260907-170150-12a754e8`); это не production admission полного каталога.
+Публичный клиент этой работой не переустанавливался. Runtime источников и пределы
+пилота закреплены сверху [implementation-status.md](implementation-status.md).
+
 # Сервер, конфигурация и развёртывание
+
+## Обновление публичного клиента и Caddy — 7 сентября 2026
+
+Опубликован `0.1.0-rc.2-fix`, source `487ada8e3bdfe99d827033a519d6be610c707d91`.
+Текущий Caddy: `loginom-dock:landing-rc2-fix-f9549670`, image ID
+`sha256:7718912a50c5975bb5d99e48e2af7ccce82338bda8b6fb0e9509386ebc84dcb1`.
+Source лендинга: `f954967097832960863dd858185cb9c99972a762`.
+API/MCP-контейнер не пересоздавался. current/server source остались прежними;
+исторические caddy-image.* в старом каталоге не описывают этот новый образ.
+Точные inputs, image.* и backup конфигурации:
+`/opt/loginom-dock/client-build/rc2-fix-487ada8e/landing/`.
+Для отката сайта брать `deploy.env.rc2-baseline`, а не промежуточный rc.5,
+который удалён из GitHub по запросу пользователя. Подробнее:
+[windows-agent-install.md](windows-agent-install.md).
+Остальные записи ниже сохраняют свои даты применимости.
 
 Сначала прочитать [памятку агенту](agent-handoff.md). Инвентаризация ниже сверена
 с сервером 4 сентября 2026 года; перед изменениями повторить read-only проверки.
 Секреты здесь намеренно не приводятся. Документационная задача не является
 поводом перезапускать сервисы, переустанавливать клиента или запускать модели.
+
+## Стенд Loginom для тестирования и отладки
+
+С 7 сентября2026 по явному выбору пользователя использовать
+`http://logi-test-plan.bg.local/app/?testable=true`, account `user` без пароля.
+Живой вход и просмотр `/user` проверены; отображаемая версия7.4.2.
+По уточнению пользователя 7 сентября 2026 целевой Loginom развёрнут на Linux,
+Excel на этом стенде не поддерживается и исключён из текущего плана реализации.
+Это адрес целевого Loginom, отдельно от VPS/API/MCP Dock ниже. Production Dock
+и установленный клиент этой проверкой не изменялись. Перед новой приёмкой
+нужны соответствующие origin/build pins и проверенные storage allowed roots.
 
 ## Доступ и расположение
 
@@ -388,3 +426,27 @@ URI `viking://resources/loginom-dock/catalogs/executor-preview/releases/2026.09.
 Серверный build/report: `/opt/loginom-dock/releases/20260906-catalog-agent3-11f696c5/`.
 Save revision 2 ограничен `/test/packages`. Production не активирован; live
 сохранение и повторное открытие ещё должны пройти приёмку.
+
+### Candidate для стенда Loginom7.4.2 (7 сентября2026)
+
+`2026.09.07-agent.4-candidate`: build и stage/read-back выполнены на VPS в
+`/opt/loginom-dock/releases/20260907-catalog-agent4-loginom742/` из предыдущего
+серверного каталогаagent3. Profile loginom-7.4.2-macos-chromium-ru,
+loginom_build7.4.2, save allowed root `/user/dock-p3/packages`.
+Manifest URI `viking://resources/loginom-dock/catalogs/executor-preview/releases/2026.09.07-agent.4-candidate/manifest.json`,
+SHA `85ac2d532245d2da2c9428c499cfa74ba3cc0b3a6e0732c51e6b96cf9f96b0fa`.
+Staged=true, activated=false. Это кандидат для проверки, не приёмка capability.
+Каталоги `/user/dock-p3` и `/user/dock-p3/packages` созданы и повторно открыты
+через UI под явно выбранным user; package save/reopen ещё не проверен.
+
+### Candidate с «Параметрами полей» (7 сентября 2026)
+
+`2026.09.07-agent.5-candidate` собран на VPS и staged/read-back в
+`/opt/loginom-dock/releases/20260907-catalog-agent5-reform/`. Добавлен
+`transform.reform_columns` в node.add revision3, с provenance
+`bg/selectors.ts:370–374` того же E2E commit. Profile и save root сохранены
+от agent4. Manifest SHA
+`25c659669ace184ba27e7c8b0cea6c030997e29f2c7c89372d565f4bc8cdd4eb`, URI
+`viking://resources/loginom-dock/catalogs/executor-preview/releases/2026.09.07-agent.5-candidate/manifest.json`.
+Staged=true, activated=false; автономная приёмка нового узла ещё не выполнена.
+Production current повторно проверен: `20260904-landing-7b711846`.

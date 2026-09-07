@@ -1,5 +1,14 @@
 # Контракты расширения исполнителя
 
+**Разделение current/target — 7 сентября 2026.** Новый полный `node.apply`,
+пакетное описание контрактов и чтение выхода определены в
+[плане](../plans/2026-09-02-loginom-dock-implementation-plan.md#public-node-contracts)
+и пока не реализованы. Ниже описаны существующие механизмы; новый составной
+контракт должен явно перечислять эффекты и квитанции фаз.
+Старое требование `reopened=true` относится к `package.save_as` и не задаёт
+поведение будущего промежуточного сохранения. Reopen мастера импортного пилота
+также не становится обязательным шагом нового продуктового пути.
+
 ## Registry и версии
 
 Локальный `client/lib/capability-registry.mjs` связывает action key, versioned
@@ -10,7 +19,8 @@ capability, фиксированный handler и effect kind. Из него с�
 серверного publisher; contract test проверяет согласованность. Старый клиент
 отклоняет неизвестный action/capability до browser call.
 
-ABI 1 / executor 1.1.0 пока сохраняются для трёх существующих алгоритмов.
+Capability ABI 1 / executor 1.2.0 описывают четыре зарегистрированных алгоритма,
+включая `node.configure_text_import` с прежним Done/reopen/readback контрактом.
 Точный clientRevision всё равно меняется при правках registry/validator/body.
 Добавление нового обработчика требует новой executor revision, входных файлов
 session/packaging, tests и принятого каталога. Registry — не механизм загрузки

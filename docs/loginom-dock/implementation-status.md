@@ -1,3 +1,54 @@
+## 7 сентября 2026 — накопленные наработки сохранены тематическими коммитами
+
+По просьбе пользователя изменения после 71497679 разобраны по зависимостям.
+До работы сохранена локальная резервная копия `.dock/commit-split-20260907-211544/`:
+исходный HEAD, полный tracked patch, 45 новых исходных/документационных файлов
+и manifest состояния 138 путей. Диагностические файлы браузера остались на месте.
+
+| Коммит | Сохранённая работа |
+| --- | --- |
+| 84e33f76 | Запуск установленных агентов через PATH и Windows CMD |
+| d17b12c2 | Управляемое завершение и сохранение защиты буфера обмена |
+| 76c3f5b1 | Проверка транзитивных зависимостей закреплённых E2E-исходников |
+| a171d7aa | Метаданные и история уже опубликованного Windows hotfix |
+| 208c71b7 | UI/порты/таблицы, загрузки и независимые проверки настроек |
+| 106abedb | Прежний пилот настройки импорта, каталог, журнал и аудитор |
+| 0b41e5fb | Игнорирование локальных диагностических каталогов Playwright |
+
+Действующий план, десять подпланов, исследования и историческая копия сохранены
+отдельным документационным коммитом с этой записью. Текущие статусы согласованы:
+01 реализован локально, Sol/low уже переключён; далее 02 и контракты 03.
+Весь V1 и новый полный node.apply не объявлены завершёнными. Старый импорт
+сохраняет ограничения открытого мастера, восьми полей и обязательного QA reopen.
+
+Проверялись выделенные деревья индекса, а не смешанное рабочее дерево:
+
+- Установщик: 10 PASS, один Windows-only SKIP на macOS.
+- Управляемое завершение и bridge: 8 PASS; анализ исходников: 18 PASS.
+- UI/порты/аудиторы: итоговые 260 клиентских и 222 Python PASS;
+  отдельно 2 проверки состава и подготовки исходников упаковки.
+- Итоговый пилот: 10 packaging PASS, включая весь клиентский набор в изолированной
+  копии, и 231 Python PASS. Проверка упаковки не создавала production-выпуск.
+- Метаданные hotfix совпали с сохранённым коммитом лендинга f9549670 и описанием
+  трёх архивов. Историческая копия плана сохранила SHA256 6a5370e3…b3dd.
+
+Два первых UI-прогона дали по одному отказу на разных больших DOM-fixtures:
+синтетический CSS-поиск почти исчерпывал реальный бюджет 500 мс. Для семи
+структурных fixtures добавлены управляемые часы; отдельно проверены 500/501 мс
+и истечение action deadline до жеста. Ограничения и guards production не менялись.
+В двух Python-файлах убраны лишние пустые строки в конце; другая логика сохранена.
+Логи успешных и неуспешных проверок находятся рядом с резервной копией.
+
+Все исполняемые клиентские изменения сохранены побайтно. Закоммиченные 49 runtime
+inputs дают SHA256 d35ee7f6f51b1f3dcabb76d1388e9adf4544e9356f423c397a0c9be17a0afaa3,
+совпадающий с runtime прежней приёмки 01 (17/17). Это не новая живая приёмка:
+Hermes/UI, production, установленный клиент и frozen audits не изменялись;
+состав тестов и документации теперь отличается от прежнего набора evidence.
+
+Пять удалений benchmark/locomo/openclaw оставлены незакоммиченными: их причина
+не установлена и текущий план их не требует. Все 23 ранее видимых браузерных
+артефакта сохранены и игнорируются Git. Сырой вывод браузера в коммиты не включён.
+
 ## 7 сентября 2026 — реализована подготовка workspace (подплан 01)
 
 Добавлены намерения `new_draft`, `open_package`, `existing_workflow`, точная
@@ -22,6 +73,463 @@
 231 PASS. Source fault tests не объявляются live fault injection.
 [Контракт и source pins](workspace-preparation.md). Сервер, публичные артефакты
 и установленный клиент не обновлялись; новый выпуск и весь V1 не приняты.
+
+## 7 сентября 2026 — подготовлены десять конкретных подпланов
+
+Действующий план разделён на [отдельные документы](../plans/loginom-dock/README.md):
+01 — открытие Loginom и черновика, 02 — добавление и соединение узлов,
+03–10 — настройка восьми типов. В каждом описаны конкретная работа, зависимости,
+источники, контракт, явные ожидания, ошибки, проверки и критерий готовности.
+Общие драйверы распределены между 01/02/03, первый сквозной путь —
+01 → 02 → 03 → 04 → 07 → 08. Поставка V5 остаётся в основном плане.
+
+Независимое ревью выявило неоднозначность отдельных мастеров портов; уточнён
+общий порядок: промежуточное «Готово» узла, настройка порта, выполнение с графа
+внутри той же node.apply без повторного открытия мастера узла. Итоговый
+execution=not_requested относится только к запросу настройки без запуска.
+Для двух ветвей продаж запланирован отдельный fixture с Product; старые
+fixtures и audits не изменялись. Ссылки добавлены в основной план и checkpoint.
+
+Все подпланы planned. Изменена только документация: новая реализация,
+переключение фактического профиля Hermes, UI-прогоны и deploy не выполнялись.
+Проверены комплект десяти подпланов, 138 локальных ссылок, форматирование и
+неизменность SHA256 исторической копии плана. Поведенческие тесты не запускались.
+
+## 7 сентября 2026 — Excel исключён из плана для Linux-стенда
+
+По уточнению пользователя целевой Loginom работает на Linux-сервере и не
+поддерживает Excel. Его обработчик и Excel-сценарий приёмки удалены из
+действующего плана; первый выпуск теперь включает восемь типов. Сценарий
+очистки проверяется на CSV. Ограничение распространяется и на последующие
+очереди этого плана. Согласованы текущие инструкции, архитектура и checkpoint.
+Исторические редакции и исходный inventory сохранены. Код не менялся.
+
+## 7 сентября 2026 — переработан план первого аналитического выпуска
+
+Существующий канонический план заменён новой редакцией; предыдущий полный текст
+сохранён [побайтно в истории](../plans/2026-09-02-loginom-dock-implementation-plan-history-through-2026-09-07.md),
+SHA256 6a5370e3516f2045a3188671b2c3dc4ab09da7c74c25d95e6981a5393133b3dd.
+[Действующий план](../plans/2026-09-02-loginom-dock-implementation-plan.md) задаёт
+девять типов, полный локальный node.apply, проверку выхода, UI-резерв,
+сохранения по этапам и очередь V1–V5. Старые P0–P9 сопоставлены с новой очередью.
+
+По указанию пользователя все будущие Hermes-прогоны должны использовать
+openai-codex / gpt-5.6-sol / low через существующую подписку ChatGPT.
+Синхронизированы действующие инструкции и навигация. У исторического coverage
+исправлена ссылка provenance на прежний план; статусы и данные покрытия не повышены.
+
+Это изменение документации и ссылки источника, не реализация нового поведения.
+Runtime, launcher/audit/admission, тесты выполнения, Hermes-прогоны, production
+и установленный клиент этим шагом не менялись. Ни новый node.apply, ни профиль
+Sol/low в реальном run не объявляются принятыми. Следующая реализация — V1.
+Проверено: SHA исторической копии, все 10 прежних явных якорей, 76 локальных
+ссылок в связанных документах, JSON реестра (146 записей) и diff --check.
+Независимая проверка плана выполнена; уточнены configure-only без нового выхода
+и переход default на executor после V5. Поведенческие тесты не запускались:
+эта задача не меняла исполняемый код.
+Датированные записи ниже сохраняют прежние результаты и ограничения.
+
+---
+
+**7 сентября 2026 — остановлено по просьбе пользователя.**
+Активных Hermes-прогонов нет. Последний `20260907-172236-0bae3c10` завершён,
+frozen audit 25/27 (не PASS). settle:0 внесён в executor-сессии; MCP-native PASS
+24,948 с. Hermes выявил UI_EPOCH_CHANGED до клика picker UnitPrice/data_kind
+на шаге 37. Безопасное локальное обновление наблюдения пока не реализовано.
+Процессы завершены, незавершённых вызовов нет; последнее состояние операции idle,
+мастер на формате. Новые прогоны/правки — после команды продолжения.
+[Точная точка продолжения](resume-checkpoint.md).
+
+## 7 сентября 2026 — принят пилот варианта 2, явные ожидания
+
+Самостоятельный Hermes `20260907-170150-12a754e8` (ChatGPT,
+`openai-codex` / `gpt-5.6-luna` / `medium`) завершён: 56 API calls,
+без timeout. Единственный frozen audit **54/54 PASS**, SHA256
+`4526bf48dfc71e6f75b92b8cf3e879d684be0357ab477a570ad413efa652b550`.
+Доказательства: `.dock/post-mvp-p0/runs/20260907-170150-12a754e8/`.
+Принята отдельная цель `node-import-roundtrip`, не весь P3.
+
+Hermes вызвал `node.configure_text_import` один раз; локальный клиент выполнил
+22 действия, сохранение «Готово», повторное открытие и полное чтение source,
+format, пяти столбцов и output mapping. Байты загруженного файла, внешний вызов,
+контекст и внутренний журнал связаны независимыми проверками. Runtime:
+`dcef5ae4d7bbf2aa3183f368182537a9ad9cd6ea58c33d61fc92603cbe411c63`;
+кандидат каталога `2026.09.07-node-import.1-candidate`, SHA256
+`dcef4bc665c53185eca66e674b126b21fae3b21077bc5cdc293769afc053321f`.
+
+По замечанию пользователя введены обязательные именованные ожидания результата
+с пределом 15 секунд и общим deadline. Политика `semantic_condition_v2` прекращает
+опрос после выполнения условия. Только после «Готово» два наблюдения подтверждают
+одну и ту же инкарнацию сохранённого узла. Штатные epoch/identity/interaction
+проверки перед жестом сохранены. Постоянное требование четырёх одинаковых полных
+снимков удалено. В этой паре Hermes-прогонов время самой операции сократилось с
+258,439 до 82,818 секунды (примерно 3,1 раза), полных снимков — со 175 до 44.
+Это замер одного участка, не доказательство ускорения всего сценария: подготовка
+загрузки/вкладок остаётся отдельными вызовами модели; во втором прогоне были
+безопасно отклонённые попытки до открытия рабочей области.
+
+Проверки: 405 client PASS, 1 Windows-only skip; 228 Python PASS; 10 packaging PASS
+до последнего изменения политики ожиданий (состав bundle после него не менялся).
+Последний Codex-native проход — 25,046 секунды, локальный независимый proof PASS.
+Первый frozen audit 51/54 сохранён без пересчёта; дефекты аудитора исправлены с
+негативными тестами: страницы одного наблюдения связываются с отдельными journal
+receipts и цепочкой cursor, отказ Enter допускается только при доказанном
+отсутствии эффекта до взаимодействия.
+
+Ограничения пилота: один явный путь, 1–8 полностью видимых столбцов, изменение
+типа/вида данных при уже совпадающих именах/метках/выборе. Выполнение, сохранение
+пакета и остальные узлы этой целью не принимаются. Production не активирован,
+установленный публичный клиент не обновлён. Дальнейшая работа — расширение по
+плану §13.3; результат пилота не уменьшает согласованный объём P3.
+
+**7 сентября, 14:06 МСК — безопасная пауза по просьбе пользователя.**
+Последний calculator-roundtrip `20260907-133241-682396db` завершён без timeout,
+158 API calls, frozen audit 52/59. P3 не принят: после reopen импорта прочитана
+только первая страница; полные Calculator input/node/output proofs отсутствуют.
+Активных прогонов нет. Интегрированы agent5/Reform, глобальный native редактор
+поля 7.4.2, literal-кавычка и промежуточная цель calculator-roundtrip.
+218 Python /188 workspace-pager /8 catalog PASS; private Group/Reform —
+14 synthetic PASS, не интегрирован. Ручной Table результат не является
+автономной приёмкой. Production этой итерацией не переключался.
+Точная точка продолжения и SHA: [resume-checkpoint.md](resume-checkpoint.md).
+
+**7 сентября — продолжение с развёрнутым браузером.** После terminal run123922
+исправлены экспорт prepare при повторной compaction и Group UI (available fields,
+пустые native summary rows, Factor binding). Добавлен независимый Calculator
+verifier с отдельными node/input/output roundtrip; живого PASS ещё нет.
+217 Python /188 workspace-pager tests PASS. Пять domain verifiers ещё отсутствуют,
+P3 не принят. Текущий run и frozen audit — в [resume-checkpoint.md](resume-checkpoint.md).
+
+**7 сентября — импорт P3 принят независимым живым аудитом.**
+Run20260907-113445-24e336d0:53/59; wizard_settings_readback=true,
+transfer verified. Остались шесть domain verifiers. Полный P3 открыт.
+SHA и дальнейшая работа: [resume-checkpoint.md](resume-checkpoint.md).
+
+**7 сентября — стенд7.4.2, загрузка подтверждена, импорт ещё открыт.**
+Run20260907-111942-a2a1e7b9: frozen audit52/59, CSV230bytes verified;
+узел не создан. После terminal исключены безымянные Graph;Vertex из actions,
+уточнена цель создания импорта.162 workspace/200 Python tests PASS, live scoped
+graph observation SUCCEEDED без декоративных vertices. P3 не принят.
+Подробности и SHA: [resume-checkpoint.md](resume-checkpoint.md).
+
+**2026-09-07 — опубликован hotfix `0.1.0-rc.2-fix`.**
+
+Клиент собран на VPS из `487ada8e3bdfe99d827033a519d6be610c707d91`,
+в отдельной ветке `release/windows-npm-codex-rc2-fix` на базе публичного rc.2.
+Архивы и скачанные GitHub assets сверены; Windows-приёмка и повтор полного
+набора пропущены по явному решению пользователя. Сайт переключён на hotfix.
+Временные выпуск/tag/ветка rc.5 удалены; номер следующего RC не занят.
+Подробности, суммы и откат: [windows-agent-install.md](windows-agent-install.md).
+
+**2026-09-07 — проверен новый стенд для тестирования и отладки.**
+
+По выбору пользователя: `http://logi-test-plan.bg.local/app/?testable=true`,
+Loginom `user` без пароля. Реальный вход успешен, версия7.4.2, avatar visible,
+загрузочных масок нет. Раздел «Файлы» и `/user` доступны для просмотра.
+Запись и сохранение пока не проверялись. Стенд закреплён в плане§13.2а и
+checkpoint. Перед Hermes replay нужен новый pinned compatibility profile;
+старый профиль build49202 автоматически не переиспользуется. P3 открыт.
+
+**2026-09-07 — подготовлен исходный патч Windows npm Codex installer.**
+
+Общий запуск агента закрепляет команду для preflight/native/recovery; ошибки
+запуска больше не выдаются за несовместимую версию. Целевые проверки 10 PASS,
+1 Windows-only SKIP на Node24.19.0. Windows SSH недоступен; новый архив не
+собирался и не публиковался. Полный набор и изолированная упаковка имеют
+описанные ограничения. Подробности и продолжение: [windows-agent-install.md](windows-agent-install.md).
+
+**2026-09-06 — приёмка остановлена на отозванной авторизации Hermes.**
+
+Run222609 не выполнил ни одного tool call: token_revoked. Pure refresh исходного
+Hermes connection подтвердил refresh_token_invalidated; повторный вход требует
+участия пользователя. Обнаружен CLI credential recovery в Hermes; конечная
+identity runs215646/222609 отличается от исходной, поэтому эти runs не являются
+допуском на согласованной подписке. Frozen audits сохранены. В отдельный
+acceptance launcher добавлен запрет import/recovery/refresh; аудит проверяет
+receipt и неизменность подключения. 199Python tests PASS, guarded --version
+реального Hermes0.21.0 PASS без модели. P3 не принят. Следующий шаг и порядок
+восстановления той же учётной записи — в resume-checkpoint.md.
+
+**2026-09-06 — run215646, Table coverage и прямое чтение мастера.**
+
+Run215646 завершён123APIcalls, frozen audit20/22; P3 FAIL. Диагностика после
+исправления архивных duplicate-tool copies152/152 подтверждает transfer и scoped
+knowledge, но не полный import roundtrip. Добавлены scope wizard, table_coverage
+и disabled Ext menu guard;232browser и195Python tests PASS. Live6paired rows,
+range1–6, disabled pagination и source wizard focus подтверждены. Это наблюдения,
+не полная проверка результатов. Точные SHA, ограничения и следующий шаг —
+в [актуальном checkpoint](resume-checkpoint.md). Production unchanged.
+
+**2026-09-06 — свежие refs из доказанного no-effect ответа.**
+
+Исправлено учётное различие: journal-bound NOT_APPLIED выдаёт свежую страницу,
+которую последующее SUCCEEDED действие вправе использовать. Отказ остаётся
+отказом и не становится выполненным переходом. 44 профильных tests PASS.
+На сохранённом run212312 теперь диагностически подтверждены полные settings,
+configured schema и mapping roundtrips. Общая приёмка остаётся FAIL по transfer
+pre-inspect и unscoped knowledge; старый audit не заменялся. Следующая приёмка
+должна использовать новые pins и уточнённые описания. Подробности в checkpoint.
+
+**2026-09-06 — run212312 и продолжение независимой проверки.**
+
+Hermes завершил import/reopen на ChatGPT/Luna/medium,109APIcalls, source/harness
+unchanged. Frozen audit19/22: служебные duplicate-read markers после compression
+и реальный unscoped search. Узкий экспортёр копий исправлен,194Python checks PASS;
+диагностика сохранённого evidence125calls/125replies. Scope нарушение не снято.
+Уточнены описания upload inspections и область поиска в goal. Далее offline
+исправление выдачи ref из доказанного journal-bound NOT_APPLIED: reply236 содержит
+свежую кнопку для следующего успешного перехода, но успешный-only bound_receipts
+её не учитывает. Подробности, SHA и точка продолжения — в resume-checkpoint.md.
+Новый replay до проверки этой правки не запускать. P3 остаётся открытым.
+
+**2026-09-06 — literal decimal и самостоятельные переходы мастера.**
+
+В отдельном test UI подтверждён ввод `.` + blur и отображение `Точка (.)`
+после next/back; E2E issue724 и Help сверены. Comparator допускает только эти
+два отображения точки, не считает их applied/persistence proof. Goal сокращён
+до требований к результату с полной контрольной серией до/после reopen.
+Run210229 выявил повторяющееся угадывание expected_stage=input_mapping и отсутствие
+inspect upload перед изменениями; остановлен SIGTERM с экспортом evidence,
+frozen audit23/33. Исходники во время запуска не менялись. После него schema
+description объясняет переходы Text Import и отдельный смысл input_mapping,
+goal требует отдельного подтверждения завершения исходной передачи.
+155 workspace-ui и 41 профильный Python test PASS. Новая live приёмка последних
+уточнений ещё впереди; P3 остаётся открытым. Exact SHA и evidence — в checkpoint.
+
+**2026-09-06 — короткий цикл диагностики перед новым replay.**
+
+Порядок согласован с пользователем и закреплён в §13.2а плана. На сохранённых
+очищенных evidence run195419 проверены prepare binding, origin/root-URL slash
+и точная graph-page проекция. Последняя сохраняет все признаки пропуска данных:
+пустые dialogs/masks graph-страницы не становятся доказательством их отсутствия.
+Внешний аудит по-прежнему требует закрепления зависимостей до запуска.
+193 теста приёмочного инструментария PASS; проверка проекции использует настоящий
+JS pager, негативные случаи проверяют подмену полей/scope/omission flags.
+Диагностический run195419-graph-fixed-diagnostic.json: transfer_verified=true,
+wizard_settings_readback=true. Исторический audit SHA c949fc7c… сохранён.
+Это диагноз старого evidence новым кодом, не новая автономная приёмка.
+Свежий целевой run203659 на ChatGPT/Luna/medium завершён: frozen audit52/59,
+85APIcalls, runtime/harness unchanged. Transfer PASS, import readback FAIL:
+пропущена чистая серия чтения перед finish; обнаружено различие отображений
+decimal separator `.` и `Точка (.)`. Следующий шаг — отдельная live-сверка поля
+и review goal-only обязательств, без неизменённого повторного запуска.
+Подробности и SHA — в checkpoint и private run203659-diagnosis.json.
+Остальные шесть P3 verifier и P4–P9 остаются открытыми.
+
+**2026-09-06 — текущий прогресс и незавершённая приёмка.**
+
+**Приоритет пользователя, подтверждённый 6 сентября:** агент должен быстро
+и без ошибок создавать сценарии Loginom. Пользователь явно разрешил
+эксперименты и альтернативные подходы для достижения этой цели. Оценивать
+изменения по времени до проверенного результата, числу вызовов инструментов,
+ошибок и восстановлений, сохраняя полную проверку данных и сохранённого пакета
+после reopen. Это разрешение на исследования, а не подтверждение P3 PASS.
+Профиль Hermes и остальные границы проекта сохраняются; кандидаты проходят
+review и отдельную приёмку, исторические аудиты остаются неизменными.
+
+Последний Hermes `20260906-195419-26afee73` завершён (exec7119, returncode=0).
+Заморозка runtime/harness снята. Неизменяемый аудит — 48/59, SHA256
+`c949fc7cdac7f43289fcbdbbcf4a8410eba1a7c2ac1a0a28a255b28a218547a7`.
+Разбор sanitized tools/events выявил ошибку проверяющего: повторный dock_prepare
+был отклонён без изменения workspace, но оба transfer verifier посчитали его
+второй подготовкой и потеряли привязку artifact. В итоге четыре transfer checks
+и зависимый import readback остались FAIL. Аудит не пересчитывался.
+
+В evidence есть единственная успешная подготовка (reply3, один
+workspace_prepared event), явный отказ повторной подготовки (reply59), успешная
+verify (reply73, 230 bytes и SHA fixture), finish (223), reopen (229) и повторное
+output_mapping (237). Это факты отдельных операций, не новый P3 PASS.
+Диагноз: `run195419-prepare-diagnosis.json`. Следующий шаг — узко исправить
+отбор успешной подготовки с отдельной проверкой безопасного отказа, сохранить
+строгий запрет второй реальной подготовки и повторить приёмку новым запуском.
+Actual runtime по этому диагнозу ещё не менялся.
+
+Профиль запуска подтверждён: `openai-codex` / `gpt-5.6-luna` / `medium`,
+существующая подписка ChatGPT. Перед запуском прошли 357 клиентских проверок
+последовательно и 187 Python-проверок. В параллельном полном клиентском прогоне
+одна проверка упёрлась в scan budget; последовательный полный прогон прошёл.
+
+Предыдущий Hermes `20260906-193127-6e07427d` завершён: 89 calls,
+returncode=0. Неизменяемый аудит — 52/59, SHA256
+`482b66a2ee766b3cdbf4bfa99797dc97ec7f0c22230c451abe9c6fd3ee696c1e`.
+Transfer и only_supported_dock_tools прошли. Finish/reopen импорта состоялись,
+но после reopen модель вызвала переход к output_mapping с observation_id
+прежней страницы файла. Запрос отклонён как stale; повторный mapping readback
+не получен. Это новый незавершённый UI-путь, а не прежняя ошибка verifier.
+Диагноз основан на sanitized calls/replies/events:
+`run193127-readback-diagnosis.json`; исходный аудит не пересчитывался.
+
+Root воспроизвёл причину выдачи: на первой странице формата находились только
+три поля, без Next. Приоритет Next/Finish перенесён перед полями; новое первое
+сообщение размером 11108 bytes содержит Next, delimiter, qualifier и null marker.
+Действие по выданному Next в живом UI завершилось SUCCEEDED с переходом
+к output_mapping (`import-paged-next-native-fixed.json`). Stale-ref guard сохранён.
+
+
+
+Предыдущий завершённый запуск `20260906-191903-a62088ee`: неизменяемый аудит
+24/32, SHA256 `d02cc0eeae30899cb857b8cc87ab3de3f7369e3f7d15538d7946377daca6aff9`.
+Only-supported проверка прошла, но upload/verify не состоялись: Hermes
+остановился в Files на `/`. Root воспроизвёл проблему и подтвердил после
+исправления живой переход `/` → `test`; доказательства сохранены в private
+`files-root-fixed-native.txt` и `files-root-test-confirmed.txt`.
+
+Запуск `20260906-185724-f40c8463`: неизменяемый аудит 52/59, SHA256
+`5d81514c52e9ecc90849d9c25dde01aff106b80383fede436568abec96047e47`.
+Transfer и only-supported прошли. Finish/reopen импорта были выполнены,
+но прежний projection verifier не признал readback. Старый аудит сохраняет
+wizard_settings_readback=FAIL; исправление проверяющего не превращает его
+в новый PASS задним числом.
+
+Живые диагностические readbacks расширены: Calculator/Grouping/Factor,
+полный список четырёх полей Table и пять входных связей Revenue. В Table
+полнота схемы отделена от painted visibility: скрытые opacity=0 значки
+не дают права утверждать видимость остальных полей. Для каждого выбранного
+числового поля прочитаны видимый значок и пустая строка особого формата.
+`mapping-native-confirmed-live.txt` подтверждает пять видимых соответствий,
+но owner/source/applied proof остаётся открытым. Evidence находятся в
+`.dock/post-mvp-p0/resume-20260906/`; текущее состояние и следующий шаг — в
+[resume-checkpoint.md](resume-checkpoint.md).
+
+В actual runtime интегрированы Process readback, наблюдаемые маркеры типов
+и контекст входного порта. Они не доказывают применение настроек, source identity
+или свежее выполнение. P3 и P4–P9 не закрыты. P7 crash fixture и read-only
+inspector остаются приватными кандидатами; durable resume не реализован. Production
+и установленный клиент не менялись, прежние audits не пересчитывались.
+
+**2026-09-06 — история run181352: прямые инструменты и экспорт compaction.**
+
+Последний terminal `20260906-181352-2d892b3f`:94calls, exact
+openai-codex/gpt-5.6-luna/medium. Frozen audit21/22, SHA256
+`c288565b5bbcfd1c2508f25968619f41b02d250761354a2abd0ed3a43e991d2f`.
+Проверка only_supported_dock_tools PASS. Проверяющий остановился на
+неверно распознанной сохранённой копии prepare при compaction; это не новый
+P3 PASS. Исходные evidence/audit неизменяемы. Исправление экспортера проверяется
+отдельно перед следующим прогоном.
+
+Предыдущий run174120 terminal51/59 (SHA в checkpoint) подтвердил все transfer
+checks. Import finish/reopen были успешны, но verifier не учитывал наблюдённую
+автоматическую метку CSV, а viewport1200 обрезал mapping grid. Root воспроизвёл
+partial при932/1000px и complete_configured_rows при viewport1280×800. Теперь
+размер1280×800 закреплён в session metadata; проверки clipping сохранены.
+Добавлены связанная автоматическая метка, bounded finish settle и прямые
+Hermes tool schemas. Подробности: [UI review](p3-import-viewport-review.md).
+
+Перед run181352 Python182PASS; client333 —332PASS и один scan-budget отказ
+при параллельной нагрузке, тот же тест отдельно PASS. Root native finish
+с тремя quiet samples SUCCEEDED1198ms. Эти проверки не заменяют live gate.
+
+Управляемое завершение CLI теперь сохраняет clipboard lease при неизвестном
+завершении собственного browser transport; требуется actual onclose.13
+профильных проверок и packaging10 прошли. SIGKILL/crash остаются вне гарантии;
+[P4 ограничения](p4-managed-shutdown.md). P4 целиком не закрыт.
+
+Root diagnostic package сохранён и повторно открыт по точному пути
+`/test/packages/Root-diagnostic-20260906-1753.lgp`; настройки Reform прочитаны
+после reopen. Этот пакет использует Revenue/Id, поэтому не является exact
+fixture acceptance. Дополнительно проверен restrictive→empty filter roundtrip:
+1строка→3строки, пустой список условий после reopen при enabled=true.
+Остальные P3 domain gates, P4–P9 остаются открыты. Production/client install
+не менялись; чужие изменения и процессы не затрагивались.
+
+**2026-09-06 — run170701: область повторной проверки файла.**
+
+Run `20260906-170701-0d99f168` terminal, frozen audit24/32, SHA256
+`3deacf080c0bdf1e283339e509c613783eb4703233c194615883551a7d1c130d`.
+Модель openai-codex/gpt-5.6-luna/medium, source/harness unchanged PASS.
+Verify читал прежнюю upload область дерева каталогов вместо issued file row;
+DOWNLOAD_REVEAL_TARGET_CHANGED возникал до прокрутки. Root native live
+воспроизвёл точный отказ с пустым trace. Internal verify теперь читает exact
+issued file_ref, сохраняя global guards. Root повтор подтвердил SUCCEEDED:
+один scroll49px + один download, SHA256 совпал с fixture. P3 не закрыт.
+Предшествующие fixes прошли322client/171acceptance tests и ручную проверку
+49px reveal/download SHA fixture. Это не заменяет автономный transfer proof.
+
+Grouping получил bounded typed readback наблюдённых group/measure rows;
+root live подтвердил Region и Quantity SUM / Revenue SUM / Id COUNT.
+Проверяются ordered section headers, summary boundaries, record indexes,
+уникальные ячейки и типы. Учтено реальное расхождение правого края TABLE
+на1/64 CSSpx; большее clipping не допускается. Coverage остаётся partial,
+source identity / applied / aggregation settings не объявляются проверенными.
+Calculator settings diagnostics теперь отвергает подмену node breadcrumb.
+174 Python acceptance tests PASS; новый domain gate не включался.
+
+**2026-09-06 — новое UI-first исследование и отказ передачи в run163929.**
+
+Run `20260906-163929-8d2e4d83` завершён на подтверждённом
+openai-codex/gpt-5.6-luna/medium. Однократный frozen audit **24/32**,
+SHA256 `e372e82bbfbfd34622bb80c690d1b372b361a59f36ea8028d831975536cb3812`.
+До import не дошёл: оба file snapshots имели outside_viewport/point=null;
+verify отказал DOWNLOAD_GESTURE_NOT_CONFIRMED. Десять parallel root reads
+вытеснили исходный snapshot из cache8; последние два refs были выданы ранее,
+но устарели. Никакой модели/провайдера на замену не применялось.
+
+Root в отдельном test UI воспроизвёл файл вне viewport1280x800:
+row y825, exact storage owner top0/max50. Реальная прокрутка50px → row y775 →
+один double-click download. Имя и SHA256 f628434c… совпали с pinned fixture.
+Private copy `.dock/post-mvp-p0/resume-20260906/manual-verified-copy.csv`.
+Обнаружено ограничение реализации: uiAct полностью запрещён при pending upload,
+поэтому инструкция прокрутить файл сама по себе не поможет. Готовится bounded
+reveal в exact artifact.verify без расширения общего pending guard.
+
+После предыдущего run source fixes lifecycle и BrowseView-N прошли319 client
+и167 acceptance tests; root live подтвердил open/finish import и typed чтение
+только активной второй Table. P4 shutdown fix удерживает clipboard lease при
+failed browser transport close лишь пока жив process; P4 в целом открыт.
+P8 offline source dependency review18tests PASS,82files; без admission/publication.
+
+Root также исследовал Calculator и Grouping в отдельном несохранённом черновике.
+Calculator идёт calculator→done; output mapping открывается отдельно через
+контекстное меню порта. Grouping требует собственный typed readback/coverage.
+Особые наблюдения (DOM sections, Ext checkbox semantics, post-refresh stale data,
+wrapped group label) записаны приватно в resume-20260906. Они не закрывают
+автономную приёмку. Production и установленный клиент не менялись.
+
+**2026-09-06 — восстановление памяти и уточнение причины отказа import roundtrip.**
+
+Личная OpenViking memory проверена healthy; exact actor/list retrieval выполнен
+по Peer из актуального AGENTS.md. Dock resource URI не использовался как корень
+личной памяти. Пользовательские изменения AGENTS/checkpoint и удаления benchmark
+сохранены; процессы из ~/.hermes не останавливались.
+
+Sanitized evidence frozen run145935 подтверждает finish194/open204/reopened mapping216.
+Причина пустого roundtrip — verifier допускал доказанный no-effect retry только
+для graph click, а не wizard_step/finish. Row180→181: UI_EPOCH_CHANGED без эффекта;
+row187→188: idle schema refusal (лишний expected_stage). Allowlist отказал на
+row172 tool_call без name. Frozen audit50/58 и SHA d72d566a… не пересчитывались.
+
+Root UI-first в отдельном новом test browser создал диагностический черновик,
+прочитал существующий run-specific CSV, прошёл file→format→mapping→done→finish
+и повторно открыл узел. E2E wizard.ts совпал с pinned SHA700b2519…; Help txt
+README проверен. На повторном mapping реальный hover изменил DOM epoch9702→9704:
+старый wizard_step отвергнут NOT_APPLIED/UI_EPOCH_CHANGED, effect_possible=false,
+cleanup_complete=true, без gesture. Свежий read→step успешно перешёл на done.
+Private evidence: .dock/post-mvp-p0/resume-20260906/stale-live.json.
+Это ручная диагностика, не Hermes acceptance и не проверка полной схемы.
+
+Добавлено узкое признание доказанных wizard pre-effect refusals с issued control,
+контекстом/owner/root/stage, fresh read, строгим порядком и journal binding.
+167 Python acceptance tests PASS. Runtime/allowlist не менялись; goal уточняет
+поля lifecycle verbs и обязательные name/arguments транспортного tool_call.
+Source Hermes run20260906-161218-a1580042 завершён на
+openai-codex/gpt-5.6-luna/medium. Однократный audit: **51/58**,
+SHA256 `33aca2c22bb934fce7bf918055f2c2a947e99e7fa580a8c5d65a3a951a32a4b0`.
+only_supported_dock_tools PASS. wizard_settings_readback FAIL: row202/reply203
+open_wizard выполнил жест, затем AMBIGUOUS/UI_ROOT_STALE; позднейшее
+accept_observed_state не доказывает typed reopen. Frozen audit не менять.
+
+UI-first root подтвердил исчезновение графа и появление нового мастера после
+одного клика. Driver теперь до трёх раз повторяет только post-gesture discovery
+при UI_ROOT_STALE; полный context/document/tab/package/owner остаётся обязательным.
+317 client tests PASS. Отдельный живой source probe после исправления:
+open_wizard SUCCEEDED за2515ms, file→format→mapping→done→finish SUCCEEDED.
+Private evidence lifecycle-fixed-live.json. Это ручная диагностика, не Hermes
+приёмка; P3 остаётся не принят.
+
+Параллельный P8 review tool и локальная pinned submodule closure описаны в
+[p8-source-dependency-review.md](p8-source-dependency-review.md).18/18 tests PASS;
+82 файла — материал source review, не публикация и не P8 admission.
+Production и установленный клиент не менялись.
 
 **2026-09-06 — реализована независимая проверка настроек импорта P3.**
 
