@@ -101,7 +101,9 @@ export async function createBridge(config, session) {
       pinnedActions = pinned;
       recoveryContext = createRecoveryContext({ remote, pinned, knownSecrets: [config.apiKey] });
       Object.assign(session.metadata, pinned.pins);
-      actionRuntime = createActionRuntime({ pinned, artifactStore:session.artifactStore, allowCandidate: replay, onRecord: recordExecution,
+      actionRuntime = createActionRuntime({ pinned,
+        getNodeContractPins: () => ({...pinned.pins, skillRevision:session.metadata.skillRevision, loginomProfile:session.metadata.targetIdentity ?? pinned.compatibility}),
+        artifactStore:session.artifactStore, allowCandidate: replay, onRecord: recordExecution,
         targetOrigin: config.loginomUrl ? new URL(config.loginomUrl).origin : undefined, execute: async (code, options) => {
         const response = await browser.callTool({ name: 'browser_run_code_unsafe', arguments: { code } }, undefined, options);
         return parseCapabilityResult(response);
@@ -193,7 +195,7 @@ export async function createBridge(config, session) {
         }
         if (owner === 'action') {
           if (request.params.name === 'dock_action_describe') {
-            return { content: [{ type: 'text', text: JSON.stringify(actionRuntime.describe(request.params.arguments?.action_key)) }] };
+            return { content: [{ type: 'text', text: JSON.stringify(actionRuntime.describe(request.params.arguments ?? {})) }] };
           }
           return await browserGate(async () => {
             extra.signal.throwIfAborted();

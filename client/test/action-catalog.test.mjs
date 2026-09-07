@@ -214,3 +214,20 @@ test('builder is deterministic and marks only actions affected by E2E dependency
   assert.equal(JSON.parse(await readFile(join(replay, 'manifest.json'), 'utf8')).status, 'candidate');
   assert.ok(JSON.parse(await readFile(join(replay, 'actions.json'), 'utf8')).actions.every(action => action.status === 'candidate'));
 });
+
+test('batch descriptions reuse the pinned catalog and distinguish planned type cards from actions', async () => {
+  const data = await fixture();
+  const pinned = await pinActionCatalog(data.remote);
+  const runtime = createActionRuntime({pinned, allowCandidate:true, execute:async()=>{throw new Error('No execution during description');}});
+  const reads=data.reads.length;
+  const batch=runtime.describe({action_keys:['node.add','link.create'],node_types:['imports.text','transform.join_data']});
+  assert.equal(batch.actions.length,2);
+  assert.equal(batch.node_types[0].catalog_add_available,true);
+  assert.equal(batch.node_types[1].catalog_add_available,false);
+  assert.equal(batch.node_types[1].full_node_apply_available,false);
+  assert.equal(data.reads.length,reads);
+  assert.deepEqual(runtime.describe({action_key:'node.add'}),runtime.describe('node.add'));
+  assert.deepEqual(runtime.describe({}),runtime.describe());
+  assert.throws(()=>runtime.describe({action_key:'node.add',node_types:['imports.text']}),/single action/);
+  assert.throws(()=>runtime.describe({action_keys:['node.add','node.add']}),/distinct/);
+});

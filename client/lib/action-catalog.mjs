@@ -1,3 +1,4 @@
+import { NODE_TYPES } from './node-contracts.mjs';
 import { createHash } from 'node:crypto';
 import { ACTION_KEYS, CAPABILITIES, requireCapability } from './capability-registry.mjs';
 
@@ -14,10 +15,12 @@ export const ACCEPTANCE_CHECKS = ['node_add', 'link_create_standard', 'link_crea
 
 export const actionDescribeTool = {
   name: 'dock_action_describe',
-  description: 'List the pinned available actions with {} or describe one exact action. Supported local handlers include node.add, link.create, package.save_as and node.configure_text_import. Only actions present in this session catalog are callable. Does not change Loginom.',
+  description: 'List the pinned available actions with {} or describe one exact action. Batch action_keys and node_types return selected pinned actions and graph-phase cards; planned configuration handlers are explicitly marked and are not callable node.apply. Supported local handlers include node.add, link.create, package.save_as and node.configure_text_import. Only actions present in this session catalog are callable. Does not change Loginom.',
   inputSchema: {
     type: 'object',
-    properties: { action_key: { type: 'string', enum: [...ACTION_KEYS] } },
+    properties: { action_key: { type: 'string', enum: [...ACTION_KEYS] },
+      action_keys: { type: 'array', items: { type: 'string', enum: [...ACTION_KEYS] } },
+      node_types: { type: 'array', items: { type: 'string', enum: Object.keys(NODE_TYPES) } } },
     additionalProperties: false,
   },
   annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: false },

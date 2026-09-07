@@ -46,7 +46,7 @@ export async function createSession(config, { headless = false } = {}) {
   const clientHash = createHash('sha256');
   for (const file of ['../.node-version', '../package.json', '../package-lock.json',
     '../bin/loginom-dock.mjs', './config.mjs', './session.mjs', './catalog.mjs', './action-catalog.mjs', './capability-registry.mjs', './effect-contracts.mjs', './outcome-verification.mjs', './executor.mjs',
-    './bridge.mjs', './managed-shutdown.mjs', './workspace.mjs', './workspace-ui.mjs', './node-procedure.mjs', './text-import-procedure.mjs', './observation-pages.mjs', './artifacts.mjs', './execution-journal.mjs', './recovery-context.mjs', './platform.mjs', './native.mjs', './clipboard.mjs', './skill.mjs', './hooks.mjs', './history.mjs', './archive.mjs', './redact.mjs',
+    './bridge.mjs', './managed-shutdown.mjs', './workspace.mjs', './workspace-ui.mjs', './node-procedure.mjs', './node-contracts.mjs', './node-target.mjs', './node-target-browser.mjs', './node-contracts.d.ts', './text-import-procedure.mjs', './observation-pages.mjs', './artifacts.mjs', './execution-journal.mjs', './recovery-context.mjs', './platform.mjs', './native.mjs', './clipboard.mjs', './skill.mjs', './hooks.mjs', './history.mjs', './archive.mjs', './redact.mjs',
     '../bin/hook.mjs', '../bin/dispatch.mjs', './hook-runtime.mjs', './install.mjs', './diagnostics.mjs', '../../examples/memory-plugin-shared/lib/mcp-proxy-config.mjs',
     '../../examples/memory-plugin-shared/lib/batch-send.mjs', '../../examples/memory-plugin-shared/lib/capture-utils.mjs',
     '../../examples/memory-plugin-shared/lib/pending-queue.mjs', '../../examples/memory-plugin-shared/lib/retryable.mjs',

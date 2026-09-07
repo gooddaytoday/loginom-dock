@@ -1,3 +1,7 @@
+import { prepareNodeTarget, inspectNodeTarget } from './node-target.mjs';
+import { createNodeTargetBrowserAdapter } from './node-target-browser.mjs';
+import { validateNodeTargetRequest } from './node-contracts.mjs';
+import { describeNodeTypes } from './node-contracts.mjs';
 import { randomUUID, createHash } from 'node:crypto';
 import { requireCapability } from './capability-registry.mjs';
 import { actionDescribeTool, actionRunTool, assertActionOutcome, validateActionParameters } from './action-catalog.mjs';
@@ -261,9 +265,19 @@ function browserCapability(page, task) {
   const result = (status, output = {}, error = null) => ({ status, action_key: task.action.action_key,
     action_revision: task.action.revision, operation_id: task.operation_id, phase, effect_possible: effectPossible, output, error, trace });
   const safeMessage = error => String(error?.message ?? error ?? 'unknown failure').slice(0, 1000);
-  const ensureDeadline = () => { if (Date.now() >= deadline) throw new Error('Action deadline exceeded'); };
+  const ensureDeadline = () => { if(task.node_target_cancellation_id && page[Symbol.for('loginom-dock.node-target-cancel')]?.has(task.node_target_cancellation_id))throw new Error('Node target cancelled');if (Date.now() >= deadline) throw new Error('Action deadline exceeded'); };
   const interact = async (operation, effect = false) => {
     ensureDeadline();
+    if(task.node_target_context)await page.evaluate(({context,beforeEffect})=>{
+      const p=globalThis.__loginomDockPreparationV1,r=context.request;
+      const exact=tid=>document.querySelectorAll('[data-tid='+JSON.stringify(tid)+']');
+      const tab=exact(r.workflow_ref.tab_tid),root=exact(r.workflow_ref.prefix+';ModelForm;cmpDiagram');
+      const receipt=p&&[...p.receipts.values()].find(v=>v.workflowId===r.workflow_ref.workflow_id&&v.phase==='verified');
+      if(p?.document!==document||p.id!==r.document_id||!receipt||tab.length!==1||tab[0]!==receipt.tab||!tab[0].classList.contains('x-tab-active')||root.length!==1||p.nodeTargetDomEpochs?.objects.get(root[0])!==context.dom_epoch)throw new Error('Node target link context changed');
+      const d=bg.app.Application.FInstance.FMainForm.Items.Workspace.getActiveTab().Controller.FController.FDiagram;
+      for(const expected of context.nodes){const matches=d.FNodes.FCollection.filter(n=>n.FGuid===expected.id);if(matches.length!==1)throw new Error('Node target link identity changed');const e=d.FmxGraph.view.getState(matches[0].FCell)?.shape?.node;
+        if(e?.getAttribute('data-tid')!==r.workflow_ref.prefix+';Graph;'+expected.tid||(beforeEffect&&p.nodeTargetDomEpochs.objects.get(e)!==expected.dom_epoch))throw new Error('Node target link DOM binding changed');}
+    },{context:task.node_target_context,beforeEffect:!effectPossible});
     if (effect) { effectPossible = true; phase = 'applying'; }
     return operation(Math.max(1, remaining()));
   };
@@ -994,7 +1008,7 @@ export function parseCapabilityResult(response) {
   throw new Error('Pinned browser capability returned no typed result');
 }
 
-export function createActionRuntime({ pinned, execute, artifactStore, allowCandidate = false, onRecord = async () => {}, now = Date.now, targetBuild = pinned?.compatibility?.loginom_build, targetOrigin }) {
+export function createActionRuntime({ pinned, execute, artifactStore, allowCandidate = false, onRecord = async () => {}, now = Date.now, targetBuild = pinned?.compatibility?.loginom_build, targetOrigin, getNodeContractPins = () => pinned.pins, nodeTargetAdapterFactory = createNodeTargetBrowserAdapter }) {
   if (!pinned?.actions || !pinned?.selectors) throw new Error('A verified pinned action catalog is required');
   let pending = null;
   let running = false;
@@ -1186,8 +1200,21 @@ export function createActionRuntime({ pinned, execute, artifactStore, allowCandi
     if(raw.status==='NOT_APPLIED' && raw.cleanup_complete===true)await attempt.lease.release();
     return outcome;
   };
+  const nodeTargetOutcome=(operation,result)=>({status:result.status,action_key:operation.action.action_key,action_revision:'1',operation_id:operation.id,
+    phase:result.phase,effect_possible:operation.targetPhase?.effect_possible===true,cleanup_complete:result.cleanup_complete===true,
+    output:result,error:result.error?{code:'NODE_TARGET_INCOMPLETE',message:result.error}:null,trace:[]});
+  const nodeTargetRecord=event=>onRecord({...event,action_key:'node.target.internal',action_revision:'1'});
+  const inspectTarget=async operation=>{
+    if(running)return failed(operation,'OPERATION_STILL_PENDING','The node graph phase is still running');
+    const result=await inspectNodeTarget({request:operation.parameters,operation,adapter:operation.nodeTargetAdapter,record:nodeTargetRecord,deadline:now()+15000});
+    const outcome=nodeTargetOutcome(operation,result);await remember(operation,'reconciled',outcome);
+    operation.outcome=outcome;operation.cleanupConfirmed=outcome.cleanup_complete;
+    if(result.status==='SUCCEEDED')pending=null;
+    return outcome;
+  };
   const reconcilePending = async () => {
     const operation = pending;
+    if(operation.action.capability==='node.target.internal'){try{return await inspectTarget(operation);}catch(error){return failed(operation,'RECONCILIATION_FAILED',String(error.message));}}
     if (running && operation.action.capability === 'node.configure_text_import.v1') {
       return failed(operation, 'OPERATION_STILL_PENDING', 'The bounded node procedure is still running');
     }
@@ -1244,6 +1271,7 @@ export function createActionRuntime({ pinned, execute, artifactStore, allowCandi
     base.unshift({ tool: 'dock_operation_inspect', arguments: { operation_id: operation.id },
       required_fields: [], requires: [], provides: ['completion_receipt', 'cleanup_state'] });
     if (operation.transportUncertain) return { recovery_options: [], next_steps: base };
+    if(operation.action.capability==='node.target.internal')return {recovery_options:[],next_steps:base,internal_resume_available:operation.cleanupConfirmed===true&&!operation.targetPhase?.pending};
     if(operation.action.capability==='artifact.upload') {
       if(operation.cleanupConfirmed && (!operation.verification || operation.verification.settled))base.push({
         tool:'dock_artifact_verify',arguments:{operation_id:operation.id},required_fields:['verification_id','observation_id','file_ref'],
@@ -1301,6 +1329,18 @@ export function createActionRuntime({ pinned, execute, artifactStore, allowCandi
       if (running || pending) throw new Error('Dock preparation cannot run while an action is running or its effect remains uncertain');
     },
     describe(actionKey) {
+      if (actionKey && typeof actionKey === 'object') {
+        const query = actionKey;
+        if (Object.keys(query).some(k => !['action_key', 'action_keys', 'node_types'].includes(k))
+          || query.action_key !== undefined && (query.action_keys !== undefined || query.node_types !== undefined)) throw new Error('Choose a single action or a batch description');
+        if (query.action_key !== undefined) return this.describe(query.action_key);
+        if (query.action_keys === undefined && query.node_types === undefined) return this.describe();
+        if (query.action_keys !== undefined && (!Array.isArray(query.action_keys) || !query.action_keys.length
+          || query.action_keys.length > 16 || new Set(query.action_keys).size !== query.action_keys.length)) throw new Error('Select distinct action keys');
+        return { actions: (query.action_keys ?? []).map(key => structuredClone(find(key))),
+          node_types: query.node_types === undefined ? [] : describeNodeTypes(query.node_types, getNodeContractPins(), pinned.actions),
+          session_manifest: structuredClone(pinned.pins) };
+      }
       if (actionKey === undefined) return { available_actions: [...pinned.actions.keys()],
         ...(allowCandidate && artifactStore ? {artifact_upload_tool:'dock_artifact_upload',artifact_verify_tool:'dock_artifact_verify',input_artifacts:artifactStore.list()} : {}),
         ui_action_tool: 'dock_ui_action', observation_tool: 'dock_workspace_observe', session_manifest: structuredClone(pinned.pins) };
@@ -1327,6 +1367,7 @@ export function createActionRuntime({ pinned, execute, artifactStore, allowCandi
       if (operations.has(recoveryOperationId)) throw new Error('Recovery ID conflicts with an existing operation');
       const operation = operations.get(operationId);
       if (!operation || pending !== operation) throw new Error('Recovery requires the pending operation of this session');
+      if(operation.action.capability==='node.target.internal')throw new Error('Use the enclosing node procedure to resume this internal phase');
       if(operation.action.capability==='artifact.upload')throw new Error('Upload requires server transfer verification before recovery or abandonment');
       if (!['complete_link', 'restore_control', 'accept_observed_state', 'abandon_operation'].includes(strategy)) throw new Error('Unsupported recovery strategy');
       if (strategy === 'complete_link' && operation.action.capability !== 'link.create.v1') throw new Error('complete_link requires a pending link.create operation');
@@ -1632,6 +1673,47 @@ export function createActionRuntime({ pinned, execute, artifactStore, allowCandi
         }
         return structuredClone(await finishArtifactVerification(operation,attempt,raw));
       } finally {running=false;}
+    },
+    // Private entry point for the node.apply shell (03). No new public MCP
+    // action: the graph phase shares this runtime's gate, IDs and journal.
+    async runNodeTarget(request,{operationId,signal,resume=false}={}) {
+      signal?.throwIfAborted();checkId(operationId);validateNodeTargetRequest(request);
+      if(running)throw new Error('Another Dock action is still running');
+      const signature=fingerprint('node.target.internal',request);
+      if(auxiliary.has(operationId))throw new Error('Operation ID conflicts with a recovery or UI operation');
+      let operation=operations.get(operationId);
+      if(operation&&operation.signature!==signature)throw new Error('operation_id was already used with different parameters');
+      if(pending&&pending!==operation)throw new Error('Another Dock operation remains pending');
+      if(operation&&!resume){await inspectTarget(operation);return {...structuredClone(operation.outcome),output:{...structuredClone(operation.outcome.output),replayed:operation.outcome.status==='SUCCEEDED'}};}
+      if(resume){
+        if(!operation||pending!==operation)throw new Error('Resume requires the original pending node target');
+        await inspectTarget(operation);
+        if(!pending)return structuredClone(operation.outcome);
+        if(operation.targetPhase.pending||!operation.cleanupConfirmed)throw new Error('Inspect must verify the pending effect and cleanup before resume');
+        if((operation.resumeAttempts??0)>=3)throw new Error('Node target resume budget exhausted');
+        operation.resumeAttempts=(operation.resumeAttempts??0)+1;
+      }
+      running=true;
+      try{
+        if(!operation){operation={id:operationId,signature,parameters:structuredClone(request),action:{action_key:'node.target.internal',capability:'node.target.internal',revision:'1'}};
+          operation.nodeTargetAdapter=nodeTargetAdapterFactory({execute:async(code,options)=>{
+            const wrapped='async page => {const base={action_key:"node.target.transport",action_revision:"1",operation_id:'+JSON.stringify(operation.id)+',phase:"observed",effect_possible:false,trace:[]};try{return {...base,status:"SUCCEEDED",error:null,output:{value:await ('+code+')(page)}};}catch(error){return {...base,status:"FAILED",output:{},error:{code:"NODE_TARGET_TRANSPORT",message:String(error.message).slice(0,500)}};}}';
+            const response=await execute(wrapped,options);if(response.status!=='SUCCEEDED')throw new Error(response.error?.message??'Node target transport failed');return response.output.value;
+          },pinned,origin:targetOrigin,build:targetBuild});
+          operation.checkpoint={workflow_ref:request.workflow_ref,document_id:request.document_id};
+        }
+        operation.deadline=now()+60000;
+        await remember(operation,resume?'node_target_resume_prepared':'prepared');signal?.throwIfAborted();
+        operations.set(operation.id,operation);pending=operation;observations.clear();
+        const result=await prepareNodeTarget({request:operation.parameters,operation,adapter:operation.nodeTargetAdapter,record:nodeTargetRecord,signal,now});
+        // A settled child receipt is needed even after cancellation. Never infer
+        // cleanup from a model summary or release the gate on transport timeout.
+        result.cleanup_complete=!operation.targetPhase?.pending || operation.targetPhase.pending.receipt?.cleanup_complete===true;
+        const outcome=nodeTargetOutcome(operation,result);operation.outcome=outcome;operation.cleanupConfirmed=outcome.cleanup_complete;
+        try{await remember(operation,'completed',outcome);}catch(error){operation.outcome=failed(operation,'EVIDENCE_WRITE_FAILED',String(error.message));return operation.outcome;}
+        if(result.status!=='AMBIGUOUS'&&operation.cleanupConfirmed)pending=null;
+        return structuredClone(outcome);
+      }finally{running=false;}
     },
     async run(actionKey, parameters, { signal, operationId } = {}) {
       signal?.throwIfAborted();
