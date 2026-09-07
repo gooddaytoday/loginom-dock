@@ -5,9 +5,10 @@ import { loadConfig } from '../lib/config.mjs';
 import { createSession } from '../lib/session.mjs';
 import { createBridge } from '../lib/bridge.mjs';
 import { admitStartupArtifacts } from '../lib/artifacts.mjs';
+import { installManagedShutdown } from '../lib/managed-shutdown.mjs';
 
 process.umask(0o077);
-let bridge;
+let bridge, shutdownController;
 try {
   const { values } = parseArgs({ options: {
     config: { type: 'string' }, 'state-dir': { type: 'string' },
@@ -35,14 +36,12 @@ try {
     return JSON.parse(value);
   }));
   bridge = await createBridge(config, session);
-  for (const signal of ['SIGINT', 'SIGTERM']) {
-    process.once(signal, async () => { await bridge.close(); process.exit(0); });
-  }
-  process.stdin.once('end', () => { void bridge.close(); });
+  shutdownController = installManagedShutdown({ close: () => bridge.close() });
   await bridge.server.connect(new StdioServerTransport());
 } catch {
   // Config parsing and upstream failures may embed secrets. Startup logs are fixed.
   process.stderr.write('Loginom Dock could not start. Check its explicit config, pinned runtime, browser installation and server availability.\n');
-  await bridge?.close();
   process.exitCode = 1;
+  if (shutdownController) await shutdownController.shutdown(1);
+  else await bridge?.close();
 }

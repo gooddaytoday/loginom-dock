@@ -62,6 +62,17 @@ export async function createBridge(config, session) {
     env: { ...getDefaultEnvironment(), PLAYWRIGHT_BROWSERS_PATH: session.browserRoot },
     cwd: session.directory, stderr: 'pipe',
   });
+  // The pinned SDK emits transport.onclose from the child-process 'close'
+  // event. Protocol.connect chains any existing callback, so install ours first.
+  let browserProcessTerminated = false, resolveBrowserExit;
+  const browserExited = new Promise(resolve => { resolveBrowserExit = resolve; });
+  browserTransport.onclose = () => { browserProcessTerminated = true; resolveBrowserExit(); };
+  const awaitBrowserExit = async () => {
+    if (browserProcessTerminated) return;
+    let timer;
+    try { await Promise.race([browserExited, new Promise(resolve => { timer = setTimeout(resolve, 1000); })]); }
+    finally { clearTimeout(timer); }
+  };
   // Browser stderr may contain page details; never persist or forward it to logs.
   browserTransport.stderr?.on('data', () => {});
   const closeClients = () => Promise.allSettled([remote?.close(), browser.close()]);
@@ -255,8 +266,19 @@ export async function createBridge(config, session) {
     return { server, catalog, close() {
       closing ??= (async () => {
         await server.close(); const closed=await closeClients();
-        if (closed[1].status==='fulfilled') await session.artifactStore.releaseUploads();
-        await Promise.allSettled([...heldLeases].map(lease => lease.release()));
+        if (closed[1].status === 'fulfilled') await awaitBrowserExit();
+        const browserTransportClosed = closed[1].status === 'fulfilled' && browserProcessTerminated;
+        if (browserTransportClosed) {
+          await session.artifactStore.releaseUploads();
+          await Promise.allSettled([...heldLeases].map(async lease => {
+            await lease.release(); heldLeases.delete(lease);
+          }));
+        }
+        // A failed transport close does not prove that an unconfirmed paste has
+        // stopped. Retain leases while this process lives; process exit still
+        // releases kernel locks and is not cross-process recovery evidence.
+        return { browser_transport_closed: browserTransportClosed,
+          browser_process_terminated: browserProcessTerminated, clipboard_leases_retained: heldLeases.size };
       })();
       return closing;
     } };

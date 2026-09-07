@@ -22,8 +22,8 @@ test('MCP application refusals remain typed normal content and the same connecti
   const pinned = { actions, selectors, pins: {}, compatibility, manifest: { compatibility } };
   class ExternalClient {
     constructor(identity) { this.browser = identity.name === 'loginom-dock-browser'; }
-    async connect() {}
-    async close() {}
+    async connect(transport) { this.transport = transport; }
+    async close() { this.transport?.onclose?.(); }
     async listTools() { return { tools: [{ name: this.browser ? 'browser_run_code_unsafe' : 'read', inputSchema: { type: 'object', additionalProperties: true } }] }; }
     async callTool(request) {
       assert.equal(this.browser, true);
