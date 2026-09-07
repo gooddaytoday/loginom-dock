@@ -1,11 +1,15 @@
 import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
-import { spawnSync } from 'node:child_process';
+import { createAgentLauncher } from './agent-command.mjs';
 import { isDeepStrictEqual } from 'node:util';
 import { launcherPath } from './platform.mjs';
 
-export function nativeCommand(command, args, env, { capture = false, allowMissing = false } = {}) {
-  const result = spawnSync(command, args, { env, encoding: 'utf8', stdio: capture ? ['ignore', 'pipe', 'pipe'] : 'inherit' });
+export function createNativeCommand(launcher) {
+  return (command, args, env, options = {}) => nativeCommand(command, args, env, { ...options, launcher });
+}
+
+export function nativeCommand(command, args, env, { capture = false, allowMissing = false, launcher = createAgentLauncher(command, { env }) } = {}) {
+  const result = launcher.run(args, { encoding: 'utf8', windowsHide: true, stdio: capture ? ['ignore', 'pipe', 'pipe'] : 'inherit' });
   const missing = allowMissing && capture && command === 'hermes' && args[0] === 'config' && args[1] === 'get'
     && result.status === 1 && !result.stdout?.trim() && result.stderr?.trim() === 'Config key not set: ' + args[2];
   if (result.error || (result.status !== 0 && !missing)) throw new Error('Native plugin operation failed');
