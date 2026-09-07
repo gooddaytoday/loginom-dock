@@ -46,6 +46,7 @@ class FileStorageInspectTest(unittest.TestCase):
         r.update(status='NOT_APPLIED',phase='preconditions',effect_possible=False,cleanup_complete=True,
                  error={'code':'UI_EPOCH_CHANGED'},trace=[{'event':'ui_action_failed','code':'UI_EPOCH_CHANGED'}])
         data['events'][0]['outcome']=copy.deepcopy(r)
+        data['calls'][0]['arguments']['action']={'verb':'press','ref':'r','key':'Enter'}
         self.assertTrue(file_storage_inspect(data,[],'/analyst/data')['all_assertions_passed'])
         for key,value in [('effect_possible',True),('cleanup_complete',False),('phase','gesture')]:
             changed=copy.deepcopy(data);changed['tools'][1]['result'][key]=value

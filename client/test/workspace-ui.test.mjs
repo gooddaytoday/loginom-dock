@@ -95,7 +95,7 @@ class Handle {
   async dispose() { this.page.disposed++; }
 }
 class Page {
-  constructor() {
+  constructor({ clock = Date } = {}) {
     this.document = new Document(); this.events = []; this.disposed = 0; this.location = { origin }; this.clickedPoints = []; this.playwrightBoxReads = 0;
     this.app = { Version: build };
     this.avatar = this.add('button', 'MF;cntMain;tlbMainToolbar;btnAvatar', '', { x: 950, y: 0, width: 30, height: 20 });
@@ -109,7 +109,7 @@ class Page {
     }
     this.context = vm.createContext({ document: this.document, location: this.location, bg: { app: this.app },
       MutationObserver: MutationObserverFixture,
-      getComputedStyle: element => ({ display: 'block', visibility: 'visible', opacity: '1', ...element.style }), Date, Math });
+      getComputedStyle: element => ({ display: 'block', visibility: 'visible', opacity: '1', ...element.style }), Date: clock, Math });
     this.keyboard = { type: async text => {
       this.events.push('keyboard_type'); const element = this.document.activeElement;
       element.value = this.selectedAll ? text : element.value + text; this.selectedAll = false;
@@ -149,6 +149,172 @@ class Page {
   async observe() { const outcome = await this.execute({ mode: 'observe' }); assertActionOutcome(outcome); assert.equal(outcome.status, 'SUCCEEDED'); return outcome.output; }
   async act(action, snapshot) { return this.execute({ mode: 'act', operation_id: 'test-primitive', action, snapshot }); }
 }
+
+// Large fake-DOM tests measure traversal/ownership, not the JavaScript selector
+// double's speed under parallel test-runner load. Time guards have explicit tests.
+function fixtureClock() {
+  let elapsed = 0;
+  class Clock extends Date { static now() { return elapsed; } }
+  return { Date: Clock, advance(ms) { elapsed += ms; } };
+}
+
+function tabBarFixture(options) {
+  const page=new Page(options),base='MF;cntMain;cntWorkspace;Workspace;t.br';
+  const bar=page.add('div',base,'',{x:10,y:5,width:400,height:30});
+  page.tab.remove();bar.append(page.tab);
+  const target=page.add('a',base+';tb-2','Черновик',{x:140,y:5,width:100,height:20},bar);
+  const close=page.add('span',null,'',{x:230,y:5,width:10,height:20},target);close.attrs.class='x-tab-close-btn';
+  return {page,base,bar,target};
+}
+
+test('tab bar discovery issues only a region then a fresh narrow tab click reports the observed new workspace',async()=>{
+  const {page,base,target}=tabBarFixture({ clock: fixtureClock().Date });
+  for(let i=0;i<6500;i++)page.add('div',null,'background');
+  const roots=await page.execute({mode:'observe',discover_roots:true});
+  const region=roots.output.ui.elements.find(e=>e.tid===base);
+  assert.ok(region);assert.deepEqual(region.allowed_actions,[]);
+  assert.equal(roots.output.ui.elements.some(e=>e.tid===base+';tb-2'),false);
+  const raw=await page.execute({mode:'observe',root_ref:region.ref});
+  assert.equal(raw.status,'SUCCEEDED');assert.ok(raw.output.scan.detail_elements<10);
+  const snapshot=raw.output,pager=createObservationPages(),issued=pager.retain(raw);
+  const tab=issued.output.ui.elements.find(e=>e.tid===base+';tb-2');
+  assert.ok(tab.allowed_actions.includes('click'));
+  assert.doesNotThrow(()=>pager.assertIssued(issued.output.observation_id,{verb:'click',ref:tab.ref}));
+  assert.equal(issued.output.ui.elements.some(e=>e.signature?.tag==='span'),false);
+  const click=page.mouse.click;page.mouse.click=async(...args)=>{
+    await click(...args);page.tab.attrs.class='';target.attrs.class='x-tab-active';
+  };
+  const result=await page.act({verb:'click',ref:tab.ref},snapshot);
+  assert.equal(result.status,'SUCCEEDED',JSON.stringify(result.error));
+  assert.equal(page.events.filter(e=>e==='click').length,1);
+  assert.equal(result.output.workflow_ref.prefix,'MF;TF-2');
+  assert.equal(result.output.active_identity,'Черновик');
+});
+
+test('tab navigation retains fresh context mask and dangerous-anchor guards',async()=>{
+  for(const mode of ['changed_context','changed_epoch','mask','dialog','href','hidden','replacement']) {
+    const {page,base,target}=tabBarFixture();
+    if(mode==='href')target.attrs.href='https://outside.test';
+    if(mode==='hidden')target.style.visibility='hidden';
+    if(mode==='mask')page.add('div','mask','Loading',{x:0,y:0,width:500,height:50}).attrs.class='x-mask-msg';
+    if(mode==='dialog') {
+      page.add('div','msgbox','Confirm',{x:20,y:60,width:300,height:100}).attrs.class='x-window';
+      const mask=page.add('div',null,'',{x:0,y:0,width:500,height:50});mask.attrs.class='bg-mask-message';mask.attrs['bg-mask-text']='';
+    }
+    const roots=await page.execute({mode:'observe',discover_roots:true});
+    const region=roots.output.ui.elements.find(e=>e.tid===base);
+    const raw=await page.execute({mode:'observe',root_ref:region.ref});
+    const tab=raw.output.ui.elements.find(e=>e.tid===base+';tb-2');
+    if(['href','hidden'].includes(mode)) {
+      assert.ok(!tab || !tab.allowed_actions.includes('click'),mode);continue;
+    }
+    if(mode==='changed_context'){page.tab.attrs.class='';target.attrs.class='x-tab-active';}
+    if(mode==='changed_epoch')page.mutationObserver.pending.push({type:'attributes',target,attributeName:'title'});
+    if(mode==='replacement'){
+      const parent=target.parentElement;target.remove();page.add('a',base+';tb-2','Черновик',target.box,parent);
+    }
+    const result=await page.act({verb:'click',ref:tab.ref},raw.output);
+    assert.notEqual(result.status,'SUCCEEDED',mode);
+    assert.equal(page.events.filter(e=>e==='click').length,0,mode);
+  }
+});
+
+function calculatorManifestFixture(count=1) {
+  const page=new Page();page.context.innerWidth=1000;page.context.innerHeight=800;
+  const base='MF;TF-1;WizrdMCF;',box={x:30,y:100,width:334,height:238},wizard=page.add('div',base.slice(0,-1),'',box);
+  page.add('button',base+'CalcDataWizard;btnAddExpr','',undefined,wizard);
+  const replace=page.add('button',base+'CalcDataWizard;btnReplaceField','Заменять поле',undefined,wizard);
+  const grid=page.add('div',base+'CalcDataWizard;grdExpressions;tbl','',box,wizard);grid.attrs.id='expression-grid';
+  Object.assign(grid,{clientWidth:334,scrollWidth:334,clientHeight:238,scrollHeight:238,scrollTop:0,scrollLeft:0});
+  const container=page.add('div',null,'',{...box,height:24*count},grid);container.attrs.class='x-grid-item-container';
+  const records=[];
+  for(let index=0;index<count;index++) {
+    const name=index?'Extra'+index:'Amount',rb={x:30,y:100+24*index,width:334,height:24};
+    const row=page.add('table',null,'',rb,container);row.attrs={class:'x-grid-item'+(index?'':' x-grid-item-selected'),'data-recordindex':String(index),'data-boundview':'expression-grid'};
+    const body=page.add('tbody',null,'',rb,row),tr=page.add('tr',null,'',rb,body);tr.attrs.class='x-grid-row';
+    const cell=page.add('td',base+'CalcDataWizard;colExpressionName_'+name,name,{...rb,width:167},tr);
+    const icon=page.add('div',null,'',{x:30,y:rb.y,width:16,height:16},cell);icon.attrs.class='bg-TBGDataType-dtFloat bg-grid-icon';
+    const label=page.add('td',base+'CalcDataWizard;colExpressionDisplayName_'+name,'Стоимость',{...rb,x:197,width:167},tr);
+    const replaced=page.add('td',base+'CalcDataWizard;colExprReplaced_'+name,'',{...rb,x:364,width:0},tr);
+    records.push({row,tr,cell,icon,label,replaced});
+  }
+  return {page,base,wizard,grid,container,records,replace};
+}
+
+test('calculator manifest proves bounded definition count while keeping label name text and mapping claims distinct',async()=>{
+  const {page,records,replace}=calculatorManifestFixture(2);
+  let full=await page.observe(),manifest=full.wizard.calculator_expressions;
+  assert.equal(manifest.status,'rendered_expression_definitions');
+  assert.equal(manifest.definition_coverage.status,'complete_configured_rows');assert.equal(manifest.definition_coverage.count,2);
+  assert.deepEqual(manifest.fields.map(f=>[f.name,f.label,f.type]),[['Amount','Стоимость','real'],['Extra1','Стоимость','real']]);
+  assert.equal(manifest.complete,false);assert.equal(manifest.expression_texts_verified,false);assert.equal(manifest.source_identity_verified,false);
+  assert.equal(manifest.selected_replacement.value,false);assert.equal(manifest.selected_replacement.row_ref,manifest.fields[0].row_ref);
+  replace.attrs.class='x-btn-pressed';
+  assert.equal((await page.observe()).wizard.calculator_expressions.selected_replacement.value,true);
+  records[0].row.attrs.class='x-grid-item';records[1].row.attrs.class='x-grid-item x-grid-item-selected';
+  const next=(await page.observe()).wizard.calculator_expressions;
+  assert.equal(next.selected_replacement.row_ref,next.fields[1].row_ref);
+  const roots=await page.execute({mode:'observe',discover_roots:true});
+  assert.equal(roots.output.wizard.calculator_expressions.definition_coverage.status,'partial');
+  const narrow=await page.execute({mode:'observe',root_ref:manifest.definition_coverage.grid_ref});
+  assert.equal(narrow.output.wizard.calculator_expressions.definition_coverage.count,2);
+  const cellRead=await page.execute({mode:'observe',root_ref:manifest.fields[0].name_ref});
+  assert.equal(cellRead.output.wizard.calculator_expressions.definition_coverage.status,'partial');
+});
+
+test('calculator complete definitions reject hidden rows gaps clipping duplicates editor and source ambiguity',async()=>{
+  for(const mode of ['hidden','gap','offset','overflow','spacer','duplicate_name','wrong_key','duplicate_label','ambiguous_type','missing_type','editor','mask','foreign_view','clipped','sensitive','extra_tr','extra_row','too_many']) {
+    const {page,base,wizard,grid,container,records:r}=calculatorManifestFixture(mode==='too_many'?9:2);
+    if(mode==='hidden')r[1].row.style.visibility='hidden';
+    if(mode==='gap')r[1].row.attrs['data-recordindex']='2';
+    if(mode==='offset')container.box.y++;
+    if(mode==='overflow')grid.scrollHeight=500;
+    if(mode==='spacer')page.add('div',null,'',grid.box,grid);
+    if(mode==='duplicate_name'){r[1].cell.ownText='Amount';r[1].cell.attrs['data-tid']=r[0].cell.attrs['data-tid'];}
+    if(mode==='wrong_key')r[0].cell.attrs['data-tid']=base+'CalcDataWizard;colExpressionName_Wrong';
+    if(mode==='duplicate_label')page.add('td',r[0].label.attrs['data-tid'],'Other',r[0].label.box,r[0].tr);
+    if(mode==='ambiguous_type')r[0].icon.attrs.class+=' bg-TBGDataType-dtInteger';
+    if(mode==='missing_type')r[0].icon.remove();
+    if(mode==='editor')page.add('div',base+'ExprDataEditForm','',undefined,wizard);
+    if(mode==='mask')page.add('div','mask','Loading').attrs.class='x-mask-msg';
+    if(mode==='foreign_view')r[1].row.attrs['data-boundview']='foreign';
+    if(mode==='clipped')r[1].label.box.width=200;
+    if(mode==='sensitive')page.add('span','password','secret',undefined,r[1].label);
+    if(mode==='extra_tr')page.add('tr',null,'',r[1].row.box,r[1].row);
+    if(mode==='extra_row')page.add('div',null,'',r[1].row.box,container);
+    const manifest=(await page.observe()).wizard.calculator_expressions;
+    assert.equal(manifest.definition_coverage.status,'partial',mode);assert.deepEqual(manifest.fields,[],mode);assert.equal(manifest.complete,false,mode);
+    assert.ok(!JSON.stringify(manifest).includes('secret'),mode);
+  }
+});
+
+test('calculator option readback uses exact Ext owners and never native checked or hidden replacement cells',async()=>{
+  for(const mode of ['unchecked','checked','missing','duplicate','foreign','hidden','selected_ambiguous']) {
+    const {page,base,wizard,records,replace}=calculatorManifestFixture(2);
+    const dialog=page.add('div',base+'ExprDataEditForm');
+    for(const name of ['chbIntermediate','chbCached']) {
+      const owner=page.add('div',base+'ExprDataEditForm;'+name,'',undefined,mode==='foreign'?wizard:dialog);
+      if(mode==='checked')owner.attrs.class='x-form-cb-checked';
+      const input=page.add('input',base+'ExprDataEditForm;'+name+';InputEl','',undefined,owner);input.attrs.class='x-form-checkbox';input.attrs.type='button';input.checked=mode!=='checked';
+      const display=page.add('span',base+'ExprDataEditForm;'+name+';DisplayEl','',undefined,owner);display.attrs.class='x-form-checkbox';
+      if(mode==='hidden')owner.style.visibility='hidden';
+      if(mode==='missing')display.remove();
+      if(mode==='duplicate')page.add('div',base+'ExprDataEditForm;'+name,'',undefined,dialog);
+    }
+    if(mode==='selected_ambiguous')records[1].row.attrs.class+=' x-grid-item-selected';
+    if(mode==='missing')replace.remove();
+    const snapshot=await page.observe(),options=snapshot.wizard.expression_parameters.options;
+    for(const name of ['intermediate','cached']) {
+      if(['unchecked','checked','selected_ambiguous'].includes(mode)) {
+        assert.equal(options[name].status,'observed',mode);assert.equal(options[name].value,mode==='checked',mode);
+        assert.equal(options[name].applied_verified,false);
+      } else assert.equal(options[name].status,'unobserved',mode);
+    }
+    if(['missing','selected_ambiguous'].includes(mode))assert.equal(snapshot.wizard.calculator_expressions.selected_replacement.status,'unobserved');
+    const narrow=await page.execute({mode:'observe',root_ref:snapshot.wizard.expression_parameters.root_ref});
+    assert.deepEqual(narrow.output.wizard.expression_parameters.options,options);
+  }
+});
 
 test('fixed observation remains available during masks and login, bounds evidence, and never reads password controls', async () => {
   const page = new Page(); page.avatar.remove();
@@ -516,7 +682,7 @@ test('right click uses the checked ref and releases the right button after a los
 });
 
 test('initial region discovery avoids a large document and only admits later detailed reads', async () => {
-  const page=new Page();
+  const page=new Page({ clock: fixtureClock().Date });
   const form=page.add('div','Form;Main','',{x:30,y:100,width:300,height:100});form.attrs.role='form';form.attrs['aria-label']='Import settings';
   page.add('input','Form;edtInside','',{x:35,y:110,width:100,height:25},form);
   const background=page.add('div','Background');
@@ -535,7 +701,7 @@ test('initial region discovery avoids a large document and only admits later det
 });
 
 test('global toolbar is discoverable and readable above a large workspace', async () => {
-  const page=new Page();
+  const page=new Page({ clock: fixtureClock().Date });
   const toolbar=page.add('div','MF;cntMain;tlbMainToolbar');
   page.add('button','MF;cntMain;tlbMainToolbar;btnFilestorage','Файлы',undefined,toolbar);
   for(let i=0;i<6500;i++) page.add('div',null,'background');
@@ -553,7 +719,7 @@ test('global toolbar is discoverable and readable above a large workspace', asyn
 });
 
 test('selected root traverses only its small subtree while a large background and global blocker remain outside', async () => {
-  const page=new Page(),root=page.add('div','Form;btnSection','Section',{x:30,y:100,width:300,height:100});
+  const page=new Page({ clock: fixtureClock().Date }),root=page.add('div','Form;btnSection','Section',{x:30,y:100,width:300,height:100});
   page.add('input','Form;edtInside','',{x:35,y:110,width:100,height:25},root);
   const initial=await page.observe(),ref=initial.ui.elements.find(e=>e.tid==='Form;btnSection').ref;
   const large=page.add('div','Background');
@@ -836,7 +1002,7 @@ test('observation error codes cross a serialized browser boundary without except
 });
 
 test('navigation root reads the directory without traversing a large storage table', async () => {
-  const page=new Page(),table=page.add('div','MF;TF-1;FileStorageForm;pnlFileStorage;tbl');
+  const page=new Page({ clock: fixtureClock().Date }),table=page.add('div','MF;TF-1;FileStorageForm;pnlFileStorage;tbl');
   for(let i=0;i<6500;i++) page.add('div',null,'row',undefined,table);
   const bar=page.add('div','MF;TF-1;NavigationBar;NavigationPanel');
   for(const [i,text] of ['Файлы','user','data'].entries()) {
@@ -855,7 +1021,7 @@ test('navigation root reads the directory without traversing a large storage tab
 });
 
 test('storage-name discovery uses escaped fixed lookup and no table traversal', async () => {
-  const page=new Page(),name='data, " ]';
+  const page=new Page({ clock: fixtureClock().Date }),name='data, " ]';
   const cell=page.add('td','MF;TF-1;FileStorageForm;colName_data_"_]','data, " ]');
   for(let i=0;i<6500;i++) page.add('div',null,'background');
   let lookup='',walks=0;const walker=page.document.createTreeWalker.bind(page.document);
@@ -906,7 +1072,7 @@ test('empty navigation decorations are skipped without accepting an empty direct
 });
 
 test('wizard context exposes the current step and lifecycle states on a narrow read',async()=>{
-  const page=new Page(),base='MF;TF-1;WizrdMCF';
+  const page=new Page({ clock: fixtureClock().Date }),base='MF;TF-1;WizrdMCF';
   const form=page.add('div',base);
   const title=page.add('div',base+';cardWizardPanel;p.h;p.t','Сопоставление входных полей',undefined,form);
   page.add('button',base+';TuneDataSourceInputPortWizard;btnAddMappingColumn','',undefined,form);
@@ -971,6 +1137,34 @@ test('data table observations preserve field types, row identity, empty strings 
     const roots=await page.execute({mode:'observe',discover_roots:true});
     assert.ok(roots.output.ui.elements.some(e=>e.tid===base));
   }
+});
+
+test('indexed Table discovery and scoped cells exclude the offscreen first view and malformed suffixes',async()=>{
+  const page=new Page(),base='MF;TF-1;ViewsForm;BrowseView';
+  const addView=(suffix,text,box)=>{
+    const tid=base+suffix,view=page.add('div',tid,'',box);
+    const head=page.add('div',tid+';normalHeaderCt;Amount','Amount',box,view);
+    head.attrs.class='x-column-header bg-TBGDataType-dtFloat-before';
+    page.add('td',tid+';normalHeaderCt;Amount_0',text,box,view);
+    return view;
+  };
+  const oldView=addView('','stale',{x:48,y:-9929,width:2,height:2});
+  oldView.style.visibility='hidden';
+  addView('-1','52.004',{x:48,y:71,width:500,height:300});
+  for(const suffix of ['-x','-01','-0','-1;Nested'])addView(suffix,'foreign',{x:48,y:71,width:500,height:300});
+  const roots=await page.execute({mode:'observe',discover_roots:true});
+  assert.equal(roots.status,'SUCCEEDED');
+  const views=roots.output.ui.elements.filter(e=>e.tid?.startsWith(base));
+  assert.deepEqual(views.map(e=>e.tid),[base+'-1']);
+  const read=await page.execute({mode:'observe',root_ref:views[0].ref});
+  assert.equal(read.status,'SUCCEEDED');
+  const cells=read.output.ui.table_cells.filter(c=>c.data_cell).map(c=>c.data_cell);
+  assert.equal(cells.length,1);
+  assert.equal(cells[0].view_key,base+'-1');
+  assert.equal(cells[0].display_text,'52.004');
+  assert.equal(cells[0].header_observed,true);
+  const global=await page.observe();
+  assert.deepEqual(global.ui.table_cells.filter(c=>c.data_cell).map(c=>c.data_cell.view_key),[base+'-1']);
 });
 
 test('table evidence refuses missing or ambiguous headers, marks truncation and redacts sensitive columns',async()=>{
@@ -1518,7 +1712,7 @@ test('completed generic click rediscovers regions when its observed root closes'
   }
 });
 
-test('graph paging leads with identified node controls before anonymous SVG vertices',async()=>{
+test('graph paging retains identified node controls without anonymous SVG vertices',async()=>{
   const page=new Page();
   for(let i=0;i<70;i++)page.add('g','MF;TF-1;Graph;Vertex');
   for(const name of ['Источник','Расчёт','Итог']) {
@@ -1535,8 +1729,7 @@ test('graph paging leads with identified node controls before anonymous SVG vert
   }
   assert.equal(first.output.ui.elements[0].graph_node.part,'settings');
   assert.equal(first.output.ui.elements[1].graph_node.part,'body');
-  assert.ok(first.output.page.next_cursor,'remaining SVG geometry remains paged');
-  assert.ok(snapshot.ui.elements.filter(e=>e.tid.endsWith(';Vertex')).every(e=>!e.graph_node));
+  assert.equal(snapshot.ui.elements.some(e=>e.tid==='MF;TF-1;Graph;Vertex'),false);
 });
 
 test('Calculator parameter dialog is read outside the wizard subtree with bounded ambiguity-safe fields',async()=>{
@@ -1701,7 +1894,8 @@ test('wizard owner context uses bounded active-tab breadcrumbs and survives narr
 });
 
 test('typed wizard opening verifies node and workflow path after one settings click',async()=>{
-  for(const mode of ['success','formatted_name','same_label_wrong_key','renamed_tab','replaced_tab','wrong_node','wrong_workflow','dialog','lost_reply']) {
+  for(const mode of ['success','formatted_name','same_label_wrong_key','renamed_tab','replaced_tab','wrong_node','wrong_workflow','dialog','lost_reply',
+    'stale_region','stale_origin','stale_document','stale_tab','stale_wrong_owner','stale_exhausted']) {
     const page=new Page(),base='MF;TF-1;',panel=page.add('div',base+'NavigationBar;NavigationPanel');
     let path='';
     for(const label of ['Сервер','Пакеты','Package1','Модуль1','Сценарий']) {
@@ -1717,14 +1911,15 @@ test('typed wizard opening verifies node and workflow path after one settings cl
     page.add('g',base+'Graph;'+nodeKey+';Setting','',{x:500,y:300,width:30,height:30},graph);
     const snapshot=await page.observe(),button=snapshot.ui.elements.find(e=>e.wizard_open);
     assert.ok(button);
-    const click=page.mouse.click;page.mouse.click=async(...args)=>{await click(...args);graph.remove();
+    let pending=false,detached=null,waits=0;
+    const transition=()=>{graph.remove();
       const tab=page.document.querySelectorAll('.x-tab-active')[0];
       if(mode==='renamed_tab')tab.ownText='Настройка';
       if(mode==='replaced_tab'){const tid=tab.getAttribute('data-tid');tab.remove();page.add('div',tid,'Настройка').attrs.class='x-tab-active';}
       const wizard=page.add('div',base+'WizrdMCF');
       page.add('button',base+'WizrdMCF;CalcDataWizard;btnAddExpr','',undefined,wizard);
       if(mode==='wrong_workflow')path=path.replace('Модуль1','Модуль2');
-      const name=mode==='wrong_node' || mode==='same_label_wrong_key'?'Другой':nodeKey;
+      const name=['wrong_node','same_label_wrong_key','stale_wrong_owner'].includes(mode)?'Другой':nodeKey;
       const node=page.add('a',base+'cnrNaviMode;b.s_'+path+'>'+name,mode==='wrong_node'?'Другой':nodeLabel,undefined,panel);
       page.add('span',null,'',undefined,node).attrs.class='bg-vendor-icon-calcdata';
       const last=page.add('a',base+'cnrNaviMode;b.s_'+path+'>'+name+'>Настройка','Настройка',undefined,panel);
@@ -1732,16 +1927,46 @@ test('typed wizard opening verifies node and workflow path after one settings cl
       if(mode==='dialog')page.add('div','msgbox','Подтвердить').attrs.class='x-window';
       if(mode==='lost_reply')throw new Error('reply lost');
     };
+    const click=page.mouse.click;page.mouse.click=async(...args)=>{
+      await click(...args);
+      if(mode.startsWith('stale_'))pending=true;else transition();
+    };
+    const evaluate=page.evaluate.bind(page);
+    page.evaluate=async(fn,arg)=>{
+      const output=await evaluate(fn,arg);
+      if(arg?.discoverRoots && page.events.includes('click')) {
+        // Complete the real DOM transition after discovery returned the old
+        // region, before its separate detailed read starts.
+        if(pending){pending=false;transition();}
+        else if(mode==='stale_exhausted') {
+          detached=page.document.querySelectorAll('[data-tid="'+base+'WizrdMCF"]')[0];detached.remove();
+        }
+      }
+      return output;
+    };
+    page.waitForTimeout=async()=>{
+      waits++;
+      if(detached){page.document.body.append(detached);detached=null;}
+      if(mode==='stale_origin')page.location.origin='https://other.invalid';
+      if(mode==='stale_tab'){page.tab.remove();page.add('div','MF;cntMain;cntWorkspace;Workspace;t.br;tb-2','Настройка').attrs.class='x-tab-active';}
+      if(mode==='stale_document')vm.runInContext('delete globalThis[Symbol.for("loginom-dock.workspace-ui.identity.v1")]',page.context);
+    };
     const result=await page.act({verb:'open_wizard',ref:button.ref},snapshot);
-    const success=['success','formatted_name','renamed_tab'].includes(mode);
+    const success=['success','formatted_name','renamed_tab','stale_region'].includes(mode);
     assert.equal(result.status,success?'SUCCEEDED':'AMBIGUOUS',mode+JSON.stringify(result.error));
     assert.equal(page.events.filter(e=>e==='click').length,1);
     assert.equal(result.trace.some(e=>e.event==='wizard_open_verified'),success);
+    if(mode.startsWith('stale_')) {
+      assert.equal(result.trace.filter(e=>e.event==='wizard_region_rediscovery').length,mode==='stale_exhausted'?3:1,mode);
+      assert.equal(waits,mode==='stale_exhausted'?3:1,mode);
+      if(mode==='stale_exhausted')assert.equal(result.error.code,'UI_ROOT_STALE');
+    }
   }
 });
 
 test('wizard finish waits for the expected graph node and does not claim settings readback',async()=>{
-  for(const mode of ['success','wrapped_label','actual_space','wrong_label','dialog','still_open','lost_reply','empty_label']) {
+  for(const mode of ['success','wrapped_label','wrapped_filename','wrapped_grouping','different_key','comma_collision','duplicate_label','duplicate_body','actual_space','wrong_label','dialog','still_open','lost_reply','empty_label','stale_region','late_body','late_epoch','epoch_churn','late_mask','late_tab','late_duplicate']) {
+    const expected=mode==='wrapped_filename'?'sales 2026.csv':mode==='wrapped_grouping'?'Quantity, Revenue, Id по Region':mode==='comma_collision'?'A, B':mode==='empty_label'?'':'Сумма';
     const page=new Page(),base='MF;TF-1;',panel=page.add('div',base+'NavigationBar;NavigationPanel');
     let path='';const breadcrumbs=[];
     for(const label of ['Сервер','Пакеты','Package1','Модуль1','Сценарий','Old','Настройка']) {
@@ -1752,7 +1977,7 @@ test('wizard finish waits for the expected graph node and does not claim setting
       if(label==='Настройка')page.add('span',null,'',undefined,crumb).attrs.class='maptree-icon-wizard';
     }
     const wizard=page.add('div',base+'WizrdMCF');
-    for(const [key,value] of [['edtDisplayName',mode==='empty_label'?'':'Сумма'],['cbxNodeTitleMode','Автоматическая метка']]) {
+    for(const [key,value] of [['edtDisplayName',expected],['cbxNodeTitleMode','Автоматическая метка']]) {
       const owner=page.add('div',base+'WizrdMCF;DoneWizard;'+key,'',undefined,wizard);
       page.add('input',null,'',undefined,owner).value=value;
     }
@@ -1760,20 +1985,153 @@ test('wizard finish waits for the expected graph node and does not claim setting
     const snapshot=await page.observe(),button=snapshot.ui.elements.find(e=>e.wizard_finish);
     if(mode==='empty_label'){assert.equal(button,undefined);continue;}
     assert.ok(button);
-    const click=page.mouse.click;page.mouse.click=async(...args)=>{await click(...args);
+    let pending=false,finishedNode,finishedLabel,finishedGraph;
+    const transition=()=>{
       if(mode==='still_open')return;
       wizard.remove();breadcrumbs.at(-1).remove();breadcrumbs.at(-2).remove();
-      const graph=page.add('div',base+'ModelForm;cmpDiagram'),name=mode==='wrong_label'?'Other':'Сумма';
+      const graph=page.add('div',base+'ModelForm;cmpDiagram'),name=mode==='wrong_label' || mode==='different_key'?'Other':mode==='actual_space'?'Сум_ма':expected.replace(/\s/g,'_').replace(/,/g,'');
       const node=page.add('g',base+'Graph;'+name,'',undefined,graph);
-      const label=page.add('span',base+'Graph;'+name+';Label;Label',['wrapped_label','actual_space'].includes(mode)?'':name,undefined,node);
+      const wrapped=['wrapped_label','actual_space','wrapped_filename','wrapped_grouping'].includes(mode);
+      const label=page.add('span',base+'Graph;'+name+';Label;Label',wrapped?'':mode==='wrong_label'?'Other':mode==='comma_collision'?'A B':expected,undefined,node);
+      finishedNode=node;finishedLabel=label;finishedGraph=graph;
       if(['wrapped_label','actual_space'].includes(mode)){page.add('span',null,mode==='actual_space'?'Сум ':'Сум',undefined,label);page.add('br',null,'',undefined,label);page.add('span',null,'ма',undefined,label);}
+      if(mode==='wrapped_filename' || mode==='wrapped_grouping') {
+        page.add('span',null,mode==='wrapped_filename'?'sales':'Quantity,\u00a0Revenue,',undefined,label);
+        page.add('br',null,'',undefined,label);
+        page.add('span',null,mode==='wrapped_filename'?'2026.csv':'Id\u00a0по\u00a0Region',undefined,label);
+      }
+      if(mode==='duplicate_label')page.add('span',base+'Graph;'+name+';Label;Label',expected,undefined,node);
+      if(mode==='duplicate_body')page.add('g',base+'Graph;'+name,'',undefined,graph);
       if(mode==='dialog')page.add('div','msgbox','Подтвердить').attrs.class='x-window';
       if(mode==='lost_reply')throw new Error('Lost reply');
     };
+    const click=page.mouse.click;page.mouse.click=async(...args)=>{
+      await click(...args);if(mode==='stale_region')pending=true;else transition();
+    };
+    const evaluate=page.evaluate.bind(page);
+    page.evaluate=async(fn,arg)=>{
+      const output=await evaluate(fn,arg);
+      if(arg?.discoverRoots && pending){pending=false;transition();}
+      return output;
+    };
+    let waits=0;
+    page.waitForTimeout=async()=>{
+      waits++;
+      if(mode==='late_body' && waits===2) {
+        finishedNode.remove();finishedNode=page.add('g',base+'Graph;Сумма','',undefined,finishedGraph);
+        finishedLabel=page.add('span',base+'Graph;Сумма;Label;Label','Сумма',undefined,finishedNode);
+      }
+      if(mode==='epoch_churn' || mode==='late_epoch' && waits===2)
+        page.mutationObserver.pending.push({type:'attributes',target:finishedNode,attributeName:'style'});
+      if(mode==='late_mask' && waits===2)page.add('div','late-mask','Загрузка').attrs.class='x-mask-msg';
+      if(mode==='late_tab' && waits===2)page.tab.attrs['data-tid']='MF;cntMain;cntWorkspace;Workspace;t.br;tb-2';
+      if(mode==='late_duplicate' && waits===2)page.add('span',base+'Graph;Сумма;Label;Label','Сумма',undefined,finishedNode);
+    };
     const result=await page.act({verb:'finish_wizard',ref:button.ref},snapshot);
-    assert.equal(result.status,['success','wrapped_label'].includes(mode)?'SUCCEEDED':'AMBIGUOUS',mode+JSON.stringify(result.error));
+    const success=['success','wrapped_label','wrapped_filename','wrapped_grouping','stale_region','late_body','late_epoch'].includes(mode);
+    assert.equal(result.status,success?'SUCCEEDED':'AMBIGUOUS',mode+JSON.stringify(result.error));
     assert.equal(page.events.filter(e=>e==='click').length,1);
-    assert.equal(result.trace.some(e=>e.event==='wizard_finish_graph_verified' && e.reopen_required && !e.settings_readback_verified),['success','wrapped_label'].includes(mode));
+    assert.equal(result.trace.some(e=>e.event==='wizard_finish_graph_verified' && e.reopen_required && !e.settings_readback_verified),success);
+    assert.equal(result.trace.some(e=>e.event==='wizard_finish_settled' && e.quiet_samples===3),success);
+    if(['late_body','late_epoch'].includes(mode))assert.equal(waits,5,mode);
+    if(mode==='late_body') {
+      const settled=result.trace.find(e=>e.event==='wizard_finish_settled');
+      const finalNode=result.output.ui.elements.find(e=>e.graph_node?.part==='body');
+      assert.equal(settled.node_ref,finalNode.ref);
+      assert.equal(result.output.ui.elements.find(e=>e.ref===finalNode.ref).tid,finishedNode.attrs['data-tid']);
+    }
+    if(mode==='epoch_churn'){assert.equal(waits,12);assert.equal(result.error.code,'WIZARD_FINISH_NOT_SETTLED');}
+    if(mode==='stale_region')assert.equal(result.trace.filter(e=>e.event==='wizard_region_rediscovery').length,1);
+  }
+});
+
+function groupingFixture() {
+  const page=new Page(),base='MF;TF-1;WizrdMCF;GroupDataWizard;';
+  page.context.innerWidth=1000;page.context.innerHeight=800;
+  const box={x:30,y:100,width:500,height:300},wizard=page.add('div','MF;TF-1;WizrdMCF','',box);
+  const grid=page.add('div',base+'grdUsedFields;tbl','',box,wizard);grid.attrs.id='group-grid';
+  const spacer=page.add('div',null,'',box,grid);spacer.style.display='none';
+  const container=page.add('div',null,'',box,grid);container.attrs.class='x-grid-item-container';
+  const records=[];
+  for(const [index,[key,type,text,header,summary]] of [
+    ['Region','dtString','Region','6',0],['Quantity','dtInteger','Quantity (Сумма)','7',null],
+    ['Revenue','dtFloat','Revenue (Сумма)',null,null],['Id','dtInteger','Id (Количество)',null,1]].entries()) {
+    const rowBox={x:30,y:100+index*70,width:500,height:70};
+    const row=page.add('table',null,'',rowBox,container);row.attrs={class:'x-grid-item','data-recordindex':String(index),'data-boundview':'group-grid'};
+    const body=page.add('tbody',null,'',rowBox,row);let groupHeader;
+    if(header) {
+      const tr=page.add('tr',null,'',rowBox,body);
+      groupHeader=page.add('div',base+'grdUsedFields;tbl;GroupHeader;'+header,header==='6'?'Группа':'Показатели',rowBox,tr);
+      groupHeader.attrs.class='x-grid-group-hd x-grid-group-hd-not-collapsible';groupHeader.attrs['data-groupname']=header;
+    }
+    const tr=page.add('tr',null,'',rowBox,body);tr.attrs.class='x-grid-row';
+    const cell=page.add('td',base+'colUsedFields_'+key,text,rowBox,tr);
+    const icon=page.add('div',null,'',rowBox,cell);icon.attrs.class='bg-TBGDataType-'+type+' bg-grid-icon';
+    page.add('td',base+'colUsedFieldsDelete_'+key,'',rowBox,tr);
+    let summaryRow;
+    if(summary!==null) {
+      summaryRow=page.add('tr',null,'',rowBox,body);summaryRow.attrs.class='x-grid-row-summary';
+      page.add('td',base+'colUsedFields;SummaryRow-'+summary,'\u00a0',rowBox,summaryRow);
+      page.add('td',base+'colUsedFieldsDelete;SummaryRow-'+summary,'\u00a0',rowBox,summaryRow);
+    }
+    records.push({row,body,tr,cell,icon,groupHeader,summaryRow});
+  }
+  return {page,base,wizard,grid,container,records};
+}
+
+test('grouping rendered readback binds sections and SUM COUNT without claiming coverage or output types',async()=>{
+  const {page}=groupingFixture(),full=await page.observe();
+  const result=full.wizard.grouping;
+  assert.equal(result.status,'rendered_grouping_rows',JSON.stringify(result));
+  assert.deepEqual(result.keys.map(f=>[f.field_key,f.input_type]),[['Region','string']]);
+  assert.deepEqual(result.measures.map(f=>[f.field_key,f.input_type,f.aggregations]),[
+    ['Quantity','integer',['sum']],['Revenue','real',['sum']],['Id','integer',['count']]]);
+  assert.equal(result.measures[0].section_ref,result.measures[2].section_ref);
+  assert.notEqual(result.keys[0].section_ref,result.measures[0].section_ref);
+  assert.equal(result.complete,false);assert.equal(result.source_identity_verified,false);
+  assert.equal(result.aggregation_settings_verified,false);assert.equal(result.definition_coverage.status,'partial');
+  const roots=await page.execute({mode:'observe',discover_roots:true});
+  assert.equal(roots.output.wizard.grouping.status,'unobserved');
+  const narrow=await page.execute({mode:'observe',root_ref:result.grid_ref});
+  assert.deepEqual(narrow.output.wizard.grouping,result);
+  const cell=await page.execute({mode:'observe',root_ref:result.measures[0].cell_ref});
+  assert.equal(cell.output.wizard.grouping.status,'unobserved');
+});
+
+test('grouping readback rejects ambiguous stale or incomplete rendered section structures',async()=>{
+  for(const mode of ['index_gap','reordered','missing_header','wrong_header','duplicate_header','missing_summary','wrong_summary',
+    'early_summary','extra_row','clipped','duplicate_cell','unknown_aggregate','multiple_aggregates','missing_type','ambiguous_type','editor','foreign_boundview','hidden_row']) {
+    const {page,base,wizard,container,records:r}=groupingFixture();
+    if(mode==='index_gap')r[2].row.attrs['data-recordindex']='3';
+    if(mode==='reordered')container.children=[r[1].row,r[0].row,r[2].row,r[3].row];
+    if(mode==='missing_header')r[1].groupHeader.remove();
+    if(mode==='wrong_header')r[1].groupHeader.ownText='Группа';
+    if(mode==='duplicate_header')page.add('div',r[1].groupHeader.attrs['data-tid'],'Показатели',r[1].row.box,r[1].tr).attrs.class='x-grid-group-hd';
+    if(mode==='missing_summary')r[0].summaryRow.remove();
+    if(mode==='wrong_summary')r[0].summaryRow.children[0].attrs['data-tid']=base+'colUsedFields;SummaryRow-1';
+    if(mode==='early_summary')r[0].body.children.reverse();
+    if(mode==='extra_row')page.add('tr',null,'',r[1].row.box,r[1].body);
+    if(mode==='clipped')r[3].row.box.y=700;
+    if(mode==='duplicate_cell')page.add('td',r[2].cell.attrs['data-tid'],'',r[2].row.box,r[2].tr);
+    if(mode==='unknown_aggregate')r[1].cell.ownText='Quantity (Среднее)';
+    if(mode==='multiple_aggregates')r[1].cell.ownText='Quantity (Сумма, Количество)';
+    if(mode==='missing_type')r[1].icon.remove();
+    if(mode==='ambiguous_type')r[1].icon.attrs.class+=' bg-TBGDataType-dtFloat';
+    if(mode==='editor')page.add('div','MF;TF-1;WizrdMCF;FactorEditDialog','',r[1].row.box,wizard);
+    if(mode==='foreign_boundview')r[1].row.attrs['data-boundview']='foreign-grid';
+    if(mode==='hidden_row')r[1].row.style.visibility='hidden';
+    const result=(await page.observe()).wizard.grouping;
+    assert.equal(result.status,'unobserved',mode);assert.deepEqual(result.keys,[],mode);assert.deepEqual(result.measures,[],mode);
+    assert.equal(result.complete,false,mode);
+  }
+});
+
+test('grouping allows the observed 1/64px right border but rejects actual clipping and viewport overflow',async()=>{
+  for(const [extra,viewport,expected] of [[1/64,1000,'rendered_grouping_rows'],[1/32,1000,'unobserved'],[1,1000,'unobserved'],[1/64,530,'unobserved']]) {
+    const {page,records}=groupingFixture();
+    records[0].row.box={...records[0].row.box,width:500+extra};
+    page.context.innerWidth=viewport;
+    assert.equal((await page.observe()).wizard.grouping.status,expected,JSON.stringify({extra,viewport}));
   }
 });
 
@@ -1961,15 +2319,17 @@ test('field parameters read row types caching and exclusion separately from port
 });
 
 test('reform editor reads seven native parameters including disabled cache and owner checkbox state',async()=>{
-  for(const mode of ['valid','checked','missing_display','duplicate_display','duplicate_form','long_name','combo','combo_excluded','combo_cache','combo_busy','combo_lost']) {
+  for(const mode of ['global','global_duplicate','global_impostor','global_foreign_wizard','valid','checked','missing_display','duplicate_display','duplicate_form','long_name','combo','combo_excluded','combo_cache','combo_busy','combo_lost']) {
     const page=new Page(),base='MF;TF-1;WizrdMCF;',form=page.add('div',base.slice(0,-1)),stem=base+'ReformColumnsWizard;';
     page.add('div',stem+'grdTargetColumns;tbl','',undefined,form);
     const row=page.add('table',null,'',undefined,form);row.attrs.class='x-grid-item-selected';
     page.add('td',stem+'colName_QuantitySum','QuantitySum',undefined,row);
     const label=page.add('td',stem+'colDisplayName_QuantitySum','QuantitySum',undefined,row);
     page.add('span',null,'',undefined,label).attrs.class='bg-TBGDataType-dtInteger';
-    const dialog=page.add('div',base+'EditReformColumnDefForm');dialog.attrs.class='x-window';
-    const root=base+'EditReformColumnDefForm;',inputs={};
+    const dialogBase=mode.startsWith('global')?'':base;
+    const dialog=page.add('div',dialogBase+'EditReformColumnDefForm');dialog.attrs.class=mode==='global_impostor'?'':'x-window';
+    if(mode==='global_foreign_wizard')page.add('div','MF;TF-2;WizrdMCF');
+    const root=dialogBase+'EditReformColumnDefForm;',inputs={};
     for(const [key,value] of [['edtName',mode==='long_name'?'x'.repeat(257):'QuantitySum'],['edtDisplayName','QuantitySum'],['cbxDataType','Целый'],['cbxDataKind','Непрерывный'],['cbxUsageType','Не задано'],['cntMain;cbxCachingMethod','Отключено']]) {
       const owner=page.add('div',root+key,'',undefined,dialog),input=page.add('input',null,'',undefined,owner);input.value=value;inputs[key]=input;
       if(key.endsWith('cbxCachingMethod'))input.disabled=true;
@@ -1978,7 +2338,7 @@ test('reform editor reads seven native parameters including disabled cache and o
     const hidden=page.add('input',null,'',undefined,owner);hidden.checked=false;
     if(mode!=='missing_display')page.add('span',root+'cntMain;chbExcluded;DisplayEl','',undefined,owner).attrs.class='x-form-checkbox';
     if(mode==='duplicate_display')page.add('span',root+'cntMain;chbExcluded;DisplayEl','',undefined,owner).attrs.class='x-form-checkbox';
-    if(mode==='duplicate_form')page.add('div',base+'EditReformColumnDefForm');
+    if(mode==='duplicate_form' || mode==='global_duplicate')page.add('div',base+'EditReformColumnDefForm');
     if(mode.startsWith('combo')) {
       const list=page.add('div',root+'cbxDataType;boundlist','',{x:600,y:300,width:140,height:40});
       page.add('div',root+'cbxDataType;boundlist;Вещественный','Вещественный',{x:605,y:305,width:130,height:25},list);
@@ -1998,7 +2358,7 @@ test('reform editor reads seven native parameters including disabled cache and o
       assert.equal(page.events.filter(e=>e==='click').length,mode==='combo_busy'?0:1);continue;
     }
     const full=await page.observe(),params=full.wizard.reform_parameters;
-    if(mode==='duplicate_form'){assert.equal(params.status,'ambiguous');assert.equal(params.fields,undefined);continue;}
+    if(['duplicate_form','global_duplicate','global_impostor','global_foreign_wizard'].includes(mode)){assert.equal(params.status,'ambiguous');assert.equal(params.fields,undefined);continue;}
     assert.equal(params.selected_column.name,'QuantitySum');assert.equal(Object.keys(params.fields).length,7);
     assert.equal(params.fields.caching.enabled,false);assert.equal(params.fields.caching.value,'Отключено');
     assert.equal(params.fields.name.truncated,mode==='long_name');
@@ -2011,7 +2371,7 @@ test('reform editor reads seven native parameters including disabled cache and o
 });
 
 test('reform editor close verifies caching exclusion and original row after one click',async()=>{
-  for(const mode of ['apply','cancel','wrong_type','wrong_kind','cancel_replaced','lost_reply','wrong_cache','wrong_excluded']) {
+  for(const mode of ['global_apply','global_cancel','apply','cancel','wrong_type','wrong_kind','cancel_replaced','lost_reply','wrong_cache','wrong_excluded']) {
     const page=new Page(),base='MF;TF-1;WizrdMCF;',form=page.add('div',base.slice(0,-1));
     const stem=base+'ReformColumnsWizard;';page.add('button',stem+'grdTargetColumns;tbl','',undefined,form);
     let table;
@@ -2023,24 +2383,25 @@ test('reform editor close verifies caching exclusion and original row after one 
       page.add('td',stem+'colCachingMethod_'+name,'Отключено',undefined,table);
       const excluded=page.add('td',stem+'colExcluded_'+name,'',undefined,table);page.add('img',null,'',undefined,excluded).attrs.class='x-grid-checkcolumn';
     };createRow();
-    const dialog=page.add('div',base+'EditReformColumnDefForm');dialog.attrs.class='x-window';
+    const dialogBase=mode.startsWith('global')?'':base;
+    const dialog=page.add('div',dialogBase+'EditReformColumnDefForm');dialog.attrs.class='x-window';
     for(const [key,value] of [['edtName','QuantitySum'],['edtDisplayName','Sum'],['cbxDataType','Целый'],['cbxDataKind','Непрерывный'],['cbxUsageType','Не задано'],['cntMain;cbxCachingMethod','Отключено']]) {
-      const owner=page.add('div',base+'EditReformColumnDefForm;'+key,'',undefined,dialog);page.add('input',null,'',undefined,owner).value=value;
+      const owner=page.add('div',dialogBase+'EditReformColumnDefForm;'+key,'',undefined,dialog);page.add('input',null,'',undefined,owner).value=value;
     }
-    const excluded=page.add('div',base+'EditReformColumnDefForm;cntMain;chbExcluded','',undefined,dialog);
-    page.add('span',base+'EditReformColumnDefForm;cntMain;chbExcluded;DisplayEl','',undefined,excluded).attrs.class='x-form-checkbox';
-    const cancel=mode.startsWith('cancel'),verb=cancel?'cancel_reform_column':'apply_reform_column';
-    page.add('button',base+'EditReformColumnDefForm;'+(cancel?'btnCancel':'btnApply'),'Close',{x:600,y:400,width:80,height:25},dialog);
+    const excluded=page.add('div',dialogBase+'EditReformColumnDefForm;cntMain;chbExcluded','',undefined,dialog);
+    page.add('span',dialogBase+'EditReformColumnDefForm;cntMain;chbExcluded;DisplayEl','',undefined,excluded).attrs.class='x-form-checkbox';
+    const cancel=(mode.startsWith('cancel') || mode==='global_cancel'),verb=cancel?'cancel_reform_column':'apply_reform_column';
+    page.add('button',dialogBase+'EditReformColumnDefForm;'+(cancel?'btnCancel':'btnApply'),'Close',{x:600,y:400,width:80,height:25},dialog);
     const full=await page.observe(),read=await page.execute({mode:'observe',root_ref:full.wizard.reform_parameters.root_ref});
     const target=read.output.ui.elements.find(e=>e.column_close);assert.ok(target);
     const click=page.mouse.click;page.mouse.click=async(...args)=>{await click(...args);dialog.remove();
-      if(mode!=='cancel'){table.remove();createRow(cancel?'Quantity':'QuantitySum',mode==='wrong_type'?'Float':'Integer',mode==='wrong_kind'?'Дискретный':'Непрерывный');}
+      if(mode!=='cancel' && mode!=='global_cancel'){table.remove();createRow(cancel?'Quantity':'QuantitySum',mode==='wrong_type'?'Float':'Integer',mode==='wrong_kind'?'Дискретный':'Непрерывный');}
       if(mode==='wrong_cache')table.querySelectorAll('[data-tid="'+stem+'colCachingMethod_QuantitySum"]')[0].ownText='При активации';
       if(mode==='wrong_excluded')table.querySelectorAll('.x-grid-checkcolumn')[0].attrs.class+=' x-grid-checkcolumn-checked';
       if(mode==='lost_reply')throw new Error('Lost reply');
     };
     const result=await page.act({verb,ref:target.ref},read.output);
-    assert.equal(result.status,['apply','cancel'].includes(mode)?'SUCCEEDED':'AMBIGUOUS',mode+JSON.stringify(result.error));
+    assert.equal(result.status,['apply','cancel','global_apply','global_cancel'].includes(mode)?'SUCCEEDED':'AMBIGUOUS',mode+JSON.stringify(result.error));
     assert.equal(page.events.filter(e=>e==='click').length,1);
   }
 });
@@ -2058,6 +2419,27 @@ test('storage row selection reads folder type from its own visible unique cell',
   const duplicate=row.append(new Element('td',type.attrs,'Папка'));
   assert.equal((await read()).kind,'unknown');duplicate.remove();
   type.ownText='Текстовый файл';assert.equal((await read()).kind,'unknown');
+});
+
+test('narrow storage name reads retain sibling type without issuing sibling controls', async () => {
+  const page=new Page(),row=page.add('table',null);row.attrs.class='x-grid-item';
+  const cell=row.append(new Element('td',{'data-tid':'MF;TF-1;FileStorageForm;colName_test'},'test'));
+  const type=row.append(new Element('td',{'data-tid':'MF;TF-1;FileStorageForm;colFileType_test'},'Папка'));
+  const full=await page.observe(),ref=full.ui.elements.find(e=>e.tid===cell.getAttribute('data-tid')).ref;
+  const read=async()=> (await page.execute({mode:'observe',root_ref:ref})).output;
+  const narrow=await read(),entry=narrow.ui.elements.find(e=>e.ref===ref);
+  assert.equal(entry.storage_entry.kind,'folder');
+  assert.equal(narrow.ui.elements.some(e=>e.tid===type.getAttribute('data-tid')),false);
+  row.attrs.class+=' x-grid-item-selected';
+  assert.equal((await read()).ui.elements.find(e=>e.ref===ref).storage_entry.selected,true);
+  for(const mode of ['hidden','duplicate','other_type','other_row']) {
+    let extra;
+    type.style.display=mode==='hidden'?'none':'';type.ownText=mode==='other_type'?'Текстовый файл':'Папка';
+    if(mode==='duplicate')extra=row.append(new Element('td',type.attrs,'Папка'));
+    if(mode==='other_row'){type.remove();const foreign=page.add('table',null);foreign.attrs.class='x-grid-item';foreign.append(type);}
+    assert.equal((await read()).ui.elements.find(e=>e.ref===ref).storage_entry.kind,'unknown',mode);
+    extra?.remove();
+  }
 });
 
 test('import input completion waits through delayed preview masks and never repeats typing',async()=>{
@@ -2490,4 +2872,889 @@ test('relocated native graph namespace belongs to the active diagram instead of 
     assert.equal(roots.output.graph_identity.status,mode==='duplicate_container'?'ambiguous':'unobserved');
     assert.ok(!roots.output.ui.elements.some(e=>e.scope==='graph'));
   }
+});
+
+
+test('grouping small used-field coverage requires explicit complete geometry and closed sections',async()=>{
+  for(const mode of ['complete','missing_bounds','overflow','translated','hidden_payload','extra','filter','clipped','bad_section']) {
+    const {page,grid,container,records}=groupingFixture();
+    for(const e of [grid,container])Object.assign(e,{scrollTop:0,scrollLeft:0,clientHeight:300,scrollHeight:300,clientWidth:500,scrollWidth:500});
+    container.style.transform='none';
+    const sentinel=grid.children[0];sentinel.attrs.role='presentation';sentinel.style.width='1px';sentinel.style.height='1px';
+    if(mode==='missing_bounds')delete grid.scrollHeight;
+    if(mode==='overflow')grid.scrollHeight=301;
+    if(mode==='translated')container.style.transform='matrix(1, 0, 0, 1, 0, 50)';
+    if(mode==='hidden_payload')page.add('div',null,'hidden',undefined,sentinel);
+    if(mode==='extra')page.add('div',null,'',undefined,grid).style.display='none';
+    if(mode==='filter')page.add('input',null,'',undefined,grid).style.display='none';
+    if(mode==='clipped')records[3].row.box.y=700;
+    if(mode==='bad_section')records[1].groupHeader.ownText='Группа';
+    const g=(await page.observe()).wizard.grouping;
+    assert.equal(g.definition_coverage.status,mode==='complete'?'complete_rendered_used_fields':'partial',mode);
+    assert.equal(g.complete,false);assert.equal(g.source_identity_verified,false);
+    assert.equal(g.settings_applied,false);assert.equal(g.aggregation_settings_verified,false);
+    if(mode==='complete')assert.deepEqual(g.definition_coverage.sections.map(s=>[s.role,s.row_count]),[['group',1],['measure',3]]);
+  }
+});
+
+test('factor dialog reads exact Ext owner states and only rendered selected-field association',async()=>{
+  for(const mode of ['count','sum','missing','extra','duplicate','hidden','wrong_icon','foreign_dialog','no_selection','two_selected','hidden_input_false','native_summary','nonblank_summary','foreign_summary','hidden_summary']) {
+    const {page,wizard,records,grid}=groupingFixture(),tid='MF;TF-1;WizrdMCF;FactorEditDialog';
+    const dialog=page.add('div',mode==='foreign_dialog'?'MF;TF-2;WizrdMCF;FactorEditDialog':tid,'',{x:100,y:100,width:500,height:500});
+    const group=page.add('div',tid+';grpFactors','',{x:110,y:110,width:450,height:400},dialog);
+    const defs=[['gdSum','Сумма'],['gdCount','Количество'],['gdMin','Минимум'],['gdMax','Максимум'],['gdAvg','Среднее'],['gdMedian','Медиана'],['gdMode','Мода'],['gdStdDev','Стандартное откл.'],['gdUniqueCount','Кол-во уникальных'],['gdNullCount','Кол-во пропусков'],['gdFirst','Первый'],['gdLast','Последний'],['gdOnly','Единственный'],['gdConcat','Список']];
+    const owners=[];
+    for(const [index,[iconName,label]] of defs.entries()) {
+      const base=tid+';grpFactors;chb'+(index?'-'+index:''),box={x:110,y:110+index*25,width:400,height:20};
+      const owner=page.add('div',base,'',box,group);owner.attrs.class='x-form-type-checkbox'+(index===(mode==='sum'?0:1)?' x-form-cb-checked':'');
+      const input=page.add('input',base+';InputEl','',box,owner);input.attrs.role='checkbox';input.checked=false;input.style.display='none';
+      page.add('span',base+';DisplayEl','',box,owner);
+      const l=page.add('label',null,label,box,owner);l.attrs.class='x-form-cb-label';
+      const icon=page.add('div',null,'',box,l);icon.attrs.class='bg-TBGGroupDataFunction-'+iconName;
+      owners.push({owner,icon});
+    }
+    if(mode!=='no_selection')records[3].row.attrs.class+=' x-grid-item-selected';
+    if(mode==='two_selected')records[2].row.attrs.class+=' x-grid-item-selected';
+    if(mode==='missing')owners[13].owner.remove();
+    if(mode==='extra')page.add('div',tid+';grpFactors;chb-14','',undefined,group).attrs.class='x-form-type-checkbox';
+    if(mode==='duplicate')page.add('div',tid+';grpFactors;chb-1','',undefined,group).attrs.class='x-form-type-checkbox';
+    if(mode==='hidden')owners[3].owner.style.display='none';
+    if(mode==='wrong_icon')owners[3].icon.attrs.class='bg-TBGGroupDataFunction-gdSum';
+    if(mode.endsWith('_summary')) {
+      const summary=records[3].summaryRow.children[0];summary.attrs['data-tid']=records[3].cell.attrs['data-tid'];
+      if(mode==='nonblank_summary')summary.ownText='other';
+      if(mode==='foreign_summary'){summary.remove();records[2].summaryRow=page.add('tr',null,'',summary.box,records[2].body);records[2].summaryRow.attrs.class='x-grid-row-summary';records[2].summaryRow.append(summary);}
+      if(mode==='hidden_summary')summary.style.display='none';
+    }
+    const f=(await page.observe()).wizard.factor_editor,success=['count','sum','hidden_input_false','native_summary'].includes(mode);
+    assert.equal(f.status,success?'rendered_factor_options':'unobserved',mode);
+    assert.equal(f.opening_verified,false);assert.equal(f.settings_applied,false);assert.equal(f.source_identity_verified,false);
+    if(success){const narrow=await page.execute({mode:'observe',root_ref:f.dialog_ref});assert.equal(narrow.output.wizard.factor_editor.status,'rendered_factor_options','portal dialog scoped read');assert.equal(narrow.output.wizard.factor_editor.selected_field.field_key,'Id');assert.equal(f.options.length,14);assert.deepEqual(f.options.filter(o=>o.checked).map(o=>o.aggregation),[mode==='sum'?'sum':'count']);assert.equal(f.selected_field.field_key,'Id');assert.equal(f.selected_field.opening_verified,false);}
+  }
+});
+
+function candidateTableFixture(kind='format', suffix='-1') {
+  const page=new Page();page.context.innerWidth=1400;page.context.innerHeight=1000;
+  const viewKey='MF;TF-1;ViewsForm;BrowseView'+suffix;
+  const view=page.add('div',viewKey,'',{x:10,y:50,width:1300,height:900});
+  const name=kind==='format'?'BrowseFormat':'BrowseFilter';
+  const modal=page.add('div',viewKey+';ModalWindow_'+name,'',{x:100,y:150,width:1000,height:700},view);
+  modal.attrs.role='dialog';
+  const base=modal.getAttribute('data-tid')+';'+name+';';
+  const grid=page.add('div',base+(kind==='format'?'grdFields;tbl':'tbl'),'',{x:120,y:300,width:420,height:320},modal);
+  Object.assign(grid,{clientWidth:420,clientHeight:320,scrollWidth:420,scrollHeight:320,scrollLeft:0,scrollTop:0});grid.attrs.id='view-table';
+  const container=page.add('div',null,'',{x:120,y:300,width:420,height:kind==='format'?48:0},grid);container.attrs.class='x-grid-item-container';container.style.transform='none';
+  const input=(key,value='')=>{const owner=page.add('div',base+key,'',{x:600,y:250,width:100,height:24},modal);const el=page.add('input',null,'',{x:600,y:250,width:100,height:24},owner);el.attrs.type='text';el.value=value;return el;};
+  const check=(key,value)=>{const owner=page.add('div',base+key,'',{x:600,y:250,width:100,height:24},modal);owner.attrs.class=value?'x-form-cb-checked':'';
+    const el=page.add('span',base+key+';DisplayEl','',{x:600,y:250,width:15,height:15},owner);el.attrs.class='x-form-checkbox';return {owner,el};};
+  const rows=[];
+  if(kind==='format') {
+    for(const [i,key,type] of [[0,'Region','String'],[1,'Amount','Float']]) {
+      const row=page.add('table',null,'',{x:120,y:300+i*24,width:420,height:24},container);
+      row.attrs={class:'x-grid-item'+(i===1?' x-grid-item-selected':''),'data-boundview':'view-table','data-recordindex':String(i)};rows.push(row);
+      page.add('td',base+'colSourceColumnIndex_'+key,String(i),{x:120,y:300+i*24,width:40,height:24},row);
+      const label=page.add('td',base+'colDisplayName_'+key,key,{x:160,y:300+i*24,width:300,height:24},row);
+      const icon=page.add('span',null,'',{x:160,y:300+i*24,width:12,height:12},label);icon.attrs.class='bg-TBGDataType-dt'+type;
+      const cell=page.add('td',base+'colInAll_'+key,'',{x:460,y:300+i*24,width:50,height:24},row);
+      const eye=page.add('img',null,'',{x:460,y:300+i*24,width:12,height:12},cell);eye.attrs.class='bg-icon-visible';
+    }
+    input('txtColumnsFilterField');check('BrowseFormatPanel;cntFormat;cnt-1;chb',true);check('BrowseFormatPanel;cbFormatStr',true);
+    check('BrowseFormatPanel;cbThousand',false);check('BrowseFormatPanel;cbScientific',false);
+    input('BrowseFormatPanel;edtDecimalDigit');input('BrowseFormatPanel;edtCurrency');input('BrowseFormatPanel;edtFormatStr','0.00');
+  } else check('chkEnableFilter',true);
+  return {page,view,viewKey,modal,base,grid,container,rows};
+}
+
+test('candidate Table format reads full small list including invisible field and selected Ext numeric settings',async()=>{
+  const f=candidateTableFixture();f.rows[0].querySelectorAll('.bg-icon-visible')[0].attrs.class='bg-icon-invisible';
+  const raw=await f.page.execute({mode:'observe'}),s=raw.output.table_settings;
+  const delivered=createObservationPages().retain(raw).output.table_settings;assert.deepEqual(delivered,s);
+  assert.equal(s.status,'observed');assert.equal(s.view_key,f.viewKey);assert.equal(s.format.fieldlist_complete,true);
+  assert.deepEqual(s.format.fields.map(x=>[x.name_key,x.source_index,x.type,x.visible]),[['Region',0,'string',false],['Amount',1,'real',true]]);
+  assert.equal(s.format.selected_numeric.formatting.value,true);assert.equal(s.format.selected_numeric.custom.value,true);
+  assert.equal(s.format.selected_numeric.format_string.value,'0.00');assert.equal(s.format.selected_numeric.losslessness_verified,false);
+  assert.equal(s.settings_applied,false);assert.equal(s.result_complete,false);assert.equal(s.execution_verified,false);
+});
+
+test('candidate Table format refuses hidden extra rows, filtered lists, duplicate selections and clipping',async()=>{
+  for(const mode of ['hidden_extra','filter','selection','clip','foreign','other_dialog','other_view','hidden_grid_payload','translated']) {
+    const f=candidateTableFixture();
+    if(mode==='hidden_extra'){const extra=f.page.add('table',null,'',{x:120,y:348,width:420,height:24},f.container);extra.attrs.class='x-grid-item';extra.style.display='none';}
+    if(mode==='hidden_grid_payload'){const extra=f.page.add('div',null,'',f.grid.box,f.grid);extra.style.display='none';f.page.add('span',null,'predicate',f.grid.box,extra);}
+    if(mode==='translated')f.container.style.transform='translateY(24px)';
+    if(mode==='filter')f.modal.querySelectorAll('input')[0].value='Amount';
+    if(mode==='selection')f.rows[0].attrs.class+=' x-grid-item-selected';
+    if(mode==='clip')f.grid.box.x=1300;
+    if(mode==='foreign')f.view.attrs['data-tid']='MF;TF-2;ViewsForm;BrowseView-1';
+    if(mode==='other_dialog'){const other=f.page.add('div','OtherDialog','',{x:200,y:200,width:200,height:100});other.attrs.role='dialog';}
+    if(mode==='other_view')f.page.add('div','MF;TF-1;ViewsForm;BrowseView','',{x:10,y:50,width:1300,height:900});
+    const s=(await f.page.observe()).table_settings;
+    if(mode==='selection'){assert.equal(s.format.fieldlist_complete,true);assert.equal(s.format.selected_numeric,undefined);}
+    else assert.notEqual(s.format?.fieldlist_complete,true,mode);
+  }
+});
+
+test('candidate Table filter proves only complete empty predicates while enabled remains true',async()=>{
+  const f=candidateTableFixture('filter');let s=(await f.page.observe()).table_settings;
+  assert.equal(s.filter.enabled.value,true);assert.equal(s.filter.predicates_complete,true);assert.equal(s.filter.predicate_coverage,'complete_empty');
+  assert.equal(s.filter.effective_filter_verified,false);assert.equal(s.settings_applied,false);
+  const hidden=f.page.add('table',null,'',{x:120,y:300,width:420,height:24},f.container);hidden.attrs.class='x-grid-item';hidden.style.display='none';
+  s=(await f.page.observe()).table_settings;assert.equal(s.filter.predicates_complete,false);
+});
+
+test('grouping cells are native issued controls only after exact grid row and section binding',async()=>{
+  for(const mode of ['valid','duplicate','foreign_grid','wrong_section','hidden','disabled','covered']) {
+    const {page,records,base,wizard}=groupingFixture();
+    for(const record of records) {record.cell.box={...record.cell.box,width:450};record.icon.box={...record.icon.box,width:450};record.tr.children[1].box={...record.tr.children[1].box,x:490,width:20};}
+    if(mode==='duplicate')page.add('td',base+'colUsedFields_Revenue','Revenue',records[2].cell.box,wizard);
+    if(mode==='foreign_grid')records[2].row.attrs['data-boundview']='foreign';
+    if(mode==='wrong_section')records[1].groupHeader.ownText='Группа';
+    if(mode==='hidden')records[2].cell.style.display='none';
+    if(mode==='disabled')records[2].cell.attrs['aria-disabled']='true';
+    if(mode==='covered')page.add('div','cover','',records[2].cell.box);
+    const snapshot=await page.observe();
+    const fields=snapshot.ui.elements.filter(e=>e.grouping_field);
+    if(['duplicate','foreign_grid','wrong_section','hidden'].includes(mode)){assert.equal(fields.length,0,mode);continue;}
+    assert.equal(fields.length,4,mode);
+    const revenue=fields.find(e=>e.grouping_field.field_key==='Revenue');
+    assert.equal(revenue.ref,snapshot.wizard.grouping.measures[1].cell_ref);
+    assert.equal(revenue.grouping_field.grid_ref,snapshot.wizard.grouping.grid_ref);
+    assert.deepEqual(revenue.allowed_actions,mode==='valid'?['click','double_click','press']:[],mode);
+    assert.equal(revenue.grouping_field.role,'measure');
+  }
+});
+
+
+
+test('Table portal modal root gets exact global view owner without expanding scope',async()=>{
+  for(const kind of ['format','filter']) {
+    const f=candidateTableFixture(kind);
+    f.modal.remove();f.page.document.body.append(f.modal);
+    const initial=await f.page.observe();
+    const modalRef=initial.ui.dialogs.find(d=>d.identity.anchor_tid===f.modal.getAttribute('data-tid')).ref;
+    const observed=(await f.page.execute({mode:'observe',root_ref:modalRef})).output;
+    assert.equal(observed.table_settings.status,'observed',kind);
+    assert.equal(observed.table_settings.view_key,f.viewKey);
+    assert.equal(kind==='format'?observed.table_settings.format.fieldlist_complete:observed.table_settings.filter.predicates_complete,true,kind);
+    assert.equal(observed.table_settings.settings_applied,false);
+    assert.equal(observed.table_settings.result_complete,false);
+    const viewRef=initial.table_settings.view_ref;
+    const scoped=(await f.page.execute({mode:'observe',root_ref:viewRef})).output;
+    assert.equal(scoped.table_settings.status,'unobserved','portal body is outside requested view subtree');
+    assert.equal(scoped.ui.table_cells.length,0,'global owner guard cannot read external modal body');
+  }
+});
+
+test('Table portal global owner rejects foreign duplicate hidden and descendant impostors',async()=>{
+  for(const mode of ['foreign','duplicate','hidden','impostor']) {
+    const f=candidateTableFixture();f.modal.remove();f.page.document.body.append(f.modal);
+    const initial=await f.page.observe(),ref=initial.ui.dialogs.find(d=>d.identity.anchor_tid===f.modal.getAttribute('data-tid')).ref;
+    if(mode==='foreign')f.view.attrs['data-tid']='MF;TF-2;ViewsForm;BrowseView-1';
+    if(mode==='duplicate')f.page.add('div',f.viewKey,'',f.view.box);
+    if(mode==='hidden')f.view.style.visibility='hidden';
+    if(mode==='impostor')f.view.attrs['data-tid']=f.viewKey+';child';
+    const observed=(await f.page.execute({mode:'observe',root_ref:ref})).output;
+    assert.equal(observed.table_settings.status,'unobserved',mode);
+    assert.equal(observed.table_settings.result_complete,false,mode);
+  }
+});
+
+
+test('Table schema remains complete when nonselected native eye is opacity zero',async()=>{
+ const f=candidateTableFixture();
+ const eye=f.rows[0].querySelectorAll('.bg-icon-visible')[0];eye.attrs.class+=' bg-hidable-gridicon';eye.style.opacity='0';
+ const raw=await f.page.execute({mode:'observe'}),format=raw.output.table_settings.format;
+ assert.equal(format.fieldlist_complete,true);assert.equal(format.visibility_complete,false);
+ assert.equal(format.fields[0].name_key,'Region');assert.equal(format.fields[0].source_index,0);assert.equal(format.fields[0].type,'string');
+ assert.equal(format.fields[0].visible,null);assert.equal(format.fields[0].visibility_status,'unobserved');
+ assert.ok(format.fields[0].visibility_cell_ref);assert.equal(format.fields[0].visibility_icon_ref,undefined);
+ assert.equal(format.fields[1].visible,true);assert.equal(format.fields[1].visibility_status,'observed');assert.ok(format.fields[1].visibility_icon_ref);
+ assert.equal(format.selected_numeric.name_key,'Amount');assert.equal(format.selected_numeric.format_string.value,'0.00');
+ assert.deepEqual(createObservationPages().retain(raw).output.table_settings,raw.output.table_settings);
+ assert.equal(raw.output.table_settings.result_complete,false);assert.equal(raw.output.table_settings.settings_applied,false);
+});
+
+test('Table malformed missing duplicate or hidden eye never establishes visibility completeness',async()=>{
+ for(const mode of ['missing','duplicate','both','hidden','parent_hidden','unknown','clipped_eye','painted_invisible']) {
+  const f=candidateTableFixture(),eye=f.rows[0].querySelectorAll('.bg-icon-visible')[0],cell=eye.parentElement;
+  if(mode==='missing')eye.remove();
+  if(mode==='duplicate'){const extra=f.page.add('img',null,'',eye.box,cell);extra.attrs.class='bg-icon-visible';}
+  if(mode==='both')eye.attrs.class+=' bg-icon-invisible';
+  if(mode==='hidden')eye.style.visibility='hidden';
+  if(mode==='parent_hidden')cell.style.opacity='0';
+  if(mode==='unknown')eye.attrs.class='unknown-eye';
+  if(mode==='clipped_eye')eye.box.x=1500;
+  if(mode==='painted_invisible')eye.attrs.class='bg-icon-invisible';
+  const format=(await f.page.observe()).table_settings.format;
+  if(mode==='parent_hidden'){assert.equal(format.fieldlist_complete,false);assert.equal(format.visibility_complete,false);continue;}
+  assert.equal(format.fieldlist_complete,true,mode);
+  assert.equal(format.visibility_complete,mode==='painted_invisible',mode);
+  assert.equal(format.fields[0].visible,mode==='painted_invisible'?false:null,mode);
+  assert.equal(format.fields[0].visibility_status,mode==='painted_invisible'?'observed':'unobserved',mode);
+ }
+});
+
+test('Files discovery leads with the actual listing and issues folder controls only after its scoped read',async()=>{
+ const page=new Page(),prefix='MF;TF-1;FileStorageForm;';
+ const tree=page.add('div',prefix+'MapTreeForm;tree');
+ for(let i=0;i<40;i++)page.add('table',null,'navigation '+i,undefined,tree);
+ const listing=page.add('div',prefix+'pnlFileStorage;tbl');
+ const row=page.add('table',null,'',undefined,listing);row.attrs.class='x-grid-item';
+ const cell=page.add('td',prefix+'colName_test','test',undefined,row);
+ page.add('td',prefix+'colFileType_test','Папка',undefined,row);
+ const foreign=page.add('div','MF;TF-2;FileStorageForm;pnlFileStorage;tbl');
+ const roots=await page.execute({mode:'observe',discover_roots:true});
+ assert.equal(roots.output.ui.elements[0].tid,listing.getAttribute('data-tid'));
+ assert.deepEqual(roots.output.ui.elements[0].allowed_actions,[]);
+ assert.equal(roots.output.ui.elements.some(e=>e.tid===foreign.getAttribute('data-tid')),false);
+ assert.equal(roots.output.ui.elements.some(e=>e.tid===cell.getAttribute('data-tid')),false);
+ const read=await page.execute({mode:'observe',root_ref:roots.output.ui.elements[0].ref});
+ const pager=createObservationPages(),issued=pager.retain(read);
+ const folder=issued.output.ui.elements.find(e=>e.tid===cell.getAttribute('data-tid'));
+ assert.equal(folder.storage_entry.kind,'folder');assert.ok(folder.allowed_actions.includes('double_click'));
+ assert.doesNotThrow(()=>pager.assertIssued(issued.output.observation_id,{ref:folder.ref}));
+ listing.style.display='none';
+ const hidden=await page.execute({mode:'observe',discover_roots:true});
+ assert.equal(hidden.output.ui.elements.some(e=>e.tid===listing.getAttribute('data-tid')),false);
+});
+
+
+
+test('Table labels are issued native controls with exact typed owner signature and restricted actions',async()=>{
+ const f=candidateTableFixture();const snapshot=await f.page.observe();
+ const field=snapshot.table_settings.format.fields[1],control=snapshot.ui.elements.find(e=>e.ref===field.label_ref);
+ assert.ok(control);assert.deepEqual(control.allowed_actions,['click','press']);
+ assert.equal(control.table_field.name_key,'Amount');assert.equal(control.table_field.type,'real');assert.equal(control.table_field.source_index,1);
+ assert.equal(control.table_field.view_key,f.viewKey);assert.deepEqual(control.signature.table_field,control.table_field);
+ const result=await f.page.act({verb:'click',ref:control.ref},snapshot);assert.equal(result.status,'SUCCEEDED');
+ assert.equal(f.page.events.filter(e=>e==='click').length,1);
+ assert.equal(result.output.table_settings.settings_applied,false);
+});
+
+test('Table label issuance fails closed for identity/schema changes and obscured cells',async()=>{
+ for(const mode of ['disabled','covered','duplicate','foreign','type_change','index_change']) {
+  const f=candidateTableFixture(),before=await f.page.observe();
+  const field=before.table_settings.format.fields[1],label=f.rows[1].querySelectorAll('[data-tid]')[1];
+  if(mode==='disabled')label.attrs['aria-disabled']='true';
+  if(mode==='covered')f.page.add('div','cover','',label.box);
+  if(mode==='duplicate')f.page.add('td',label.getAttribute('data-tid'),'Amount',label.box,f.modal);
+  if(mode==='foreign')f.view.attrs['data-tid']='MF;TF-2;ViewsForm;BrowseView-1';
+  if(mode==='type_change')label.querySelectorAll('.bg-TBGDataType-dtFloat')[0].attrs.class='bg-TBGDataType-dtInteger';
+  if(mode==='index_change')f.rows[1].querySelectorAll('[data-tid]')[0].ownText='0';
+  const after=await f.page.observe(),control=after.ui.elements.find(e=>e.ref===field.label_ref);
+  if(['disabled','covered'].includes(mode))assert.deepEqual(control.allowed_actions,[],mode);
+  if(['duplicate','foreign','index_change'].includes(mode))assert.equal(control,undefined,mode);
+  const result=await f.page.act({verb:'click',ref:field.label_ref},before);
+  assert.notEqual(result.status,'SUCCEEDED',mode);assert.equal(f.page.events.includes('click'),false,mode);
+ }
+});
+
+
+test('Table parent formatting uses exact painted Ext InputEl for zero-size inline DisplayEl',async()=>{
+ for(const mode of ['checked','unchecked','duplicate_input','duplicate_display','hidden_input','wrong_type','foreign_input','hidden_display']) {
+  const f=candidateTableFixture(),tid=f.base+'BrowseFormatPanel;cntFormat;cnt-1;chb';
+  const owner=f.modal.querySelector('[data-tid="'+tid+'"]'),display=f.modal.querySelector('[data-tid="'+tid+';DisplayEl"]');
+  display.box.width=0;display.box.height=0;display.style.display='inline';
+  owner.attrs.class=mode==='unchecked'?'':'x-form-cb-checked';
+  const input=f.page.add('input',tid+';InputEl','',{x:600,y:250,width:18,height:18},mode==='foreign_input'?f.modal:owner);
+  input.attrs.class='x-form-checkbox';input.attrs.type=mode==='wrong_type'?'checkbox':'button';input.attrs.role='checkbox';input.checked=mode==='unchecked';
+  if(mode==='duplicate_input'){const duplicate=f.page.add('input',tid+';InputEl','',input.box,owner);duplicate.attrs={...input.attrs};}
+  if(mode==='duplicate_display')f.page.add('span',tid+';DisplayEl','',display.box,owner);
+  if(mode==='hidden_input')input.style.opacity='0';
+  if(mode==='hidden_display')display.style.visibility='hidden';
+  const formatting=(await f.page.observe()).table_settings.format.selected_numeric.formatting;
+  if(['checked','unchecked'].includes(mode)){assert.equal(formatting.status,'observed',mode);assert.equal(formatting.value,mode==='checked',mode);assert.ok(formatting.input_ref);assert.equal(formatting.display_ref,undefined);assert.equal(formatting.state_source,'loginom_ext');}
+  else assert.equal(formatting.status,'unobserved',mode);
+ }
+});
+
+
+// Private candidate fixture reconstructed from the root-owned live DOM probe.
+async function inputMappingLiveFixture(duplicateLabels=false) {
+  const {mappingLiveLayout}=await import('./mapping-layout.fixture.mjs');
+  const live=structuredClone(mappingLiveLayout),page=new Page();
+  if(duplicateLabels){const {duplicateTypeIcons}=await import('./mapping-duplicate-icons.fixture.mjs');
+    for(const side of ['source','target'])for(const grid of live[side])for(const container of grid.children)for(const table of container.children)for(const row of table.rows)for(const cell of row.cells){
+      const observed=duplicateTypeIcons.find(x=>x.tid===cell.tid);if(observed){cell.text=observed.label;cell.observedIcon=observed.icons[0];}
+    }}
+  page.context.innerWidth=1440;page.context.innerHeight=1000;
+  page.tab.attrs['data-tid']='MF;cntMain;cntWorkspace;Workspace;t.br;tb-5';
+  page.viewportSize=()=>({width:1440,height:1000});
+  const nodes=new Map();
+  const add=(n,parent,text='')=>{
+    const e=page.add(n.tag.toLowerCase(),n.tid,text,n.rect,parent);e.style={...n.style};
+    e.attrs.class=n.classes??'';if(n.id)e.attrs.id=n.id;
+    if(n.tid)nodes.set(n.tid,e);
+    const v=n.scroll??{};Object.assign(e,{scrollLeft:v.left,scrollTop:v.top,scrollWidth:v.width,scrollHeight:v.height,clientWidth:v.clientWidth,clientHeight:v.clientHeight});
+    return e;
+  };
+  const owner=add(live.owner,page.document.body),base=live.owner.tid+';TuneDataSourceMappingWizard;';
+  page.add('button',base+'btnAddMappingColumn','Добавить',{x:800,y:240,width:20,height:20},owner);
+  for(const c of live.controls.filter(c=>['rbLinks','rbTable','SourceFilter','TargetFilter'].includes(c.name)))for(const n of c.matches){
+    const control=add(n,owner);for(const p of n.parts.filter(p=>p.tid!==n.tid)){
+      const e=add(p,control);if(p.value!==null)e.value=p.value;if(p.disabled!==null)e.disabled=p.disabled;
+    }
+  }
+  for(const side of ['source','target'])for(const g of live[side]){
+    const grid=add(g,owner);
+    for(const c of g.children){const container=add(c,grid);
+      for(const r of c.children){const table=add(r,container);table.attrs['data-recordindex']=r.recordindex;table.attrs['data-boundview']=r.boundview;
+        for(const tr of r.rows){const row=add(tr,table);
+          for(const c of tr.cells){const cell=add(c,row,c.text);const icon=/bg-TBGDataType-dt\w+/.exec(c.html)?.[0];
+            if(icon){const e=page.add('div',null,'',c.observedIcon?.rect??{x:c.rect.x,y:c.rect.y,width:16,height:16},cell);e.attrs.class=icon;if(c.observedIcon)e.style={display:c.observedIcon.display,visibility:c.observedIcon.visibility,opacity:c.observedIcon.opacity};}
+          }
+        }
+      }
+    }
+  }
+  const pathNodes=[];
+  for(const d of live.draws){const draw=add(d,owner);for(const s of d.svgs){const svg=add(s,draw);for(const p of s.paths){
+    const path=add(p,svg);path.attrs.d=p.d;path.getScreenCTM=()=>p.screenCTM;pathNodes.push(path);
+  }}}
+  return {page,owner,base,nodes,pathNodes};
+}
+
+test('private input mapping full capability reads live permutation with opaque references only',async()=>{
+  const {page,owner,base}=await inputMappingLiveFixture();
+  const r=await page.observe();assert.equal(r.wizard.stage,'input_mapping');
+  const m=r.wizard.input_mapping;assert.equal(m.status,'rendered_mapping_links',JSON.stringify(m));
+  assert.deepEqual(m.links.map(x=>[x.source_key,x.target_key]),[['Quantity','Quantity'],['UnitPrice','UnitPrice'],['Id','Id'],['Region','Region'],['Comment','Comment']]);
+  assert.ok(m.links.every(x=>x.path_ref&&x.source_ref&&x.target_ref&&!x.path_index&&!x.source_cell_tid));
+  assert.ok(m.source_rows.every(x=>x.cell_ref&&!x.cell_tid&&!x.rect));
+  assert.equal(m.source_identity_verified,false);assert.equal(m.settings_applied,false);assert.equal(m.complete,false);
+  const roots=await page.execute({mode:'observe',discover_roots:true});
+  assert.equal(roots.output.wizard.input_mapping.status,'unobserved');
+  const root=roots.output.ui.elements.find(e=>e.tid===base.replace(/TuneDataSourceMappingWizard;$/,'').slice(0,-1));
+  assert.ok(root);const scoped=await page.execute({mode:'observe',root_ref:root.ref});
+  assert.equal(scoped.output.wizard.input_mapping.status,'rendered_mapping_links');assert.deepEqual(page.events,[]);
+});
+
+test('private input mapping rejects stale context, partial roots and malformed live structures',async()=>{
+  for(const mode of ['foreign_tab','filtered','bad_matrix','missing_row','duplicate_path','same_label','narrow_root','sensitive','hidden_svg','too_many_paths']){
+    const f=await inputMappingLiveFixture(),{page,nodes,base,pathNodes}=f;
+    if(mode==='foreign_tab')page.tab.attrs['data-tid']='MF;cntMain;cntWorkspace;Workspace;t.br;tb-3';
+    if(mode==='filtered')nodes.get(base+'SourceFilter').querySelectorAll('input')[0].value='Id';
+    if(mode==='bad_matrix')pathNodes[0].getScreenCTM=()=>({a:1,b:0,c:0,d:1,e:695,f:209});
+    if(mode==='hidden_svg')pathNodes[0].parentElement.style.opacity='0';
+    if(mode==='too_many_paths')for(let i=0;i<25;i++){const p=pathNodes[0],copy=page.add('path',null,'',p.box,p.parentElement);copy.attrs.d=p.attrs.d;copy.style={...p.style};copy.getScreenCTM=p.getScreenCTM;}
+    if(mode==='missing_row')nodes.get(base+'colSourceName_Quantity').closest('table').remove();
+    if(mode==='duplicate_path'){const p=pathNodes[0],copy=page.add('path',null,'',p.box,p.parentElement);copy.attrs.d=p.attrs.d;copy.style={...p.style};copy.getScreenCTM=p.getScreenCTM;}
+    if(mode==='same_label')for(const [tid,n] of nodes)if(/colSourceName_|colDisplayName_/.test(tid))n.ownText='Same';
+    if(mode==='sensitive')nodes.get(base+'SourceFilter').querySelectorAll('input')[0].attrs.type='password';
+    let r=await page.observe();
+    if(mode==='foreign_tab'){assert.notEqual(r.wizard.status,'observed');continue;}
+    if(mode==='same_label'){assert.equal(r.wizard.input_mapping.status,'rendered_mapping_links');continue;}
+    if(mode==='narrow_root'){
+      const ref=r.wizard.input_mapping.source_rows[0].cell_ref;
+      r=(await page.execute({mode:'observe',root_ref:ref})).output;
+    }
+    assert.equal(r.wizard.input_mapping.status,'unobserved',mode);
+  }
+});
+
+test('root observed Region and Comment duplicate display labels preserve distinct rendered links',async()=>{
+  // Root changed only these labels in the upstream output and reopened the
+  // Calculator input mapper. Exact keys and both side labels were read back in
+  // duplicate-labels-mapping-native.txt; geometry uses the preceding live probe.
+  const {page,nodes,base}=await inputMappingLiveFixture(true);
+  const result=await page.observe(),m=result.wizard.input_mapping;
+  assert.equal(m.status,'rendered_mapping_links');
+  for(const rows of [m.source_rows,m.target_rows]){
+    assert.deepEqual(rows.filter(r=>r.label==='Общая метка').map(r=>r.key),['Region','Comment']);
+  }
+  const region=m.links.find(x=>x.source_key==='Region'),comment=m.links.find(x=>x.source_key==='Comment');
+  assert.equal(region.target_key,'Region');assert.equal(comment.target_key,'Comment');
+  assert.notEqual(region.source_ref,comment.source_ref);assert.notEqual(region.target_ref,comment.target_ref);
+  assert.equal(m.source_identity_verified,false);assert.equal(m.settings_applied,false);
+  assert.ok([...m.source_rows,...m.target_rows].every(r=>r.type_verified===true));
+  const icon=nodes.get(base+'colSourceName_Region').children[0];icon.box={...icon.box,x:700};
+  assert.equal((await page.observe()).wizard.input_mapping.source_rows.find(r=>r.key==='Region').type_verified,false);
+  // Equal labels cannot compensate for loss of one independently identified row.
+  nodes.get(base+'colSourceName_Comment').attrs['data-tid']=base+'colSourceName_Region';
+  assert.equal((await page.observe()).wizard.input_mapping.status,'unobserved');
+});
+
+async function inputPortContextFixture(mode='valid') {
+  const {inputPortBreadcrumbs}=await import('./input-port-breadcrumbs.fixture.mjs');
+  const page=new Page();page.context.innerWidth=1440;page.context.innerHeight=1000;
+  page.tab.attrs['data-tid']='MF;cntMain;cntWorkspace;Workspace;t.br;tb-5';
+  const base='MF;TF-5;',wizard=page.add('div',base+'WizrdMCF','',{x:48,y:71,width:1392,height:929});
+  const marker=page.add('button',base+'WizrdMCF;'+(mode==='wrong_wizard'?'TuneDataSourceInputPortWizard':'TuneDataSourceMappingWizard')+';btnAddMappingColumn','',undefined,wizard);
+  const panel=page.add('div',base+'NavigationBar;NavigationPanel','',{x:48,y:35,width:1392,height:36});
+  const crumbs=inputPortBreadcrumbs.map((n,index)=>{
+    const crumb=page.add('a',n.tid,n.label,n.rect,panel);
+    const icon={4:'maptree-icon-workflow',5:'bg-vendor-icon-calcdata',8:'maptree-icon-wizard'}[index];
+    if(icon)page.add('span',null,'',{x:n.rect.x+1,y:n.rect.y+1,width:16,height:16},crumb).attrs.class=icon;
+    return crumb;
+  });
+  if(mode==='hidden')crumbs[7].style.visibility='hidden';
+  if(mode==='duplicate')page.add('a',crumbs[7].attrs['data-tid'],crumbs[7].ownText,crumbs[7].box,panel);
+  if(mode==='duplicate_panel')page.add('div',base+'NavigationBar;NavigationPanel','',panel.box);
+  if(mode==='foreign')crumbs[7].attrs['data-tid']=crumbs[7].attrs['data-tid'].replace('TF-5','TF-3');
+  if(mode==='wrong_folder')crumbs[6].ownText='Выходные порты';
+  if(mode==='caption_number')crumbs[7].ownText='Входной источник данных 2';
+  if(mode==='broken_chain')crumbs[3].attrs['data-tid']+='>Skipped';
+  if(mode==='clipped')crumbs[8].box={...crumbs[8].box,x:1400};
+  if(mode==='missing_icon')crumbs[4].children[0].remove();
+  if(mode==='hidden_icon')crumbs[4].children[0].style.visibility='hidden';
+  if(mode==='foreign_tab')page.tab.attrs['data-tid']='MF;cntMain;cntWorkspace;Workspace;t.br;tb-2';
+  if(mode==='bounded')for(let i=0;i<33;i++)page.add('a',base+'cnrNaviMode;b.s_Extra'+i,'Extra',crumbs[0].box,panel);
+  return {page,wizard,marker,panel,crumbs};
+}
+
+test('input port context observes exact node path and display caption without port identity claims',async()=>{
+  const {page}=await inputPortContextFixture();const full=await page.observe(),c=full.wizard.input_port_context;
+  assert.equal(c.status,'observed');assert.equal(c.node.label,'Revenue');assert.equal(c.direction,'input');
+  assert.equal(c.port_display_label,'Входной источник данных');assert.equal(c.port_key,null);assert.equal(c.port_index,null);
+  assert.equal(c.source_identity_verified,false);assert.equal(c.opening_verified,false);
+  assert.equal(c.node_path.length,6);assert.equal(c.port_path.length,8);assert.equal(c.path.length,9);
+  const narrow=await page.execute({mode:'observe',root_ref:full.wizard.root_ref});
+  assert.deepEqual(narrow.output.wizard.input_port_context,c);assert.deepEqual(page.events,[]);
+});
+
+test('input port context rejects foreign duplicated hidden and incomplete breadcrumb evidence',async()=>{
+  for(const mode of ['wrong_wizard','hidden','duplicate','duplicate_panel','foreign','wrong_folder','caption_number','broken_chain','clipped','missing_icon','hidden_icon','foreign_tab','bounded']){
+    const {page}=await inputPortContextFixture(mode),r=await page.observe();assert.notEqual(r.wizard.input_port_context?.status,'observed',mode);
+  }
+});
+
+test('native process console joins bounded grids and keeps ownership and execution unverified',async()=>{
+  const {readFileSync}=await import('node:fs');
+  const source=JSON.parse(readFileSync(new URL('./fixtures/process-console-run15.json',import.meta.url),'utf8'));
+  for(const mode of ['complete','hidden','overflow','record','unknown_state','duplicate','hidden_filter','foreign_bound','two_selected','unknown_menu']) {
+    const page=new Page();page.context.innerWidth=1440;page.context.innerHeight=1000;
+    const panel=page.add('div','ConsoleForm','',{x:48,y:397,width:1392,height:603});
+    const grids=[];
+    for(const g of source.grids) {
+      const grid=page.add('div',g.attributes['data-tid'],'',g.rect,panel);grid.attrs.id=g.attributes.id;
+      Object.assign(grid,{scrollTop:g.scroll.top,scrollLeft:g.scroll.left,clientWidth:g.scroll.clientWidth,clientHeight:g.scroll.clientHeight,scrollWidth:g.scroll.scrollWidth,scrollHeight:g.scroll.scrollHeight});
+      const container=page.add('div',null,'',g.containers[0].rect,grid);container.attrs.class='x-grid-item-container';container.style.transform='none';
+      for(const r of g.rows) {
+        const row=page.add('table',null,'',r.rect,container);Object.assign(row.attrs,r.attributes,{class:'x-grid-item'});
+        for(const c of r.cells){const cell=page.add('td',c.attributes['data-tid'],c.text,c.rect,row);cell.attrs.class=c.classes;}
+      }
+      grids.push({grid,container});
+    }
+    const portal=page.add('div','mnContextMenu','',{x:180,y:480,width:330,height:90});
+    const showNode=page.add('div','mnContextMenu;mniShowNodeToProcess','Показать узел',{x:200,y:540,width:300,height:24},portal);
+    grids[0].container.children.at(-1).attrs.class+=' x-grid-item-selected';
+    const menu=page.add('div','mnContextMenu;mniShowCompletedProcesses','Отображать завершенные процессы',{x:200,y:500,width:300,height:24},portal);menu.attrs.class='x-menu-item-checked';
+    if(mode==='two_selected')grids[0].container.children[0].attrs.class+=' x-grid-item-selected';
+    if(mode==='unknown_menu')showNode.attrs['data-tid']='mnContextMenu;unknown';
+    if(mode==='hidden')panel.style.display='none';
+    if(mode==='overflow')grids[0].grid.scrollHeight++;
+    if(mode==='record')grids[1].container.children[0].attrs['data-recordid']='foreign';
+    if(mode==='foreign_bound')grids[1].container.children[0].attrs['data-boundview']='foreign';
+    if(mode==='unknown_state')grids[1].container.children[0].children[1].attrs.class='bg-progress-ptpsUnknown';
+    if(mode==='duplicate')page.add('td',grids[1].container.children[0].children[0].attrs['data-tid'],'100',undefined,panel);
+    if(mode==='hidden_filter')menu.style.visibility='hidden';
+    const native=await page.observe(),r=native.process_console;
+    if(['hidden','overflow','record','foreign_bound','duplicate'].includes(mode)){assert.equal(r.status,'unobserved',mode);continue;}
+    assert.equal(r.status,'rendered_process_inventory',mode);if(mode==='complete')assert.doesNotThrow(()=>createObservationPages().retain({status:'SUCCEEDED',operation_id:'process-read',output:native}));assert.equal(r.rows.length,19);assert.equal(r.top_groups.length,15);
+    assert.equal(r.top_level_complete,mode!=='hidden_filter');const scoped=await page.execute({mode:'observe',root_ref:r.panel_ref});assert.equal(scoped.output.process_console.status,'rendered_process_inventory');assert.equal(scoped.output.process_console.top_level_complete,mode!=='hidden_filter');assert.equal(r.details_complete,false);assert.equal(r.execution_verified,false);assert.equal(r.owner_verified,false);
+    assert.equal(r.rows[0].rendered_state,mode==='unknown_state'?'unknown':'completed');
+    if(mode==='two_selected')assert.equal(native.ui.elements.filter(e=>e.process_menu).length,0);
+    if(mode==='unknown_menu'){const roots=await page.execute({mode:'observe',discover_roots:true});assert.equal(roots.output.ui.elements.some(e=>e.tid==='mnContextMenu'),false);}
+    if(mode==='complete') {
+      const control=native.ui.elements.find(e=>e.process_row?.record_id===r.rows.at(-1).record_id);assert.ok(control);assert.deepEqual(control.allowed_actions,['click','right_click','press']);assert.equal(control.signature.process_row.path,r.rows.at(-1).path);
+      const roots=await page.execute({mode:'observe',discover_roots:true});const menuRoot=roots.output.ui.elements.find(e=>e.tid==='mnContextMenu');assert.ok(menuRoot);
+      const read=await page.execute({mode:'observe',root_ref:menuRoot.ref});const item=read.output.ui.elements.find(e=>e.tid==='mnContextMenu;mniShowNodeToProcess');assert.ok(item?.process_menu);assert.equal(item.process_menu.process.record_id,r.rows.at(-1).record_id);assert.equal(item.process_menu.opening_verified,false);assert.deepEqual(item.allowed_actions,['click','press']);
+    }
+  }
+});
+
+async function inputPortFinishFixture(mode='valid') {
+  const f=await inputMappingLiveFixture(),{page,owner,base,nodes}=f;
+  const {inputPortBreadcrumbs}=await import('./input-port-breadcrumbs.fixture.mjs');
+  const panel=page.add('div','MF;TF-5;NavigationBar;NavigationPanel','',{x:48,y:35,width:1392,height:36});
+  const crumbs=inputPortBreadcrumbs.map((n,i)=>{
+    const crumb=page.add('a',n.tid,n.label,n.rect,panel),icon={4:'maptree-icon-workflow',5:'bg-vendor-icon-calcdata',8:'maptree-icon-wizard'}[i];
+    if(icon)page.add('span',null,'',{x:n.rect.x+1,y:n.rect.y+1,width:16,height:16},crumb).attrs.class=icon;return crumb;
+  });
+  const done=page.add('button','MF;TF-5;WizrdMCF;btnDone','Готово',{x:1300,y:950,width:100,height:25},owner);
+  if(mode==='missing_context')crumbs[7].remove();
+  if(mode==='missing_mapping')nodes.get(base+'colSourceName_Region').remove();
+  if(mode==='duplicate_done')page.add('button',done.attrs['data-tid'],'Готово',done.box,owner);
+  let graph,node,label,waits=0;
+  const click=page.mouse.click;page.mouse.click=async(...args)=>{
+    await click(...args);if(mode==='still_open')return;
+    owner.remove();for(const c of crumbs.slice(5))c.remove();
+    if(mode==='wrong_workflow')crumbs[4].ownText='Другой сценарий';
+    graph=page.add('div','MF;TF-5;ModelForm;cmpDiagram','',{x:48,y:71,width:1392,height:929});
+    const key=mode==='wrong_node'?'Other':'Revenue';node=page.add('g','MF;TF-5;Graph;'+key,'',{x:100,y:200,width:150,height:80},graph);
+    label=page.add('span','MF;TF-5;Graph;'+key+';Label;Label',key,{x:110,y:220,width:120,height:30},node);
+    if(mode==='duplicate_node')page.add('g','MF;TF-5;Graph;'+key,'',node.box,graph);
+    if(mode==='mask')page.add('div','mask','Загрузка').attrs.class='x-mask-msg';
+  };
+  page.waitForTimeout=async()=>{waits++;
+    if(mode==='late_body'&&waits===2){node.remove();node=page.add('g','MF;TF-5;Graph;Revenue','',{x:100,y:200,width:150,height:80},graph);label=page.add('span','MF;TF-5;Graph;Revenue;Label;Label','Revenue',{x:110,y:220,width:120,height:30},node);}
+    if(mode==='churn')page.mutationObserver.pending.push({type:'attributes',target:node,attributeName:'style'});
+    if(mode==='late_tab'&&waits===2)page.tab.attrs['data-tid']='MF;cntMain;cntWorkspace;Workspace;t.br;tb-2';
+  };
+  return {...f,done,waits:()=>waits};
+}
+
+test('typed input-port finish is offered only with full mapping and exact owner evidence',async()=>{
+  for(const mode of ['valid','missing_context','missing_mapping','duplicate_done']){
+    const {page}=await inputPortFinishFixture(mode),r=await page.observe();
+    const done=r.ui.elements.filter(e=>e.wizard_finish?.mode==='input_port');
+    if(mode==='valid'){
+      assert.equal(done.length,1);assert.ok(done[0].allowed_actions.includes('finish_wizard'));
+      assert.deepEqual(Object.keys(done[0].wizard_finish).sort(),['mode','node_ref','port_ref','root_ref']);
+      assert.ok(JSON.stringify(done[0].wizard_finish).length<256);
+    } else assert.equal(done.length,0,mode);
+  }
+});
+
+test('typed input-port finish uses one gesture and quiet exact graph return without applied claims',async()=>{
+  for(const mode of ['valid','late_body','wrong_node','wrong_workflow','still_open','mask','duplicate_node','churn','late_tab']){
+    const {page,waits}=await inputPortFinishFixture(mode),snapshot=await page.observe();
+    const done=snapshot.ui.elements.find(e=>e.wizard_finish?.mode==='input_port');assert.ok(done,mode);
+    const result=await page.act({verb:'finish_wizard',ref:done.ref},snapshot),success=['valid','late_body'].includes(mode);
+    assert.equal(result.status,success?'SUCCEEDED':'AMBIGUOUS',mode+JSON.stringify(result.error));
+    assert.equal(page.events.filter(e=>e==='click').length,1,mode);
+    const event=result.trace.find(e=>e.event==='input_port_finish_verified');assert.equal(!!event,success,mode);
+    assert.ok(!result.trace.some(e=>e.event==='wizard_finish_graph_verified'));
+    if(success){assert.equal(event.wizard_root_ref,snapshot.wizard.root_ref);assert.equal(event.control_ref,done.ref);
+      assert.deepEqual(event.port_path,snapshot.wizard.input_port_context.port_path);
+      assert.equal(event.reopen_required,true);assert.equal(event.settings_applied,false);assert.equal(event.source_identity_verified,false);
+      assert.equal(result.trace.find(e=>e.event==='input_port_finish_settled').quiet_samples,3);
+    }
+    if(mode==='late_body')assert.equal(waits(),5);if(mode==='churn')assert.equal(waits(),12);
+  }
+});
+
+test('input-port finish minimal metadata is delivered on the unchanged 12000-byte pager',async()=>{
+  const {page}=await inputPortFinishFixture(),raw=await page.execute({mode:'observe'}),pager=createObservationPages();
+  const issued=pager.retain(raw),button=issued.output.ui.elements.find(e=>e.wizard_finish?.mode==='input_port');
+  assert.ok(button);assert.ok(Buffer.byteLength(JSON.stringify(issued.output))<=12000);
+  pager.assertIssued(issued.output.observation_id,{verb:'finish_wizard',ref:button.ref});
+});
+
+async function nodeOverviewContextFixture(mode='valid') {
+  const {inputPortBreadcrumbs}=await import('./input-port-breadcrumbs.fixture.mjs');
+  const page=new Page();page.context.innerWidth=1440;page.context.innerHeight=1000;
+  page.tab.attrs['data-tid']='MF;cntMain;cntWorkspace;Workspace;t.br;tb-5';
+  const base='MF;TF-5;',panel=page.add('div',base+'NavigationBar;NavigationPanel','',{x:48,y:35,width:1392,height:36});
+  const crumbs=inputPortBreadcrumbs.slice(0,6).map((n,index)=>{
+    const last=index===5,crumb=page.add('a',last?n.tid.replace(/Revenue$/,'Изменение'):n.tid,last?'Изменение':n.label,last?{x:774,y:41,width:117.45,height:24}:n.rect,panel);
+    const icon={4:'maptree-icon-workflow',5:'bg-vendor-icon-reformcolumns'}[index];
+    if(icon)page.add('span',null,'',{x:crumb.box.x+6,y:44,width:18,height:18},crumb).attrs.class=icon;
+    return crumb;
+  });
+  if(mode==='hidden')crumbs[5].style.visibility='hidden';
+  if(mode==='extra')page.add('a',crumbs[5].attrs['data-tid']+'>Extra','Extra',crumbs[5].box,panel);
+  if(mode==='duplicate')page.add('a',crumbs[5].attrs['data-tid'],'Изменение',crumbs[5].box,panel);
+  if(mode==='duplicate_panel')page.add('div',base+'NavigationBar;NavigationPanel','',panel.box);
+  if(mode==='foreign')crumbs[5].attrs['data-tid']=crumbs[5].attrs['data-tid'].replace('TF-5','TF-3');
+  if(mode==='broken_chain')crumbs[3].attrs['data-tid']+='>Skipped';
+  if(mode==='clipped')crumbs[5].box={...crumbs[5].box,x:1400};
+  if(mode==='missing_icon')crumbs[4].children[0].remove();
+  if(mode==='hidden_icon')crumbs[5].children[0].style.visibility='hidden';
+  if(mode==='outside_icon')crumbs[5].children[0].box.x=1200;
+  if(mode==='foreign_tab')page.tab.attrs['data-tid']='MF;cntMain;cntWorkspace;Workspace;t.br;tb-2';
+  if(mode==='wizard')page.add('div',base+'WizrdMCF','', {x:48,y:71,width:1000,height:800});
+  if(mode==='bounded')for(let i=0;i<33;i++)page.add('a',base+'cnrNaviMode;b.s_Extra'+i,'Extra',crumbs[0].box,panel);
+  return {page,panel};
+}
+test('node overview reads six owned visible breadcrumbs without claiming ShowNode ownership',async()=>{
+  const {page}=await nodeOverviewContextFixture(),r=await page.observe();
+  assert.equal(r.node_context.status,'observed');assert.equal(r.node_context.kind,'node');assert.equal(r.node_context.path.length,6);
+  assert.equal(r.node_context.node.label,'Изменение');assert.equal(r.node_context.opening_verified,false);
+  assert.equal(r.navigation_context.status,'unobserved');
+  const scoped=(await page.execute({mode:'observe',root_ref:r.node_context.panel_ref})).output;
+  assert.deepEqual(scoped.node_context,r.node_context);assert.deepEqual(page.events,[]);
+  const raw=await page.execute({mode:'observe'});assert.deepEqual(createObservationPages().retain(raw).output.node_context,r.node_context);
+});
+test('node overview rejects incomplete foreign clipped and unowned icon breadcrumbs',async()=>{
+  for(const mode of ['hidden','extra','duplicate','duplicate_panel','foreign','broken_chain','clipped','missing_icon','hidden_icon','outside_icon','foreign_tab','wizard','bounded']) {
+    const {page}=await nodeOverviewContextFixture(mode);assert.notEqual((await page.observe()).node_context.status,'observed',mode);
+  }
+});
+
+function smallTableCoverageFixture() {
+ const page=new Page(),key='MF;TF-1;ViewsForm;BrowseView';page.context.innerWidth=1000;page.context.innerHeight=800;
+ const view=page.add('div',key,'',{x:10,y:50,width:950,height:700});
+ const nulls=page.add('button',key+';btnDataGridShowNulls','',{x:30,y:60,width:30,height:20},view);nulls.attrs.class='x-btn-pressed';
+ const grids=[],containers=[],rows=[];
+ for(let side=0;side<2;side++) {
+  const x=20+side*100,width=side?800:90,id='table-view-'+side;
+  const g=page.add('div',key+';grdData;grd'+(side?'-1':'')+';tbl','',{x,y:100,width,height:500},view);
+  g.attrs.id=id;Object.assign(g,{scrollTop:0,scrollLeft:0,clientWidth:width,scrollWidth:width,clientHeight:500,scrollHeight:500});
+  const c=page.add('div',null,'',{x,y:100,width,height:120},g);c.attrs.class='x-grid-item-container';c.style.transform='matrix(1, 0, 0, 1, 0, 0)';
+  const rs=[];for(let i=0;i<6;i++){const row=page.add('table',null,'',{x,y:100+i*20,width,height:20},c);Object.assign(row.attrs,{class:'x-grid-item','data-recordindex':String(i),'data-recordid':'record-'+i,'data-boundview':id});rs.push(row);}
+  grids.push(g);containers.push(c);rows.push(rs);
+ }
+ return {page,key,view,nulls,grids,containers,rows};
+}
+test('Table row inventory rejects hidden or virtualized remainder and mismatched grids',async()=>{
+ for(const mode of ['valid','overflow','translated','missing','duplicate','mismatch','clipped','extra','no_null','foreign_view']){
+  const f=smallTableCoverageFixture();
+  if(mode==='overflow')f.grids[1].scrollHeight=501;
+  if(mode==='translated')f.containers[1].style.transform='matrix(1, 0, 0, 1, 0, 20)';
+  if(mode==='missing')f.rows[1][5].remove();
+  if(mode==='duplicate')f.rows[1][5].attrs['data-recordid']='record-4';
+  if(mode==='mismatch')f.rows[1][5].attrs['data-recordid']='foreign';
+  if(mode==='clipped')f.rows[1][5].box.y=799;
+  if(mode==='extra')f.page.add('div',null,'',undefined,f.containers[1]);
+  if(mode==='no_null')f.nulls.attrs.class='';
+  if(mode==='foreign_view')f.view.attrs['data-tid']='MF;TF-2;ViewsForm;BrowseView';
+  const c=(await f.page.observe()).table_coverage;
+  assert.equal(!!c.rendered_rows,['valid','no_null'].includes(mode),mode);
+  assert.equal(c.complete_result_verified,false);
+  if(mode==='valid'){assert.equal(c.rendered_rows.count,6);assert.equal(c.null_display.enabled,true);assert.equal(c.rendered_rows.source_total_verified,false);}
+  if(mode==='no_null')assert.equal(c.null_display.enabled,false);
+ }
+});
+test('disabled Ext menu cannot issue gestures including its inner menuitem',async()=>{
+ const {page}=smallTableCoverageFixture(),menu=page.add('div','mnContextData','',{x:50,y:200,width:300,height:200});
+ for(const [i,n] of ['btnFirstPage','btnPrevPage','btnNextPage','btnLastPage'].entries()){
+  const item=page.add('div','mnContextData;'+n,'',{x:60,y:210+i*30,width:200,height:25},menu);item.attrs.class='x-menu-item-disabled';
+  const inner=page.add('a',null,n,{x:60,y:210+i*30,width:200,height:25},item);inner.attrs.role='menuitem';
+ }
+ const s=await page.observe();assert.equal(s.table_coverage.pagination.controls.length,4);
+ assert.ok(s.table_coverage.pagination.controls.every(c=>c.enabled===false));
+ for(const e of s.ui.elements.filter(e=>e.tid?.startsWith('mnContextData;')||e.role==='menuitem')){assert.equal(e.enabled,false);assert.deepEqual(e.allowed_actions,[]);}
+});
+test('Table row range is exact, scoped and never itself a source total',async()=>{
+ for(const mode of ['valid','malformed','duplicate','foreign']){
+  const {page,key}=smallTableCoverageFixture();const mk=key+';ModalWindow_BrowseGoToLine';
+  const modal=page.add('div',mk,'',{x:100,y:200,width:300,height:200});modal.attrs.class='x-window';
+  const tid=(mode==='foreign'?'MF;TF-2;ViewsForm;BrowseView;ModalWindow_BrowseGoToLine':mk)+';BrowseGoToLine;lblRowsRange';
+  const label=page.add('div',tid,mode==='malformed'?'Номер строки (1 - 6): extra':'Номер строки (1 - 6):',{x:110,y:220,width:250,height:30},modal);
+  if(mode==='duplicate')page.add('div',tid,label.ownText,label.box,modal);
+  const c=(await page.observe()).table_coverage;
+  assert.equal(!!c.row_range,mode==='valid',mode);if(mode==='valid'){assert.equal(c.row_range.last,6);assert.equal(c.row_range.source_total_verified,false);}
+ }
+});
+test('menu becoming disabled after observation refuses action before gesture',async()=>{
+ const {page}=smallTableCoverageFixture();
+ const menu=page.add('div','mnContextData','',{x:50,y:200,width:300,height:200});
+ const item=page.add('div','mnContextData;btnNextPage','Следующая страница',{x:60,y:210,width:200,height:25},menu);
+ const before=await page.observe(),control=before.ui.elements.find(e=>e.tid==='mnContextData;btnNextPage');
+ assert.ok(control.allowed_actions.includes('click'));item.attrs.class='x-menu-item-disabled';
+ const out=await page.act({verb:'click',ref:control.ref},before);
+ assert.equal(out.status,'NOT_APPLIED');assert.equal(out.effect_possible,false);assert.deepEqual(page.events,[]);
+});
+test('native Table coverage survives actual pager and independent journal comparison',async()=>{
+ const {page}=smallTableCoverageFixture(),raw=await page.execute({mode:'observe'});
+ const delivered=createObservationPages().retain(clone(raw)),{spawnSync}=await import('node:child_process');
+ assert.deepEqual(delivered.output.table_coverage,raw.output.table_coverage);
+ const script="import sys,json,copy;from rename_effect import journal_equal;r,d=json.load(sys.stdin);d['output'].pop('operation',None);assert journal_equal(r,d);d['output']['table_coverage']['rendered_rows']['count']=7;assert not journal_equal(r,d)";
+ const check=spawnSync('python3',['-c',script],{cwd:new URL('../../tools/loginom-acceptance/',import.meta.url),input:JSON.stringify([raw,delivered]),encoding:'utf8'});
+ assert.equal(check.status,0,check.stderr);
+});
+
+
+test('native Upload button and descendants cannot bypass artifact transfer through generic gestures',async()=>{
+  const page=new Page();
+  const upload=page.add('a','MF;TF-1;FileStorageForm;btnUpload','Загрузить');
+  const inner=page.add('span','upload-label','Загрузить',{x:35,y:105,width:60,height:15},upload);
+  const ordinary=page.add('button','MF;TF-1;FileStorageForm;btnCreateDirectory','Создать каталог',{x:200,y:100,width:130,height:25});
+  const observed=await page.observe();
+  for(const tid of [upload.getAttribute('data-tid'),inner.getAttribute('data-tid')]){
+    const element=observed.ui.elements.find(e=>e.tid===tid);
+    if(!element)continue;
+    assert.deepEqual(clone(element.allowed_actions),[]);
+    for(const action of [{verb:'click',ref:element.ref},{verb:'press',ref:element.ref,key:'Enter'}]){
+      assert.throws(()=>validateUiAction(action,observed));
+      await assert.rejects(()=>page.act(action,observed),/does not support this action/);
+    }
+  }
+  assert.ok(observed.ui.elements.find(e=>e.tid===ordinary.getAttribute('data-tid')).allowed_actions.includes('click'));
+  assert.equal(page.events.filter(e=>e==='click'||e==='key:Enter').length,0);
+});
+
+test('empty graph decorations do not masquerade as nodes while a real Vertex node remains actionable',async()=>{
+  const page=new Page(),tid='MF;TF-1;Graph;Vertex';
+  page.add('g',tid,'',{x:30,y:120,width:40,height:40});
+  page.add('g',tid,'',{x:90,y:120,width:40,height:40});
+  let snapshot=await page.observe();
+  assert.equal(snapshot.graph_identity.status,'observed');
+  assert.deepEqual(clone(snapshot.nodes),[]);
+  assert.equal(snapshot.ui.elements.some(e=>e.tid===tid),false);
+  const real=new Page();real.add('g',tid,'',{x:30,y:120,width:40,height:40});
+  real.add('text',tid+';Label;Label','Vertex',{x:30,y:165,width:60,height:20});
+  snapshot=await real.observe();
+  assert.equal(snapshot.nodes.length,1);
+  const body=snapshot.ui.elements.find(e=>e.tid===tid);
+  assert.equal(body.graph_node.part,'body');assert.ok(body.allowed_actions.includes('click'));
+});
+
+test('reform coverage binds complete visible configured fields and rejects missing remainder evidence',async()=>{
+  for(const mode of ['valid','filtered','overflow','clipped','hidden_extra','gap','wrong_view','missing_check','duplicate_check','missing_cache','editor','mask','extra_container','offset','selected_excluded']) {
+    const page=new Page(),c=mappingCoverageFixture(page),old=c.base;
+    c.base=old.replace('ColumnsMappingEngineOutputPortWizard','ReformColumnsWizard');
+    for(const e of page.document.all())if(e.attrs['data-tid']?.startsWith(old))e.attrs['data-tid']=e.attrs['data-tid'].replace(old,c.base);
+    page.document.querySelectorAll('[data-tid="'+c.base+'btnAddMappingColumn"]')[0].remove();
+    c.tableMode.remove();c.linksMode.remove();c.auto.remove();c.container.box.width=600;
+    for(const [i,row] of c.rows.entries()){
+      row.box.width=600;
+      const source=row.children[2];source.attrs['data-tid']=c.base+'colCachingMethod_Field'+i;source.ownText='Отключено';source.children=[];
+      const cell=page.add('td',c.base+'colExcluded_Field'+i,'',{x:600,y:row.box.y,width:100,height:25},row);
+      page.add('img',null,'',cell.box,cell).attrs.class='x-grid-checkcolumn'+(mode==='selected_excluded'?' x-grid-checkcolumn-checked':'');
+    }
+    if(mode==='filtered')c.input.value='Field';
+    if(mode==='overflow')c.body.scrollHeight=401;
+    if(mode==='clipped')c.rows[1].children[5].box.x=900;
+    if(mode==='hidden_extra'){const r=page.add('table',null,'',c.rows[0].box,c.container);r.attrs.class='x-grid-item';r.style.display='none';}
+    if(mode==='gap')c.rows[1].attrs['data-recordindex']='2';
+    if(mode==='wrong_view')c.rows[1].attrs['data-boundview']='foreign';
+    if(mode==='missing_check')c.rows[0].children[5].children=[];
+    if(mode==='duplicate_check')page.add('img',null,'',c.rows[0].box,c.rows[0].children[5]).attrs.class='x-grid-checkcolumn';
+    if(mode==='missing_cache')c.rows[0].children[2].remove();
+    if(mode==='editor')page.add('div','MF;TF-1;WizrdMCF;EditReformColumnDefForm','',undefined,c.form);
+    if(mode==='mask')page.add('div',null,'Loading').attrs.class='x-mask-msg';
+    if(mode==='extra_container')page.add('div',null,'',c.container.box,c.body).attrs.class='x-grid-item-container';
+    if(mode==='offset')c.body.scrollLeft=1;
+    const s=await page.observe(),cols=s.wizard.reform_columns;
+    assert.equal(cols.definition_coverage.status,['valid','selected_excluded'].includes(mode)?'complete_configured_fields':'partial',mode);
+    assert.equal(cols.complete,false);assert.equal(cols.settings_applied,false);assert.equal(cols.definition_coverage.source_identity_verified,false);
+    if(mode==='valid'){assert.equal(cols.definition_coverage.count,2);assert.equal(cols.definition_coverage.first_row_ref,cols.fields[0].row_ref);const narrow=await page.execute({mode:'observe',root_ref:s.wizard.root_ref});assert.deepEqual(narrow.output.wizard.reform_columns,cols);}
+  }
+});
+
+
+test('output mapping coverage also binds each native derived socket family',async()=>{
+  for(const family of ['DerivedDataSourceOutputSocketWizard','DerivedDataSourceMappingEngineOutputPortWizard']){
+    const page=new Page(),c=mappingCoverageFixture(page);
+    for(const e of page.document.all())if(e.attrs['data-tid']?.startsWith(c.base))e.attrs['data-tid']=e.attrs['data-tid'].replace('ColumnsMappingEngineOutputPortWizard',family);
+    const raw=await page.execute({mode:'observe'}),m=raw.output.wizard.output_columns;
+    assert.equal(m.definition_coverage.status,'complete_configured_rows');assert.equal(m.definition_coverage.count,2);assert.equal(m.auto_sync.value,true);
+    const narrow=await page.execute({mode:'observe',root_ref:raw.output.wizard.root_ref});assert.deepEqual(narrow.output.wizard.output_columns,m);
+    c.input.value='Field';const filtered=await page.observe();assert.equal(filtered.wizard.output_columns.definition_coverage.status,'partial');
+  }
+});
+
+function outputPortFinishFixture(mode='valid') {
+  const page=new Page(),c=mappingCoverageFixture(page),panel=page.add('div','MF;TF-1;NavigationBar;NavigationPanel');let path='';
+  const crumbs=[];
+  for(const [label,icon] of [['Package','maptree-icon-package'],['Workflow','maptree-icon-workflow'],['Calc','bg-vendor-icon-calcdata'],['Outputs','maptree-icon-modeloutputports'],['Result','bg-vendor-icon-deriveddatasourceoutputsocketdef'],['Settings','maptree-icon-wizard']]){
+    path+=(path?'>':'')+label;const crumb=page.add('a','MF;TF-1;cnrNaviMode;b.s_'+path,label,undefined,panel);page.add('span',null,'',undefined,crumb).attrs.class=icon;crumbs.push(crumb);
+  }
+  const done=page.add('button','MF;TF-1;WizrdMCF;btnDone','Готово',{x:750,y:500,width:100,height:25},c.form);
+  if(mode==='missing_context')crumbs[4].remove();
+  if(mode==='filtered')c.input.value='Field';
+  if(mode==='duplicate_done')page.add('button',done.attrs['data-tid'],'Готово',done.box,c.form);
+  if(mode==='missing_auto')c.auto.remove();
+  const click=page.mouse.click;let node,waits=0;
+  page.mouse.click=async(...args)=>{await click(...args);if(mode==='still_open')return;c.form.remove();for(const crumb of crumbs.slice(2))crumb.remove();
+    if(mode==='wrong_workflow')crumbs[1].ownText='Other';
+    const graph=page.add('div','MF;TF-1;ModelForm;cmpDiagram','',{x:20,y:70,width:850,height:650});
+    const key=mode==='wrong_node'?'Other':'Calc';node=page.add('g','MF;TF-1;Graph;'+key,'',{x:100,y:200,width:150,height:80},graph);
+    page.add('span','MF;TF-1;Graph;'+key+';Label;Label',key,{x:110,y:220,width:120,height:30},node);
+    if(mode==='mask')page.add('div',null,'Loading').attrs.class='x-mask-msg';
+  };
+  page.waitForTimeout=async()=>{waits++;if(mode==='churn')page.mutationObserver.pending.push({type:'attributes',target:node,attributeName:'style'});};
+  return {page,waits:()=>waits};
+}
+
+test('typed output-port finish requires complete output mapping and its own port owner',async()=>{
+  for(const mode of ['valid','missing_context','filtered','duplicate_done','missing_auto']){
+    const {page}=outputPortFinishFixture(mode),s=await page.observe();const controls=s.ui.elements.filter(e=>e.wizard_finish?.mode==='output_port');
+    assert.equal(controls.length,mode==='valid'?1:0,mode);
+  }
+});
+
+test('typed output-port finish confirms one gesture and quiet return to the exact graph',async()=>{
+  for(const mode of ['valid','wrong_workflow','wrong_node','still_open','mask','churn']){
+    const {page}=outputPortFinishFixture(mode),s=await page.observe(),done=s.ui.elements.find(e=>e.wizard_finish?.mode==='output_port');assert.ok(done,mode);
+    const r=await page.act({verb:'finish_wizard',ref:done.ref},s),ok=mode==='valid';assert.equal(r.status,ok?'SUCCEEDED':'AMBIGUOUS',mode+JSON.stringify(r.error));assert.equal(page.events.filter(e=>e==='click').length,1,mode);
+    const proof=r.trace.find(t=>t.event==='output_port_finish_verified');assert.equal(!!proof,ok,mode);assert.ok(!r.trace.some(t=>t.event==='wizard_finish_graph_verified'||t.event==='input_port_finish_verified'));
+    if(ok){assert.equal(proof.port_path.at(-1).label,'Result');assert.equal(proof.node.node_label,'Calc');assert.equal(proof.settings_applied,false);assert.equal(proof.source_identity_verified,false);assert.equal(proof.package_saved,false);assert.ok(r.trace.some(t=>t.event==='output_port_finish_settled'&&t.quiet_samples===3));}
+  }
+});
+
+function availableGroupFixture() {
+ const f=groupingFixture(),{page,base,wizard}=f;
+ // No selected data rows, while the stage marker remains present.
+ f.container.children=[];
+ const grid=page.add('div',base+'grdDataFields;tbl','',{x:600,y:100,width:200,height:300},wizard);grid.attrs.id='available';
+ const row=page.add('table',null,'',{x:600,y:100,width:200,height:24},grid);row.attrs={class:'x-grid-item','data-recordindex':'0','data-boundview':'available'};
+ const cell=page.add('td',base+'colDisplayName_Region','Region',row.box,row);
+ const icon=page.add('div',null,'',{x:602,y:102,width:16,height:16},cell);icon.attrs.class='bg-TBGDataType-dtString';
+ return {...f,available:grid,availableRow:row,availableCell:cell,availableIcon:icon};
+}
+test('available Group fields can be selected before used fields exist',async()=>{
+ const f=availableGroupFixture(),s=await f.page.observe();
+ const fields=s.wizard.grouping.available_fields;assert.equal(fields.length,1);assert.equal(fields[0].input_type,'string');
+ assert.equal(s.wizard.grouping.status,'unobserved');assert.equal(s.wizard.grouping.complete,false);
+ const cell=s.ui.elements.find(e=>e.ref===fields[0].cell_ref);assert.equal(cell.grouping_field.role,'available');assert.deepEqual(cell.allowed_actions,['click','double_click','press']);
+ const narrowed=(await f.page.execute({mode:'observe',root_ref:cell.ref})).output;
+ assert.equal(narrowed.ui.elements.find(e=>e.ref===cell.ref).grouping_field.role,'available');
+ const action=await f.page.act({verb:'click',ref:cell.ref},narrowed);assert.equal(action.status,'SUCCEEDED');assert.equal(f.page.events.filter(e=>e==='click').length,1);
+});
+test('Group available fields reject foreign hidden duplicate or malformed row identity',async()=>{
+ for(const mode of ['hidden','duplicate','foreign_grid','foreign_row','wrong_index','summary','unknown_type','duplicate_icon','hidden_icon','foreign_tid']) {
+  const f=availableGroupFixture(),{page,availableCell:cell,availableIcon:icon,availableRow:row}=f;
+  if(mode==='hidden')cell.style.display='none';
+  if(mode==='duplicate')page.add('td',cell.attrs['data-tid'],'Region',cell.box,row);
+  if(mode==='foreign_grid')f.available.attrs['data-tid']='MF;TF-2;WizrdMCF;GroupDataWizard;grdDataFields;tbl';
+  if(mode==='foreign_row')row.attrs['data-boundview']='foreign';
+  if(mode==='wrong_index')row.attrs['data-recordindex']='-1';
+  if(mode==='summary')row.attrs.class+=' x-grid-row-summary';
+  if(mode==='unknown_type')icon.attrs.class='unknown';
+  if(mode==='duplicate_icon'){const extra=page.add('div',null,'',icon.box,cell);extra.attrs.class=icon.attrs.class;}
+  if(mode==='hidden_icon')icon.style.display='none';
+  if(mode==='foreign_tid')cell.attrs['data-tid']='MF;TF-2;WizrdMCF;GroupDataWizard;colDisplayName_Region';
+  const s=await page.observe();assert.equal(s.wizard.grouping.available_fields.length,0,mode);
+  assert.equal(s.ui.elements.some(e=>e.grouping_field?.role==='available'),false,mode);
+ }
+});
+
+test('Group blank summary may reuse the final data-cell tid without becoming actionable',async()=>{
+ for(const mode of ['native','nonblank','other_key','duplicate_summary']) {
+  const f=groupingFixture(),last=f.records.at(-1),summary=last.summaryRow.children[0];
+  summary.attrs['data-tid']=last.cell.attrs['data-tid'];
+  if(mode==='nonblank')summary.ownText='other';
+  if(mode==='other_key')summary.attrs['data-tid']=f.base+'colUsedFields_unknown';
+  if(mode==='duplicate_summary')last.summaryRow.append(new Element('td',summary.attrs,'',summary.box));
+  const s=await f.page.observe(),g=s.wizard.grouping;
+  assert.equal(g.status,mode==='native'?'rendered_grouping_rows':'unobserved',mode);
+  if(mode==='native') {
+   const candidates=s.ui.elements.filter(e=>e.tid===last.cell.attrs['data-tid']);
+   assert.equal(candidates.length,1);assert.equal(candidates[0].grouping_field.field_key,'Id');
+   assert.notEqual(candidates[0].identity.anchor_tid,last.cell.attrs['data-tid']);
+  }
+ }
+});
+
+
+test('scan time budget accepts 500 ms but rejects 501 ms before issuing references', async () => {
+  for (const elapsed of [500, 501]) {
+    const clock = fixtureClock(), page = new Page({ clock: clock.Date });
+    page.add('button', 'Safe;btnAction', 'Action');
+    const query = page.document.querySelectorAll.bind(page.document);
+    let first = true;
+    page.document.querySelectorAll = selector => {
+      if (first) { first = false; clock.advance(elapsed); }
+      return query(selector);
+    };
+    const outcome = await page.execute({ mode: 'observe', discover_roots: true });
+    assert.equal(outcome.status, elapsed === 500 ? 'SUCCEEDED' : 'NOT_APPLIED');
+    if (elapsed === 501) {
+      assert.equal(outcome.error.code, 'UI_SCAN_LIMIT');
+      assert.equal(outcome.output.scan.complete, false);
+      assert.equal(outcome.output.ui, undefined);
+      assert.equal(outcome.effect_possible, false);
+    }
+    assert.deepEqual(page.events, []);
+  }
+});
+
+test('action deadline expires before the gesture with a controlled clock', async () => {
+  const clock = fixtureClock(), page = new Page({ clock: clock.Date });
+  page.add('button', 'Safe;btnAction', 'Action');
+  const snapshot = await page.observe(), target = snapshot.ui.elements.find(e => e.tid === 'Safe;btnAction');
+  const locator = page.locator.bind(page);
+  page.locator = selector => {
+    const found = locator(selector), count = found.count;
+    found.count = async () => { clock.advance(15000); return count(); };
+    return found;
+  };
+  const outcome = await page.act({ verb: 'click', ref: target.ref }, snapshot);
+  assert.equal(outcome.status, 'NOT_APPLIED');
+  assert.equal(outcome.error.code, 'UI_DEADLINE_EXCEEDED');
+  assert.equal(outcome.effect_possible, false);
+  assert.deepEqual(page.events, []);
 });

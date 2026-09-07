@@ -10,8 +10,11 @@ MISSING_PROOFS = ('source_artifact_binding', 'encoding_header_skip_readback',
 # normalize unknown labels. Literal delimiter input is also supported.
 DISPLAY_VALUES = {
     'delimiter': {';': ';', 'Точка с запятой': ';'},
-    'text_qualifier': {'Двойная кавычка (")': '"'},
-    'decimal_separator': {'Точка (.)': '.'},
+    # Loginom 7.4.2 live: literal quote after fill/blur, display label after next/back.
+    'text_qualifier': {'"': '"', 'Двойная кавычка (")': '"'},
+    # Live 2026-09-06: literal input stays '.' after blur; next/back renders
+    # the same choice as 'Точка (.)'. This is displayed settings, not apply proof.
+    'decimal_separator': {'.': '.', 'Точка (.)': '.'},
 }
 FIELD_OWNERS = {'delimiter': 'edtDelimiterChar', 'text_qualifier': 'edtTextQualifier',
                 'decimal_separator': 'edtDecimalSeparator', 'null_marker': 'edtValueNull'}

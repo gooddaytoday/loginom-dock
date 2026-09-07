@@ -37,7 +37,17 @@ test('upload uses the admitted path once and leaves server verification pending'
   await assert.rejects(()=>f.rt.upload({...request,operationId:'upload-2'}),/pending/);
   await assert.rejects(()=>f.rt.upload({...request,observationId:'changed'}),/different/);
   await assert.rejects(()=>f.rt.recover('upload-1',{strategy:'abandon_operation',recoveryOperationId:'abandon'}),/server transfer/);
-  await assert.rejects(()=>f.rt.uiAct({verb:'click',ref:'ui-ref'},{observationId:'new',operationId:'repair',recoveryOperationId:'upload-1'}),/pending/);
+  const uiRequest={observationId:'new',operationId:'repair',recoveryOperationId:'upload-1'};
+  const beforeUi=[...f.page.events],refused=await f.rt.uiAct({verb:'click',ref:'ui-ref'},uiRequest);
+  assert.equal(refused.status,'FAILED');assert.equal(refused.effect_possible,false);
+  assert.equal(refused.output.request_refusal.browser_invoked,false);
+  assert.equal(refused.output.operation.state,'pending');assert.equal(refused.output.operation.effect_state,'partial_or_unverified');
+  assert.deepEqual(f.page.events,beforeUi);
+  const record=f.events.find(e=>e.phase==='ui_request_rejected');assert.deepEqual(record.outcome,refused);
+  assert.equal(record.pending_operation_id,'upload-1');assert.equal(record.operation_id,'repair');
+  assert.deepEqual(await f.rt.uiAct({verb:'click',ref:'ui-ref'},uiRequest),refused);
+  assert.equal(f.events.filter(e=>e.phase==='ui_request_rejected').length,1);
+  await assert.rejects(()=>f.rt.uiAct({verb:'scroll',ref:'ui-ref',delta_y:100},uiRequest),/different parameters/);
   assert.throws(()=>f.rt.assertPreparationAllowed(),/action/);
   assert.ok(!JSON.stringify(f.events).includes('/private/'));
   assert.deepEqual(f.events.filter(e=>e.action_key==='artifact.upload').map(e=>e.phase),['prepared','completed','reconciled']);

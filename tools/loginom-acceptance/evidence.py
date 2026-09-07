@@ -100,9 +100,42 @@ def export_history(home, secrets):
         if '_compressed_summary' in columns:
             for row,session in db.execute("SELECT id,session_id FROM messages WHERE _compressed_summary=1"):
                 boundaries.setdefault(session,[]).append(row)
+        retained_prepare=set()
+        # Hermes preserves the initial prepare pair BEFORE its summary marker.
+        # Recognize only a complete, exact archived pair; never infer retries
+        # from IDs or a summary-looking string alone. No prose is selected.
+        if {'timestamp','active','_compressed_summary'} <= columns:
+            for session,markers in boundaries.items():
+                for marker in markers:
+                    pair=list(db.execute("SELECT id,role,tool_calls,tool_call_id,tool_name,timestamp,active FROM messages WHERE session_id=? AND id<? ORDER BY id DESC LIMIT 2",(session,marker)))
+                    if len(pair)!=2:continue
+                    reply,call=pair
+                    # A later compaction can archive this retained pair too.
+                    # Its exact original timestamps, serialized call, reply and
+                    # adjacent summary marker still distinguish it from a retry.
+                    if reply[1]!='tool' or call[1]!='assistant' or reply[6] not in (0,1) or call[6]!=reply[6]:continue
+                    try:items=json.loads(call[2])
+                    except (ValueError,TypeError):continue
+                    if not isinstance(items,list) or len(items)!=1:continue
+                    item=items[0];function=item.get('function',{})
+                    if function.get('name')!=PREFIX+'dock_prepare' or reply[4]!=PREFIX+'dock_prepare':continue
+                    if (item.get('id') or item.get('call_id'))!=reply[3]:continue
+                    old_calls=list(db.execute("SELECT id FROM messages WHERE session_id=? AND role='assistant' AND active=0 AND timestamp=? AND tool_calls=? AND id<?",(session,call[5],call[2],call[0])))
+                    old_replies=list(db.execute("SELECT id,content FROM messages WHERE session_id=? AND role='tool' AND active=0 AND timestamp=? AND tool_call_id=? AND tool_name=? AND id<?",(session,reply[5],reply[3],reply[4],call[0])))
+                    if len(old_calls)!=1 or len(old_replies)!=1 or old_calls[0][0]>=old_replies[0][0]:continue
+                    original=old_replies[0][1]
+                    content=db.execute("SELECT content FROM messages WHERE id=? AND role='tool'",(reply[0],)).fetchone()[0]
+                    try:args=function.get('arguments',{});args=json.loads(args) if isinstance(args,str) else args
+                    except (ValueError,TypeError):continue
+                    if not isinstance(args,dict):continue
+                    first=''.join(f' {k}={str(v)[:40]}' for k,v in list(args.items())[:2])
+                    stub=f"[{reply[4]}]{first} ({len(original):,} chars result)"
+                    if content not in (original,stub):continue
+                    retained_prepare.update((session,row) for row in (call[0],reply[0]))
         def copied(original,row,session,stamp):
             return (stamp is not None and original['timestamp']==stamp and original['active']==0
-                    and any(original['row']<b<row for b in boundaries.get(session,[])))
+                    and (any(original['row']<b<row for b in boundaries.get(session,[]))
+                         or (session,row) in retained_prepare))
         calls=[];dispatch=[]
         rows=db.execute(f"SELECT id,session_id,tool_calls,{timestamp},{active} FROM messages WHERE role='assistant' AND tool_calls IS NOT NULL ORDER BY id")
         for row,session,serialized,stamp,is_active in rows:
@@ -145,6 +178,15 @@ def export_history(home, secrets):
             alias=None;kind=None
             for old in prior:
                 if old['content']==content:alias=old;kind='identical_reply_after_compression';break
+                # Hermes compressor replaces an older repeated tool reply with this
+                # exact marker. Require a later original, byte-identical reply
+                # in the same archived segment; never alias an actual new call.
+                if (content=='[Duplicate tool output — same content as a more recent call]'
+                        and {'timestamp','active'} <= columns and isinstance(old['content'],str)
+                        and db.execute("SELECT 1 FROM messages WHERE session_id=? AND role='tool' AND tool_name=? AND active=0 AND id>? AND id<? AND timestamp>? AND content=? LIMIT 1",
+                            (session,transport,old['row'],row,old['timestamp'],old['content'])).fetchone()):
+                    alias=old;kind=('exact_duplicate_read_marker_after_compression' if name==PREFIX+'read'
+                                    else 'exact_duplicate_tool_marker_after_compression');break
                 if call and isinstance(call['raw_args'],dict):
                     first=''.join(f' {k}={str(v)[:40]}' for k,v in list(call['raw_args'].items())[:2])
                     stub=f"[{call['transport']}]{first} ({len(old['content']):,} chars result)"

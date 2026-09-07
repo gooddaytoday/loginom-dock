@@ -24,6 +24,66 @@ def fixture():
     return tools,calls,events
 
 class RenameEffect(unittest.TestCase):
+    def test_graph_pages_bind_native_projection_and_preserve_omission_flags(self):
+        raw=fixture()[0][0]['result']
+        raw.update(status='SUCCEEDED',operation_id='observe')
+        raw['output']['ui']['elements']=[
+            {'ref':'body','scope':'graph','signature':{'tag':'g'}},
+            {'ref':'toolbar','scope':'workflow'},
+            {'ref':'editor','scope':'graph_editor','value':'name'}]
+        raw['output']['ui']['dialogs']=[{'ref':'blocking-dialog'}]
+        script="""import {createObservationPages} from './client/lib/observation-pages.mjs';
+let text='';for await(const part of process.stdin)text+=part;
+console.log(JSON.stringify(createObservationPages().retain(JSON.parse(text),{scope:'graph'})));"""
+        result=subprocess.run(['node','--input-type=module','-e',script],
+            cwd=Path(__file__).resolve().parents[2],input=json.dumps(raw),text=True,capture_output=True,check=True)
+        page=json.loads(result.stdout)
+        self.assertTrue(rename_effect.journal_equal(raw,page))
+        self.assertEqual([e['ref'] for e in page['output']['ui']['elements']],['body','editor'])
+        for mode in ('dialog_absence','omitted_elements','foreign_scope','injected','changed_value','missing'):
+            with self.subTest(mode=mode):
+                bad=copy.deepcopy(page);ui=bad['output']['ui']
+                if mode=='dialog_absence':ui['truncated']['dialogs']=False
+                if mode=='omitted_elements':ui['truncated']['elements']=False
+                if mode=='foreign_scope':bad['output']['page']['scope']='all'
+                if mode=='injected':ui['elements'].append({'ref':'toolbar','scope':'workflow'})
+                if mode=='changed_value':ui['elements'][1]['value']='other'
+                if mode=='missing':ui['elements'].pop()
+                self.assertFalse(rename_effect.journal_equal(raw,bad))
+
+    def test_real_pager_wizard_priority_is_bound_without_accepting_reordering(self):
+        items=[('plain',{}),('step',{'wizard_step':{'direction':'next'},'allowed_actions':['wizard_step']}),
+               ('field',{'wizard_field':{},'allowed_actions':['set_wizard_field']}),
+               ('option',{'allowed_actions':['select_wizard_option']}),
+               ('picker',{'wizard_combo':{'kind':'picker','field':{'scope':'import_column'}}}),
+               ('menu',{'role':'menuitem'}),('dialog',{'signature':{'tag':'button','dialog_ref':'dialog-1'}}),
+               ('other_picker',{'wizard_combo':{'kind':'picker','field':{'scope':'other'}}}),
+               ('field_without_action',{'wizard_field':{'name':'null_marker'}}),
+               ('finish',{'allowed_actions':['finish_wizard']})]
+        script="""import {createObservationPages} from './client/lib/observation-pages.mjs';
+let text='';for await(const part of process.stdin)text+=part;
+console.log(JSON.stringify(createObservationPages().retain(JSON.parse(text))));"""
+        for observed in (True,False):
+            with self.subTest(observed=observed):
+                raw=fixture()[0][0]['result'];raw.update(status='SUCCEEDED',operation_id='observe')
+                raw['output']['nodes']=[];raw['output']['wizard']={'status':'observed' if observed else 'absent'}
+                raw['output']['ui']['elements']=[{'ref':name,'signature':{'tag':'button'},**data} for name,data in items]
+                result=subprocess.run(['node','--input-type=module','-e',script],
+                    cwd=Path(__file__).resolve().parents[2],input=json.dumps(raw),text=True,capture_output=True,check=True)
+                page=json.loads(result.stdout)
+                self.assertTrue(rename_effect.journal_equal(raw,page))
+                order=[e['ref'] for e in page['output']['ui']['elements']]
+                self.assertEqual(order,['menu','dialog','picker','option','step','finish','field','plain','other_picker','field_without_action'] if observed else [name for name,_ in items])
+                for mode in ('reorder','duplicate','changed_priority','changed_scope','missing'):
+                    bad=copy.deepcopy(page)
+                    elements=bad['output']['ui']['elements']
+                    if mode=='reorder':elements[0],elements[1]=elements[1],elements[0]
+                    if mode=='duplicate':elements[1]=copy.deepcopy(elements[0])
+                    if mode=='changed_priority':elements[0]['allowed_actions']=['set_wizard_field']
+                    if mode=='changed_scope':bad['output']['page']['scope']='dialogs'
+                    if mode=='missing':elements.pop()
+                    self.assertFalse(rename_effect.journal_equal(raw,bad),mode)
+
     def test_exact_compact_identity_fallback_does_not_override_contradictions(self):
         self.assertEqual(rename_effect.element_anchor({'tid':'exact'}),'exact')
         self.assertEqual(rename_effect.element_anchor({'tid':'exact','identity':{'anchor_tid':'other'}}),'other')
@@ -37,6 +97,63 @@ class RenameEffect(unittest.TestCase):
         self.assertIsNotNone(self.proof(data))
         data[0][0]['result']['output']['ui']['elements'][0]['identity']={'anchor_tid':'foreign'}
         self.assertIsNone(self.proof(data))
+
+    def test_process_metadata_bound_to_real_pager_without_execution_admission(self):
+        raw=fixture()[0][0]['result'];raw.update(status='SUCCEEDED',operation_id='observe')
+        raw['output']['ui']['elements'][0]['process_row']={'record_id':'1','path':'Root>Активация_узлов','record_index':0,'panel_ref':'panel','grid_ids':['tree','table']}
+        raw['output']['process_console']={'status':'rendered_process_inventory',
+            'top_level_complete':True,'execution_verified':False,'owner_verified':False,
+            'details_complete':False,'rows':[{'record_id':'1','rendered_state':'completed','path':'Root>Активация_узлов'}]}
+        script="""import {createObservationPages} from './client/lib/observation-pages.mjs';
+let text='';for await(const part of process.stdin)text+=part;
+console.log(JSON.stringify(createObservationPages().retain(JSON.parse(text))));"""
+        result=subprocess.run(['node','--input-type=module','-e',script],cwd=Path(__file__).resolve().parents[2],input=json.dumps(raw),text=True,capture_output=True,check=True)
+        page=json.loads(result.stdout)
+        self.assertTrue(rename_effect.journal_equal(raw,page))
+        for mode in ('omit','claim','change_row','changed_action_binding'):
+            bad=copy.deepcopy(page)
+            if mode=='omit':del bad['output']['process_console']
+            if mode=='claim':bad['output']['process_console']['execution_verified']=True
+            if mode=='change_row':bad['output']['process_console']['rows'][0]['record_id']='foreign'
+            if mode=='changed_action_binding':bad['output']['ui']['elements'][0]['process_row']['record_id']='foreign'
+            self.assertFalse(rename_effect.journal_equal(raw,bad),mode)
+
+    def test_node_context_metadata_bound_to_real_pager_and_journal(self):
+        raw=fixture()[0][0]['result'];raw.update(status='SUCCEEDED',operation_id='observe')
+        raw['output']['node_context']={'status':'observed','kind':'node','opening_verified':False,
+            'panel_ref':'panel','node':{'ref':'node','tid':'own>node','label':'Изменение'},
+            'path':[{'ref':'node','tid':'own>node','label':'Изменение'}]}
+        script="""import {createObservationPages} from './client/lib/observation-pages.mjs';
+let text='';for await(const part of process.stdin)text+=part;
+console.log(JSON.stringify(createObservationPages().retain(JSON.parse(text))));"""
+        result=subprocess.run(['node','--input-type=module','-e',script],cwd=Path(__file__).resolve().parents[2],input=json.dumps(raw),text=True,capture_output=True,check=True)
+        page=json.loads(result.stdout)
+        self.assertTrue(rename_effect.journal_equal(raw,page))
+        for mode in ('omit','claim','node','path','kind'):
+            bad=copy.deepcopy(page)
+            if mode=='omit':del bad['output']['node_context']
+            if mode=='claim':bad['output']['node_context']['opening_verified']=True
+            if mode=='node':bad['output']['node_context']['node']['tid']='foreign'
+            if mode=='path':bad['output']['node_context']['path'][0]['tid']='foreign'
+            if mode=='kind':bad['output']['node_context']['kind']='workflow'
+            self.assertFalse(rename_effect.journal_equal(raw,bad),mode)
+
+    def test_table_settings_metadata_bound_to_real_pager_and_journal(self):
+        raw=fixture()[0][0]['result'];raw.update(status='SUCCEEDED',operation_id='observe')
+        raw['output']['table_settings']={'status':'observed','kind':'filter',
+            'filter':{'predicates_complete':True,'effective_filter_verified':False},
+            'settings_applied':False,'result_complete':False,'execution_verified':False}
+        script="""import {createObservationPages} from './client/lib/observation-pages.mjs';
+let text='';for await(const part of process.stdin)text+=part;
+console.log(JSON.stringify(createObservationPages().retain(JSON.parse(text))));"""
+        result=subprocess.run(['node','--input-type=module','-e',script],cwd=Path(__file__).resolve().parents[2],input=json.dumps(raw),text=True,capture_output=True,check=True)
+        page=json.loads(result.stdout)
+        self.assertTrue(rename_effect.journal_equal(raw,page))
+        for mode in ('missing','changed'):
+            bad=copy.deepcopy(page)
+            if mode=='missing':del bad['output']['table_settings']
+            else:bad['output']['table_settings']['result_complete']=True
+            self.assertFalse(rename_effect.journal_equal(raw,bad))
 
     def test_actual_runtime_all_pages_compact_only_redundant_identity(self):
         raw=fixture()[0][0]['result'];raw.update(status='SUCCEEDED',operation_id='observe')

@@ -22,12 +22,12 @@ const uiActionTool = { name: 'dock_ui_action',
     required: ['observation_id', 'operation_id', 'action'], additionalProperties: false },
   annotations: { readOnlyHint: false, destructiveHint: true, openWorldHint: false } };
 const artifactUploadTool = {name:'dock_artifact_upload',
-  description:'Submit an operator-authorized input artifact to its exact Loginom destination. Requires artifact_id and upload_grant_id from dock_prepare plus a fresh observation with file_storage.status=observed and file_storage.directory equal to the grant directory. First open the main Файлы (Files) workspace using its observed control and enter that exact directory. The import wizard file-selection dialog only selects existing server files; it is not the upload workspace. Cancel that dialog through its observed control before opening Files. Upload and verify the artifact before selecting it in the import wizard. This candidate supports only explicitly authorized replace; reject is unavailable and never silently changed. Submission is not upload completion: the operation remains pending for server verification. A repeated operation_id never sends the file again. No local paths, selectors, or overwrite choices are accepted.',
+  description:'Submit an operator-authorized input artifact to its exact Loginom destination. Requires artifact_id and upload_grant_id from dock_prepare plus a fresh observation with file_storage.status=observed and file_storage.directory equal to the grant directory. First open the main Файлы (Files) workspace using its observed control and enter that exact directory. Then call this artifact tool directly; do not press the Upload toolbar button or open a native file chooser. The import wizard file-selection dialog only selects existing server files; it is not the upload workspace. Cancel that dialog through its observed control before opening Files. Upload and verify the artifact before selecting it in the import wizard. This candidate supports only explicitly authorized replace; reject is unavailable and never silently changed. Submission is not upload completion: the operation remains pending for server verification. Read the original upload with dock_operation_inspect before verification to confirm pending state, confirmed cleanup and its immutable receipt; after successful verification inspect it again to confirm resolved state before scenario changes. A repeated operation_id never sends the file again. No local paths, selectors, or overwrite choices are accepted.',
   inputSchema:{type:'object',additionalProperties:false,required:['artifact_id','upload_grant_id','observation_id','operation_id'],
     properties:{artifact_id:identifier,upload_grant_id:identifier,observation_id:identifier,operation_id:identifier}},
   annotations:{readOnlyHint:false,destructiveHint:true,openWorldHint:false}};
 const artifactVerifyTool={name:'dock_artifact_verify',
-  description:'Download and verify the exact authorized CSV for a pending upload. operation_id is the ORIGINAL upload; verification_id is a new unique verification request. Supply observation_id and file_ref from a fresh detailed file-row observation. This checks downloaded name, size and SHA, without resubmitting the upload. Repeat the same verification_id or inspect the original operation after a lost response; never bypass uncertainty with a new ID. Confirmed submission plus matching destination bytes, cleanup and durable receipts complete the original transfer. Inspect it and obtain fresh UI refs before continuing.',
+  description:'Download and verify the exact authorized CSV for a pending upload. operation_id is the ORIGINAL upload; verification_id is a new unique verification request. Supply observation_id and file_ref from a fresh detailed file-row observation. If that exact CSV is vertically outside its viewport, verification may reveal it with one checked scroll of its original observed owner, at most 1000 pixels, before a fresh checked download gesture. It cannot navigate folders or reveal another file. An unconfirmed reveal remains an effect and does not verify bytes. Public UI repair remains unavailable while upload verification is pending. This checks downloaded name, size and SHA, without resubmitting the upload. Repeat the same verification_id or inspect the original operation after a lost response; never bypass uncertainty with a new ID. Confirmed submission plus matching destination bytes, cleanup and durable receipts complete the original transfer. Inspect it and obtain fresh UI refs before continuing.',
   inputSchema:{type:'object',additionalProperties:false,required:['operation_id','verification_id','observation_id','file_ref'],
     properties:{operation_id:identifier,verification_id:identifier,observation_id:identifier,file_ref:identifier}},
   annotations:{readOnlyHint:false,destructiveHint:false,openWorldHint:false}};
@@ -83,29 +83,108 @@ export function makeArtifactUploadCode(options) {
   return `async (page) => (${browserArtifactUpload.toString()})(page,${JSON.stringify(options)},${observe})`;
 }
 
-async function browserArtifactDownload(page,task,observe,act) {
-  let phase='preconditions',gesture=false,download=null,completed=false,event;
+async function browserArtifactReveal(page,task,snapshot) {
+  return page.evaluate(({task,snapshot})=>{
+    const reject=code=>({applied:false,code});
+    const state=globalThis[Symbol.for('loginom-dock.workspace-ui.identity.v1')];
+    state?.captureMutations?.(state.observer.takeRecords());
+    if(!state || state.epoch!==snapshot.dom_epoch?.document || state.revision!==snapshot.dom_epoch?.revision)return reject('DOWNLOAD_REVEAL_EPOCH_CHANGED');
+    const row=snapshot.ui.elements.find(e=>e.ref===task.file_ref),scroll=row?.scroll;
+    const file=state.refs?.get(task.file_ref)?.deref(),owner=state.refs?.get(scroll?.ref)?.deref();
+    if(!file?.isConnected || !owner?.isConnected || !owner.contains(file)
+      || file.getAttribute('data-tid')!==row.tid || file.textContent.trim()!==task.artifact.name)return reject('DOWNLOAD_REVEAL_TARGET_CHANGED');
+    let nearest=null;
+    for(let parent=file.parentElement;parent;parent=parent.parentElement) {
+      if(parent.scrollHeight>parent.clientHeight && ['auto','scroll'].includes(getComputedStyle(parent).overflowY)){nearest=parent;break;}
+    }
+    if(nearest!==owner || owner.scrollTop!==scroll.top || owner.scrollHeight-owner.clientHeight!==scroll.max_top)
+      return reject('DOWNLOAD_REVEAL_OWNER_CHANGED');
+    const f=file.getBoundingClientRect(),o=owner.getBoundingClientRect(),style=getComputedStyle(owner);
+    const top=Math.max(0,o.top??o.y),bottom=Math.min(innerHeight,(o.top??o.y)+owner.clientHeight);
+    const left=Math.max(0,o.left??o.x),right=Math.min(innerWidth,(o.left??o.x)+owner.clientWidth);
+    const fy=f.top??f.y,fx=f.left??f.x;
+    if(style.display==='none' || style.visibility==='hidden' || bottom<=top || right<=left
+      || f.height<=0 || f.height>bottom-top || fx<left || fx+f.width>right)return reject('DOWNLOAD_REVEAL_NOT_VERTICAL');
+    const point=document.elementFromPoint((left+right)/2,(top+bottom)/2);
+    if(!point || !owner.contains(point))return reject('DOWNLOAD_REVEAL_OWNER_BLOCKED');
+    const delta=Math.ceil(fy<top?fy-top:fy+f.height>bottom?fy+f.height-bottom:0);
+    const target=Math.min(scroll.max_top,Math.max(0,scroll.top+delta));
+    if(!delta || Math.abs(delta)>1000 || target-scroll.top!==delta)return reject('DOWNLOAD_REVEAL_LIMIT');
+    owner.scrollTop=target;
+    return {applied:true,file_ref:task.file_ref,owner_ref:scroll.ref,from:scroll.top,to:owner.scrollTop,
+      max_top:scroll.max_top,delta,document:state.epoch};
+  },{task:{file_ref:task.file_ref,artifact:{name:task.artifact.name}},snapshot});
+}
+
+async function browserArtifactDownload(page,task,observe,act,reveal) {
+  let phase='preconditions',gesture=false,download=null,completed=false,event,revealed=false;
+  const trace=[];
   const result=(status,code,output={})=>({status,action_key:'artifact.download',action_revision:'1',operation_id:task.operation_id,
     phase,effect_possible:gesture,cleanup_complete:!gesture || completed,output,
-    error:code?{code,message:code}:null,trace:[]});
+    error:code?{code,message:code}:null,trace});
   const same=(a,b)=>JSON.stringify(a)===JSON.stringify(b);
   const contextMatches=current=>current.authenticated && current.origin===task.expected_origin
     && current.loginom_build===task.expected_build && same(current.workflow_ref,task.snapshot.workflow_ref)
+    && current.dom_epoch?.document===task.snapshot.dom_epoch?.document
+    && current.active_tab_ref===task.snapshot.active_tab_ref && same(current.package_identity,task.snapshot.package_identity)
     && current.file_storage?.status==='observed' && current.file_storage.directory===task.artifact.upload.directory
     && current.ui.dialogs.length===0 && current.ui.masks.length===0;
   try {
-    const before=await observe(page);
+    let before=await observe(page);
     if(before.status!=='SUCCEEDED' || !contextMatches(before.output)
       || !same(before.output.dom_epoch,task.snapshot.dom_epoch))return result('NOT_APPLIED','DOWNLOAD_CONTEXT_CHANGED');
+    const original=task.snapshot.ui.elements.find(e=>e.ref===task.file_ref);
+    const target=current=>current.ui.elements.find(e=>e.ref===task.file_ref && e.tid===original.tid && e.label===task.artifact.name);
+    if(['outside_viewport','point_not_observed'].includes(original.interaction?.state)) {
+      if(!original.scroll?.ref)return result('NOT_APPLIED','DOWNLOAD_REVEAL_OWNER_MISSING');
+      const fresh=target(before.output);
+      if(!fresh || !same(fresh.scroll,original.scroll))return result('NOT_APPLIED','DOWNLOAD_REVEAL_TARGET_CHANGED');
+      phase='revealing';
+      // The synchronous helper performs at most one owner-only scroll. Once
+      // invoked, an uncertain response must conservatively retain its effect.
+      gesture=true;
+      const moved=await reveal(page,task,before.output);
+      gesture=moved.applied===true;
+      if(!gesture)return result('NOT_APPLIED',moved.code);
+      revealed=true;completed=true;
+      trace.push({event:'download_file_revealed',...moved});
+      if(moved.to!==moved.from+moved.delta)return result('AMBIGUOUS','DOWNLOAD_REVEAL_NOT_CONFIRMED');
+      let file,quiet=0,previous=null;
+      const settleDeadline=Date.now()+2000;
+      // Scrolling changes layout asynchronously. Observe only: never repeat
+      // the owner scroll, and stop immediately if its binding changes.
+      for(let attempt=0;attempt<12 && Date.now()<settleDeadline;attempt++) {
+        if(attempt)await page.waitForTimeout(Math.min(100,Math.max(1,settleDeadline-Date.now())));
+        before=await observe(page);
+        file=before.status==='SUCCEEDED' && target(before.output);
+        if(!file || !contextMatches(before.output) || file.scroll?.ref!==original.scroll.ref
+          || file.scroll.top!==moved.to || file.scroll.max_top!==moved.max_top)
+          return result('AMBIGUOUS','DOWNLOAD_REVEAL_NOT_CONFIRMED');
+        const stamp={epoch:before.output.dom_epoch,interaction:file.interaction,scroll:file.scroll,box:file.bounding_box};
+        quiet=file.interaction?.state==='point_observed'?(same(stamp,previous)?quiet+1:1):0;
+        previous=stamp;
+        if(quiet>=3)break;
+      }
+      if(quiet<3 || Date.now()>settleDeadline)return result('AMBIGUOUS','DOWNLOAD_REVEAL_NOT_CONFIRMED');
+      trace.push({event:'download_reveal_confirmed',file_ref:task.file_ref,owner_ref:file.scroll.ref,
+        document:before.output.dom_epoch.document,interaction:'point_observed',file_tid:file.tid,
+        origin:before.output.origin,loginom_build:before.output.loginom_build,workflow_ref:before.output.workflow_ref,
+        active_tab_ref:before.output.active_tab_ref,package_identity:before.output.package_identity,directory:before.output.file_storage.directory});
+    }
     // Register BEFORE the checked gesture; native download may fire before
     // the click promise settles. Only this Page's event is eligible.
     event=page.waitForEvent('download',{timeout:15000}).then(value=>value,()=>null);
     phase='requesting';gesture=true;
-    const action=await act(page);
-    gesture=action.effect_possible===true;
+    completed=false;
+    const action=await act(page,before.output);
+    gesture=revealed || action.effect_possible===true;
+    trace.push({event:'download_gesture_result',status:action.status,effect_possible:action.effect_possible===true,
+      cleanup_complete:action.cleanup_complete===true,
+      error_code:/^[A-Z][A-Z0-9_]{0,79}$/.test(action.error?.code??'')?action.error.code:null});
     download=await event;
     if(action.status!=='SUCCEEDED' || action.output?.gesture_applied!==true) {
       if(download) {gesture=true;await download.cancel();completed=true;}
+      else if(action.effect_possible===false && action.cleanup_complete===true)completed=true;
       return result(gesture?'AMBIGUOUS':'NOT_APPLIED','DOWNLOAD_GESTURE_NOT_CONFIRMED');
     }
     gesture=true;
@@ -153,9 +232,12 @@ export function makeArtifactDownloadCode(options) {
     || matches[0].label!==artifact.name || matches[0].tid!==snapshot.workflow_ref?.prefix+';FileStorageForm;colName_'+suffix)
     throw new Error('Download requires the exact observed authorized CSV file');
   const shared={expected_build:options.expected_build,expected_origin:options.expected_origin};
-  const observe=makeWorkspaceUiCode({mode:'observe',root_ref:options.storage_root_ref,...shared});
-  const act=makeWorkspaceUiCode({mode:'act',snapshot,action:{verb:'double_click',ref:options.file_ref},...shared});
-  return `async (page) => (${browserArtifactDownload.toString()})(page,${JSON.stringify(options)},${observe},${act})`;
+  // Upload may have observed the folder tree. Verification owns the separately
+  // issued exact CSV ref, so its narrow reads must follow that file, not the
+  // earlier upload region. Global context/blocker guards remain in native reads.
+  const observe=makeWorkspaceUiCode({mode:'observe',root_ref:options.file_ref,...shared});
+  const act=makeWorkspaceUiCode({mode:'act',snapshot,action:{verb:'double_click',ref:options.file_ref},...shared},{snapshotArgument:true});
+  return `async (page) => (${browserArtifactDownload.toString()})(page,${JSON.stringify(options)},${observe},${act},${browserArtifactReveal.toString()})`;
 }
 
 function browserCapability(page, task) {
@@ -1257,10 +1339,10 @@ export function createActionRuntime({ pinned, execute, artifactStore, allowCandi
     },
     async observe({ signal, scope, cursor, rootRef, observationId, storageName } = {}) {
       signal?.throwIfAborted();
-      if (scope !== undefined && !['bootstrap', 'all', 'palette', 'graph', 'dialogs', 'roots'].includes(scope)) throw new Error('Unknown observation scope');
+      if (scope !== undefined && !['bootstrap', 'all', 'palette', 'graph', 'dialogs', 'roots', 'wizard'].includes(scope)) throw new Error('Unknown observation scope');
       if (cursor !== undefined && (typeof cursor !== 'string' || !cursor || scope !== undefined)) throw new Error('Use cursor alone to continue the original observation scope');
       if (cursor !== undefined && (rootRef !== undefined || observationId !== undefined)) throw new Error('Use cursor alone to continue the original root');
-      if ((rootRef===undefined)!==(observationId===undefined) || (['bootstrap','roots'].includes(scope) && rootRef!==undefined)) throw new Error('Root requires root_ref and observation_id in a prepared workspace');
+      if ((rootRef===undefined)!==(observationId===undefined) || (['bootstrap','roots','wizard'].includes(scope) && rootRef!==undefined)) throw new Error('Root requires root_ref and observation_id in a prepared workspace');
       if (rootRef!==undefined) {
         if (typeof rootRef!=='string' || !/^ui-[a-zA-Z0-9-]{1,124}$/.test(rootRef)) throw new Error('Root requires an observed opaque reference');
         observations.assertIssued(observationId,{ref:rootRef});
@@ -1268,12 +1350,29 @@ export function createActionRuntime({ pinned, execute, artifactStore, allowCandi
       if (storageName!==undefined && (scope!=='roots' || cursor!==undefined || typeof storageName!=='string'
           || !storageName || storageName.length>200 || /[\\/\x00-\x1f\x7f]/.test(storageName))) throw new Error('storage_name requires roots scope and one filename');
       const selectedStorageName=cursor===undefined ? storageName : observations.filterForCursor(cursor)?.storage_name;
-      const selectedRoot = cursor===undefined ? rootRef : observations.rootForCursor(cursor);
+      let selectedRoot = cursor===undefined ? rootRef : observations.rootForCursor(cursor);
       if (scope === 'bootstrap') return execute(makeWorkspaceBootstrapCode({ origin: targetOrigin, build: targetBuild }), { signal, timeout: 5000 });
       const observationOperationId=randomUUID();
-      let outcome = await execute(makeWorkspaceUiCode({ mode: 'observe', operation_id:observationOperationId, root_ref:selectedRoot, storage_name:selectedStorageName, discover_roots:scope==='roots' || (cursor!==undefined && observations.kindForCursor(cursor)==='roots'), expected_build: targetBuild, expected_origin: targetOrigin }), { signal, timeout: 35000 });
-      let deliveredScope=scope;
-      if(cursor===undefined && selectedRoot===undefined && scope!=='roots'
+      let outcome,deliveredScope=scope,selection;
+      if(scope==='wizard') {
+        const discovery=await execute(makeWorkspaceUiCode({mode:'observe',operation_id:observationOperationId,
+          discover_roots:true,expected_build:targetBuild,expected_origin:targetOrigin}),{signal,timeout:35000});
+        const state=discovery.output,wizard=state?.wizard;
+        const candidates=(state?.ui?.elements??[]).filter(e=>e.kind==='region'
+          && e.ref===wizard?.root_ref && e.tid===state?.workflow_ref?.prefix+';WizrdMCF');
+        if(discovery.status==='SUCCEEDED' && wizard?.status==='observed' && candidates.length===1) {
+          selectedRoot=candidates[0].ref;deliveredScope='all';
+          selection={event:'observation_scope_selected',requested_scope:'wizard',delivered_scope:'all',
+            root_ref:selectedRoot,reason:'unique_observed_wizard'};
+        } else {
+          outcome=discovery;deliveredScope='roots';
+          selection={event:'observation_scope_selected',requested_scope:'wizard',delivered_scope:'roots',reason:'unique_wizard_not_observed'};
+        }
+      }
+      signal?.throwIfAborted();
+      if(!outcome)outcome = await execute(makeWorkspaceUiCode({ mode: 'observe', operation_id:observationOperationId, root_ref:selectedRoot, storage_name:selectedStorageName, discover_roots:scope==='roots' || (cursor!==undefined && observations.kindForCursor(cursor)==='roots'), expected_build: targetBuild, expected_origin: targetOrigin }), { signal, timeout: 35000 });
+      if(selection)outcome.trace.push(selection);
+      if(cursor===undefined && selectedRoot===undefined && !['roots','wizard'].includes(scope)
           && outcome.status==='NOT_APPLIED' && outcome.error?.code==='UI_SCAN_LIMIT') {
         signal?.throwIfAborted();
         outcome=await execute(makeWorkspaceUiCode({mode:'observe',operation_id:observationOperationId,
@@ -1288,7 +1387,6 @@ export function createActionRuntime({ pinned, execute, artifactStore, allowCandi
     },
     async uiAct(action, { observationId, operationId, recoveryOperationId, signal } = {}) {
       signal?.throwIfAborted(); checkId(operationId);
-      if(pending?.action.capability==='artifact.upload')throw new Error('Upload is pending server verification; only observation and inspection are available');
       const signature = fingerprint('ui.act', [observationId, action, recoveryOperationId ?? null]);
       if (auxiliary.has(operationId)) {
         const previous = auxiliary.get(operationId);
@@ -1296,6 +1394,22 @@ export function createActionRuntime({ pinned, execute, artifactStore, allowCandi
         return structuredClone(previous.outcome);
       }
       if (operations.has(operationId)) throw new Error('UI operation ID conflicts with an existing operation');
+      if(pending?.action.capability==='artifact.upload') {
+        if(running || pending.transportUncertain || !pending.cleanupConfirmed)
+          throw new Error('Upload is pending server verification; only observation and inspection are available');
+        // This attempted request never enters the browser. Preserve the
+        // original upload's uncertainty separately from this explicit refusal.
+        const outcome={status:'FAILED',action_key:'request.validate',action_revision:'1',operation_id:null,
+          phase:'request_rejected',effect_possible:false,cleanup_complete:true,request_rejected:true,
+          output:{request_refusal:{operation_id:operationId,pending_operation_id:pending.id,
+            reason:'upload_pending',browser_invoked:false},operation:view(pending).output},
+          error:{code:'REQUEST_REJECTED',message:'Upload is pending server verification; UI actions are not invoked'},trace:[]};
+        await onRecord({operation_id:operationId,action_key:'request.validate',phase:'ui_request_rejected',
+          parameters:{action:structuredClone(action),observation_id:observationId,recovery_operation_id:recoveryOperationId??null},
+          pending_operation_id:pending.id,outcome:structuredClone(outcome)});
+        auxiliary.set(operationId,{signature,outcome:structuredClone(outcome)});
+        return outcome;
+      }
       const snapshot = observations.get(observationId);
       if (!snapshot) throw new Error('Observation is stale or belongs to another session; observe again');
       validateUiAction(action, snapshot);

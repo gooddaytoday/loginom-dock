@@ -15,7 +15,9 @@ class UploadProbeTest(unittest.TestCase):
         artifact={**copy.deepcopy(expected),'artifact_id':'a'}
         artifact['upload'].update(grant_id='g',destination='/analyst/data/'+expected['name'])
         data['tools'].insert(0,{'session_id':'s','tool_call_id':'prepare','tool':PREFIX+'dock_prepare','row':0,
-                               'result':{'input_artifacts':[artifact]}})
+                               'result':{'prepared':True,'sessionId':'native-session','workspace':{'created_draft':True},'input_artifacts':[artifact]}})
+        data['calls'].insert(0,{'session_id':'s','tool_call_id':'prepare','tool':PREFIX+'dock_prepare','row':-1,'arguments':{}})
+        data['events'].insert(0,{'event':'workspace_prepared','phase':None,'operation_id':None,'session_id':'native-session','state':{'created_draft':True}})
         data['tools'][-1]['result']['output']['observation_id']='dir-read'
         data['events'][-1]['outcome']['output']['observation_id']='dir-read'
         call={'session_id':'s','tool_call_id':'upload','tool':PREFIX+'dock_artifact_upload','row':6,
@@ -60,3 +62,32 @@ class UploadProbeTest(unittest.TestCase):
         self.assertEqual(value['name'],'Dock-upload-20260905-230000-1234abcd.csv')
         for run_id,directory in [('bad','/test'),('20260905-230000-1234abcd','/test/../user')]:
             with self.assertRaises(ValueError):upload_probe.descriptor(run_id,directory)
+
+    def test_paged_directory_is_bound_to_each_native_receipt(self):
+        import json, subprocess
+        raw={'status':'SUCCEEDED','operation_id':'read','output':{'nodes':[],'links':[],
+             'file_storage':{'status':'observed','directory':'/test'},
+             'ui':{'elements':[{'ref':f'ui-{i}','label':str(i),'signature':{'tag':'td'}} for i in range(70)],
+                   'dialogs':[],'masks':[],'messages':[],'table_cells':[],'truncated':{}}}}
+        script="""import {createObservationPages} from './client/lib/observation-pages.mjs';
+let text='';for await(const part of process.stdin)text+=part;
+const raw=JSON.parse(text),pager=createObservationPages(),out=[];let p=pager.retain(structuredClone(raw));
+while(true){out.push(p);if(!p.output.page.next_cursor)break;p=pager.next(p.output.page.next_cursor,structuredClone(raw));}
+console.log(JSON.stringify(out));"""
+        pages=json.loads(subprocess.run(['node','--input-type=module','-e',script],
+            cwd=Path(__file__).resolve().parents[2],input=json.dumps(raw),text=True,capture_output=True,check=True).stdout)
+        data={'calls':[],'tools':[],'events':[]}
+        for i,page in enumerate(pages):
+            page['operation_id']=f'read-{i}'
+            call={'session_id':'s','tool_call_id':str(i),'tool':PREFIX+'dock_workspace_observe','row':i*2,
+                  'arguments':{} if i==0 else {'cursor':pages[i-1]['output']['page']['next_cursor']}}
+            data['calls'].append(call);data['tools'].append({**call,'row':i*2+1,'result':page})
+            data['events'].append({'phase':'observation_completed','operation_id':page['operation_id'],
+                                   'outcome':{**copy.deepcopy(raw),'operation_id':page['operation_id']}})
+        self.assertTrue(upload_probe.delivered_directory(data['tools'],data,{'session_id':'s'},'/test'))
+        for mutate in [lambda d:d['events'].pop(),lambda d:d['calls'][1]['arguments'].update(cursor='wrong'),
+                       lambda d:d['tools'][1]['result']['output']['file_storage'].update(directory='/other'),
+                       lambda d:d['tools'][1]['result']['output']['page'].update(offset=0),
+                       lambda d:d['tools'][1].update(session_id='foreign')]:
+            bad=copy.deepcopy(data);mutate(bad)
+            self.assertFalse(upload_probe.delivered_directory(bad['tools'],bad,{'session_id':'s'},'/test'))

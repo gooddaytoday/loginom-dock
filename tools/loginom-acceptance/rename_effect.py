@@ -14,7 +14,7 @@ def element_anchor(element):
 def compact_receipt_equal(record, reply):
     """Bind every delivered value to the immutable receipt, without erasing data.
 
-    This verifies any all-scope page projection of a UI receipt. Revision is
+    This verifies all/graph page projections of a UI receipt. Revision is
     an opaque correlation token here, not an independently proven DOM epoch.
     Unknown projection versions/fields fail closed.
     """
@@ -22,12 +22,12 @@ def compact_receipt_equal(record, reply):
     page=actual.get('page',{})
     if (set(page)!={'schema_version','scope','offset','returned','total_records','next_cursor',
                     'captured_snapshot_complete','full_dom_complete'}
-        or page.get('schema_version')!=1 or page.get('scope')!='all'
+        or page.get('schema_version')!=1 or page.get('scope') not in ('all','graph')
         or page.get('full_dom_complete') is not False
         or not re.fullmatch(r'[a-f0-9]{64}',actual.get('observation_revision',''))):return False
     if {k:v for k,v in record.items() if k!='output'}!={k:v for k,v in reply.items() if k!='output'}:return False
-    metadata=('origin','authenticated','loginom_build','workflow_ref','active_identity','active_tab_ref','navigation_context','graph_identity','package_identity',
-              'workarea','verification_required','gesture_applied','scan','dom_epoch', 'observation_root', 'observation_kind', 'file_storage', 'observation_filter', 'wizard')
+    metadata=('origin','authenticated','loginom_build','workflow_ref','active_identity','active_tab_ref','navigation_context','node_context','graph_identity','package_identity',
+              'workarea','verification_required','gesture_applied','scan','dom_epoch', 'observation_root', 'observation_kind', 'file_storage', 'observation_filter', 'wizard', 'table_settings', 'table_coverage', 'process_console')
     if set(source)-set(metadata)-{'nodes','links','ui'}:return False
     expected={k:copy.deepcopy(source[k]) for k in metadata if k in source}
     ui=source.get('ui',{});rows=[]
@@ -38,7 +38,25 @@ def compact_receipt_equal(record, reply):
             if len(ports)>8:value['ports_page']={'offset':offset,'total':len(ports),'complete':False}
             rows.append(('nodes',value))
     rows.extend(('links',link) for link in source.get('links',[]))
-    for item in ui.get('elements',[]):
+    elements=list(ui.get('elements',[]))
+    if page['scope']=='graph':
+        elements=[item for item in elements if item.get('scope') in ('graph','graph_editor')]
+    # Mirror the pinned pager's stable wizard ordering before projection.
+    # This verifier admits all-scope pages only; other scopes remain rejected
+    # above even though the runtime also applies this rank to dialogs.
+    if source.get('wizard',{}).get('status')=='observed' and page['scope'] in ('all','dialogs'):
+        def rank(item):
+            actions=item.get('allowed_actions',[])
+            if item.get('signature',{}).get('dialog_ref') or item.get('role')=='menuitem':return -2
+            combo=item.get('wizard_combo',{})
+            if combo.get('kind')=='picker' and combo.get('field',{}).get('scope')=='import_column':return -1
+            if 'select_wizard_option' in actions:return 0
+            if 'finish_wizard' in actions or item.get('wizard_step',{}).get('direction')=='next' and 'wizard_step' in actions:return 0.5
+            if (bool(item.get('wizard_field')) or isinstance(item.get('wizard_field'),(dict,list))) and 'set_wizard_field' in actions:return 1
+            if any(action in ('wizard_step','finish_wizard') for action in actions):return 2
+            return 3
+        elements.sort(key=rank)
+    for item in elements:
         value={k:v for k,v in item.items() if k not in ('signature','bounding_box')}
         identity=item.get('identity')
         if (isinstance(item.get('tid'),str) and item['tid'] and isinstance(identity,dict)
@@ -47,7 +65,8 @@ def compact_receipt_equal(record, reply):
         if item.get('signature') is not None:value['signature']={k:v for k,v in item['signature'].items() if k=='tag'}
         rows.append(('elements',value))
     collections=('elements','dialogs','masks','messages','table_cells')
-    for key in collections[1:]:rows.extend((key,item) for item in ui.get(key,[]))
+    if page['scope']=='all':
+        for key in collections[1:]:rows.extend((key,item) for item in ui.get(key,[]))
     count=page.get('returned');offset=page.get('offset')
     if type(offset) is not int or not 0<=offset<=len(rows):return False
     if type(count) is not int or not 0<=count<=min(len(rows)-offset,32) or (rows and not count):return False
@@ -59,6 +78,9 @@ def compact_receipt_equal(record, reply):
     elif cursor is not None:return False
     expected.update(nodes=[],links=[],ui={key:[] for key in collections})
     expected['ui']['truncated']=copy.deepcopy(ui.get('truncated',{}))
+    if page['scope']=='graph':
+        if len(elements)<len(ui.get('elements',[])):expected['ui']['truncated']['elements']=True
+        for key in collections[1:]:expected['ui']['truncated'][key]=True
     for key,item in rows[offset:end]:
         (expected[key] if key in ('nodes','links') else expected['ui'][key]).append(item)
     for key,_ in rows[:offset]+rows[end:]:expected['ui']['truncated'][key]=True

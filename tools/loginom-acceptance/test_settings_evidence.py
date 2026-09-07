@@ -7,7 +7,7 @@ EXPECTED={'output_field':'Amount','operation':'Quantity * UnitPrice','type':'rea
 
 def fixture():
     path=[{'tid':'root','label':'Package'},{'tid':'root>w','label':'Workflow'},{'tid':'root>w>n','label':'Node'},{'tid':'root>w>n>s','label':'Settings'}]
-    owner={'status':'observed','node':{'ref':'node','label':'Node'},'path':path}
+    owner={'status':'observed','node':{'ref':'node','tid':'root>w>n','label':'Node'},'path':path}
     base={'origin':'http://test','loginom_build':'build','workflow_ref':{'prefix':'MF;TF-1'},'package_identity':{'name':'Package'},'active_tab_ref':'tab','dom_epoch':{'document':'doc'},
           'wizard':{'status':'observed','stage':'calculator','root_ref':'wizard1','owner_context':owner,'expression_selection':{'status':'observed','name':'Amount','label':'Amount','type_label':'Вещественный'}},
           'ui':{'dialogs':[],'masks':[],'elements':[{'calculator_editor':{'status':'observed','mode':'expression','selected_expression':{'ref':'expr','label':'Amount'},'document':{'status':'observed','full_text_verified':True,'text':EXPECTED['operation'],'document_ref':'editor1'}}}]}}
@@ -42,6 +42,39 @@ class SettingsEvidenceTests(unittest.TestCase):
                 if mode=='node':f['ui']['elements']=[]
                 if mode=='duplicate':f['ui']['elements']*=2
                 self.assertFalse(se.roundtrip(a,f,o,b,EXPECTED)['calculator_node_settings_verified'])
+
+    def test_reject_reopened_different_node_even_with_identical_expression(self):
+        for label in ('OtherNode', 'Node'):
+            with self.subTest(label=label):
+                before,finish,opened,after=fixture()
+                for snapshot in (opened,after):
+                    owner=snapshot['wizard']['owner_context']
+                    owner['node'].update(tid='root>w>other',label=label)
+                    owner['path'][-2]={'tid':'root>w>other','label':label}
+                    owner['path'][-1]={'tid':'root>w>other>s','label':'Settings'}
+                finish['ui']['elements'][0]['label']=label
+                proof=se.roundtrip(before,finish,opened,after,EXPECTED)
+                self.assertFalse(proof['calculator_node_settings_verified'])
+                self.assertEqual(proof['reason'],'node_owner_changed')
+                self.assertFalse(proof['package_persistence_verified'])
+
+    def test_reject_missing_or_inconsistent_breadcrumb_node_identity(self):
+        for mode in ('missing_tid','wrong_tid','wrong_label'):
+            with self.subTest(mode=mode):
+                before,*_=fixture()
+                node=before['wizard']['owner_context']['node']
+                if mode=='missing_tid':del node['tid']
+                if mode=='wrong_tid':node['tid']='root>w>other'
+                if mode=='wrong_label':node['label']='OtherNode'
+                self.assertIsNone(se.calculator_state(before,EXPECTED))
+
+    def test_owner_refs_may_change_but_literal_expression_contract_does_not(self):
+        before,finish,opened,after=fixture()
+        for snapshot in (opened,after):
+            snapshot['wizard']['owner_context']['node']['ref']='new-breadcrumb-ref'
+        self.assertTrue(se.roundtrip(before,finish,opened,after,EXPECTED)['calculator_node_settings_verified'])
+        after['ui']['elements'][0]['calculator_editor']['document']['text']='Quantity*UnitPrice'
+        self.assertFalse(se.roundtrip(before,finish,opened,after,EXPECTED)['calculator_node_settings_verified'])
 
     def test_bound_receipts_require_unique_ordered_journal_match(self):
         result={'status':'SUCCEEDED','operation_id':'op','output':{'value':1}}

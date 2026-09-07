@@ -269,7 +269,11 @@ class ImportSettingsEvidenceTests(unittest.TestCase):
                     self.assertFalse(ise.compare(state, EXPECTED)['rendered_import_settings_match'])
         state = snapshot(); state['wizard']['settings']['fields']['decimal_separator']['value'] = '.'
         state['wizard']['settings']['fields']['decimal_separator']['value_length_utf16'] = 1
-        self.assertEqual(ise.compare(state, EXPECTED)['reason'], 'setting_mismatch:decimal_separator')
+        self.assertTrue(ise.compare(state, EXPECTED)['rendered_import_settings_match'])
+        for value in (',', ' .', '. ', 'Не задано (.)', 'Точка', '..'):
+            field=state['wizard']['settings']['fields']['decimal_separator']
+            field.update(value=value,value_length_utf16=len(value))
+            self.assertFalse(ise.compare(state, EXPECTED)['rendered_import_settings_match'])
         state = snapshot(); fields = state['wizard']['settings']['fields']
         fields['decimal_separator']['input_ref'] = fields['delimiter']['input_ref']
         self.assertEqual(ise.compare(state, EXPECTED)['reason'], 'duplicate_setting_input')
@@ -291,6 +295,13 @@ class ImportSettingsEvidenceTests(unittest.TestCase):
                 crumb['tid'] = crumb['tid'].replace('b.s_Сервер', 'b.s_' + root_name)
             changed_owner['node'] = copy.deepcopy(changed_owner['path'][-2])
             self.assertEqual(ise.compare(changed, EXPECTED)['reason'], 'owner_path_mismatch')
+
+    def test_text_qualifier_literal_and_native_label_are_exact(self):
+        for value, matches in [('"', True), ('Двойная кавычка (" )', False),
+                               (' "', False), ('" ', False), ('“', False), ('""', False)]:
+            state = snapshot(); field = state['wizard']['settings']['fields']['text_qualifier']
+            field.update(value=value, value_length_utf16=len(value))
+            self.assertEqual(ise.compare(state, EXPECTED)['rendered_import_settings_match'], matches)
 
     def test_delimiter_reopened_display_label_is_exact(self):
         for label, matches in (('Точка с запятой', True), ('Точка с запятой ', False),

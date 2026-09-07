@@ -13,16 +13,73 @@
   },
   "dependencies": {
     "node.add": {
-      "selectors": ["loginom.ready_avatar", "workspace.active_tab", "workflow.graph", "workflow.workarea", "workflow.node", "workflow.node_label", "component.imports.text", "component.imports.lgd", "component.transform.group_data", "component.transform.calculator", "component.transform.union_data", "component.transform.col_union_data"],
-      "files": ["bg/helpers/workflow/node.ts", "bg/selectors.ts", "bg/utils/selectors.ts"]
+      "selectors": [
+        "loginom.ready_avatar",
+        "workspace.active_tab",
+        "workflow.graph",
+        "workflow.workarea",
+        "workflow.node",
+        "workflow.node_label",
+        "component.imports.text",
+        "component.imports.lgd",
+        "component.transform.group_data",
+        "component.transform.calculator",
+        "component.transform.union_data",
+        "component.transform.col_union_data",
+        "component.transform.reform_columns"
+      ],
+      "files": [
+        "bg/helpers/workflow/node.ts",
+        "bg/selectors.ts",
+        "bg/utils/selectors.ts"
+      ]
     },
     "link.create": {
-      "selectors": ["loginom.ready_avatar", "workspace.active_tab", "workflow.graph", "workflow.port.output.data", "workflow.port.output.var", "workflow.port.output.order", "workflow.port.output.tree", "workflow.port.output.connection", "workflow.port.input.data", "workflow.port.input.var", "workflow.port.input.order", "workflow.port.input.tree", "workflow.port.input.connection", "workflow.port.input.control_var", "workflow.port.input.add"],
-      "files": ["bg/helpers/workflow/links.ts", "bg/selectors.ts", "bg/utils/selectors.ts", "tests/acceptance/workflow/linking.ts"]
+      "selectors": [
+        "loginom.ready_avatar",
+        "workspace.active_tab",
+        "workflow.graph",
+        "workflow.port.output.data",
+        "workflow.port.output.var",
+        "workflow.port.output.order",
+        "workflow.port.output.tree",
+        "workflow.port.output.connection",
+        "workflow.port.input.data",
+        "workflow.port.input.var",
+        "workflow.port.input.order",
+        "workflow.port.input.tree",
+        "workflow.port.input.connection",
+        "workflow.port.input.control_var",
+        "workflow.port.input.add"
+      ],
+      "files": [
+        "bg/helpers/workflow/links.ts",
+        "bg/selectors.ts",
+        "bg/utils/selectors.ts",
+        "tests/acceptance/workflow/linking.ts"
+      ]
     },
     "package.save_as": {
-      "selectors": ["loginom.ready_avatar", "workspace.active_tab", "workflow.graph", "packages.menu", "packages.save_as", "packages.close", "packages.open", "file_dialog.file_name", "file_dialog.confirm", "message.text", "message.error", "message.yes", "message.no"],
-      "files": ["bg/helpers/packages.ts", "bg/helpers/filedialog.ts", "bg/selectors.ts"]
+      "selectors": [
+        "loginom.ready_avatar",
+        "workspace.active_tab",
+        "workflow.graph",
+        "packages.menu",
+        "packages.save_as",
+        "packages.close",
+        "packages.open",
+        "file_dialog.file_name",
+        "file_dialog.confirm",
+        "message.text",
+        "message.error",
+        "message.yes",
+        "message.no"
+      ],
+      "files": [
+        "bg/helpers/packages.ts",
+        "bg/helpers/filedialog.ts",
+        "bg/selectors.ts"
+      ]
     }
   }
 }

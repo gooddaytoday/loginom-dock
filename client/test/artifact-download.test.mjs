@@ -1,5 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import vm from 'node:vm';
 import {Page,build} from './support/executor-fixture.mjs';
 import {makeArtifactDownloadCode} from '../lib/executor.mjs';
 
@@ -68,6 +69,8 @@ test('failed gesture drains and cancels the captured download',async()=>{
   const result=await f.run();assert.equal(result.status,'AMBIGUOUS');
   assert.equal(result.error.code,'DOWNLOAD_GESTURE_NOT_CONFIRMED');
   assert.deepEqual(f.calls,['listen','click','cancel']);
+  assert.equal(result.trace.find(e=>e.event==='download_gesture_result').error_code,'UI_BROWSER_CALL_FAILED');
+  assert.ok(!JSON.stringify(result).includes('private click failure'));
 });
 
 test('missing event and post-download context change cannot claim a verified copy',async()=>{
@@ -78,4 +81,106 @@ test('missing event and post-download context change cannot claim a verified cop
   changed.download.saveAs=async path=>{await save(path);changed.page.directory='/other';};
   const result=await changed.run();assert.equal(result.error.code,'DOWNLOAD_CONTEXT_CHANGED');
   assert.equal(result.status,'AMBIGUOUS');assert.equal(result.output.download_completed,undefined);
+});
+
+function revealFixture(mode='success') {
+  const f=fixture(),snapshot=f.page.uiSnapshot.bind(f.page),ownerRef='observed-owner';
+  let waits=0;
+  const wait=f.page.waitForTimeout.bind(f.page);
+  f.page.waitForTimeout=async ms=>{waits++;await wait(ms);if(mode==='context_while_settling' && waits===1)f.page.directory='/other';};
+  const owner={isConnected:true,scrollTop:0,scrollHeight:mode==='too_far'?2000:850,clientHeight:800,clientWidth:1000,
+    parentElement:null,contains:e=>e===file || e===owner,getBoundingClientRect:()=>({x:0,y:0,width:1000,height:800})};
+  const file={isConnected:true,parentElement:owner,textContent:f.options.artifact.name,
+    getAttribute:()=>f.options.snapshot.ui.elements.find(e=>e.ref===f.options.file_ref).tid,
+    getBoundingClientRect:()=>({x:30,y:(mode==='too_far'?1900:825)-owner.scrollTop,width:100,height:25})};
+  f.page.uiSnapshot=()=>{
+    const state=snapshot(),row=state.ui.elements.find(e=>e.ref===f.options.file_ref);
+    row.scroll={ref:ownerRef,top:owner.scrollTop,max_top:owner.scrollHeight-owner.clientHeight};
+    row.interaction={state:owner.scrollTop>=50?'point_observed':'outside_viewport',point:owner.scrollTop>=50?{x:50,y:780}:null};
+    if(mode==='delayed_repaint' && waits<2)row.interaction={state:'outside_viewport',point:null};
+    if(mode==='clipped')row.interaction.state=owner.scrollTop>=50?'point_observed':'point_not_observed';
+    return state;
+  };
+  f.options.snapshot=f.page.uiSnapshot();
+  const state={epoch:f.options.snapshot.dom_epoch.document,revision:f.options.snapshot.dom_epoch.revision,
+    refs:new Map([[f.options.file_ref,{deref:()=>file}],[ownerRef,{deref:()=>owner}]]),observer:{takeRecords:()=>[]},captureMutations:()=>{}};
+  const context=vm.createContext({innerHeight:800,innerWidth:1000,
+    document:{elementFromPoint:()=>mode==='blocked'?{}:owner},getComputedStyle:()=>({overflowY:'auto',display:'block',visibility:'visible'}),
+    state});
+  vm.runInContext('globalThis[Symbol.for("loginom-dock.workspace-ui.identity.v1")]=state',context);
+  const evaluate=f.page.evaluate.bind(f.page);
+  f.page.evaluate=async(fn,arg)=>{
+    if(fn.toString().includes('DOWNLOAD_REVEAL_EPOCH_CHANGED')) {
+      f.calls.push('reveal');
+      if(mode==='owner_changed')owner.scrollTop=1;
+      if(mode==='file_changed')file.textContent='other.csv';
+      if(mode==='document_changed')state.epoch='foreign';
+      if(mode==='horizontal')file.getBoundingClientRect=()=>({x:1100,y:825,width:100,height:25});
+      if(mode==='already_inside')file.getBoundingClientRect=()=>({x:30,y:100,width:100,height:25});
+      const output=vm.runInContext('('+fn.toString()+')',context)(arg);
+      if(mode==='context_after')f.page.directory='/other';
+      if(mode==='still_hidden')f.page.uiSnapshot=()=>{const s=snapshot();const row=s.ui.elements.find(e=>e.ref===f.options.file_ref);row.scroll={ref:ownerRef,top:owner.scrollTop,max_top:50};row.interaction={state:'outside_viewport'};return s;};
+      return output;
+    }
+    return evaluate(fn,arg);
+  };
+  return {...f,owner,waitCount:()=>waits};
+}
+
+test('verification reveals its original clipped or offscreen file owner once before one download',async()=>{
+  for(const mode of ['success','clipped','delayed_repaint']) {
+    const f=revealFixture(mode),result=await f.run();
+    assert.equal(result.status,'SUCCEEDED',JSON.stringify(result));
+    assert.equal(f.owner.scrollTop,50);
+    assert.deepEqual(f.calls,['reveal','listen','click','save']);
+    assert.equal(result.trace.filter(t=>t.event==='download_file_revealed').length,1);
+    assert.equal(result.trace.find(t=>t.event==='download_file_revealed').delta,50);
+    assert.equal(result.trace.find(t=>t.event==='download_reveal_confirmed').interaction,'point_observed');
+    assert.equal(f.waitCount(),mode==='delayed_repaint'?4:2);
+  }
+});
+
+test('verification reads its issued CSV when upload observed a separate folder tree',async()=>{
+  const f=revealFixture(),roots=[];
+  f.options.storage_root_ref='upload-folder-tree';
+  f.options.snapshot.observation_root={ref:'issued-file-row'};
+  const evaluate=f.page.evaluate.bind(f.page);
+  f.page.evaluate=async(fn,arg)=>{
+    if(arg && Object.hasOwn(arg,'rootRef')) {
+      roots.push(arg.rootRef);
+      // Native tree observations retain the /test breadcrumb but cannot
+      // contain the sibling grid's CSV. This reproduced the live failure.
+      if(arg.rootRef==='upload-folder-tree') {
+        const snapshot=f.page.uiSnapshot();snapshot.ui.elements=[];
+        return snapshot;
+      }
+    }
+    return evaluate(fn,arg);
+  };
+  const result=await f.run();
+  assert.equal(result.status,'SUCCEEDED',JSON.stringify(result));
+  assert.equal(roots[0],f.options.file_ref);
+  assert.equal(roots.includes('upload-folder-tree'),false);
+  assert.equal(roots.includes('issued-file-row'),false);
+  assert.deepEqual(f.calls,['reveal','listen','click','save']);
+});
+
+test('reveal rejects other owners files documents obstruction and unbounded movement before scroll',async()=>{
+  for(const mode of ['owner_changed','file_changed','document_changed','too_far','horizontal','already_inside','blocked']) {
+    const f=revealFixture(mode),result=await f.run();
+    assert.equal(result.status,'NOT_APPLIED',mode+JSON.stringify(result));
+    assert.equal(result.effect_possible,false,mode);
+    assert.deepEqual(f.calls,['reveal'],mode);
+    if(mode==='too_far')assert.equal(result.error.code,'DOWNLOAD_REVEAL_LIMIT');
+  }
+});
+
+test('post-scroll failure retains effect and never retries reveal or download',async()=>{
+  for(const mode of ['context_after','still_hidden','context_while_settling']) {
+    const f=revealFixture(mode),result=await f.run();
+    assert.equal(result.status,'AMBIGUOUS',mode+JSON.stringify(result));
+    assert.equal(result.effect_possible,true);assert.equal(result.cleanup_complete,true);
+    assert.equal(f.owner.scrollTop,50);assert.deepEqual(f.calls,['reveal']);
+    assert.equal(f.waitCount(),mode==='still_hidden'?11:mode==='context_while_settling'?1:0);
+  }
 });

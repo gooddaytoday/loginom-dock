@@ -20,7 +20,9 @@ def _calculator_state(snapshot, expected):
         or document.get('text')!=expected['operation'] or not document.get('document_ref')):return None
     if snapshot.get('ui',{}).get('dialogs') or snapshot.get('ui',{}).get('masks'):return None
     path=[{'tid':p['tid'],'label':p['label']} for p in owner.get('path',[])]
-    if len(path)<3 or not owner.get('node',{}).get('label'):return None
+    node=owner.get('node',{})
+    if (len(path)<3 or not node.get('label') or not node.get('tid')
+        or node['tid']!=path[-2]['tid'] or node['label']!=path[-2]['label']):return None
     return {'row':{k:row[k] for k in ('name','label','type_label')},'path':path,
             'node':owner['node']['label'],'document_ref':document['document_ref']}
 
@@ -44,6 +46,8 @@ def roundtrip(before, finish, opened, after, expected):
                 return {**result,'reason':'context_changed_or_missing'}
         if before.get('dom_epoch',{}).get('document') is None or any(s.get('dom_epoch',{}).get('document')!=before['dom_epoch']['document'] for s in snapshots):
             return {**result,'reason':'document_changed'}
+        if a['node']!=b['node'] or a['path'][-2]!=b['path'][-2]:
+            return {**result,'reason':'node_owner_changed'}
         if a['row']!=b['row'] or a['document_ref']==b['document_ref']:
             return {**result,'reason':'settings_changed_or_editor_not_reopened'}
         opened_owner=opened.get('wizard',{}).get('owner_context',{})

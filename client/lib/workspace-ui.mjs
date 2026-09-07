@@ -4,7 +4,8 @@ export const uiActionSchema = {
   type: 'object', additionalProperties: false, required: ['verb'],
   properties: {
     verb: { type: 'string', enum: ['click', 'double_click', 'right_click', 'fill', 'press', 'drag', 'scroll', 'set_checked', 'replace_expression', 'set_wizard_field', 'wizard_step', 'select_wizard_option', 'apply_expression_parameters', 'cancel_expression_parameters', 'open_wizard', 'finish_wizard', 'apply_output_column', 'cancel_output_column', 'apply_reform_column', 'cancel_reform_column'] },
-    expected_stage: { type: 'string', enum: ['text_import_file','text_import_format','input_mapping','output_mapping','calculator','grouping','field_parameters','done'] },
+    expected_stage: { type: 'string', enum: ['text_import_file','text_import_format','input_mapping','output_mapping','calculator','grouping','field_parameters','done'],
+      description: 'Required only for wizard_step: destination after the observed next/previous control, not the current stage. For delimited Text Import, next follows text_import_file → text_import_format → output_mapping → done; previous reverses this order. input_mapping means a separate INPUT PORT mapping wizard, never Text Import output columns. Other wizard families may have different paths; inspect their current UI and sources instead of guessing. Do not pass this field to open_wizard or finish_wizard.' },
     checked: { type: 'boolean' },
     delta_y: { type: 'integer', minimum: -1000, maximum: 1000 },
     ref: { type: 'string', maxLength: 128 }, text: { type: 'string', maxLength: 2048 },
@@ -135,13 +136,25 @@ function workspaceUiCapability(page, task) {
       if (dom.length >= maxElements) { const error=new Error('Selected region or global guards exceed the scan budget');error.code='UI_SCAN_LIMIT';throw error; }
       seenElements.add(element);dom.push(element);
     };
-    const regionSelector='[data-tid$=";PreviewForm;DataSetForm"],[data-tid$=";ViewsForm;BrowseView"],[data-tid="MF;cntMain;tlbMainToolbar"],[role="dialog"],.x-window,.bg-dialog,[role="grid"],table,[role="form"],[data-tid$=";WizrdMCF"],[data-tid$=";boundlist"],[data-tid$=";MapTreeForm;tree"],[data-tid$=";cmpDiagram"],[data-tid$=";pnlWorkarea"],[data-tid$="NavigationBar;NavigationPanel"]';
+    const regionSelector='[data-tid="mnContextData"],[data-tid="ConsoleForm"],[data-tid$=";FileStorageForm;pnlFileStorage;tbl"],[data-tid$=";PreviewForm;DataSetForm"],[data-tid$=";ViewsForm;BrowseView"],[data-tid="MF;cntMain;tlbMainToolbar"],[data-tid="MF;cntMain;cntWorkspace;Workspace;t.br"],[role="dialog"],.x-window,.bg-dialog,[role="grid"],table,[role="form"],[data-tid$=";WizrdMCF"],[data-tid$=";boundlist"],[data-tid$=";MapTreeForm;tree"],[data-tid$=";cmpDiagram"],[data-tid$=";pnlWorkarea"],[data-tid$="NavigationBar;NavigationPanel"]';
     // E2E utils/selectors.Format: whitespace -> underscore, comma removed.
     // This finds candidates, not filesystem identity or absence. CSS hex escapes
     // keep arbitrary filename characters data rather than selector syntax.
     const storageSuffix=storageName===null ? null : ';FileStorageForm;colName_'+storageName.replace(/\s/g,'_').replace(/,/g,'');
     const storageSelector=storageSuffix===null ? null : '[data-tid$="'+Array.from(storageSuffix,char=>'\\'+char.codePointAt(0).toString(16)+' ').join('')+'"]';
-    const regionElements=discoverRoots ? [...document.querySelectorAll(storageSelector ?? regionSelector)] : [];
+    // Indexed Table roots use the same E2E IdSuffix convention as the first
+    // view. The candidate selector also finds descendants: admit only exact
+    // numeric root identities, charging every candidate against the budget.
+    const indexedViews=discoverRoots && storageSelector===null
+      ? [...document.querySelectorAll('[data-tid*=";ViewsForm;BrowseView-"]')].filter(element=>{
+        charge();return /^MF;TF(?:-\d+)?;ViewsForm;BrowseView-[1-9][0-9]*$/.test(element.getAttribute('data-tid')??'');
+      }):[];
+    const processMenuCandidates=discoverRoots?document.querySelectorAll('[data-tid="mnContextMenu"]'):[];charge();
+    const processMenuRegions=processMenuCandidates.length===1
+      && processMenuCandidates[0].querySelectorAll('[data-tid="mnContextMenu;mniShowNodeToProcess"]').length===1
+      && processMenuCandidates[0].querySelectorAll('[data-tid="mnContextMenu;mniShowCompletedProcesses"]').length===1
+      ? [processMenuCandidates[0]]:[];charge();
+    const regionElements=discoverRoots ? [...new Set([...document.querySelectorAll(storageSelector ?? regionSelector),...indexedViews,...(storageSelector===null?processMenuRegions:[])])] : [];
     charge();
     if (discoverRoots) for (const element of regionElements) include(element);
     const walker=discoverRoots ? null : document.createTreeWalker(requestedRoot ?? document.documentElement,1);
@@ -155,7 +168,7 @@ function workspaceUiCapability(page, task) {
     // fixed markers expose the current page without scanning its whole tree.
     const wizardMarkers={text_import_file:';ImportTextFilePreviewWizard;edtFileName',
       text_import_format:';ImportTextFileParamsWizard;edtValueNull',
-      input_mapping:';TuneDataSourceInputPortWizard;btnAddMappingColumn',
+      input_mapping:[';TuneDataSourceInputPortWizard;btnAddMappingColumn',';TuneDataSourceMappingWizard;btnAddMappingColumn'],
       output_mapping:[';ColumnsMappingEngineOutputPortWizard;btnAddMappingColumn',';DerivedDataSourceOutputSocketWizard;btnAddMappingColumn',';DerivedDataSourceMappingEngineOutputPortWizard;btnAddMappingColumn'],
       calculator:';CalcDataWizard;btnAddExpr',grouping:';GroupDataWizard;grdUsedFields;tbl',
       field_parameters:';ReformColumnsWizard;grdTargetColumns;tbl',done:';DoneWizard;edtDisplayName'};
@@ -164,7 +177,7 @@ function workspaceUiCapability(page, task) {
     // including buttons without their labels loses the observed directory.
     const wizardSelectors=['[data-tid$=";ModelForm;cmpDiagram"]','[data-tid$=";NavigationBar;NavigationPanel"]','[data-tid*=";cnrNaviMode;b.s_"]','[data-tid*=";cnrNaviMode;b.s"] .x-btn-inner-default-toolbar-small','[data-tid$=";WizrdMCF"]','[data-tid$=";WizrdMCF;cardWizardPanel;p.h;p.t"]',
       ...Object.values(wizardMarkers).flat().map(suffix=>'[data-tid$=";WizrdMCF'+suffix+'"]'),
-      '[data-tid*=";WizrdMCF;CalcDataWizard;colExpressionName_"]','[data-tid*=";WizrdMCF;CalcDataWizard;colExpressionDisplayName_"]','[data-tid$=";WizrdMCF;CalcDataWizard;cmpExpression"]','[data-tid$=";WizrdMCF;CalcDataWizard;btnCalcMode"]','span.bg-TBGCalcMode-cmExpression,span.bg-TBGCalcMode-cmJavaScript',
+      '[data-tid*=";WizrdMCF;CalcDataWizard;colExpressionName_"]','[data-tid*=";WizrdMCF;CalcDataWizard;colExpressionDisplayName_"]','[data-tid$=";WizrdMCF;CalcDataWizard;cmpExpression"]','[data-tid$=";WizrdMCF;CalcDataWizard;btnCalcMode"]','[data-tid$=";WizrdMCF;CalcDataWizard;btnReplaceField"]','span.bg-TBGCalcMode-cmExpression,span.bg-TBGCalcMode-cmJavaScript',
       ...['edtDelimiterChar','edtTextQualifier','edtValueNull','edtDecimalSeparator'].flatMap(name=>{const owner='[data-tid$=";WizrdMCF;ImportTextFileParamsWizard;'+name+';ValueControl"]';return [owner,owner+' input',owner+' textarea'];}),
       ...['edtConnection','edtFileName;ValueControl','edtCodePage;ValueControl','edtRowsToSkip;ValueControl'].flatMap(name=>{
         const owner='[data-tid$=";WizrdMCF;ImportTextFilePreviewWizard;'+name+'"]';return [owner,owner+' input',owner+' textarea'];}),
@@ -176,7 +189,8 @@ function workspaceUiCapability(page, task) {
       ...['edtDisplayName','cbxNodeTitleMode'].flatMap(name=>{const owner='[data-tid$=";WizrdMCF;DoneWizard;'+name+'"]';return [owner,owner+' input'];}),
       ...['ColumnsMappingEngineOutputPortWizard','DerivedDataSourceOutputSocketWizard','DerivedDataSourceMappingEngineOutputPortWizard','ReformColumnsWizard'].flatMap(form=>
         ['colName_','colDisplayName_','colDataKind_','colDefaultUsageType_','colSourceDisplayName_','colCachingMethod_','colExcluded_'].map(key=>'[data-tid*=";WizrdMCF;'+form+';'+key+'"]')),
-      '[data-tid$=";WizrdMCF;EditReformColumnDefForm"]',
+      '[data-tid$=";WizrdMCF;EditReformColumnDefForm"]','[data-tid="EditReformColumnDefForm"]',
+      ...['edtName','edtDisplayName','cbxDataType','cbxDataKind','cbxUsageType','cntMain;cbxCachingMethod','cntMain;chbExcluded','cntMain;chbExcluded;DisplayEl'].flatMap(name=>{const owner='[data-tid="EditReformColumnDefForm;'+name+'"]';return [owner,owner+' input'];}),
       '[data-tid*=";WizrdMCF;ImportTextFileParamsWizard;ColumnDefsTuning;grdSettings;grd-1;normalHeaderCt;"]',
       ...['',';normalHeaderCt',';tbl'].map(suffix=>'[data-tid$=";WizrdMCF;ImportTextFileParamsWizard;ColumnDefsTuning;grdSettings;grd-1'+suffix+'"]'),
       '[data-tid*=";WizrdMCF;ImportTextFileParamsWizard;ColumnDefsTuning;grdSettings;grd-1;tbl;celleditor"][data-tid$=";cbx"]',
@@ -187,6 +201,7 @@ function workspaceUiCapability(page, task) {
       ...['edtName','edtDisplayName','cbxDataType','cbxDataKind','cbxUsageType'].flatMap(name=>{const owner='[data-tid$=";WizrdMCF;EditColumnDefForm;'+name+'"]';return [owner,owner+' input'];}),
       '[data-tid$=";WizrdMCF;ExprDataEditForm"]',
       ...['edtName','edtDisplayName','cbxDataType'].flatMap(name=>{const owner='[data-tid$=";WizrdMCF;ExprDataEditForm;'+name+'"]';return [owner,owner+' input'];}),
+      ...['chbIntermediate','chbCached'].flatMap(name=>['',';InputEl',';DisplayEl'].map(part=>'[data-tid$=";WizrdMCF;ExprDataEditForm;'+name+part+'"]')),
       ...wizardButtons.map(name=>'[data-tid$=";WizrdMCF;'+name+'"]')].join(',');
     if (requestedRoot || discoverRoots) {
       // Native fixed queries discover global blockers/context without walking
@@ -194,6 +209,21 @@ function workspaceUiCapability(page, task) {
       // cannot be preempted; charge immediately after each native operation.
       const guards=document.querySelectorAll(wizardSelectors+',[data-tid="MF;cntMain;tlbMainToolbar;btnAvatar"],.x-tab-active[data-tid],[role="dialog"],.x-window,.bg-dialog,.bg-mask-message,.x-mask-msg,[role="alert"],[role="status"],.bg-message,.x-message-box,.x-form-invalid-under,[data-tid$="FileStorageForm;pnlFileStorage;tbl"]');
       charge();for (const element of guards) include(element);
+      // Ext renders Table modals in a portal outside the owning BrowseView.
+      // Include exact view roots as global identity guards, never their trees.
+      const tableOwners=document.querySelectorAll('[data-tid$=";ViewsForm;BrowseView"],[data-tid*=";ViewsForm;BrowseView-"]');
+      charge();for (const element of tableOwners) {
+        charge();if(/^MF;TF(?:-\d+)?;ViewsForm;BrowseView(?:-[1-9][0-9]*)?$/.test(element.getAttribute('data-tid')??''))include(element);
+      }
+    }
+    // The exact process context menu is a portal. Read its owning console
+    // through the same bounded DOM scanner, never another workflow subtree.
+    if(requestedRoot?.getAttribute('data-tid')==='mnContextMenu'
+      && requestedRoot.querySelectorAll('[data-tid="mnContextMenu;mniShowNodeToProcess"]').length===1
+      && requestedRoot.querySelectorAll('[data-tid="mnContextMenu;mniShowCompletedProcesses"]').length===1) {
+      const panels=document.querySelectorAll('[data-tid="ConsoleForm"]');charge();
+      if(panels.length===1) {include(panels[0]);const descendants=panels[0].querySelectorAll('*');charge();
+        for(const element of descendants)include(element);}
     }
     const select = selector => dom.filter(element => { charge(); return element.matches(selector); });
     const all = select('[data-tid]'), tids = new Map();
@@ -250,8 +280,11 @@ function workspaceUiCapability(page, task) {
       }
       return null;
     };
-    const enabled = element => !element.matches(':disabled') && !element.closest('[aria-disabled="true"],.x-item-disabled,.x-btn-disabled');
+    const enabled = element => !element.matches(':disabled') && !element.closest('[aria-disabled="true"],.x-item-disabled,.x-btn-disabled,.x-menu-item-disabled');
     const dangerous = element => sensitive(element) || !!element.closest('a[href],iframe,object,embed')
+      // The native chooser interrupts MCP's typed browser response. File
+      // submission belongs to dock_artifact_upload and its pinned grant.
+      || !!element.closest('[data-tid$=";FileStorageForm;btnUpload"]')
       || element.matches('input[type="url"],input[type="file"],input[type="hidden"]')
       || /(?:^|[;_ -])(?:script|javascript|python|codeeditor)(?:[;_ -]|$)/i.test(['name', 'id', 'data-tid'].map(key => element.getAttribute(key) ?? '').join(' '))
       || !!element.closest('.monaco-editor,.CodeMirror,.ace_editor,[data-tid$=";WizrdMCF;CalcDataWizard;cmpExpression"]');
@@ -316,6 +349,7 @@ function workspaceUiCapability(page, task) {
           {status:found.length===1?'observed':found.length?'ambiguous':'unobserved',enabled:found.length===1?enabled(found[0]):null}];}))};
     }
     let navigationContext={status:'unobserved'};
+    let nodeContext={status:'unobserved',opening_verified:false};
     if(workflow) {
       // E2E navigation.GetCurrentTabPath: inspect the current tab's visible
       // breadcrumb buttons, not document.title. This is observed context only;
@@ -359,6 +393,273 @@ function workspaceUiCapability(page, task) {
       }
       if(wizard.status==='observed')wizard.owner_context=ownerContext;
       if(wizard.status==='observed' && wizard.stage==='output_mapping')wizard.port_context=portContext;
+    }
+    // Node overview is distinct from workflow and port/wizard navigation.
+    if(workflow && wizard.status==='absent') {
+      const panelTid=workflow.prefix+';NavigationBar;NavigationPanel',panels=tids.get(panelTid)??[];
+      const prefix=workflow.prefix+';cnrNaviMode;b.s_';
+      const inside=(e,parent)=>{
+        const r=boxOf(e),p=boxOf(parent),vw=globalThis.innerWidth,vh=globalThis.innerHeight;
+        return visible(e)&&!sensitive(e)&&[r.x,r.y,r.width,r.height,p.x,p.y,p.width,p.height,vw,vh].every(Number.isFinite)
+          &&r.x>=0&&r.y>=0&&r.x+r.width<=vw&&r.y+r.height<=vh
+          &&r.x>=p.x&&r.y>=p.y&&r.x+r.width<=p.x+p.width&&r.y+r.height<=p.y+p.height;
+      };
+      if(panels.length>1)nodeContext.status='ambiguous';
+      else if(panels.length===1&&inside(panels[0],panels[0])) {
+        const panel=panels[0],crumbs=all.filter(e=>{charge();return panel.contains(e)&&/;cnrNaviMode;b\.s_/.test(getTid(e)??'');});
+        if(crumbs.length>32)nodeContext.status='bounded';
+        else if(crumbs.length===6&&crumbs.every(e=>inside(e,panel)&&(getTid(e)??'').startsWith(prefix))) {
+          const items=crumbs.map(e=>({ref:refOf(e),tid:getTid(e),label:textOf(e,true)}));
+          const unique=new Set(items.map(i=>i.tid)).size===items.length;
+          const bounded=items.every(i=>i.tid.length<=2048&&i.label.length<240)&&items.reduce((n,i)=>n+i.tid.length+i.label.length,0)<=4096;
+          const chain=items.every((i,n)=>i.tid.slice(prefix.length).split('>').length===n+1&&(!n||i.tid.startsWith(items[n-1].tid+'>')));
+          const format=s=>s.replace(/\s/g,'_').replace(/,/g,'');
+          const node=items[5];
+          const exact=items[0].tid===prefix+'Сервер'&&items[1].label==='Пакеты'&&items.slice(2).every(i=>i.label)
+            &&node.tid===items[4].tid+'>'+format(node.label);
+          const icon=(e,selector)=>{const found=e.querySelectorAll(selector);charge();return found.length===1&&inside(found[0],e);};
+          const icons=icon(crumbs[4],'.maptree-icon-workflow')&&icon(crumbs[5],'[class*="bg-vendor-icon-"]');
+          if(!bounded)nodeContext.status='bounded';
+          else if(!unique||!chain)nodeContext.status='ambiguous';
+          else if(exact&&icons)nodeContext={status:'observed',kind:'node',opening_verified:false,panel_ref:refOf(panel),
+            node:{ref:node.ref,tid:node.tid,label:node.label},path:items};
+        }
+      }
+    }
+    if(wizard.status==='observed' && wizard.stage==='input_mapping'
+      && (tids.get(wizard.root_tid+';TuneDataSourceMappingWizard;btnAddMappingColumn')??[]).some(e=>wizardForms[0].contains(e)&&visible(e))) {
+      const context={status:'unobserved',direction:'input',port_key:null,port_index:null,
+        source_identity_verified:false,opening_verified:false};
+      wizard.input_port_context=context;
+      const panelTid=workflow.prefix+';NavigationBar;NavigationPanel',panels=tids.get(panelTid)??[];
+      const prefix=workflow.prefix+';cnrNaviMode;b.s_';
+      const inside=(e,parent)=>{
+        const r=boxOf(e),p=boxOf(parent),vw=globalThis.innerWidth,vh=globalThis.innerHeight;
+        return visible(e)&&!sensitive(e)&&[r.x,r.y,r.width,r.height,p.x,p.y,p.width,p.height,vw,vh].every(Number.isFinite)
+          &&r.x>=0&&r.y>=0&&r.x+r.width<=vw&&r.y+r.height<=vh
+          &&r.x>=p.x&&r.y>=p.y&&r.x+r.width<=p.x+p.width&&r.y+r.height<=p.y+p.height;
+      };
+      if(panels.length>1)context.status='ambiguous';
+      else if(panels.length===1&&inside(panels[0],panels[0])) {
+        const panel=panels[0],crumbs=all.filter(e=>{charge();return panel.contains(e)&&/;cnrNaviMode;b\.s_/.test(getTid(e)??'');});
+        if(crumbs.length>32)context.status='bounded';
+        else if(crumbs.length===9&&crumbs.every(e=>inside(e,panel)&&(getTid(e)??'').startsWith(prefix))) {
+          const items=crumbs.map(e=>({ref:refOf(e),tid:getTid(e),label:textOf(e,true)}));
+          const unique=new Set(items.map(i=>i.tid)).size===items.length;
+          const bounded=items.every(i=>i.tid.length<=2048&&i.label.length<240)&&items.reduce((n,i)=>n+i.tid.length+i.label.length,0)<=4096;
+          const chain=items.every((i,n)=>i.tid.slice(prefix.length).split('>').length===n+1&&(!n||i.tid.startsWith(items[n-1].tid+'>')));
+          const format=s=>s.replace(/\s/g,'_').replace(/,/g,'');
+          const node=items[5],folder=items[6],port=items[7],last=items[8];
+          const exact=items[0].tid===prefix+'Сервер'&&items[1].label==='Пакеты'
+            &&node.label&&folder.label==='Входные порты'&&port.label&&last.label==='Настройка'
+            &&folder.tid===node.tid+'>Входные_порты'&&port.tid===folder.tid+'>'+format(port.label)
+            &&last.tid===port.tid+'>Настройка';
+          const iconCount=(e,selector)=>{const found=e.querySelectorAll(selector);charge();return found.length===1&&inside(found[0],e)?1:0;};
+          const icons=iconCount(crumbs[4],'.maptree-icon-workflow')===1
+            &&iconCount(crumbs[5],'[class*="bg-vendor-icon-"]')===1
+            &&iconCount(crumbs[8],'.maptree-icon-wizard')===1;
+          if(!bounded)context.status='bounded';
+          else if(!unique||!chain)context.status='ambiguous';
+          else if(exact&&icons)Object.assign(context,{status:'observed',panel_ref:refOf(panel),node:{ref:node.ref,tid:node.tid,label:node.label},
+            node_path:items.slice(0,6),port_display_label:port.label,port_ref:port.ref,port_path:items.slice(0,8),path:items});
+        }
+      }
+    }
+
+    if(wizard.status==='observed' && wizard.stage==='grouping') {
+      // E2E sGroupData and live GroupDataWizard: a flat sequence of TABLE
+      // records carries section headers and explicit section-end summaries.
+      // This is rendered configuration, never source identity or full coverage.
+      const base=wizard.root_tid+';GroupDataWizard;',gridTid=base+'grdUsedFields;tbl';
+      const grouping={status:'unobserved',keys:[],measures:[],complete:false,
+        source_identity_verified:false,settings_applied:false,aggregation_settings_verified:false,
+        definition_coverage:{status:'partial'},reason:'grouping_region_required'};
+      wizard.grouping=grouping;
+      // Available fields are selectable before either used-field section has
+      // been configured. Bind each control to its exact wizard-owned grid/row;
+      // this does not establish complete source schema or applied settings.
+      grouping.available_fields=[];
+      const availableTid=base+'grdDataFields;tbl',availableGrids=[...wizardForms[0].querySelectorAll('[data-tid$=";GroupDataWizard;grdDataFields;tbl"]')].filter(e=>{charge();return getTid(e)===availableTid && visible(e);});
+      if(!discoverRoots && availableGrids.length===1 && wizardForms[0].contains(availableGrids[0])) {
+        const available=availableGrids[0],types={dtInteger:'integer',dtFloat:'real',dtString:'string',dtBoolean:'boolean',dtDateTime:'datetime',dtVariant:'variant'};
+        const cells=all.filter(e=>{charge();return (getTid(e)??'').startsWith(base+'colDisplayName_') && available.contains(e) && visible(e) && !sensitive(e);});
+        if(cells.length<=64)for(const cell of cells) {
+          const tid=getTid(cell),key=tid.slice((base+'colDisplayName_').length),row=cell.closest('table.x-grid-item');
+          const peers=tids.get(tid)??[],index=row?.getAttribute('data-recordindex'),label=textOf(cell);
+          const icons=[...cell.querySelectorAll('[class*="bg-TBGDataType-"]')];charge();
+          const kinds=icons.length===1 && visible(icons[0])?Object.entries(types).filter(([css])=>icons[0].classList.contains('bg-TBGDataType-'+css)):[];
+          if(peers.length!==1 || !row || row.closest('[data-tid$=";tbl"]')!==available
+            || !available.getAttribute('id') || row.getAttribute('data-boundview')!==available.getAttribute('id')
+            || !/^(0|[1-9][0-9]*)$/.test(index??'') || cell.closest('.x-grid-row-summary')
+            || !key || key.length>128 || key.includes(';') || !label || label.length>=240
+            || label==='[outside selected root]' || kinds.length!==1)continue;
+          grouping.available_fields.push({field_key:key,label,input_type:kinds[0][1],cell_ref:refOf(cell),row_ref:refOf(row),
+            grid_ref:refOf(available),record_index:Number(index),selected:row.classList.contains('x-grid-item-selected'),source_identity_verified:false});
+        }
+      }
+      const grids=tids.get(gridTid)??[];
+      if(!discoverRoots && grids.length===1 && wizardForms[0].contains(grids[0])
+        && (!requestedRoot || requestedRoot===grids[0] || requestedRoot.contains(grids[0]))) {
+        const grid=grids[0],containers=[...grid.querySelectorAll('.x-grid-item-container')];charge();
+        const inside=(e,parent)=>{
+          const b=boxOf(e),p=boxOf(parent),vw=globalThis.innerWidth,vh=globalThis.innerHeight;
+          return visible(e) && !sensitive(e) && [b.x,b.y,b.width,b.height,p.x,p.y,p.width,p.height,vw,vh].every(Number.isFinite)
+            && b.x>=0 && b.y>=0 && b.x+b.width<=vw && b.y+b.height<=vh
+            // Live Ext table borders extend exactly 1/64 CSS px beyond the
+            // container's right edge. No tolerance applies to viewport edges.
+            && b.x>=p.x && b.y>=p.y && b.x+b.width<=p.x+p.width+1/64 && b.y+b.height<=p.y+p.height;
+        };
+        const noEditors=![...wizardForms[0].querySelectorAll('[data-tid]')].some(e=>{
+          charge();const tid=getTid(e)??'';
+          return visible(e) && (tid.startsWith(wizard.root_tid+';FactorEditDialog') || tid.startsWith(gridTid+';celleditor'));
+        });
+        grouping.reason='grouping_structure_unverifiable';
+        if(containers.length===1 && inside(grid,grid) && inside(containers[0],grid) && noEditors
+          && !select('.bg-mask-message,.x-mask-msg').some(visible)) {
+          const container=containers[0],rows=[...container.children];charge();
+          const allRows=[...grid.querySelectorAll('table.x-grid-item')];charge();
+          const types={dtInteger:'integer',dtFloat:'real',dtString:'string',dtBoolean:'boolean',dtDateTime:'datetime',dtVariant:'variant'};
+          let section=null,sectionIndex=-1,closed=true,valid=rows.length>0 && rows.length<=8
+            && rows.length===allRows.length && rows.every(e=>allRows.includes(e))
+            && [...grid.children].every(e=>e===container || !visible(e));
+          const keys=[],measures=[],seen=new Set(),sections=[];
+          for(const [index,row] of rows.entries()) {
+            charge();if(!valid)break;
+            const bodyId=grid.getAttribute('id');
+            const headers=[...row.querySelectorAll('.x-grid-group-hd')];charge();
+            const dataRows=[...row.querySelectorAll('tr.x-grid-row')];charge();
+            const summaries=[...row.querySelectorAll('tr.x-grid-row-summary')];charge();
+            const rowParts=[...row.querySelectorAll('tr')];charge();
+            const expectedParts=[...headers.map(e=>e.closest('tr')),...dataRows,...summaries];
+            if(row.parentElement!==container || !row.matches('table.x-grid-item') || !inside(row,container)
+              || row.getAttribute('data-recordindex')!==String(index) || !bodyId || row.getAttribute('data-boundview')!==bodyId
+              || headers.length>1 || dataRows.length!==1 || summaries.length>1 || rowParts.length!==expectedParts.length
+              || rowParts.some((part,i)=>part!==expectedParts[i])){valid=false;break;}
+            if(headers.length===1) {
+              const header=headers[0],next=sectionIndex+1,id=next===0?'6':next===1?'7':null;
+              if(!closed || !id || getTid(header)!==gridTid+';GroupHeader;'+id || header.getAttribute('data-groupname')!==id
+                || (tids.get(getTid(header))??[]).length!==1
+                || !header.classList.contains('x-grid-group-hd-not-collapsible') || !inside(header,row)
+                || textOf(header,true)!==(next===0?'Группа':'Показатели')){valid=false;break;}
+              sectionIndex=next;section=next===0?'group':'measure';closed=false;
+              sections.push({role:section,header_ref:refOf(header)});
+            }
+            if(closed || !section){valid=false;break;}
+            const cells=all.filter(e=>{charge();return dataRows[0].contains(e) && (getTid(e)??'').startsWith(base+'colUsedFields_');});
+            if(cells.length!==1 || !inside(cells[0],row)){valid=false;break;}
+            const cell=cells[0],fieldKey=getTid(cell).slice((base+'colUsedFields_').length),text=textOf(cell,true);
+            const peers=(tids.get(getTid(cell))??[]).filter(e=>!(e.closest('.x-grid-row-summary') && e.closest('table')===row && textOf(e,true)===''));
+            const icons=[...cell.querySelectorAll('[class*="bg-TBGDataType-"]')];charge();
+            const observedTypes=icons.length===1 && visible(icons[0])?Object.entries(types).filter(([css])=>icons[0].classList.contains('bg-TBGDataType-'+css)):[];
+            if(!fieldKey || fieldKey.length>128 || fieldKey.includes(';') || seen.has(fieldKey) || peers.length!==1
+              || !text || text.length>=240 || sensitive(cell) || observedTypes.length!==1){valid=false;break;}
+            const aggregate=section==='measure'?/^(.*) \((Сумма|Количество)\)$/.exec(text):null;
+            if(section==='measure' && (!aggregate || !aggregate[1] || aggregate[1].length>=240)){valid=false;break;}
+            const field={field_key:fieldKey,label:aggregate?aggregate[1]:text,input_type:observedTypes[0][1],
+              row_ref:refOf(row),cell_ref:refOf(cell),section_ref:sections.at(-1).header_ref,
+              rendered_text:text,source_identity_verified:false};
+            if(section==='measure')field.aggregations=[aggregate[2]==='Сумма'?'sum':'count'];
+            (section==='group'?keys:measures).push(field);seen.add(fieldKey);
+            if(summaries.length) {
+              const expected=base+'colUsedFields;SummaryRow-'+sectionIndex;
+              const ends=[...summaries[0].querySelectorAll('[data-tid]')].filter(e=>{charge();return getTid(e)===expected || getTid(e)===getTid(cell);});
+              if(ends.length!==1 || textOf(ends[0],true)!=='' || !inside(summaries[0],row) || !inside(ends[0],row)){valid=false;break;}
+              closed=true;
+            }
+          }
+          if(valid && closed && sectionIndex===1 && keys.length && measures.length)Object.assign(grouping,
+            {status:'rendered_grouping_rows',keys,measures,sections,reason:'rendered_rows_only',grid_ref:refOf(grid),container_ref:refOf(container)});
+          if(grouping.status==='rendered_grouping_rows') {
+            const bounds=e=>({top:e.scrollTop,left:e.scrollLeft,height:e.clientHeight,width:e.clientWidth,
+              scroll_height:e.scrollHeight,scroll_width:e.scrollWidth});
+            const gridBounds=bounds(grid),containerBounds=bounds(container);
+            const noOverflow=b=>Object.values(b).every(Number.isFinite) && b.top===0 && b.left===0
+              && b.height>0 && b.width>0 && b.scroll_height===b.height && b.scroll_width===b.width;
+            const transform=globalThis.getComputedStyle(container).transform;
+            const atOrigin=['none','matrix(1, 0, 0, 1, 0, 0)','matrix3d(1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1)'].includes(transform);
+            const extras=[...grid.children].filter(e=>e!==container);
+            // Exact observed Ext sentinel only; hidden row/spacer payload is
+            // not evidence that the complete list has been rendered.
+            const sentinel=extras.length<=1 && extras.every(e=>e.tagName==='DIV'
+              && e.children.length===0 && !getTid(e) && globalThis.getComputedStyle(e).display==='none'
+              && e.getAttribute('role')==='presentation' && e.style.width==='1px' && e.style.height==='1px');
+            const controls=[...grid.querySelectorAll('input,textarea,select')];charge();
+            if(noOverflow(gridBounds) && noOverflow(containerBounds) && atOrigin && sentinel && controls.length===0) {
+              grouping.definition_coverage={status:'complete_rendered_used_fields',source_identity_verified:false,
+                row_count:rows.length,first_index:0,last_index:rows.length-1,
+                first_row_ref:refOf(rows[0]),last_row_ref:refOf(rows.at(-1)),grid_bounds:gridBounds,container_bounds:containerBounds,
+                sections:sections.map(s=>({role:s.role,header_ref:s.header_ref,
+                  row_count:(s.role==='group'?keys:measures).length})),
+                unfiltered_scope:'used_fields_only',available_fields_filter_applies:false,
+                no_scroll_remainder:true,container_at_origin:true,no_editors:true};
+            }
+          }
+
+        }
+      }
+    }
+    if(wizard.status==='observed' && wizard.stage==='grouping') {
+      const dialogTid=wizard.root_tid+';FactorEditDialog',dialogs=tids.get(dialogTid)??[];
+      const factor={status:'unobserved',opening_verified:false,settings_applied:false,
+        source_identity_verified:false,aggregation_settings_verified:false,options:[]};
+      wizard.factor_editor=factor;
+      const fullyVisible=e=>{
+        const b=boxOf(e);
+        return visible(e) && !sensitive(e) && [b.x,b.y,b.width,b.height].every(Number.isFinite)
+          && b.x>=0 && b.y>=0 && b.x+b.width<=globalThis.innerWidth && b.y+b.height<=globalThis.innerHeight;
+      };
+      if(!discoverRoots && dialogs.length===1 && fullyVisible(dialogs[0])
+        && (!requestedRoot || requestedRoot===dialogs[0] || requestedRoot.contains(dialogs[0]))) {
+        const dialog=dialogs[0],groupTid=dialogTid+';grpFactors',groups=tids.get(groupTid)??[];
+        const definitions=[['gdSum','sum','Сумма'],['gdCount','count','Количество'],['gdMin','min','Минимум'],
+          ['gdMax','max','Максимум'],['gdAvg','average','Среднее'],['gdMedian','median','Медиана'],['gdMode','mode','Мода'],
+          ['gdStdDev','standard_deviation','Стандартное откл.'],['gdUniqueCount','unique_count','Кол-во уникальных'],
+          ['gdNullCount','null_count','Кол-во пропусков'],['gdFirst','first','Первый'],['gdLast','last','Последний'],
+          ['gdOnly','only','Единственный'],['gdConcat','concat','Список']];
+        const owners=[...dialog.querySelectorAll('.x-form-type-checkbox')].filter(e=>(getTid(e)??'').startsWith(groupTid+';') || groups.length===1 && groups[0].contains(e));
+        let valid=groups.length===1 && dialog.contains(groups[0]) && fullyVisible(groups[0]) && owners.length===14;
+        const options=[];
+        for(const [index,[iconName,aggregation,label]] of definitions.entries()) {
+          if(!valid)break;charge();
+          const tid=groupTid+';chb'+(index?'-'+index:'');const matches=tids.get(tid)??[];
+          if(matches.length!==1){valid=false;break;}
+          const owner=matches[0],displays=tids.get(tid+';DisplayEl')??[],inputs=tids.get(tid+';InputEl')??[];
+          const b=boxOf(owner),g=boxOf(groups[0]);
+          const labels=[...owner.querySelectorAll('.x-form-cb-label')],icons=[...owner.querySelectorAll('[class*="bg-TBGGroupDataFunction-"]')];charge();
+          if(!owners.includes(owner) || !groups[0].contains(owner) || !fullyVisible(owner)
+            || b.x<g.x || b.y<g.y || b.x+b.width>g.x+g.width || b.y+b.height>g.y+g.height
+            || displays.length!==1 || inputs.length!==1 || !owner.contains(displays[0]) || !owner.contains(inputs[0])
+            || !fullyVisible(displays[0]) || inputs[0].getAttribute('role')!=='checkbox'
+            || labels.length!==1 || !fullyVisible(labels[0]) || textOf(labels[0],true)!==label
+            || icons.length!==1 || !fullyVisible(icons[0]) || !icons[0].classList.contains('bg-TBGGroupDataFunction-'+iconName)
+            || definitions.filter(([name])=>icons[0].classList.contains('bg-TBGGroupDataFunction-'+name)).length!==1) {valid=false;break;}
+          options.push({aggregation,label,owner_ref:refOf(owner),display_ref:refOf(displays[0]),
+            checked:owner.classList.contains('x-form-cb-checked'),enabled:enabled(owner),state_source:'ext_owner_class'});
+        }
+        const gridTid=wizard.root_tid+';GroupDataWizard;grdUsedFields;tbl',grids=tids.get(gridTid)??[];
+        let selected=null;
+        if(grids.length===1 && wizardForms[0].contains(grids[0])) {
+          const rows=[...grids[0].querySelectorAll('table.x-grid-item-selected')];charge();
+          if(rows.length===1 && fullyVisible(rows[0]) && rows[0].getAttribute('data-boundview')===grids[0].getAttribute('id')) {
+            const prefix=wizard.root_tid+';GroupDataWizard;colUsedFields_';
+            const cells=[...rows[0].querySelectorAll('[data-tid]')].filter(e=>!e.closest('.x-grid-row-summary') && (getTid(e)??'').startsWith(prefix));
+            // The dialog is a portal sibling; a scoped dialog read does not
+            // include the selected grid cell in tids. Check exact native DOM
+            // uniqueness with a bounded query, not metadata issuance.
+            const exactCells=cells.length===1?[...document.querySelectorAll('[data-tid='+JSON.stringify(getTid(cells[0]))+']')].filter(e=>{
+              charge();return !(e.closest('.x-grid-row-summary') && e.closest('table')===rows[0] && fullyVisible(e) && textOf(e,true)==='');
+            }):[];charge();
+            if(cells.length===1 && fullyVisible(cells[0]) && exactCells.length===1 && exactCells[0]===cells[0]) {
+              const key=getTid(cells[0]).slice(prefix.length),index=rows[0].getAttribute('data-recordindex');
+              if(key && !key.includes(';') && /^[0-9]+$/.test(index??''))selected={status:'rendered_selected',
+                field_key:key,row_ref:refOf(rows[0]),cell_ref:refOf(cells[0]),record_index:Number(index),opening_verified:false};
+            }
+          }
+        }
+        if(valid && selected)Object.assign(factor,{status:'rendered_factor_options',dialog_ref:refOf(dialog),
+          dialog_tid:dialogTid,group_ref:refOf(groups[0]),selected_field:selected,options,
+          definition_coverage:{status:'complete_rendered_options',count:14},count_includes_null_records:true});
+      }
     }
     if(wizard.status==='observed' && ['output_mapping','field_parameters'].includes(wizard.stage)) {
       const reform=wizard.stage==='field_parameters',columnsKey=reform?'reform_columns':'output_columns';
@@ -407,7 +708,9 @@ function workspaceUiCapability(page, task) {
     }
     if(wizard.output_columns) {
       let coverage={status:'partial',source_identity_verified:false};
-      const base=wizard.root_tid+';ColumnsMappingEngineOutputPortWizard;';
+      const forms=['ColumnsMappingEngineOutputPortWizard','DerivedDataSourceOutputSocketWizard','DerivedDataSourceMappingEngineOutputPortWizard'].filter(name=>
+        (tids.get(wizard.root_tid+';'+name+';btnAddMappingColumn')??[]).filter(e=>wizardForms[0].contains(e) && visible(e) && !sensitive(e)).length===1);
+      const base=wizard.root_tid+';'+(forms.length===1?forms[0]:'__unobserved__')+';';
       const unique=key=>{const es=tids.get(base+key)??[];return es.length===1 && wizardForms[0].contains(es[0])
         && visible(es[0]) && !sensitive(es[0])?es[0]:null;};
       const body=unique('grdTargetColumns;tbl'),filter=unique('TargetFilter'),tableMode=unique('rbTable'),linksMode=unique('rbLinks');
@@ -461,6 +764,59 @@ function workspaceUiCapability(page, task) {
       }
       wizard.output_columns.definition_coverage=coverage;
     }
+    if(wizard.reform_columns) {
+      let coverage={status:'partial',source_identity_verified:false};
+      const base=wizard.root_tid+';ReformColumnsWizard;';
+      const unique=key=>{const es=tids.get(base+key)??[];return es.length===1 && wizardForms[0].contains(es[0])
+        && visible(es[0]) && !sensitive(es[0])?es[0]:null;};
+      const body=unique('grdTargetColumns;tbl'),filter=unique('TargetFilter');
+      if(body && filter) {
+        const containers=[...body.querySelectorAll('.x-grid-item-container')];charge();
+        const rows=[...body.querySelectorAll('table.x-grid-item')];charge();
+        const inputs=[...filter.querySelectorAll('input')].filter(e=>{charge();return visible(e) && !sensitive(e);});
+        const inside=(e,parent)=>{
+          if(!visible(e) || sensitive(e))return false;
+          const b=boxOf(e),p=boxOf(parent),vw=globalThis.innerWidth,vh=globalThis.innerHeight;
+          return [b.x,b.y,b.width,b.height,p.x,p.y,p.width,p.height,vw,vh].every(Number.isFinite)
+            && vw>0 && vh>0 && b.x>=0 && b.y>=0 && b.x+b.width<=vw && b.y+b.height<=vh
+            && b.x>=p.x && b.y>=p.y && b.x+b.width<=p.x+p.width && b.y+b.height<=p.y+p.height;
+        };
+        const dimensions=[body.clientWidth,body.clientHeight,body.scrollWidth,body.scrollHeight,body.scrollLeft,body.scrollTop];
+        const fields=wizard.reform_columns.fields;
+        const noEditors=!all.some(e=>{charge();return ((getTid(e)??'').startsWith(base+'grdTargetColumns;tbl;celleditor')
+          || getTid(e)===wizard.root_tid+';EditReformColumnDefForm' || getTid(e)==='EditReformColumnDefForm') && visible(e);});
+        const noMasks=!select('.bg-mask-message,.x-mask-msg').some(visible);
+        if(containers.length===1 && rows.length>0 && rows.length<=8 && rows.length===fields.length
+          && dimensions.every(Number.isFinite) && body.clientWidth>0 && body.clientHeight>0
+          && body.scrollWidth<=body.clientWidth && body.scrollHeight<=body.clientHeight && body.scrollLeft===0 && body.scrollTop===0
+          && inputs.length===1 && String(inputs[0].value??'')==='' && noEditors && noMasks && inside(body,body)) {
+          const container=containers[0],cb=boxOf(container),bb=boxOf(body);
+          const direct=[...container.children];charge();
+          const bodyChildren=[...body.children];charge();
+          const boundId=body.getAttribute('id');
+          const valid=boundId && inside(container,body) && cb.y===bb.y && cb.x===bb.x
+            && direct.length===rows.length && direct.every(e=>rows.includes(e))
+            && bodyChildren.every(e=>e===container || !visible(e))
+            && rows.every((row,index)=>{
+              charge();const rb=boxOf(row),previous=index?boxOf(rows[index-1]):null;
+              const matches=fields.filter(f=>f.row_ref===refOf(row));
+              const nameCells=all.filter(e=>{charge();return row.contains(e) && (getTid(e)??'').startsWith(base+'colName_');});
+              if(row.parentElement!==container || row.getAttribute('data-recordindex')!==String(index)
+                || row.getAttribute('data-boundview')!==boundId || !inside(row,container)
+                || rb.y!==(previous?previous.y+previous.height:cb.y) || matches.length!==1 || matches[0].status!=='observed' || typeof matches[0].excluded!=='boolean' || !matches[0].caching || !matches[0].data_kind || !matches[0].usage
+                || nameCells.length!==1)return false;
+              const key=getTid(nameCells[0]).slice((base+'colName_').length);
+              return ['colName_','colDisplayName_','colDataKind_','colDefaultUsageType_','colCachingMethod_','colExcluded_'].every(prefix=>{
+                const es=tids.get(base+prefix+key)??[];
+                return es.length===1 && row.contains(es[0]) && inside(es[0],row);
+              });
+            }) && boxOf(rows.at(-1)).y+boxOf(rows.at(-1)).height===cb.y+cb.height;
+          if(valid)coverage={status:'complete_configured_fields',count:rows.length,body_ref:refOf(body),container_ref:refOf(container),
+            first_row_ref:refOf(rows[0]),last_row_ref:refOf(rows.at(-1)),filter_ref:refOf(inputs[0]),source_identity_verified:false};
+        }
+      }
+      wizard.reform_columns.definition_coverage=coverage;
+    }
     if(wizard.status==='observed' && wizard.stage==='done') {
       const base=wizard.root_tid+';DoneWizard;';
       const fields=Object.fromEntries(Object.entries({label:'edtDisplayName',label_mode:'cbxNodeTitleMode'}).map(([name,key])=>{
@@ -487,13 +843,230 @@ function workspaceUiCapability(page, task) {
         if(labels.length===1 && types.length===1 && name.length<=256 && label.length<=256)
           wizard.expression_selection={status:'observed',row_ref:refOf(row),name,label,type_label:types[0][1]};
       }
+      // Complete bounded definition rows are distinct from expression text,
+      // options, source mapping identity and applied/persisted configuration.
+      const manifest={status:'unobserved',fields:[],definition_coverage:{status:'partial'},complete:false,
+        expression_texts_verified:false,source_identity_verified:false,settings_applied:false,
+        selected_replacement:{status:'unobserved'}};
+      wizard.calculator_expressions=manifest;
+      const replacements=tids.get(base+'btnReplaceField')??[];
+      if(wizard.expression_selection.status==='observed' && replacements.length===1
+        && wizardForms[0].contains(replacements[0]) && visible(replacements[0]) && !sensitive(replacements[0]))
+        manifest.selected_replacement={status:'observed',value:replacements[0].classList.contains('x-btn-pressed'),
+          enabled:enabled(replacements[0]),button_ref:refOf(replacements[0]),row_ref:wizard.expression_selection.row_ref};
+      const gridTid=base+'grdExpressions;tbl',grids=tids.get(gridTid)??[];
+      if(!discoverRoots && grids.length===1 && wizardForms[0].contains(grids[0])
+        && (!requestedRoot || requestedRoot===grids[0] || requestedRoot.contains(grids[0]))) {
+        const grid=grids[0],containers=[...grid.querySelectorAll('.x-grid-item-container')];charge();
+        const inside=(e,parent)=>{
+          const b=boxOf(e),p=boxOf(parent),vw=globalThis.innerWidth,vh=globalThis.innerHeight;
+          return visible(e) && !sensitive(e) && [b.x,b.y,b.width,b.height,p.x,p.y,p.width,p.height,vw,vh].every(Number.isFinite)
+            && b.x>=0 && b.y>=0 && b.x+b.width<=vw && b.y+b.height<=vh
+            && b.x>=p.x && b.y>=p.y && b.x+b.width<=p.x+p.width && b.y+b.height<=p.y+p.height;
+        };
+        const bounds=[grid.clientWidth,grid.clientHeight,grid.scrollWidth,grid.scrollHeight,grid.scrollLeft,grid.scrollTop];
+        const noEditor=!all.some(e=>{charge();return visible(e) && ((getTid(e)??'').startsWith(gridTid+';celleditor')
+          || getTid(e)===wizard.root_tid+';ExprDataEditForm');});
+        if(containers.length===1 && inside(grid,grid) && inside(containers[0],grid) && noEditor && !dialogs.length
+          && !select('.bg-mask-message,.x-mask-msg').some(visible) && bounds.every(Number.isFinite)
+          && grid.clientWidth>0 && grid.clientHeight>0 && grid.scrollWidth<=grid.clientWidth && grid.scrollHeight<=grid.clientHeight
+          && grid.scrollLeft===0 && grid.scrollTop===0) {
+          const container=containers[0],rows=[...container.children];charge();
+          const nativeRows=[...grid.querySelectorAll('table.x-grid-item')];charge();
+          const cb=boxOf(container),gb=boxOf(grid),boundId=grid.getAttribute('id');
+          let valid=!!boundId && rows.length>0 && rows.length<=8 && rows.length===nativeRows.length
+            && rows.every(e=>nativeRows.includes(e)) && cb.x===gb.x && cb.y===gb.y
+            && [...grid.children].every(e=>e===container || !visible(e));
+          const fields=[],names=new Set(),types={dtInteger:'integer',dtFloat:'real',dtString:'string',dtBoolean:'boolean',dtDateTime:'datetime',dtVariant:'variant'};
+          for(const [index,row] of rows.entries()) {
+            charge();if(!valid)break;
+            const rb=boxOf(row),previous=index?boxOf(rows[index-1]):null;
+            const dataRows=[...row.querySelectorAll('tr')];charge();
+            const cells=all.filter(e=>{charge();return row.contains(e) && (getTid(e)??'').startsWith(base+'colExpressionName_');});
+            if(!row.matches('table.x-grid-item') || row.parentElement!==container || !inside(row,container)
+              || row.getAttribute('data-recordindex')!==String(index) || row.getAttribute('data-boundview')!==boundId
+              || rb.y!==(previous?previous.y+previous.height:cb.y) || dataRows.length!==1
+              || !dataRows[0].classList.contains('x-grid-row') || cells.length!==1){valid=false;break;}
+            const cell=cells[0],key=getTid(cell).slice((base+'colExpressionName_').length),name=String(cell.textContent??'');
+            const labels=tids.get(base+'colExpressionDisplayName_'+key)??[],peers=tids.get(getTid(cell))??[];
+            const icons=[...cell.querySelectorAll('[class*="bg-TBGDataType-dt"]')];charge();
+            const matched=icons.length===1 && visible(icons[0])?Object.entries(types).filter(([css])=>icons[0].classList.contains('bg-TBGDataType-'+css)):[];
+            if(peers.length!==1 || labels.length!==1 || !row.contains(labels[0]) || !inside(cell,row) || !inside(labels[0],row)
+              || dom.some(e=>{charge();return (cell.contains(e) || labels[0].contains(e)) && sensitive(e);})
+              || !/^[A-Za-z_][A-Za-z0-9_]{0,127}$/.test(name) || key!==name || names.has(name) || matched.length!==1){valid=false;break;}
+            const label=String(labels[0].textContent??'');
+            if(!label || label.length>256 || /[\0\r\n]/.test(label)){valid=false;break;}
+            fields.push({index,name,label,type:matched[0][1],row_ref:refOf(row),name_ref:refOf(cell),label_ref:refOf(labels[0]),
+              selected:row.classList.contains('x-grid-item-selected')});names.add(name);
+          }
+          if(valid && fields.length===rows.length && boxOf(rows.at(-1)).y+boxOf(rows.at(-1)).height===cb.y+cb.height)
+            Object.assign(manifest,{status:'rendered_expression_definitions',fields,
+              definition_coverage:{status:'complete_configured_rows',count:fields.length,grid_ref:refOf(grid),container_ref:refOf(container),
+                first_row_ref:refOf(rows[0]),last_row_ref:refOf(rows.at(-1)),source_identity_verified:false}});
+        }
+      }
     }
+// Private candidate: accepts only the pinned DOM probe schema. No model-supplied
+// expected names, link order or values participate in reconstructing the links.
+function readRenderedInputMapping(observation) {
+  const empty = reason => ({status:'unobserved',reason,links:[],complete:false,
+    source_identity_verified:false,settings_applied:false});
+  try {
+    const d=observation;
+    const require = (ok,reason) => { if(!ok)throw new Error(reason); };
+    const cls=(n,c)=>String(n?.classes??'').split(/\s+/).includes(c);
+    const finite=r=>r&&['x','y','width','height','right','bottom'].every(k=>Number.isFinite(r[k]))
+      && r.width>0&&r.height>0&&r.right===r.x+r.width&&r.bottom===r.y+r.height;
+    const shown=n=>n?.visible===true&&finite(n.rect)&&n.style?.visibility==='visible'
+      &&n.style.display!=='none'&&Number(n.style.opacity)>0;
+    const inside=(n,p)=>shown(n)&&finite(p.rect)&&n.rect.x>=p.rect.x&&n.rect.y>=p.rect.y
+      &&n.rect.right<=p.rect.right&&n.rect.bottom<=p.rect.bottom;
+    require(d?.status==='dom_observation'&&/^MF;TF(?:-\d+)?;WizrdMCF$/.test(d.owner?.tid),'owner_unverified');
+    require(Number.isFinite(d.viewport?.width)&&Number.isFinite(d.viewport?.height),'viewport_unverified');
+    const viewport={rect:{x:0,y:0,width:d.viewport.width,height:d.viewport.height,right:d.viewport.width,bottom:d.viewport.height}};
+    require(inside(d.owner,viewport)&&Array.isArray(d.masks)&&d.masks.length===0,'owner_blocked');
+    const base=d.owner.tid+';TuneDataSourceMappingWizard;';
+    const control=name=>{
+      const c=d.controls.filter(x=>x.name===name);
+      require(c.length===1&&c[0].matches.length===1,'control_not_unique');
+      const n=c[0].matches[0];require(n.tid===base+name&&inside(n,d.owner),'control_not_owned');return n;
+    };
+    const radio=name=>{const n=control(name);require(cls(n,'x-form-type-radio'),'mode_not_radio');
+      const input=n.parts.filter(p=>p.tid===base+name+';InputEl');
+      require(input.length===1&&inside(input[0],n)&&input[0].disabled===false,'mode_input_unverified');
+      return cls(n,'x-form-cb-checked');};
+    require(radio('rbLinks')&&!radio('rbTable'),'links_mode_unverified');
+    for(const name of ['SourceFilter','TargetFilter']) {
+      const n=control(name),inputs=n.parts.filter(p=>p.tag==='INPUT');
+      require(inputs.length===1&&inside(inputs[0],n)&&inputs[0].value==='','filter_not_empty');
+    }
+    require(Array.isArray(d.ownedMarkers)&&!d.ownedMarkers.some(n=>n.visible&&/GroupHeader|celleditor/.test(n.tid??'')),'grouped_or_editing');
+    const noScroll=n=>n.scroll&&['left','top','width','height','clientWidth','clientHeight'].every(k=>Number.isFinite(n.scroll[k]))
+      &&n.scroll.left===0&&n.scroll.top===0&&n.scroll.width<=n.scroll.clientWidth&&n.scroll.height<=n.scroll.clientHeight;
+    const grid=side=>{
+      const names={source:['grdSourceColumns','colSourceName_'],target:['grdTargetColumns','colDisplayName_']};
+      require(Array.isArray(d[side])&&d[side].length===1,'grid_not_unique');
+      const g=d[side][0],[gridName,cellName]=names[side];
+      require(g.tid===base+gridName+';tbl'&&inside(g,d.owner)&&noScroll(g),'grid_bounds_unverified');
+      const containers=g.children.filter(n=>cls(n,'x-grid-item-container'));
+      require(containers.length===1&&g.children.every(n=>n===containers[0]||!n.visible),'container_not_unique');
+      const c=containers[0];require(inside(c,g)&&noScroll(c)&&c.rect.x===g.rect.x&&c.rect.y===g.rect.y,'container_bounds_unverified');
+      const rows=c.children;require(rows.length>0&&rows.length<=8,'row_bound_exceeded');
+      const keys=new Set();
+      const fields=rows.map((r,index)=>{
+        require(r.tag==='TABLE'&&cls(r,'x-grid-item')&&r.recordindex===String(index)&&r.boundview===g.id
+          &&inside(r,c)&&r.rect.y===(index?rows[index-1].rect.bottom:c.rect.y),'row_structure_unverified');
+        require(r.rows.length===1&&cls(r.rows[0],'x-grid-row')&&inside(r.rows[0],r),'data_row_unverified');
+        const cells=r.rows[0].cells.filter(n=>n.tid?.startsWith(base+cellName));
+        require(cells.length===1&&inside(cells[0],r),'field_cell_unverified');
+        const cell=cells[0],key=cell.tid.slice((base+cellName).length);
+        require(/^[A-Za-z_][A-Za-z0-9_]{0,127}$/.test(key)&&!keys.has(key),'field_key_ambiguous');keys.add(key);
+        require(typeof cell.text==='string'&&cell.text.length>0&&cell.text.length<=256&&!/[\0\r\n]/.test(cell.text),'field_label_unbounded');
+        const iconClasses=[...String(cell.html??'').matchAll(/class="([^"]*)"/g)].flatMap(m=>m[1].split(/\s+/)).filter(x=>/^bg-TBGDataType-dt/.test(x));
+        const typeMap={dtInteger:'integer',dtFloat:'real',dtString:'string',dtBoolean:'boolean',dtDateTime:'datetime',dtVariant:'variant'};
+        require(iconClasses.length===1&&typeMap[iconClasses[0].slice('bg-TBGDataType-'.length)],'field_type_marker_unverified');
+        return {index,key,label:cell.text,type_marker:typeMap[iconClasses[0].slice('bg-TBGDataType-'.length)],
+          type_verified:Array.isArray(cell.icons)&&cell.icons.length===1&&inside(cell.icons[0],cell)
+            &&cls(cell.icons[0],iconClasses[0]),cell_tid:cell.tid,rect:cell.rect};
+      });
+      require(rows.at(-1).rect.bottom===c.rect.bottom,'rows_end_unverified');return {fields,grid:g};
+    };
+    const source=grid('source'),target=grid('target');
+    require(d.draws?.length===1,'draw_not_unique');const draw=d.draws[0];
+    require(draw.tid===base+'pnlMiddle;draw'&&inside(draw,d.owner)&&draw.svgs?.length===1,'draw_owner_unverified');
+    const svg=draw.svgs[0];require(inside(svg,draw)&&svg.paths?.length>0&&svg.paths.length<=24,'svg_bound_unverified');
+    const lines=[],arrows=[],hitAreas=[];
+    const number='-?(?:\\d+(?:\\.\\d+)?|\\.\\d+)';
+    const linePattern=new RegExp('^M('+number+'),('+number+')L('+number+'),('+number+')L('+number+'),('+number+')L('+number+'),('+number+')$');
+    const point=(m,x,y)=>({x:m.a*x+m.c*y+m.e,y:m.b*x+m.d*y+m.f});
+    for(const [index,p] of svg.paths.entries()) {
+      const m=p.screenCTM;require(m&&['a','b','c','d','e','f'].every(k=>Number.isFinite(m[k]))&&m.a===1&&m.b===0&&m.c===0&&m.d===1&&m.e===draw.rect.x&&m.f===draw.rect.y,'path_transform_unverified');
+      require(p.style.visibility==='visible'&&p.style.display!=='none'&&Number(p.style.opacity)===1,'path_hidden');
+      const match=linePattern.exec(p.d);
+      if(match&&p.style.stroke==='rgb(247, 147, 30)'&&Number(p.style.strokeOpacity)===1&&Number(p.style.strokeWidth.replace('px',''))===2&&p.style.fill==='rgba(0, 0, 0, 0)') {
+        const v=match.slice(1).map(Number);
+        require(v[0]===0&&v[2]===20&&v[4]===80&&v[6]===100&&v[1]===v[3]&&v[5]===v[7]&&draw.rect.width===100,'line_shape_unverified');
+        lines.push({index,start:point(m,v[0],v[1]),end:point(m,v[6],v[7]),local:v});
+      } else if(p.d.endsWith('Z')&&p.style.fill==='rgb(247, 147, 30)'&&p.style.stroke==='rgb(255, 255, 255)'&&Number(p.style.fillOpacity)===1)arrows.push(p);
+      else if(p.d.endsWith('Z')&&p.style.fill==='rgb(255, 255, 255)'&&Number(p.style.fillOpacity)===0.01&&Number(p.style.strokeOpacity)===0.01)hitAreas.push(p);
+      else require(false,'unknown_path');
+    }
+    require(lines.length>0&&lines.length===arrows.length&&lines.length===hitAreas.length,'path_count_unverified');
+    const usedSources=new Set(),usedTargets=new Set();
+    const links=lines.map(line=>{
+      const src=source.fields.filter(f=>line.start.x===f.rect.right+1&&line.start.y===f.rect.y+f.rect.height/2);
+      const dst=target.fields.filter(f=>line.end.x===f.rect.x-1&&line.end.y===f.rect.y+f.rect.height/2);
+      require(src.length===1&&dst.length===1,'endpoint_ambiguous');const a=src[0],b=dst[0];
+      require(!usedSources.has(a.key)&&!usedTargets.has(b.key),'duplicate_endpoint');usedSources.add(a.key);usedTargets.add(b.key);
+      const y=line.local[7];
+      const arrow=`M90,${y-6}L90,${y+6}L100,${y}L90,${y-6}Z`;
+      require(arrows.filter(p=>p.d===arrow&&p.screenCTM.e===draw.rect.x&&p.screenCTM.f===draw.rect.y).length===1,'arrow_unverified');
+      const sy=line.local[1],delta=(y-sy)/40,n=v=>Number(v.toFixed(8));
+      const hit=`M0,${sy-5}L${n(20+delta)},${sy-5}L${n(80+delta)},${y-5}L100,${y-5}L100,${y+5}L${n(80-delta)},${y+5}L${n(20-delta)},${sy+5}L0,${sy+5}Z`;
+      require(hitAreas.filter(p=>p.d===hit).length===1,'hit_area_unverified');
+      return {source_key:a.key,target_key:b.key,source_cell_tid:a.cell_tid,target_cell_tid:b.cell_tid,path_index:line.index};
+    });
+    return {status:'rendered_mapping_links',owner_tid:d.owner.tid,source_rows:source.fields,target_rows:target.fields,links,
+      rendered_coverage:{status:'complete_visible_rows',source_count:source.fields.length,target_count:target.fields.length,link_count:links.length},
+      complete:false,source_identity_verified:false,settings_applied:false};
+  } catch(error) { return empty(error.message||'mapping_structure_unverifiable'); }
+}
+
+    if(wizard.status==='observed' && wizard.stage==='input_mapping'
+      && (tids.get(wizard.root_tid+';TuneDataSourceMappingWizard;btnAddMappingColumn')??[]).some(e=>wizardForms[0].contains(e)&&visible(e))) {
+      const mappingBase=wizard.root_tid+';TuneDataSourceMappingWizard;';
+      const mapping={status:'unobserved',reason:'full_mapping_root_required',links:[],complete:false,source_identity_verified:false,settings_applied:false};
+      wizard.input_mapping=mapping;
+      const owner=wizardForms[0];
+      if(!discoverRoots && (!requestedRoot || requestedRoot===owner || requestedRoot.contains(owner)) && !dialogs.length) {
+        const query=(root,selector)=>{const found=[...root.querySelectorAll(selector)];charge();if(found.length>128)throw new Error('mapping_collection_bound');for(const e of found) {charge();if(!seenElements.has(e))throw new Error('mapping_scan_incomplete');}return found;};
+        const children=e=>{const found=[...e.children];if(found.length>32)throw new Error('mapping_collection_bound');for(const n of found){charge();if(!seenElements.has(n))throw new Error('mapping_scan_incomplete');}return found;};
+        const exact=tail=>(tids.get(mappingBase+tail)??[]).filter(e=>owner.contains(e));
+        const rect=e=>{const b=boxOf(e);return {...b,right:b.x+b.width,bottom:b.y+b.height};};
+        const info=e=>{charge();const s=getComputedStyle(e);return {tag:e.tagName,tid:getTid(e),id:e.getAttribute('id'),classes:e.getAttribute('class'),
+          rect:rect(e),visible:visible(e)&&!sensitive(e),style:Object.fromEntries(['display','visibility','opacity','fill','fillOpacity','stroke','strokeWidth','strokeOpacity'].map(k=>[k,s[k]])),
+          scroll:{left:e.scrollLeft,top:e.scrollTop,width:e.scrollWidth,height:e.scrollHeight,clientWidth:e.clientWidth,clientHeight:e.clientHeight}};};
+        const cell=e=>{const icons=query(e,'[class*="bg-TBGDataType-dt"]');
+          return {...info(e),icons:icons.map(info),text:String(e.textContent??'').trim(),html:icons.length===1&&visible(icons[0])&&!sensitive(icons[0])?'<i class="'+icons[0].getAttribute('class')+'"></i>':''};};
+        const table=e=>({...info(e),recordindex:e.getAttribute('data-recordindex'),boundview:e.getAttribute('data-boundview'),
+          rows:query(e,'tr').map(r=>({...info(r),cells:children(r).map(cell)}))});
+        const grid=name=>exact(name+';tbl').map(g=>({...info(g),children:children(g).map(c=>({...info(c),children:children(c).map(table)}))}));
+        const control=name=>({name,matches:exact(name).map(e=>({...info(e),parts:[e,...query(e,'input,button,label,[data-tid]')].map(n=>({...info(n),
+          value:'value'in n?String(n.value??''):null,disabled:'disabled'in n?n.disabled:null}))}))});
+        const matrices=e=>{charge();const m=e.getScreenCTM?.();return m?Object.fromEntries(['a','b','c','d','e','f'].map(k=>[k,m[k]])):null;};
+        try {
+          const mappingNodes=dom.filter(e=>{charge();return owner.contains(e);});
+          if(mappingNodes.some(e=>sensitive(e)))throw new Error('mapping_sensitive_content');
+          const pathElements=[];
+          const draws=exact('pnlMiddle;draw').map(e=>({...info(e),svgs:query(e,'svg').map(s=>({...info(s),paths:query(s,'path').map(p=>{
+            pathElements.push(p);if(pathElements.length>24)throw new Error('mapping_path_bound');
+            for(let ancestor=p.parentElement;ancestor&&ancestor!==owner;ancestor=ancestor.parentElement){charge();const style=getComputedStyle(ancestor);if(style.display==='none'||style.visibility!=='visible'||Number(style.opacity)!==1)throw new Error('mapping_path_hidden');}
+            return {...info(p),d:p.getAttribute('d'),screenCTM:matrices(p)};})}))}));
+          const raw={status:'dom_observation',owner:info(owner),viewport:{width:globalThis.innerWidth,height:globalThis.innerHeight},
+            masks:select('.x-mask,.bg-mask-message,.x-mask-msg').filter(visible).map(info),
+            controls:['rbLinks','rbTable','SourceFilter','TargetFilter'].map(control),source:grid('grdSourceColumns'),target:grid('grdTargetColumns'),draws,
+            ownedMarkers:mappingNodes.filter(e=>(getTid(e)??'').startsWith(mappingBase)&&/GroupHeader|celleditor/.test(getTid(e))).map(info)};
+          const rendered=readRenderedInputMapping(raw);
+          if(rendered.status==='rendered_mapping_links') {
+            const cellRef=tid=>{const found=exact(tid.slice(mappingBase.length));if(found.length!==1)throw new Error('mapping_cell_not_unique');return refOf(found[0]);};
+            const fields=rows=>rows.map(({cell_tid,rect,...row})=>({...row,cell_ref:cellRef(cell_tid)}));
+            const links=rendered.links.map(({source_cell_tid,target_cell_tid,path_index,...link})=>({...link,source_ref:cellRef(source_cell_tid),target_ref:cellRef(target_cell_tid),path_ref:refOf(pathElements[path_index])}));
+            Object.assign(mapping,{...rendered,root_ref:refOf(owner),source_rows:fields(rendered.source_rows),target_rows:fields(rendered.target_rows),links});
+            delete mapping.reason;delete mapping.owner_tid;
+          } else Object.assign(mapping,rendered);
+        } catch(error) {if(error?.code==='UI_SCAN_LIMIT')throw error;mapping.reason='mapping_structure_unverifiable';}
+      }
+    }
+
     if(wizard.status==='observed' && wizard.stage==='field_parameters') {
-      const base=wizard.root_tid+';EditReformColumnDefForm';
-      const forms=(tids.get(base)??[]).filter(e=>visible(e) && !sensitive(e));
+      const candidates=[...(tids.get(wizard.root_tid+';EditReformColumnDefForm')??[]),...(tids.get('EditReformColumnDefForm')??[])];
+      const visibleWizards=all.filter(e=>{charge();return (getTid(e)??'').endsWith(';WizrdMCF') && visible(e);});
+      const forms=candidates.filter(e=>visible(e) && !sensitive(e));
+      const portalUnbound=forms.some(e=>getTid(e)==='EditReformColumnDefForm' && (!e.matches('.x-window') || visibleWizards.length!==1 || visibleWizards[0]!==wizardForms[0]));
+      const base=forms.length===1?getTid(forms[0]):wizard.root_tid+';EditReformColumnDefForm';
       if(forms.length) {
-        wizard.reform_parameters={status:forms.length===1?'observed':'ambiguous',applied_verified:false};
-        if(forms.length===1) {
+        wizard.reform_parameters={status:forms.length===1 && !portalUnbound?'observed':'ambiguous',applied_verified:false};
+        if(forms.length===1 && !portalUnbound) {
           const form=forms[0],selected=(wizard.reform_columns?.fields??[]).filter(f=>f.status==='observed' && f.selected);
           const fields=Object.fromEntries(Object.entries({name:'edtName',label:'edtDisplayName',type_label:'cbxDataType',data_kind:'cbxDataKind',usage:'cbxUsageType',caching:'cntMain;cbxCachingMethod'}).map(([name,key])=>{
             const owners=(tids.get(base+';'+key)??[]).filter(e=>form.contains(e) && visible(e) && !sensitive(e));
@@ -507,7 +1080,7 @@ function workspaceUiCapability(page, task) {
           fields.excluded=owners.length===1 && displays.length===1 && displays[0].matches('.x-form-checkbox')
             ?{status:'observed',value:owners[0].classList.contains('x-form-cb-checked'),owner_ref:refOf(owners[0]),display_ref:refOf(displays[0]),enabled:enabled(displays[0])}
             :{status:owners.length>1 || displays.length>1?'ambiguous':'unobserved'};
-          Object.assign(wizard.reform_parameters,{root_ref:refOf(form),selected_column:selected.length===1?selected[0]:null,fields});
+          Object.assign(wizard.reform_parameters,{root_ref:refOf(form),root_tid:base,selected_column:selected.length===1?selected[0]:null,fields});
         }
       }
     }
@@ -545,7 +1118,7 @@ function workspaceUiCapability(page, task) {
       && Object.values(reformParams.fields).every(f=>f.status==='observed' && !f.truncated)) {
       const field=reformParams.fields.type_label;
       if(field.enabled && !field.read_only)
-        wizardCombos.set(wizard.root_tid+';EditReformColumnDefForm;cbxDataType',{name:'type_label',scope:'reform_column',
+        wizardCombos.set(reformParams.root_tid+';cbxDataType',{name:'type_label',scope:'reform_column',
           owner_ref:field.owner_ref,input_ref:field.input_ref,root_ref:wizard.root_ref,parameter_root_ref:reformParams.root_ref,
           selected_column:reformParams.selected_column,value:field.value});
     }
@@ -609,6 +1182,16 @@ function workspaceUiCapability(page, task) {
                 root_ref:wizard.root_ref,parameter_root_ref:refOf(forms[0]),selected_expression:selectedExpression,value});
             return [name,{status:'observed',value:value.slice(0,256),value_length_utf16:value.length,truncated:value.length>256,
               input_ref:refOf(inputs[0]),owner_ref:refOf(owners[0]),enabled:enabled(inputs[0]),read_only:inputs[0].readOnly===true}];
+          }));
+          wizard.expression_parameters.options=Object.fromEntries(Object.entries({intermediate:'chbIntermediate',cached:'chbCached'}).map(([name,key])=>{
+            const owners=tids.get(base+';'+key)??[],inputs=tids.get(base+';'+key+';InputEl')??[],displays=tids.get(base+';'+key+';DisplayEl')??[];
+            const known=owners.length===1 && inputs.length===1 && displays.length===1
+              && forms[0].contains(owners[0]) && owners[0].contains(inputs[0]) && owners[0].contains(displays[0])
+              && [owners[0],inputs[0],displays[0]].every(e=>visible(e) && !sensitive(e))
+              && inputs[0].matches('input.x-form-checkbox') && displays[0].matches('.x-form-checkbox');
+            return [name,known?{status:'observed',value:owners[0].classList.contains('x-form-cb-checked'),
+              owner_ref:refOf(owners[0]),input_ref:refOf(inputs[0]),display_ref:refOf(displays[0]),enabled:enabled(inputs[0]),
+              source:'loginom_ext_checkbox',applied_verified:false}:{status:'unobserved'}];
           }));
         }
       }
@@ -737,7 +1320,7 @@ function workspaceUiCapability(page, task) {
       const regions=regionElements.filter(element=>visible(element) && !sensitive(element) && scopeOf(element)!=='inactive_workflow')
         // Deliver the current wizard root before its tables, so a changing form
         // can be read narrowly without paging through those tables first.
-        .sort((a,b)=>{const rank=e=>getTid(e)===workflow?.prefix+';WizrdMCF'?0:wizardCombos.has((getTid(e)??'').replace(/;boundlist$/,'')) && (getTid(e)??'').endsWith(';boundlist')?1:(getTid(e)??'').endsWith(';MapTreeForm;tree')?2:3;return rank(a)-rank(b);});
+        .sort((a,b)=>{const rank=e=>getTid(e)===workflow?.prefix+';WizrdMCF'?0:wizardCombos.has((getTid(e)??'').replace(/;boundlist$/,'')) && (getTid(e)??'').endsWith(';boundlist')?1:getTid(e)===workflow?.prefix+';FileStorageForm;pnlFileStorage;tbl'?2:(getTid(e)??'').endsWith(';MapTreeForm;tree')?3:4;return rank(a)-rank(b);});
       const elements=regions.slice(0,240).map(element=>({ref:refOf(element),tid:getTid(element),identity:identityOf(element),
         kind:'region',label:textOf(element),scope:scopeOf(element),visible:true,enabled:enabled(element),allowed_actions:[],
         signature:{tag:element.tagName.toLowerCase()},bounding_box:boxOf(element)}));
@@ -748,6 +1331,83 @@ function workspaceUiCapability(page, task) {
         scan:{complete:true,mutation_counts:{...state.mutations},visited_elements:dom.length,detail_elements:0,max_elements:maxElements,max_work:maxWork,max_ms:maxMs},
         nodes:[],links:[],ui:{elements,dialogs:[],messages:[],masks:[],table_cells:[],
           truncated:{elements:regions.length>240,nodes:true,links:true,ports:true,dialogs:true,messages:true,masks:true,table_cells:true}}};
+    }
+    const processConsole={status:'unobserved',top_groups:[],rows:[],top_level_complete:false,
+      details_complete:false,execution_verified:false,owner_verified:false};
+    const consoles=tids.get('ConsoleForm')??[];
+    if(consoles.length===1 && (!requestedRoot || requestedRoot===consoles[0] || requestedRoot.contains(consoles[0]) || getTid(requestedRoot)==='mnContextMenu')) {
+      const panel=consoles[0],base='ConsoleForm;ProgressForm;';
+      const inside=(e,parent)=>{const b=boxOf(e),p=boxOf(parent);return visible(e) && !sensitive(e)
+        && b.x>=0 && b.y>=0 && b.x+b.width<=globalThis.innerWidth && b.y+b.height<=globalThis.innerHeight
+        && b.x>=p.x && b.y>=p.y && b.x+b.width<=p.x+p.width && b.y+b.height<=p.y+p.height;};
+      const gridLists=['trpProgress;treepanel;tree','trpProgress;grd;tbl'].map(suffix=>tids.get(base+suffix)??[]);
+      let valid=inside(panel,panel) && gridLists.every(list=>list.length===1 && panel.contains(list[0]));
+      const grids=valid?gridLists.map(list=>list[0]):[],rowSets=[],bounds=[];
+      for(const grid of grids) {
+        const b={top:grid.scrollTop,left:grid.scrollLeft,height:grid.clientHeight,width:grid.clientWidth,
+          scroll_height:grid.scrollHeight,scroll_width:grid.scrollWidth};bounds.push(b);
+        const containers=grid.querySelectorAll('.x-grid-item-container');charge();
+        if(!inside(grid,panel) || !Object.values(b).every(Number.isFinite) || b.top!==0 || b.left!==0
+          || b.height<=0 || b.width<=0 || b.height!==b.scroll_height || b.width!==b.scroll_width
+          || containers.length!==1){valid=false;break;}
+        const container=containers[0],nativeRows=grid.querySelectorAll('table.x-grid-item');charge();
+        const transform=getComputedStyle(container).transform;
+        if(!inside(container,grid) || !['none','matrix(1, 0, 0, 1, 0, 0)'].includes(transform)
+          || nativeRows.length>30 || nativeRows.length!==container.children.length){valid=false;break;}
+        const extras=[...grid.children].filter(e=>e!==container);
+        if(extras.length>1 || extras.some(e=>e.tagName!=='DIV' || e.children.length || getTid(e)
+          || getComputedStyle(e).display!=='none' || e.style.width!=='1px' || e.style.height!=='1px')){valid=false;break;}
+        const rows=[...nativeRows];
+        if(rows.some((row,index)=>{charge();return row.parentElement!==container || !inside(row,grid)
+          || row.getAttribute('data-recordindex')!==String(index) || row.getAttribute('data-boundview')!==grid.getAttribute('id');})){valid=false;break;}
+        rowSets.push(rows);
+      }
+      if(valid && rowSets.length===2 && rowSets[0].length===rowSets[1].length) {
+        const rows=[],seen=new Set(),paths=new Set(),ordinals=[];
+        for(let index=0;index<rowSets[0].length;index++) {
+          charge();const pair=rowSets.map(list=>list[index]),record=pair[0].getAttribute('data-recordid');
+          const left=pair[0].querySelectorAll('td[data-tid]'),right=pair[1].querySelectorAll('td[data-tid]');charge();
+          if(!record || seen.has(record) || pair[1].getAttribute('data-recordid')!==record || left.length!==2 || right.length!==8){valid=false;break;}
+          const fields={},cells=[...left,...right];let path;
+          for(const cell of cells) {
+            const match=/^ConsoleForm;ProgressForm;col(Id|Process|Percent|Progress|ActionStop|ActionDelete|ErrorDetails|ProgressStart|ProgressFinish|ProcessTime)_(Root>.+)$/.exec(getTid(cell)??'');
+            if(!match || fields[match[1]] || (tids.get(getTid(cell))??[]).length!==1 || !inside(cell,cell.closest('table'))
+              || path && path!==match[2]){valid=false;break;}
+            path=match[2];fields[match[1]]=cell;
+          }
+          if(!valid || !path || paths.has(path)){valid=false;break;}
+          const ordinal=textOf(fields.Id,true),top=path.split('>').length===2;
+          if(!/^[1-9][0-9]*(?:\.[1-9][0-9]*)*$/.test(ordinal) || top!==!ordinal.includes('.')
+            || !top && !paths.has(path.slice(0,path.lastIndexOf('>')))){valid=false;break;}
+          if(top)ordinals.push(Number(ordinal));
+          const states=(fields.Progress.getAttribute('class')??'').split(/\s+/).filter(c=>c.startsWith('bg-progress-ptps'));
+          const finish=textOf(fields.ProgressFinish,true),start=textOf(fields.ProgressStart,true),error=textOf(fields.ErrorDetails,true);
+          const completed=states.length===1 && states[0]==='bg-progress-ptpsCompleted' && finish.length>0 && error.length===0;
+          rows.push({record_id:record,path,ordinal,process_cell_ref:refOf(fields.Process),selected:pair[0].classList.contains('x-grid-item-selected'),
+            rendered_state:completed?'completed':'unknown',start,finish,error_present:error.length>0});seen.add(record);paths.add(path);
+        }
+        if(valid && ordinals.every((n,i)=>Number.isSafeInteger(n) && (!i || n>ordinals[i-1]))) {
+          const menu=document.querySelectorAll('[data-tid="mnContextMenu;mniShowCompletedProcesses"]');charge();
+          const filter=menu.length===1 && inside(menu[0],menu[0])?{status:'observed',checked:menu[0].classList.contains('x-menu-item-checked'),owner_ref:refOf(menu[0])}:{status:'unobserved',checked:null};
+          Object.assign(processConsole,{status:'rendered_process_inventory',panel_ref:refOf(panel),grid_refs:grids.map(refOf),
+            grid_ids:grids.map(g=>g.getAttribute('id')),grid_bounds:bounds,rows,top_groups:rows.filter(r=>!r.ordinal.includes('.')).map(r=>r.record_id),state_source:'native_progress_cell_class',show_completed:filter,
+            top_level_rendered_coverage:true,top_level_complete:filter.status==='observed' && filter.checked});
+        }
+      }
+    }
+    const processCells=new Map(processConsole.status==='rendered_process_inventory'
+      ? processConsole.rows.map((row,index)=>[row.process_cell_ref,{record_id:row.record_id,path:row.path,
+        record_index:index,panel_ref:processConsole.panel_ref,grid_ids:processConsole.grid_ids}]) : []);
+    const processMenuControls=new Map();
+    const menus=tids.get('mnContextMenu')??[];
+    const selectedProcesses=processConsole.rows.filter(row=>row.selected);
+    if(menus.length===1 && visible(menus[0]) && processConsole.status==='rendered_process_inventory' && selectedProcesses.length===1
+      && ['mniShowNodeToProcess','mniShowCompletedProcesses'].every(name=>(tids.get('mnContextMenu;'+name)??[]).length===1)) {
+      for(const action of ['mniShowNodeToProcess','mniShowCompletedProcesses']) {
+        const tid='mnContextMenu;'+action,items=tids.get(tid)??[];
+        if(items.length===1 && menus[0].contains(items[0]) && visible(items[0]))processMenuControls.set(refOf(items[0]),{
+          action,menu_ref:refOf(menus[0]),process:processCells.get(selectedProcesses[0].process_cell_ref),opening_verified:false});
+      }
     }
     const candidates = select('button,input,textarea,select,[contenteditable="true"],[role="button"],[role="checkbox"],[role="radio"],[role="combobox"],[role="menuitem"],[role="tab"],[role="treeitem"],[role="option"],[role="spinbutton"],[data-tid]')
       .filter(element => visible(element) && !sensitive(element) && scopeOf(element) !== 'inactive_workflow');
@@ -775,7 +1435,18 @@ function workspaceUiCapability(page, task) {
     };
     const importColumnCellRefs=new Set((wizard.import_columns?.fields??[]).filter(column=>column.status==='observed')
       .flatMap(column=>[column.cell_refs.type,column.cell_refs.data_kind]));
-    const interesting = element => !!comboPart(element) || importColumnCellRefs.has(state.ids.get(element)) || element.matches('button,input,textarea,select,[contenteditable="true"],[role="button"],[role="checkbox"],[role="radio"],[role="combobox"],[role="menuitem"],[role="tab"],[role="treeitem"],[role="option"],[role="spinbutton"]')
+    // The rendered grouping parser has already bound each actual cell to a
+    // unique wizard-owned grid, data row and closed section. Metadata refs
+    // alone never create actionable records; candidates below must include
+    // the same live DOM element and pass native identity/interaction guards.
+    const groupingCells=new Map(wizard.grouping?.status==='rendered_grouping_rows'
+      ? [...wizard.grouping.keys,...wizard.grouping.measures].map(field=>[field.cell_ref,{
+        field_key:field.field_key,row_ref:field.row_ref,section_ref:field.section_ref,
+        role:wizard.grouping.keys.includes(field)?'group':'measure',
+        grid_ref:wizard.grouping.grid_ref,wizard_root_ref:wizard.root_ref}]) : []);
+    for(const field of wizard.grouping?.available_fields??[])groupingCells.set(field.cell_ref,{
+      field_key:field.field_key,row_ref:field.row_ref,grid_ref:field.grid_ref,role:'available',wizard_root_ref:wizard.root_ref});
+    const interesting = element => processCells.has(state.ids.get(element)) || processMenuControls.has(state.ids.get(element)) || groupingCells.has(state.ids.get(element)) || !!comboPart(element) || importColumnCellRefs.has(state.ids.get(element)) || element.matches('button,input,textarea,select,[contenteditable="true"],[role="button"],[role="checkbox"],[role="radio"],[role="combobox"],[role="menuitem"],[role="tab"],[role="treeitem"],[role="option"],[role="spinbutton"]')
       || /;(?:Input|Output)_[^;]+$|;Label;Label$|;Graph;[^;]+$|;btn[^;]+$|;edt[^;]+$|;mi[^;]+$|;tb(?:-\d+)?$/.test(getTid(element) ?? '')
       // Pinned E2E bg/selectors.ts:272,279,286: palette tree labels and
       // expanders are spans without button/treeitem roles in some UI builds.
@@ -833,7 +1504,12 @@ function workspaceUiCapability(page, task) {
       if(graphNode)return graphNode.part==='settings'?1.5:graphNode.part==='body'?1.6:1.7;
       return priority[scopeOf(element)];
     };
-    const controls = candidates.filter(interesting).filter(element=>!selectedRoot || selectedRoot===element || selectedRoot.contains(element))
+    const controls = candidates.filter(interesting)
+      // Loginom draws anonymous canvas geometry with repeated Graph;Vertex
+      // tids even in an empty draft. It is not a node or an actionable target.
+      // Preserve a real uniquely labelled node whose actual name is Vertex.
+      .filter(element=>!ownedGraph(element) || getTid(element)!==graphPrefix+'Vertex' || graphNodeOf(element))
+      .filter(element=>!element.closest('[data-tid="mnContextMenu"]') || processMenuControls.has(state.ids.get(element))).filter(element=>!selectedRoot || selectedRoot===element || selectedRoot.contains(element))
       .sort((left, right) => controlPriority(left) - controlPriority(right));
     const checkStateOf = element => {
       const type=element.getAttribute('type'),role=element.getAttribute('role');
@@ -957,19 +1633,37 @@ function workspaceUiCapability(page, task) {
       const checkState=checkStateOf(element);
       const calculatorEditor=calculatorEditorOf(element);
       const combo=comboPart(element);
+      const groupingField=groupingCells.get(state.ids.get(element));
+      const processRow=processCells.get(state.ids.get(element)),processMenu=processMenuControls.get(state.ids.get(element));
       const wizardStep=wizard.status==='observed' && wizard.stage && ['btnNext','btnPrev'].some(name=>tid===wizard.root_tid+';'+name)
         && wizard.controls[tid.split(';').at(-1)]?.status==='observed'
         ? {direction:tid.endsWith(';btnNext')?'next':'previous',root_ref:wizard.root_ref,stage:wizard.stage}:null;
       const openWizard=wizard.status==='absent' && navigationContext.status==='observed' && graphNodeOf(element)?.part==='settings'
         ? {node:graphNodeOf(element),workflow_path:navigationContext.path}:null;
+      const inputPortFinishReady=wizard.stage==='input_mapping' && wizard.input_port_context?.status==='observed'
+        && wizard.input_port_context.direction==='input' && wizard.input_mapping?.status==='rendered_mapping_links'
+        && wizard.input_mapping.root_ref===wizard.root_ref && wizard.input_mapping.rendered_coverage?.status==='complete_visible_rows'
+        && wizard.input_mapping.source_rows?.length===wizard.input_mapping.rendered_coverage.source_count
+        && wizard.input_mapping.target_rows?.length===wizard.input_mapping.rendered_coverage.target_count
+        && wizard.input_mapping.links?.length===wizard.input_mapping.rendered_coverage.link_count;
+      const outputPortFinishReady=wizard.stage==='output_mapping' && wizard.port_context?.status==='observed'
+        && wizard.port_context.kind==='output_data' && wizard.output_columns?.status==='rendered_rows'
+        && wizard.output_columns.definition_coverage?.status==='complete_configured_rows'
+        && wizard.output_columns.fields?.length===wizard.output_columns.definition_coverage.count
+        && wizard.output_columns.auto_sync?.status==='observed';
       const finishWizard=tid===wizard.root_tid+';btnDone' && wizard.stage==='done' && wizard.completion?.ready && wizard.owner_context?.status==='observed'
-        ? {root_ref:wizard.root_ref,owner:wizard.owner_context,completion:wizard.completion}:null;
+        ? {root_ref:wizard.root_ref,owner:wizard.owner_context,completion:wizard.completion}
+        : tid===wizard.root_tid+';btnDone' && wizard.controls.btnDone?.status==='observed' && inputPortFinishReady
+          ? {mode:'input_port',root_ref:wizard.root_ref,node_ref:wizard.input_port_context.node.ref,port_ref:wizard.input_port_context.port_ref}
+          : tid===wizard.root_tid+';btnDone' && wizard.controls.btnDone?.status==='observed' && outputPortFinishReady
+            ? {mode:'output_port',root_ref:wizard.root_ref,node_ref:wizard.port_context.node.ref,port_ref:wizard.port_context.port.ref}:null;
       const reformColumn=wizard.stage==='field_parameters',column=reformColumn?wizard.reform_parameters:wizard.column_parameters;
       const columnReady=column?.status==='observed' && column.selected_column?.data_kind && column.selected_column?.usage
         && (!reformColumn || column.selected_column.caching && typeof column.selected_column.excluded==='boolean')
         && Object.values(column.fields??{}).length===(reformColumn?7:5) && Object.values(column.fields).every(f=>f.status==='observed' && !f.truncated);
       const columnForm=reformColumn?'EditReformColumnDefForm':'EditColumnDefForm';
-      const columnClose=columnReady && [wizard.root_tid+';'+columnForm+';btnApply',wizard.root_tid+';'+columnForm+';btnCancel'].includes(tid)
+      const columnBase=reformColumn?column?.root_tid:wizard.root_tid+';'+columnForm;
+      const columnClose=columnReady && [columnBase+';btnApply',columnBase+';btnCancel'].includes(tid)
         ? {scope:reformColumn?'reform':'output',mode:tid.endsWith(';btnApply')?'apply':'cancel',root_ref:column.root_ref,wizard_root_ref:wizard.root_ref,original_row:column.selected_column}:null;
       const params=wizard.expression_parameters;
       const expressionParametersReady=params?.status==='observed' && wizard.expression_selection?.status==='observed' && params.selected_expression
@@ -986,12 +1680,16 @@ function workspaceUiCapability(page, task) {
       // E2E filestorage: click selects a row; doubleClick opens the folder.
       // Read the type from the same row, never infer it from a filename.
       const storageRow=/^MF;TF(?:-\d+)?;FileStorageForm;colName_.+$/.test(tid ?? '') ? element.closest('.x-grid-item') : null;
-      const storageTypes=storageRow ? (tids.get(tid.replace(';colName_',';colFileType_')) ?? []).filter(other=>{charge();return storageRow.contains(other)
-        && visible(other) && !sensitive(other);}) : [];
+      // A name-cell read does not include its sibling type in `tids`.
+      // Read only that row's metadata; do not issue sibling action refs.
+      const storageTypes=storageRow ? [...storageRow.querySelectorAll('[data-tid]')].filter(other=>{charge();return getTid(other)===tid.replace(';colName_',';colFileType_')
+        && other.closest('.x-grid-item')===storageRow && visible(other) && !sensitive(other);}) : [];
       const storageEntry=storageRow ? {row_ref:refOf(storageRow),selected:storageRow.classList.contains('x-grid-item-selected'),
-        kind:storageTypes.length===1 && textOf(storageTypes[0])==='Папка' ? 'folder':'unknown'} : null;
+        kind:storageTypes.length===1 && textOf(storageTypes[0],true)==='Папка' ? 'folder':'unknown'} : null;
       return { ref: refOf(element), tid, identity, kind, role, label:label || (combo?.kind==='picker' && combo.field.scope==='import_column'
         ? 'Открыть список: '+(combo.field.name==='type'?'Тип данных':'Вид данных'):''), scope: scopeOf(element), ...fieldValue,
+        ...(processRow?{process_row:processRow}:{}),...(processMenu?{process_menu:processMenu}:{}),
+        ...(groupingField ? {grouping_field:groupingField} : {}),
         ...(storageEntry ? {storage_entry:storageEntry} : {}),
         ...(graphNodeOf(element) ? {graph_node:graphNodeOf(element)} : {}),
         ...(scroll ? { scroll } : {}),
@@ -1005,11 +1703,11 @@ function workspaceUiCapability(page, task) {
         ...(expressionApply ? {expression_apply:expressionApply} : {}),
         ...(expressionCancel ? {expression_cancel:expressionCancel} : {}),
         ...(wizardFields.has(element) ? {wizard_field:wizardFields.get(element)} : {}),
-        signature: { tag, tid, role, type: element.getAttribute('type'), name: element.getAttribute('name'), label, ...fieldValue, dialog_ref: dialogRef(element), scroll, check_state:checkState },
+        signature: { tag, tid, role, type: element.getAttribute('type'), name: element.getAttribute('name'), label, ...fieldValue, dialog_ref: dialogRef(element), scroll, check_state:checkState, ...(groupingField?{grouping_field:groupingField}:{}),...(processRow?{process_row:processRow}:{}),...(processMenu?{process_menu:processMenu}:{}) },
         enabled: isEnabled, visible: true, interaction, bounding_box: boxOf(element),
         // A bounded prefix is not a sufficient value precondition. A dedicated
         // large-field driver must establish its own complete read/write contract.
-        allowed_actions: expressionWritable ? ['replace_expression'] : allowed && !valueTruncated ? ['click', 'double_click', 'right_click', 'press', 'drag', ...(editable ? ['fill',...(wizardFields.has(element)?['set_wizard_field']:[])] : []), ...(checkState ? ['set_checked'] : []), ...(wizardStep?['wizard_step']:[]), ...(openWizard?['open_wizard']:[]), ...(finishWizard?['finish_wizard']:[]), ...(columnClose?[columnClose.mode+'_'+columnClose.scope+'_column']:[]), ...(expressionApply?['apply_expression_parameters']:[]), ...(expressionCancel?['cancel_expression_parameters']:[]), ...(combo?.kind==='option'?['select_wizard_option']:[]), ...(scroll && interaction.state === 'point_observed' ? ['scroll'] : [])] : [] };
+        allowed_actions: processRow || processMenu ? (allowed && interaction.state==='point_observed' ? (processRow?['click','right_click','press']:['click','press']) : []) : groupingField ? (allowed && interaction.state==='point_observed' ? ['click','double_click','press'] : []) : expressionWritable ? ['replace_expression'] : allowed && !valueTruncated ? ['click', 'double_click', 'right_click', 'press', 'drag', ...(editable ? ['fill',...(wizardFields.has(element)?['set_wizard_field']:[])] : []), ...(checkState ? ['set_checked'] : []), ...(wizardStep?['wizard_step']:[]), ...(openWizard?['open_wizard']:[]), ...(finishWizard?['finish_wizard']:[]), ...(columnClose?[columnClose.mode+'_'+columnClose.scope+'_column']:[]), ...(expressionApply?['apply_expression_parameters']:[]), ...(expressionCancel?['cancel_expression_parameters']:[]), ...(combo?.kind==='option'?['select_wizard_option']:[]), ...(scroll && interaction.state === 'point_observed' ? ['scroll'] : [])] : [] };
     });
     const nodes = labels.slice(0, 200).map(label => {
       const nodeTid = graphPrefix + label, matches=graphElements.filter(e=>getTid(e)===nodeTid),node=matches.length===1?matches[0]:null;
@@ -1055,7 +1753,7 @@ function workspaceUiCapability(page, task) {
     // not execution freshness, full result coverage or parsed value claims.
     const dataIdentity=element=>{
       const owner=element.closest('td,[role="gridcell"],.x-column-header,[role="columnheader"]')??element;
-      const tid=getTid(owner),match=/^(MF;TF(?:-\d+)?;(?:ModelForm;(?:PreviewWindow;)?PreviewForm;DataSetForm|ViewsForm;BrowseView));normalHeaderCt;([^;]+)$/.exec(tid??'');
+      const tid=getTid(owner),match=/^(MF;TF(?:-\d+)?;(?:ModelForm;(?:PreviewWindow;)?PreviewForm;DataSetForm|ViewsForm;BrowseView(?:-[1-9][0-9]*)?));normalHeaderCt;([^;]+)$/.exec(tid??'');
       if(!match || match[2].length>256 || !tid.startsWith(workflow?.prefix+';'))return null;
       const isHeader=owner.matches('.x-column-header,[role="columnheader"]');
       const cell=isHeader?null:/^(.+)_(0|[1-9][0-9]*)$/.exec(match[2]);
@@ -1146,9 +1844,204 @@ function workspaceUiCapability(page, task) {
         }
       }
     }
+    // Candidate: observed Table settings only, never result/execution acceptance.
+    let tableSettings={status:'unobserved',settings_applied:false,result_complete:false,execution_verified:false};
+    if(workflow) {
+      const viewPattern=new RegExp('^'+workflow.prefix+';ViewsForm;BrowseView(?:-\\d+)?$');
+      const onScreen=element=>{
+        if(!visible(element) || sensitive(element))return false;
+        const b=boxOf(element),w=globalThis.innerWidth,h=globalThis.innerHeight;
+        return [b.x,b.y,b.width,b.height,w,h].every(Number.isFinite) && b.width>0 && b.height>0
+          && b.x>=0 && b.y>=0 && b.x+b.width<=w && b.y+b.height<=h;
+      };
+      const views=all.filter(e=>{charge();return viewPattern.test(getTid(e)??'') && onScreen(e);});
+      if(views.length===1) {
+        const view=views[0],viewKey=getTid(view);
+        const modalNames=['BrowseFormat','BrowseFilter'];
+        const modals=all.filter(e=>{charge();return modalNames.some(name=>getTid(e)===viewKey+';ModalWindow_'+name)
+          && onScreen(e) && (!selectedRoot || selectedRoot===e || selectedRoot.contains(e));});
+        if(modals.length===1 && !masks.length && !dialogElements.some(e=>e!==modals[0] && !e.contains(modals[0]) && !modals[0].contains(e))) {
+          const modal=modals[0],kind=getTid(modal).endsWith('_BrowseFormat')?'format':'filter';
+          const base=getTid(modal)+';'+(kind==='format'?'BrowseFormat':'BrowseFilter')+';';
+          const unique=tid=>{const found=(tids.get(tid)??[]).filter(e=>modal.contains(e));return found.length===1 && visible(found[0]) && !sensitive(found[0])?found[0]:null;};
+          const input=key=>{
+            const owner=unique(base+key),inputs=owner?dom.filter(e=>{charge();return owner.contains(e) && e.matches('input') && visible(e) && !sensitive(e);}):[];
+            if(inputs.length!==1)return {status:'unobserved'};
+            const value=String(inputs[0].value??'');
+            return {status:value.length<240?'observed':'truncated',value:value.slice(0,240),enabled:enabled(inputs[0]),input_ref:refOf(inputs[0])};
+          };
+          const checked=key=>{
+            const owner=unique(base+key),display=unique(base+key+';DisplayEl');
+            if(!owner)return {status:'unobserved'};
+            let painted=display,part='display';
+            if(!painted && key==='BrowseFormatPanel;cntFormat;cnt-1;chb') {
+              const displays=(tids.get(base+key+';DisplayEl')??[]).filter(e=>modal.contains(e));
+              const input=unique(base+key+';InputEl'),empty=displays.length===1?displays[0]:null;
+              const box=empty?boxOf(empty):null,style=empty?getComputedStyle(empty):null;
+              // Native Format parent checkbox uses a painted Ext button while
+              // its single inline DisplayEl has no box. Never use .checked.
+              if(empty && owner.contains(empty) && !sensitive(empty) && empty.matches('span.x-form-checkbox')
+                && box.width===0 && box.height===0 && style.display==='inline' && style.visibility==='visible' && style.opacity!=='0'
+                && input && owner.contains(input) && onScreen(input) && input.matches('input.x-form-checkbox[type="button"][role="checkbox"]')) {
+                painted=input;part='input';
+              }
+            }
+            if(!painted || !owner.contains(painted))return {status:'unobserved'};
+            const state=checkStateOf(painted);
+            return state?.source==='loginom_ext' && state.kind==='checkbox' && !state.indeterminate
+              ?{status:'observed',value:state.checked,enabled:enabled(painted),owner_ref:refOf(owner),
+                state_source:'loginom_ext',...(part==='input'?{input_ref:refOf(painted)}:{display_ref:refOf(painted)})}:{status:'unobserved'};
+          };
+          const bounds=grid=>{
+            if(!grid || !onScreen(grid))return null;
+            const rows=dom.filter(e=>{charge();return grid.contains(e) && e.matches('table.x-grid-item');});
+            const containers=dom.filter(e=>{charge();return grid.contains(e) && e.matches('.x-grid-item-container');});
+            const dims=[grid.clientWidth,grid.clientHeight,grid.scrollWidth,grid.scrollHeight,grid.scrollLeft,grid.scrollTop];
+            if(rows.length>16 || containers.length!==1 || dims.some(n=>!Number.isFinite(n)) || grid.clientWidth<=0 || grid.clientHeight<=0
+              || grid.scrollWidth>grid.clientWidth || grid.scrollHeight>grid.clientHeight || grid.scrollLeft!==0 || grid.scrollTop!==0)return null;
+            const container=containers[0],box=boxOf(grid),inside=e=>{const b=boxOf(e);return onScreen(e)&&b.x>=box.x&&b.y>=box.y&&b.x+b.width<=box.x+box.width&&b.y+b.height<=box.y+box.height;};
+            const cb=boxOf(container),emptyContainer=rows.length===0 && container.isConnected && !sensitive(container)
+              && getComputedStyle(container).display!=='none' && getComputedStyle(container).visibility!=='hidden'
+              && [cb.x,cb.y,cb.width,cb.height].every(Number.isFinite) && cb.height===0 && cb.width>0
+              && cb.x>=box.x && cb.y>=box.y && cb.x+cb.width<=box.x+box.width && cb.y<=box.y+box.height;
+            const extras=[...grid.children].filter(e=>e!==container);
+            const sentinel=extras.length<=1 && extras.every(e=>e.tagName==='DIV' && e.children.length===0 && !getTid(e)
+              && getComputedStyle(e).display==='none' && e.getAttribute('role')==='presentation'
+              && e.style.width==='1px' && e.style.height==='1px');
+            const transform=getComputedStyle(container).transform;
+            if(!(inside(container)||emptyContainer) || container.children.length!==rows.length || [...container.children].some(e=>!rows.includes(e))
+              || !sentinel || !['none','matrix(1, 0, 0, 1, 0, 0)','matrix3d(1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1)'].includes(transform))return null;
+            const id=grid.getAttribute('id');
+            if(!id || rows.some((r,i)=>r.parentElement!==container || !inside(r) || r.getAttribute('data-boundview')!==id
+              || r.getAttribute('data-recordindex')!==String(i)))return null;
+            return {rows,grid_ref:refOf(grid),container_ref:refOf(container)};
+          };
+          tableSettings={...tableSettings,status:'observed',kind,view_key:viewKey,view_ref:refOf(view),modal_ref:refOf(modal),owner_binding:'observed_view_only'};
+          if(kind==='filter') {
+            const grid=unique(base+'tbl'),coverage=bounds(grid);
+            tableSettings.filter={enabled:checked('chkEnableFilter'),predicate_coverage:coverage?.rows.length===0?'complete_empty':'partial',
+              predicates_complete:coverage?.rows.length===0,effective_filter_verified:false,
+              ...(coverage?{rendered_row_count:coverage.rows.length,grid_ref:coverage.grid_ref,container_ref:coverage.container_ref}:{})};
+          } else {
+            const labelCells=all.filter(e=>{charge();return (getTid(e)??'').startsWith(base+'colDisplayName_') && modal.contains(e);});
+            const rows=[...new Set(labelCells.map(e=>e.closest('table')).filter(Boolean))];
+            const grid=unique(base+'grdFields;tbl');
+            const coverage=bounds(grid),filter=input('txtColumnsFilterField');
+            const fields=labelCells.slice(0,16).map(cell=>{
+              const key=getTid(cell).slice((base+'colDisplayName_').length),row=cell.closest('table');
+              const index=unique(base+'colSourceColumnIndex_'+key),visibility=unique(base+'colInAll_'+key);
+              const icons=dom.filter(e=>{charge();return cell.contains(e) && /bg-TBGDataType-dt/.test(e.getAttribute('class')??'');});
+              const types=Object.entries({String:'string',Integer:'integer',Float:'real',Boolean:'boolean',DateTime:'datetime',Variant:'variant'})
+                .filter(([name])=>icons.length===1 && icons[0].classList.contains('bg-TBGDataType-dt'+name));
+              const eye=visibility?dom.filter(e=>{charge();return visibility.contains(e) && (e.classList.contains('bg-icon-visible')||e.classList.contains('bg-icon-invisible'));}):[];
+              const value=index?textOf(index,true):'',label=textOf(cell,true);
+              if(!row || !onScreen(cell) || !index || !visibility || !onScreen(index) || !onScreen(visibility) || index.closest('table')!==row || visibility.closest('table')!==row
+                || !/^\d+$/.test(value) || Number(value)>100000 || !key || key.length>=240 || label.length>=240 || types.length!==1
+                || !visible(icons[0]))return {status:'ambiguous'};
+              // Ext hides nonselected eye icons with opacity:0. That leaves
+              // schema observable, but supplies no painted visibility state.
+              const visibilityObserved=eye.length===1 && onScreen(eye[0])
+                && eye[0].classList.contains('bg-icon-visible')!==eye[0].classList.contains('bg-icon-invisible');
+              return {status:'observed',name_key:key,source_index:Number(value),label,type:types[0][1],visible:visibilityObserved?eye[0].classList.contains('bg-icon-visible'):null,
+                visibility_status:visibilityObserved?'observed':'unobserved',visibility_cell_ref:refOf(visibility),
+                ...(visibilityObserved?{visibility_icon_ref:refOf(eye[0])}:{}),selected:row.classList.contains('x-grid-item-selected'),row_ref:refOf(row),label_ref:refOf(cell)};
+            });
+            const valid=coverage && coverage.rows.length>0 && fields.length===coverage.rows.length && labelCells.length===fields.length
+              && fields.every(f=>f.status==='observed') && new Set(fields.map(f=>f.name_key)).size===fields.length
+              && new Set(fields.map(f=>f.source_index)).size===fields.length && fields.every(f=>f.source_index<fields.length)
+              && filter.status==='observed' && filter.value===''
+              && !dom.some(e=>{charge();return modal.contains(e) && /celleditor|EditColumnDefForm/.test(getTid(e)??'') && visible(e);});
+            tableSettings.format={fields,fieldlist_complete:!!valid,visibility_complete:!!valid && fields.every(f=>f.visibility_status==='observed'),filter,source_identity_verified:false};
+            const selected=fields.filter(f=>f.status==='observed' && f.selected);
+            if(valid && selected.length===1 && ['integer','real'].includes(selected[0].type)) {
+              tableSettings.format.selected_numeric={name_key:selected[0].name_key,source_index:selected[0].source_index,
+                formatting:checked('BrowseFormatPanel;cntFormat;cnt-1;chb'),custom:checked('BrowseFormatPanel;cbFormatStr'),
+                thousands:checked('BrowseFormatPanel;cbThousand'),scientific:checked('BrowseFormatPanel;cbScientific'),
+                decimal_digits:input('BrowseFormatPanel;edtDecimalDigit'),currency:input('BrowseFormatPanel;edtCurrency'),
+                format_string:input('BrowseFormatPanel;edtFormatStr'),losslessness_verified:false};
+            }
+          }
+        }
+      }
+    }
+    // Small rendered Table evidence. These facts do not attest execution or
+    // source ownership; the independent verifier must bind the opening gesture.
+    const tableCoverage={status:'unobserved',complete_result_verified:false};
+    if(workflow) {
+      const viewPattern=new RegExp('^'+workflow.prefix+';ViewsForm;BrowseView(?:-[1-9][0-9]*)?$');
+      const inside=(e,parent)=>{
+        if(!visible(e)||sensitive(e))return false;
+        const b=boxOf(e),p=boxOf(parent);
+        return [b.x,b.y,b.width,b.height,p.x,p.y,p.width,p.height].every(Number.isFinite)
+          &&b.width>0&&b.height>0&&b.x>=0&&b.y>=0&&b.x+b.width<=globalThis.innerWidth&&b.y+b.height<=globalThis.innerHeight
+          &&b.x>=p.x&&b.y>=p.y&&b.x+b.width<=p.x+p.width&&b.y+b.height<=p.y+p.height;
+      };
+      const views=all.filter(e=>{charge();return viewPattern.test(getTid(e)??'')&&inside(e,e);});
+      if(views.length===1) {
+        const view=views[0],key=getTid(view),one=tid=>{const es=tids.get(tid)??[];return es.length===1?es[0]:null;};
+        Object.assign(tableCoverage,{status:'observed_view',view_key:key,view_ref:refOf(view)});
+        const nulls=one(key+';btnDataGridShowNulls');
+        if(nulls&&inside(nulls,view))tableCoverage.null_display={status:'observed',enabled:nulls.classList.contains('x-btn-pressed'),control_ref:refOf(nulls),state_source:'ext_pressed_class'};
+        const modal=one(key+';ModalWindow_BrowseGoToLine'),range=one(key+';ModalWindow_BrowseGoToLine;BrowseGoToLine;lblRowsRange');
+        if(modal&&range&&modal.contains(range)&&inside(modal,modal)&&inside(range,modal)) {
+          const literal=textOf(range,true),match=/^Номер строки \(1 - ([1-9][0-9]*)\):$/.exec(literal);
+          if(match&&Number.isSafeInteger(Number(match[1])))tableCoverage.row_range={status:'observed',first:1,last:Number(match[1]),literal,modal_ref:refOf(modal),label_ref:refOf(range),source_total_verified:false};
+        }
+        const menu=one('mnContextData');
+        if(menu&&inside(menu,menu)) {
+          const names=['btnFirstPage','btnPrevPage','btnNextPage','btnLastPage'],items=names.map(n=>one('mnContextData;'+n));
+          if(items.every(e=>e&&menu.contains(e)&&inside(e,menu)))tableCoverage.pagination={status:'observed_menu',menu_ref:refOf(menu),opening_verified:false,
+            controls:items.map((e,i)=>({name:names[i],ref:refOf(e),enabled:enabled(e)}))};
+        }
+        const grids=['grd','grd-1'].map(n=>one(key+';grdData;'+n+';tbl'));
+        const inventories=[];
+        let valid=grids.every(g=>g&&view.contains(g)&&inside(g,view));
+        for(const grid of valid?grids:[]) {
+          charge();const bounds={top:grid.scrollTop,left:grid.scrollLeft,height:grid.clientHeight,width:grid.clientWidth,scroll_height:grid.scrollHeight,scroll_width:grid.scrollWidth};
+          const containers=grid.querySelectorAll('.x-grid-item-container'),rows=[...grid.querySelectorAll('table.x-grid-item')];charge();
+          if(Object.values(bounds).some(n=>!Number.isFinite(n))||bounds.top!==0||bounds.left!==0||bounds.height<=0||bounds.width<=0
+            ||bounds.height!==bounds.scroll_height||bounds.width!==bounds.scroll_width||containers.length!==1||rows.length>16){valid=false;break;}
+          const container=containers[0],extras=[...grid.children].filter(e=>e!==container),id=grid.getAttribute('id');
+          if(!id||!inside(container,grid)||!['none','matrix(1, 0, 0, 1, 0, 0)'].includes(getComputedStyle(container).transform)
+            ||container.children.length!==rows.length||extras.length>1||extras.some(e=>e.tagName!=='DIV'||e.children.length||getTid(e)
+              ||getComputedStyle(e).display!=='none'||e.getAttribute('role')!=='presentation'||e.style.width!=='1px'||e.style.height!=='1px')){valid=false;break;}
+          const records=rows.map((r,i)=>{charge();return {index:r.getAttribute('data-recordindex'),record_id:r.getAttribute('data-recordid'),ref:refOf(r),valid:r.parentElement===container&&inside(r,grid)&&r.getAttribute('data-boundview')===id&&r.getAttribute('data-recordindex')===String(i)};});
+          if(records.some(r=>!r.valid||!r.record_id)||new Set(records.map(r=>r.record_id)).size!==records.length){valid=false;break;}
+          inventories.push({grid_ref:refOf(grid),container_ref:refOf(container),bounds,records:records.map(({valid,...r})=>r)});
+        }
+        if(valid&&inventories.length===2&&inventories[0].records.length===inventories[1].records.length
+          &&inventories[0].records.every((r,i)=>r.record_id===inventories[1].records[i].record_id)) {
+          tableCoverage.rendered_rows={status:'bounded_unscrolled_inventory',count:inventories[0].records.length,grids:inventories,source_total_verified:false};
+        }
+      }
+    }
+
+    // Metadata refs are not issued controls. Admit only the same bounded live
+    // Table label cell, with its typed owner/schema identity frozen in signature.
+    if(tableSettings.format?.fieldlist_complete) {
+      for(const field of tableSettings.format.fields) {
+        const matches=candidates.filter(e=>{charge();return state.ids.get(e)===field.label_ref;});
+        if(matches.length!==1)continue;
+        const issuedIndex=elements.findIndex(e=>e.ref===field.label_ref);
+        const element=matches[0];
+        if(selectedRoot && selectedRoot!==element && !selectedRoot.contains(element))continue;
+        if(!controls.includes(element))controls.push(element);
+        if(issuedIndex<0 && elements.length>=240)continue;
+        const identity=identityOf(element),tid=getTid(element),tag=element.tagName.toLowerCase();
+        const interaction=interactionOf(element),isEnabled=enabled(element);
+        const tableField={view_key:tableSettings.view_key,view_ref:tableSettings.view_ref,modal_ref:tableSettings.modal_ref,
+          name_key:field.name_key,source_index:field.source_index,type:field.type,row_ref:field.row_ref};
+        const signature={tag,tid,role:element.getAttribute('role'),type:element.getAttribute('type'),name:element.getAttribute('name'),
+          label:field.label,dialog_ref:dialogRef(element),table_field:tableField};
+        const issued={ref:field.label_ref,tid,identity,kind:'control',role:signature.role,label:field.label,scope:scopeOf(element),
+          table_field:tableField,signature,enabled:isEnabled,visible:true,interaction,bounding_box:boxOf(element),
+          allowed_actions:identity && isEnabled && !dangerous(element) && interaction.state==='point_observed'?['click','press']:[]};
+        if(issuedIndex>=0)elements[issuedIndex]=issued;else elements.push(issued);
+      }
+    }
     return { origin: location.origin, authenticated: !!tids.get('MF;cntMain;tlbMainToolbar;btnAvatar')?.some(visible), loginom_build: globalThis.bg?.app?.Version ?? null,
       workflow_ref: workflow, graph_identity:graphIdentity, active_tab_ref:active?refOf(active):null, active_identity: active ? textOf(active) : null, package_identity: packageIdentity,
-      file_storage:fileStorage,wizard,navigation_context:navigationContext,
+      file_storage:fileStorage,wizard,navigation_context:navigationContext,node_context:nodeContext,table_settings:tableSettings,table_coverage:tableCoverage,process_console:processConsole,
       dom_epoch: {document:state.epoch,revision:state.revision},
       ...(selectedRoot ? {observation_root:{ref:rootRef,identity:identityOf(selectedRoot),detail_scope:'elements_and_cells',global_scan:false,global_guards:'fixed_native_queries'}} : {}),
       scan: { complete: true, mutation_counts:{...state.mutations}, visited_elements: dom.length, detail_elements:detailElements, max_elements: maxElements, max_work: maxWork, max_ms: maxMs },
@@ -1418,11 +2311,37 @@ function workspaceUiCapability(page, task) {
         if (effectPossible) record('ui_gesture_applied', { verb: task.action.verb });
         phase = 'observing'; timeout();
         if(['apply_expression_parameters','cancel_expression_parameters','select_wizard_option','apply_output_column','cancel_output_column','apply_reform_column','cancel_reform_column'].includes(task.action.verb))postActionRoot=current.wizard.root_ref;
+        const lifecycleContextMatches=fresh=>fresh.authenticated && fresh.origin===current.origin && fresh.loginom_build===current.loginom_build
+          && same(fresh.workflow_ref,current.workflow_ref) && same(fresh.package_identity,current.package_identity)
+          && fresh.active_tab_ref===current.active_tab_ref && !!current.active_tab_ref
+          && !!current.dom_epoch?.document && fresh.dom_epoch?.document===current.dom_epoch.document && fresh.ui.dialogs.length===0;
+        let staleOpeningRoots=0;
         const readOpeningUi=async()=>{
-          const roots=await readUi(true);
-          postActionRoot=roots.wizard?.root_ref ?? roots.ui.elements.find(e=>e.tid===current.workflow_ref.prefix+';ModelForm;cmpDiagram')?.ref ?? roots.ui.elements.find(e=>e.scope==='dialog')?.ref ?? roots.ui.elements[0]?.ref;
-          if(!postActionRoot)fail('WIZARD_OPEN_NOT_CONFIRMED','No current region was available after opening settings');
-          return readUi();
+          for(;;) {
+            const roots=await readUi(true);
+            // Roots discovery intentionally omits package/tab identity and
+            // detailed blockers. Check its available context now; require the
+            // full context and typed owner verification on the detailed read.
+            if(!roots.authenticated || roots.origin!==current.origin || roots.loginom_build!==current.loginom_build
+              || !same(roots.workflow_ref,current.workflow_ref) || !current.dom_epoch?.document
+              || roots.dom_epoch?.document!==current.dom_epoch.document)
+              fail('WIZARD_CONTEXT_CHANGED','The original document and workspace were not preserved after the wizard gesture');
+            postActionRoot=roots.wizard?.root_ref ?? roots.ui.elements.find(e=>e.tid===current.workflow_ref.prefix+';ModelForm;cmpDiagram')?.ref ?? roots.ui.elements.find(e=>e.scope==='dialog')?.ref ?? roots.ui.elements[0]?.ref;
+            if(!postActionRoot)fail('WIZARD_OPEN_NOT_CONFIRMED','No current region was available after opening settings');
+            try {
+              const fresh=await readUi();
+              if(!lifecycleContextMatches(fresh))fail('WIZARD_CONTEXT_CHANGED','The original document and workspace changed while reading the wizard region');
+              return fresh;
+            } catch(error) {
+              // The one completed click can replace cmpDiagram with WizrdMCF
+              // between discovery and detail. Rediscover only that detached
+              // post-gesture region; never repeat the gesture or relax guards.
+              if(error?.code!=='UI_ROOT_STALE' || !effectPossible || staleOpeningRoots>=3)throw error;
+              staleOpeningRoots++;
+              record('wizard_region_rediscovery',{reason:'UI_ROOT_STALE',attempt:staleOpeningRoots});
+              timeout();await page.waitForTimeout(Math.min(100,timeout()));
+            }
+          }
         };
         let observed;
         try { observed = await (['open_wizard','finish_wizard'].includes(task.action.verb)?readOpeningUi():readUi()); }
@@ -1436,30 +2355,58 @@ function workspaceUiCapability(page, task) {
         }
         if(task.action.verb==='finish_wizard') {
           const finish=current.ui.elements.find(e=>e.ref===task.action.ref).wizard_finish;
-          const contextMatches=fresh=>fresh.authenticated && fresh.origin===current.origin && fresh.loginom_build===current.loginom_build
-            && same(fresh.workflow_ref,current.workflow_ref) && same(fresh.package_identity,current.package_identity)
-            && fresh.active_tab_ref===current.active_tab_ref && !!current.active_tab_ref && fresh.ui.dialogs.length===0;
+          const contextMatches=lifecycleContextMatches;
+          const inputPort=finish.mode==='input_port',outputPort=finish.mode==='output_port',port=inputPort||outputPort;
+          const finishOwner=inputPort?current.wizard.input_port_context:outputPort?current.wizard.port_context:finish.owner;
+          const expectedLabel=port?finishOwner.node.label:finish.completion.fields.label.value;
+          const workflowPath=(inputPort?finishOwner.node_path.slice(0,-1):outputPort?finishOwner.path.slice(0,-4):finishOwner.path.slice(0,-2)).map(({tid,label})=>({tid,label}));
           const targetNode=fresh=>{
-            const labels=fresh.ui.elements.filter(e=>e.graph_node?.part==='label' && e.graph_node.label_text===finish.completion.fields.label.value);
+            const expected=expectedLabel;
+            // E2E Format maps whitespace to underscores and removes commas.
+            // Wrapped SVG labels may lose whitespace at BR boundaries, so
+            // require both the exact native key and rendered punctuation.
+            const key=expected.replace(/\s/g,'_').replace(/,/g,'');
+            const labels=fresh.ui.elements.filter(e=>e.graph_node?.part==='label'
+              && e.graph_node.node_label===key && typeof e.graph_node.label_text==='string'
+              && e.graph_node.label_text.replace(/\s/g,'')===expected.replace(/\s/g,''));
             if(labels.length!==1)return null;
-            return fresh.ui.elements.find(e=>e.graph_node?.part==='body' && e.graph_node.node_label===labels[0].graph_node.node_label)??null;
+            const bodies=fresh.ui.elements.filter(e=>e.graph_node?.part==='body' && e.graph_node.node_label===key);
+            return bodies.length===1?bodies[0]:null;
           };
           for(let attempt=0;attempt<24 && contextMatches(observed) && (observed.wizard.status!=='absent' || observed.ui.masks.length || !targetNode(observed));attempt++) {
             timeout();await page.waitForTimeout(Math.min(200,timeout()));observed=await readOpeningUi();
           }
-          const node=targetNode(observed);
-          if(!contextMatches(observed) || observed.ui.masks.length || observed.wizard.status!=='absent' || !node
-            || observed.navigation_context?.status!=='observed'
-            || !same(observed.navigation_context.path,finish.owner.path.slice(0,-2).map(({tid,label})=>({tid,label}))))
+          const ready=fresh=>contextMatches(fresh) && !fresh.ui.masks.length && fresh.wizard.status==='absent' && !!targetNode(fresh)
+            && fresh.navigation_context?.status==='observed'
+            && same(fresh.navigation_context.path,workflowPath);
+          if(!ready(observed))
             fail('WIZARD_FINISH_NOT_CONFIRMED','The expected node and workflow were not confirmed after one Done click; inspect before retry');
-          record('wizard_finish_graph_verified',{previous_owner:finish.owner.node,node:node.graph_node,node_ref:node.ref,
+          // Live finish can replace the newly painted graph body after the
+          // first success. Issue only the final quiet snapshot, not its stale
+          // predecessor; a replacement restarts settling without another click.
+          const stamp=fresh=>({epoch:fresh.dom_epoch,node_ref:targetNode(fresh)?.ref,
+            label_ref:fresh.ui.elements.find(e=>e.graph_node?.part==='label'
+              && e.graph_node.node_label===targetNode(fresh)?.graph_node.node_label)?.ref});
+          let quietSamples=0;
+          for(let attempt=0;attempt<12 && quietSamples<3;attempt++) {
+            timeout();await page.waitForTimeout(Math.min(200,timeout()));
+            const fresh=await readOpeningUi();
+            if(!ready(fresh))fail('WIZARD_FINISH_NOT_CONFIRMED','The destination changed while settling after one Done click; inspect before retry');
+            quietSamples=same(stamp(fresh),stamp(observed))?quietSamples+1:0;
+            observed=fresh;
+          }
+          if(quietSamples<3)fail('WIZARD_FINISH_NOT_SETTLED','The graph kept changing after one Done click; observe before continuing');
+          const node=targetNode(observed);
+          record(port?(inputPort?'input_port_finish_settled':'output_port_finish_settled'):'wizard_finish_settled',{quiet_samples:quietSamples,interval_ms:200,dom_epoch:observed.dom_epoch,node_ref:node.ref});
+          if(port)record(inputPort?'input_port_finish_verified':'output_port_finish_verified',{wizard_root_ref:finish.root_ref,control_ref:task.action.ref,
+            port_path:inputPort?finishOwner.port_path:finishOwner.path.slice(0,-1).map(({tid,label})=>({tid,label})),node:node.graph_node,node_ref:node.ref,workflow_path:workflowPath,
+            reopen_required:true,settings_readback_verified:false,settings_applied:false,source_identity_verified:false,package_saved:false});
+          else record('wizard_finish_graph_verified',{previous_owner:finish.owner.node,node:node.graph_node,node_ref:node.ref,
             label:finish.completion.fields.label.value,reopen_required:true,settings_readback_verified:false,package_saved:false});
         }
         if(task.action.verb==='open_wizard') {
           const opening=current.ui.elements.find(e=>e.ref===task.action.ref).wizard_open;
-          const contextMatches=fresh=>fresh.authenticated && fresh.origin===current.origin && fresh.loginom_build===current.loginom_build
-            && same(fresh.workflow_ref,current.workflow_ref) && same(fresh.package_identity,current.package_identity)
-            && fresh.active_tab_ref===current.active_tab_ref && !!current.active_tab_ref && fresh.ui.dialogs.length===0;
+          const contextMatches=lifecycleContextMatches;
           for(let attempt=0;attempt<24 && contextMatches(observed) && (observed.wizard?.owner_context?.status!=='observed' || observed.ui.masks.length);attempt++) {
             timeout();await page.waitForTimeout(Math.min(200,timeout()));observed=await readOpeningUi();
           }
@@ -1682,9 +2629,12 @@ function workspaceUiCapability(page, task) {
   })();
 }
 
-export function makeWorkspaceUiCode(options) {
+export function makeWorkspaceUiCode(options, { snapshotArgument = false } = {}) {
   if (!options || !['observe', 'act'].includes(options.mode)) throw new Error('Workspace UI mode must be observe or act');
   if (options.mode === 'act') validateUiAction(options.action, options.snapshot);
   const task = { ...structuredClone(options), kind: 'workspace-ui' };
+  // Trusted composite operations may supply their own fresh native read after
+  // a bounded preparatory gesture. This is not a public tool parameter.
+  if(snapshotArgument)return `async (page, snapshot) => (${workspaceUiCapability.toString()})(page, {...${JSON.stringify(task)},snapshot})`;
   return `async (page) => (${workspaceUiCapability.toString()})(page, ${JSON.stringify(task)})`;
 }

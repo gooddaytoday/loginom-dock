@@ -67,7 +67,7 @@ test('pins and verifies the complete production release once', async () => {
   assert.equal(pinned.manifest.status, 'candidate');
   assert.equal(pinned.pins.catalogLifecycleStatus, 'production');
   data.files.set(`${ACTION_CATALOG_ROOT}/current.json`, '{}');
-  assert.equal(pinned.actions.get('node.add').revision, '2');
+  assert.equal(pinned.actions.get('node.add').revision, '3');
 });
 
 test('pins an exact candidate only for operator-selected replay and rejects it in the production runtime', async () => {
@@ -154,10 +154,10 @@ test('validates action parameters before browser preparation and checks successf
   const calls = [];
   const runtime = createActionRuntime({ pinned, execute: async (code, options) => {
     calls.push({ code, options });
-    if (calls.length === 1) return { status: 'NOT_APPLIED', action_key: 'node.add', action_revision: '2',
+    if (calls.length === 1) return { status: 'NOT_APPLIED', action_key: 'node.add', action_revision: '3',
       operation_id: 'unit-node-add', phase: 'prepared', effect_possible: false, checkpoint: { workflow_ref: { tab_tid: 'test-tab', prefix: 'test-prefix' } },
       output: {}, error: null, trace: [] };
-    return { status: 'SUCCEEDED', action_key: 'node.add', action_revision: '2', operation_id: 'unit-node-add', phase: 'verified', effect_possible: true, output: {
+    return { status: 'SUCCEEDED', action_key: 'node.add', action_revision: '3', operation_id: 'unit-node-add', phase: 'verified', effect_possible: true, output: {
       node_ref: { kind: 'node', node_label: 'Калькулятор', workflow_ref: { tab_tid: 'test-tab', prefix: 'test-prefix' } },
       auto_created_links: [], goal_verified: false,
     }, cleanup_complete: true, error: null, trace: [{ at_ms: 0, event: 'test' }] };
@@ -166,15 +166,15 @@ test('validates action parameters before browser preparation and checks successf
   await assert.rejects(runtime.run('node.add', { component_key: 'imports.text', target_position: { x: 100, y: 100 }, extra: true }), /unknown field extra/);
   await assert.rejects(runtime.run('node.add', { component_key: 'unknown', target_position: { x: 100, y: 100 } }), /allowed enum/);
   assert.equal(calls.length, 0);
-  const outcome = await runtime.run('node.add', { component_key: 'imports.text', target_position: { x: 100, y: 100 } }, { operationId: 'unit-node-add' });
+  const outcome = await runtime.run('node.add', { component_key: 'transform.reform_columns', target_position: { x: 100, y: 100 } }, { operationId: 'unit-node-add' });
   assert.equal(outcome.status, 'SUCCEEDED');
   assert.equal(calls.length, 2);
   assert.equal(calls[0].options.timeout, 65000);
   let brokenCalls = 0;
   const broken = createActionRuntime({ pinned, execute: async () => ++brokenCalls === 1
-    ? { status: 'NOT_APPLIED', action_key: 'node.add', action_revision: '2', operation_id: 'unit-broken', phase: 'prepared', effect_possible: false,
+    ? { status: 'NOT_APPLIED', action_key: 'node.add', action_revision: '3', operation_id: 'unit-broken', phase: 'prepared', effect_possible: false,
       checkpoint: { workflow_ref: { tab_tid: 'test-tab', prefix: 'test-prefix' } }, output: {}, error: null, trace: [] }
-    : { status: 'SUCCEEDED', action_key: 'node.add', action_revision: '2', operation_id: 'unit-broken', phase: 'verified', effect_possible: true,
+    : { status: 'SUCCEEDED', action_key: 'node.add', action_revision: '3', operation_id: 'unit-broken', phase: 'verified', effect_possible: true,
       output: { auto_created_links: [], goal_verified: false }, error: null, trace: [] } });
   const invalid = await broken.run('node.add', { component_key: 'imports.text', target_position: { x: 100, y: 100 } }, { operationId: 'unit-broken' });
   assert.equal(invalid.status, 'AMBIGUOUS');

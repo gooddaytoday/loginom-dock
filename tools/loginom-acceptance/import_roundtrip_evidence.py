@@ -2,6 +2,7 @@
 import import_settings_evidence as settings
 import copy
 import re
+from urllib.parse import urlsplit
 import rename_effect
 from settings_evidence import bound_receipts
 
@@ -58,10 +59,28 @@ def _semantic_owner(snapshot):
             'path': [{k: p[k] for k in ('tid', 'label')} for p in owner['path']]}
 
 
+def _same_origin(left, right):
+    """Allow only the observed origin/root-URL slash projection, not URL paths."""
+    def origin(value):
+        if not isinstance(value, str):return None
+        try:
+            parsed=urlsplit(value)
+            if (parsed.scheme in ('http','https') and parsed.hostname
+                    and not parsed.username and not parsed.password
+                    and parsed.path in ('','/') and not parsed.query and not parsed.fragment
+                    and not any(c.isspace() for c in value)):
+                return value[:-1] if value.endswith('/') else value
+        except ValueError:pass
+        return None
+    normalized=origin(left)
+    return normalized is not None and normalized==origin(right)
+
+
 def _same_context(snapshot, baseline):
     return (snapshot.get('authenticated') is True
+            and _same_origin(snapshot.get('origin'), baseline.get('origin'))
             and all(baseline.get(key) is not None and snapshot.get(key) == baseline[key] for key in
-                ('origin', 'loginom_build', 'workflow_ref', 'package_identity', 'active_tab_ref'))
+                ('loginom_build', 'workflow_ref', 'package_identity', 'active_tab_ref'))
             and baseline.get('dom_epoch', {}).get('document') is not None
             and snapshot.get('dom_epoch', {}).get('document') == baseline['dom_epoch']['document']
             and snapshot.get('ui', {}).get('dialogs') == [] and snapshot.get('ui', {}).get('masks') == [])
@@ -117,7 +136,36 @@ def _page(snapshot, expected, source_path, stage):
     return settings.mapping_compare(snapshot, expected).get('rendered_import_mapping_match') is True
 
 
-def _transition_trace(receipt, before, after, owner):
+def _finished_owner(receipt, before, after, owner, receipts):
+    """Only the issued ready automatic label can bridge the finish identity."""
+    completion=before.get('wizard',{}).get('completion',{})
+    label=completion.get('fields',{}).get('label',{})
+    if label.get('value')==owner['node']['label']:
+        return owner
+    mode=completion.get('fields',{}).get('label_mode',{})
+    value=label.get('value')
+    if (completion.get('ready') is not True or label.get('status')!='observed'
+            or label.get('truncated') is not False or not isinstance(value,str) or not value.strip()
+            or mode.get('status')!='observed' or mode.get('truncated') is not False
+            or mode.get('value')!='Автоматическая метка'):
+        return None
+    wizard=before['wizard'];element=_issued(receipt,receipts)
+    if (not element or element.get('wizard_finish')!={'root_ref':wizard.get('root_ref'),
+            'owner':wizard.get('owner_context'),'completion':completion}
+            or not wizard.get('root_tid') or element.get('tid')!=wizard['root_tid']+';btnDone'
+            or element.get('enabled') is not True or element.get('visible') is not True):return None
+    key=re.sub(r'\s','_',value).replace(',','')
+    if not key or any(c in key for c in '>;'):return None
+    result=copy.deepcopy(owner);result['graph_key']=key
+    old_tid=owner['node']['tid'];new_tid=old_tid.rsplit('>',1)[0]+'>'+key
+    result['node']={'tid':new_tid,'label':value}
+    result['path'][-2]={'tid':new_tid,'label':value}
+    if not result['path'][-1]['tid'].startswith(old_tid+'>'):return None
+    result['path'][-1]['tid']=new_tid+result['path'][-1]['tid'][len(old_tid):]
+    return result if _graph(after,result) else None
+
+
+def _transition_trace(receipt, before, after, owner, finished_owner=None):
     verb = _verb(receipt)
     event = {'wizard_step':'wizard_step_verified', 'finish_wizard':'wizard_finish_graph_verified',
              'open_wizard':'wizard_open_verified'}.get(verb)
@@ -135,11 +183,12 @@ def _transition_trace(receipt, before, after, owner):
                 and receipt['call']['arguments']['action'].get('expected_stage') == after['wizard']['stage']
                 and record.get('settings_applied') is False)
     if verb == 'finish_wizard':
+        target=finished_owner or owner
         bodies = [e for e in after['ui'].get('elements', []) if e.get('graph_node') == record.get('node')
                   and e.get('ref') == record.get('node_ref')]
         return (record.get('previous_owner') == before['wizard']['owner_context']['node']
-                and record.get('label')==before['wizard'].get('completion',{}).get('fields',{}).get('label',{}).get('value')==owner['node']['label']
-                and record.get('node') == {'node_label':owner['graph_key'], 'part':'body'}
+                and record.get('label')==before['wizard'].get('completion',{}).get('fields',{}).get('label',{}).get('value')==target['node']['label']
+                and record.get('node') == {'node_label':target['graph_key'], 'part':'body'}
                 and len(bodies) == 1 and record.get('reopen_required') is True
                 and record.get('settings_readback_verified') is False and record.get('package_saved') is False)
     return (record.get('node') == {'node_label':owner['graph_key'], 'part':'settings'}
@@ -200,11 +249,100 @@ def _idle_refusal(result):
             and operation.get('cleanup_confirmed') is True and operation.get('effect_state')=='none')
 
 
+def _wizard_refusal(call, receipts, evidence, baseline, owner, last, transition, expected, source_path):
+    """Account only for an issued next/done control rejected before its gesture."""
+    action=call.get('arguments',{}).get('action',{});verb=action.get('verb')
+    before=last['outcome']['output']
+    stage=before.get('wizard',{}).get('stage');root=before.get('wizard',{}).get('root_ref')
+    if verb not in ('wizard_step','finish_wizard') or verb!=transition[0]:return None
+    if set(action)-{'verb','ref','expected_stage'}:return None
+    if verb=='wizard_step' and action.get('expected_stage')!=transition[1]:return None
+    if verb=='finish_wizard' and (stage!='done' or action.get('expected_stage','done')!='done'):return None
+    element=_delivered_element({'call':call},receipts)
+    if not element or element.get('enabled') is not True or element.get('visible') is not True:return None
+    args=call['arguments']
+    sources=[r['outcome']['output'] for r in receipts if last['reply_row']<=r['reply_row']<call['row']
+             and r['call'].get('session_id')==call.get('session_id')
+             and r['delivered'].get('output',{}).get('observation_id')==args.get('observation_id')
+             and any(e.get('ref')==action.get('ref') for e in r['delivered'].get('output',{}).get('ui',{}).get('elements',[]))]
+    if not sources or not root:return None
+    for state in sources:
+        wizard=state.get('wizard',{})
+        if (not _same_context(state,baseline) or _semantic_owner(state)!=owner
+                or wizard.get('root_ref')!=root or wizard.get('stage')!=stage):return None
+        suffix=';btnNext' if verb=='wizard_step' else ';btnDone'
+        if not wizard.get('root_tid') or element.get('tid')!=wizard['root_tid']+suffix:return None
+        if verb=='wizard_step':
+            if element.get('wizard_step')!={'direction':'next','root_ref':root,'stage':stage}:return None
+        else:
+            finish=element.get('wizard_finish',{})
+            if (finish.get('root_ref')!=root or finish.get('owner')!=wizard.get('owner_context')
+                    or finish.get('completion')!=wizard.get('completion') or not finish.get('completion',{}).get('ready')):return None
+    rejected=_no_effect_reply(call,evidence)
+    if rejected:
+        result=rejected['result']
+        if result.get('status')=='NOT_APPLIED':
+            state=result.get('output',{});wizard=state.get('wizard',{})
+            if (not _same_context(state,baseline) or _semantic_owner(state)!=owner
+                    or wizard.get('root_ref')!=root or wizard.get('stage')!=stage):return None
+            if stage=='done':
+                if wizard.get('completion')!=before['wizard'].get('completion'):return None
+            elif not _page(state,expected,source_path,stage):return None
+        return rejected
+    # A schema refusal may reuse its ID for the one later successful dispatch.
+    # Its idle reply is separate from that later immutable browser receipt.
+    key=(call.get('session_id'),call.get('tool_call_id'))
+    peers=[c for c in evidence.get('calls',[]) if (c.get('session_id'),c.get('tool_call_id'))==key]
+    replies=[t for t in evidence.get('tools',[]) if (t.get('session_id'),t.get('tool_call_id'))==key]
+    if len(peers)!=1 or len(replies)!=1:return None
+    reply=replies[0];op=args.get('operation_id')
+    if (reply.get('tool')!=call.get('tool') or reply['row']<=call['row'] or not op
+            or not _idle_refusal(reply.get('result',{}))):return None
+    later=[r for r in receipts if r['call'].get('arguments',{}).get('operation_id')==op]
+    operations=[c for c in evidence.get('calls',[]) if c.get('arguments',{}).get('operation_id')==op and _mutation(c)]
+    if len(later)!=1 or len(operations)!=2 or call not in operations:return None
+    success=later[0];other=success['call'];other_action=other.get('arguments',{}).get('action',{})
+    if (other not in operations or other.get('session_id')!=call.get('session_id')
+            or other.get('tool')!=call.get('tool') or other['row']<=reply['row']
+            or other_action!={k:v for k,v in action.items() if k!='expected_stage'}):return None
+    records=[e for e in evidence.get('events',[]) if e.get('operation_id')==op]
+    completed=[e for e in records if e.get('phase')=='completed']
+    if len(completed)!=1:return None
+    for event in records:
+        phase=event.get('phase')
+        if (phase not in ('prepared','completed','verification_delivered')
+                or sum(e.get('phase')==phase for e in records)!=1
+                or event.get('session_id')!=completed[0].get('session_id')):return None
+        if 'parameters' in event and event['parameters']!={
+                'action':other_action,'observation_id':other['arguments'].get('observation_id'),
+                'recovery_operation_id':other['arguments'].get('recovery_operation_id')}:return None
+    fresh=[r for r in receipts if reply['row']<r['call']['row']<r['reply_row']<other['row']
+           and r['call'].get('session_id')==call.get('session_id')
+           and r['delivered'].get('output',{}).get('observation_id')==other['arguments'].get('observation_id')]
+    if not fresh or not _delivered_element(success, fresh):return None
+    for read in fresh:
+        state=read['outcome']['output'];wizard=state.get('wizard',{})
+        if (not _same_context(state,baseline) or _semantic_owner(state)!=owner
+                or wizard.get('root_ref')!=root or wizard.get('stage')!=stage
+                or wizard.get('completion')!=before['wizard'].get('completion')):return None
+    return reply
+
+
 def _attempt(start, receipts, evidence, expected, source_path):
     baseline = start['outcome']['output']; session = start['call'].get('session_id')
     owner = _semantic_owner(baseline)
     if not owner or not _page(baseline, expected, source_path, 'text_import_file'):
         return None
+    # A no-effect action may still deliver a fresh observed page. Such a page
+    # can issue refs, but is never a successful transition in this state machine.
+    issued_receipts=list(receipts)
+    for call in evidence.get('calls',[]):
+        if call.get('session_id')!=session or not call.get('tool','').endswith('dock_ui_action'):continue
+        reply=_no_effect_reply(call,evidence)
+        if not reply or reply.get('result',{}).get('status')!='NOT_APPLIED':continue
+        outcome=reply['result']
+        if not outcome.get('output',{}).get('observation_id'):continue
+        issued_receipts.append({'call':call,'reply_row':reply['row'],'outcome':outcome,'delivered':outcome})
     transitions = [('wizard_step', 'text_import_format'), ('wizard_step', 'output_mapping'),
                    ('wizard_step', 'done'), ('finish_wizard', 'graph'),
                    ('open_wizard', 'text_import_file'), ('wizard_step', 'text_import_format'),
@@ -223,7 +361,13 @@ def _attempt(start, receipts, evidence, expected, source_path):
             if call==receipt['call']:
                 if call['row']<=fence:return None
                 continue
-            if current!='graph' or call.get('session_id')!=session or not call.get('tool','').endswith('dock_ui_action') or call.get('arguments',{}).get('action',{}).get('verb')!='click':return None
+            if call.get('session_id')!=session or not call.get('tool','').endswith('dock_ui_action'):return None
+            if current!='graph':
+                rejected=_wizard_refusal(call,receipts,evidence,baseline,owner,last,transitions[cursor],expected,source_path)
+                if not rejected or not fence<call['row']<rejected['row']<receipt['call']['row']:return None
+                fence=rejected['row'];rejected_calls.append(call['tool_call_id'])
+                continue
+            if call.get('arguments',{}).get('action',{}).get('verb')!='click':return None
             rejected=_no_effect_reply(call,evidence)
             if not rejected or not fence<call['row']<rejected['row']<receipt['call']['row']:return None
             element=_delivered_element({'call':call},receipts)
@@ -241,10 +385,12 @@ def _attempt(start, receipts, evidence, expected, source_path):
             if stage != current:
                 return None
         else:
-            element = _issued(receipt, receipts)
-            if not element or not _transition_trace(receipt, last['outcome']['output'], snapshot, owner):
+            element = _issued(receipt, issued_receipts)
+            finished_owner=(_finished_owner(receipt,last['outcome']['output'],snapshot,owner,issued_receipts)
+                            if verb=='finish_wizard' else owner)
+            if not element or finished_owner is None or not _transition_trace(receipt, last['outcome']['output'], snapshot, owner,finished_owner):
                 return None
-            if current=='graph' and not _issued_graph_binding(receipt,receipts,owner,baseline,graph_identity):return None
+            if current=='graph' and not _issued_graph_binding(receipt,issued_receipts,owner,baseline,graph_identity):return None
             if current == 'graph' and verb == 'click' and not selected:
                 target = element.get('graph_node', {})
                 prior=last['outcome']['output']
@@ -260,6 +406,7 @@ def _attempt(start, receipts, evidence, expected, source_path):
                 if verb == 'open_wizard' and element.get('graph_node') != {'node_label': owner['graph_key'], 'part': 'settings'}:
                     return None
                 cursor += 1; current = stage
+                if verb=='finish_wizard':owner=finished_owner
         if stage == 'graph':
             if not _graph(snapshot, owner):
                 return None

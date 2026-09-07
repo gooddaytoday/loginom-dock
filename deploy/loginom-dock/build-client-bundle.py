@@ -54,6 +54,7 @@ def copy_client_sources(source, target, *, windows=False):
         "executor/schemas/replay-acceptance.schema.json",
         "landing/instructions.mjs",
         "landing/release.json",
+        "tools/loginom-acceptance/rename_effect.py",
     ]:
         destination = target / relative
         destination.parent.mkdir(parents=True, exist_ok=True)

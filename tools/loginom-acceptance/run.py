@@ -118,7 +118,7 @@ def validate_inputs(args):
     profile=getattr(args,'model_profile','chatgpt-sol')
     if profile not in ('chatgpt-sol','xiaomi-mimo') or profile=='xiaomi-mimo' and getattr(args,'goal',None)!='data-pipeline':
         raise ValueError('Xiaomi comparison is authorized only for the full data-pipeline goal')
-    max_turns_limit=300 if getattr(args,'goal','basic-graph')=='data-pipeline' else 100
+    max_turns_limit=300 if getattr(args,'goal','basic-graph') in ('data-pipeline','calculator-roundtrip') else 100
     if not 30 <= args.timeout <= 3600 or not 1 <= args.max_turns <= max_turns_limit:
         raise ValueError("Invalid acceptance budget")
     if args.manifest_uri is not None and not re.fullmatch(re.escape(MANIFEST_ROOT) + r"[0-9A-Za-z.+-]+/manifest\.json", args.manifest_uri):
@@ -165,12 +165,12 @@ def execute(args):
     harness_inputs = {p.relative_to(WORK).as_posix(): sha(p) for p in sorted(WORK.glob("*.py"))}
     harness_inputs.update({p.name: sha(p) for p in sorted(WORK.glob("*.mjs"))})
     harness_inputs["goals/" + goal_id + ".txt"] = sha(goal)
-    if goal_id in ('file-upload-probe','file-upload-verify','data-pipeline','import-roundtrip'):
+    if goal_id in ('file-upload-probe','file-upload-verify','data-pipeline','import-roundtrip','calculator-roundtrip'):
         fixture=WORK / upload_probe.FIXTURE
         if sha(fixture)!=upload_probe.FIXTURE_SHA or fixture.stat().st_size!=230:
             raise ValueError('Upload probe fixture changed')
         harness_inputs[upload_probe.FIXTURE]=sha(fixture)
-    if goal_id in ('data-pipeline','import-roundtrip'):
+    if goal_id in ('data-pipeline','import-roundtrip','calculator-roundtrip'):
         harness_inputs.update({name:sha(WORK / name) for name in data_pipeline.FIXTURES})
     info = {"schema_version": 2, "storage_directory":getattr(args,"storage_directory",None), "scope": "source_runtime", "model_started": False,
             "provider": provider, "model": model, "reasoning_effort": reasoning, "hermes_version": "0.21.0",
@@ -216,7 +216,7 @@ def execute(args):
     package = args.storage_directory + "/packages/Dock-acceptance-" + run_id + ".lgp"
     info.update(run_id=run_id, package_path=package)
     prompt = render_goal(goal.read_text(),package,args.storage_directory)
-    if goal_id in ('file-upload-probe','file-upload-verify','data-pipeline','import-roundtrip'):
+    if goal_id in ('file-upload-probe','file-upload-verify','data-pipeline','import-roundtrip','calculator-roundtrip'):
         info['input_artifact']=upload_probe.descriptor(run_id,args.storage_directory)
         prompt=upload_probe.prompt(goal.read_text(),package,args.storage_directory,run_id)
     if goal_id == 'data-pipeline':
@@ -229,13 +229,17 @@ def execute(args):
                "--state-dir", str(dock_home), "--agent", "hermes", "--adapter-revision", "0.1.0-rc.4-acceptance",
                "--mode", "executor-replay", "--action-manifest-uri", args.manifest_uri,
                "--action-manifest-sha256", args.manifest_sha256, "--replay-bootstrap", "--replay-login-user", args.loginom_user]
-    if goal_id in ('file-upload-probe','file-upload-verify','data-pipeline','import-roundtrip'):
+    if goal_id in ('file-upload-probe','file-upload-verify','data-pipeline','import-roundtrip','calculator-roundtrip'):
         command.extend(['--input-artifact',json.dumps({**info['input_artifact'],'sourcePath':str(WORK / upload_probe.FIXTURE)},ensure_ascii=False)])
     config = {"fallback_providers": [], "mcp_servers": {"loginom-dock": {"command": str(args.node), "args": command,
               "connect_timeout": 180, "timeout": 360, "enabled": True,
               "env": {"DOCK_ACCEPTANCE_RUN_DIR": str(run),
                       "DOCK_ACCEPTANCE_EXECUTOR_SHA256": frozen["inputs"]["client/lib/executor.mjs"]}}},
               "agent": {"max_turns": args.max_turns, "reasoning_effort": reasoning},
+              # Keep the small Dock-only surface as direct typed tools. The
+              # generic discovery router otherwise discards the target schema
+              # and permits malformed calls without an instrument name.
+              "tools": {"tool_search": {"enabled": "off"}},
               "memory": {"provider": "none"}, "plugins": {"enabled": []},
               "display": {"compact": True}, "checkpoints": {"enabled": False}}
     write(hermes_home / "config.yaml", config)
@@ -329,7 +333,7 @@ def main():
     parser.add_argument("--require-delivered-context", action="store_true",
                         help="Require automatic E2E/Help delivery bound to a failure and journal before successful continuation")
     parser.add_argument("--model-profile",choices=["chatgpt-sol","xiaomi-mimo"],default="chatgpt-sol")
-    parser.add_argument("--goal", choices=["prepare-workspace", "basic-graph", "auto-link-retain", "auto-link-remove", "palette-inventory", "checkbox-roundtrip", "context-menu-checkbox", "root-checkbox", "file-storage-inspect", "file-upload-probe", "file-upload-verify", "data-pipeline", "import-roundtrip"], default="basic-graph")
+    parser.add_argument("--goal", choices=["prepare-workspace", "basic-graph", "auto-link-retain", "auto-link-remove", "palette-inventory", "checkbox-roundtrip", "context-menu-checkbox", "root-checkbox", "file-storage-inspect", "file-upload-probe", "file-upload-verify", "data-pipeline", "import-roundtrip", "calculator-roundtrip"], default="basic-graph")
     parser.add_argument("--allow-manual-reopen", action="store_true")
     args = parser.parse_args()
     if args.fault=="save_reopen" and not args.allow_manual_reopen:

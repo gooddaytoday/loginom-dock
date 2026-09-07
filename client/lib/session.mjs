@@ -58,11 +58,19 @@ export async function createSession(config, { headless = false } = {}) {
     clientHash.update(file + '\0').update(await readFile(new URL(file, import.meta.url)));
   }
   const browserConfig = join(directory, 'playwright.json');
+  // Let visible Loginom use the actual maximized window. A fixed emulated
+  // viewport stays small even when the native window is enlarged. Headless
+  // checks retain a deterministic size; live geometry guards still apply.
+  const browserViewport = headless ? { width: 1280, height: 800 } : null;
+  const browserWindowMode = headless ? 'headless' : 'maximized';
+  // Executor actions own explicit readiness and pre-gesture guards. MCP's
+  // default settle adds 500 ms even to every read-only internal observation.
+  const executorMode = ['executor-preview', 'executor-replay'].includes(config.mode);
   await writeFile(browserConfig, JSON.stringify({
     browser: { browserName: 'chromium', userDataDir: profile,
-      launchOptions: { executablePath, headless }, contextOptions: { viewport: null } },
+      launchOptions: { executablePath, headless, ...(!headless ? { args: ['--start-maximized'] } : {}) }, contextOptions: { viewport: browserViewport } },
     capabilities: ['core', 'vision'], outputDir: artifacts,
-    saveSession: false, timeouts: { action: 15000, navigation: 120000 },
+    saveSession: false, timeouts: { action: 15000, navigation: 120000, ...(executorMode ? { settle: 0 } : {}) },
   }), { mode: 0o600 });
   const releaseRoot = fileURLToPath(new URL('../../', import.meta.url));
   const releaseName = relative(join(config.stateDir, 'releases'), releaseRoot);
@@ -73,7 +81,7 @@ export async function createSession(config, { headless = false } = {}) {
     clientRevision: clientHash.digest('hex'),
     runtimeRelease,
     playwright: core.version, sdk: sdk.version,
-    chromiumRevision: chromiumRevision.revision, chromiumVersion: chromiumRevision.browserVersion,
+    chromiumRevision: chromiumRevision.revision, chromiumVersion: chromiumRevision.browserVersion, browserViewport, browserWindowMode,
     profile, artifacts, archiveActive: false, skillRevision: null, workspaceReady: false, targetIdentity: null,
   };
   return {

@@ -15,6 +15,7 @@ import rendered_results
 import settings_evidence
 import import_settings_evidence
 import import_roundtrip_evidence
+import calculator_evidence
 
 FIXTURES = tuple('fixtures/data-pipeline/'+name for name in ('sales.csv','expected.json','task.txt'))
 DOMAIN_GATES = ('wizard_settings_readback', 'calculator_expression_and_mappings',
@@ -144,18 +145,21 @@ def audit(evidence, checks, request, prefix, mutations, storage_audit, rejected_
             proof=upload_verify.audit(part,transfer_checks,request,prefix,mutations,storage_audit)
             transfer_passed=proof['all_assertions_passed']
             checks.extend({**c,'name':'transfer_'+c['name']} for c in transfer_checks)
-    # Only the journal-bound import settings gate is implemented. Remaining
-    # domain gates stay closed regardless of model summaries or UI gestures.
+    # Each implemented settings gate independently rebinds its receipts.
+    # Remaining domain gates stay closed regardless of model summaries.
     expected=json.loads(Path(__file__).with_name('fixtures').joinpath('data-pipeline/expected.json').read_text())
     roundtrips=import_roundtrip_evidence.diagnose(evidence,expected,prefix,expected_source_path=declared_source_path(request))
     wizard=wizard_readback(evidence,request,prefix,expected,roundtrips,transfer_passed)
     check('wizard_settings_readback',wizard['wizard_settings_readback'])
-    for gate in DOMAIN_GATES[1:]:check('unimplemented_verifier_'+gate,False)
+    calculator=calculator_evidence.audit_gate(evidence,request,prefix,expected,transfer_verified=transfer_passed)
+    check('calculator_expression_and_mappings',calculator['calculator_expression_and_mappings'])
+    for gate in DOMAIN_GATES[2:]:check('unimplemented_verifier_'+gate,False)
     return {'all_assertions_passed':False,'assertions':checks,'goal':request.get('goal_id','data-pipeline'),
             'acceptance_status':'diagnostic_only_domain_verifiers_incomplete',
             'rendered_result_diagnostics':rendered_results.diagnose(evidence,json.loads(Path(__file__).with_name('fixtures').joinpath('data-pipeline/expected.json').read_text()),prefix),
             'import_settings_diagnostics':import_settings_evidence.diagnose(evidence,json.loads(Path(__file__).with_name('fixtures').joinpath('data-pipeline/expected.json').read_text()),prefix,expected_source_path=declared_source_path(request)),
             'import_roundtrip_diagnostics':roundtrips,'wizard_settings_readback_diagnostics':wizard,
             'settings_roundtrip_diagnostics':settings_evidence.diagnose(evidence,json.loads(Path(__file__).with_name('fixtures').joinpath('data-pipeline/expected.json').read_text())['calculator'],prefix),
-            'transfer_verified':transfer_passed,'pre_action_rejections':len(rejected),'missing_domain_verifiers':list(DOMAIN_GATES[1:]),
-            'limitations':['Import settings readback has an independent verifier; six domain verifiers remain unimplemented. No P3 acceptance claim is possible.']}
+            'calculator_settings_diagnostics':calculator,
+            'transfer_verified':transfer_passed,'pre_action_rejections':len(rejected),'missing_domain_verifiers':list(DOMAIN_GATES[2:]),
+            'limitations':['Import and Calculator settings have independent verifiers; five domain verifiers remain unimplemented. No P3 acceptance claim is possible.']}

@@ -6,7 +6,7 @@
   "actions": [
     {
       "action_key": "node.add",
-      "revision": "2",
+      "revision": "3",
       "status": "candidate",
       "capability": "node.add.v1",
       "input_schema": {
@@ -20,7 +20,8 @@
               "transform.group_data",
               "transform.calculator",
               "transform.union_data",
-              "transform.col_union_data"
+              "transform.col_union_data",
+              "transform.reform_columns"
             ]
           },
           "target_position": {
@@ -61,9 +62,18 @@
         "properties": {
           "auto_created_links": {
             "type": "array",
-            "items": { "type": "string", "minLength": 1, "maxLength": 2000 }
+            "items": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 2000
+            }
           },
-          "goal_verified": { "type": "boolean", "enum": [false] },
+          "goal_verified": {
+            "type": "boolean",
+            "enum": [
+              false
+            ]
+          },
           "node_ref": {
             "type": "object",
             "properties": {
@@ -126,7 +136,8 @@
         "component.transform.group_data",
         "component.transform.calculator",
         "component.transform.union_data",
-        "component.transform.col_union_data"
+        "component.transform.col_union_data",
+        "component.transform.reform_columns"
       ],
       "evidence": [
         {

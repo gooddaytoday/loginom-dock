@@ -67,6 +67,62 @@ class ImportRoundtripTests(unittest.TestCase):
     def diagnose(self, evidence):
         return ir.diagnose(evidence, EXPECTED, '', expected_source_path=PATH)['roundtrips']
 
+    def automatic_label_fixture(self):
+        data=fixture();old=data['tools'][0]['result']['output']['wizard']['owner_context']['node']
+        key=old['tid'].split('>')[-1];label='source.csv'
+        def renamed(value):
+            if isinstance(value,dict):return {k:renamed(v) for k,v in value.items()}
+            if isinstance(value,list):return [renamed(v) for v in value]
+            if isinstance(value,str):
+                if value in (key,old['label']):return label
+                return value.replace('>'+key+'>', '>'+label+'>').replace(';Graph;'+key,';Graph;'+label) if not value.endswith('>'+key) else value[:-len(key)]+label
+            return value
+        for index in range(4,len(data['tools'])):
+            result=data['tools'][index]['result']
+            result=renamed(result)
+            if index==4:result['trace'][-1]['previous_owner']=copy.deepcopy(old)
+            data['tools'][index]['result']=result;data['events'][index]['outcome']=copy.deepcopy(result)
+        result=data['tools'][3]['result'];wizard=result['output']['wizard']
+        wizard['root_tid']='MF;TF-1;Wizard'
+        wizard['completion']={'ready':True,'fields':{
+            'label':{'status':'observed','truncated':False,'value':label},
+            'label_mode':{'status':'observed','truncated':False,'value':'Автоматическая метка'}}}
+        wizard_finish={'root_ref':wizard['root_ref'],'owner':copy.deepcopy(wizard['owner_context']),
+                       'completion':copy.deepcopy(wizard['completion'])}
+        result['output']['ui']['elements'][0].update(tid=wizard['root_tid']+';btnDone',enabled=True,visible=True,wizard_finish=wizard_finish)
+        data['events'][3]['outcome']=copy.deepcopy(result)
+        return data
+
+    def test_observed_automatic_label_bridges_finish_and_reopen(self):
+        self.assertEqual(len(self.diagnose(self.automatic_label_fixture())),1)
+
+    def test_automatic_label_bridge_rejects_tampering_and_substitution(self):
+        for mode in ('unknown_mode','not_ready','truncated','unissued','previous_owner','trace_label',
+                     'duplicate_trace','foreign_body','reopened_owner','foreign_document','unbound'):
+            with self.subTest(mode=mode):
+                data=self.automatic_label_fixture()
+                if mode in ('unknown_mode','not_ready','truncated','unissued'):
+                    r=data['tools'][3]['result'];w=r['output']['wizard']
+                    if mode=='unknown_mode':w['completion']['fields']['label_mode']['value']='unknown'
+                    if mode=='not_ready':w['completion']['ready']=False
+                    if mode=='truncated':w['completion']['fields']['label']['truncated']=True
+                    if mode=='unissued':r['output']['ui']['elements'][0]['wizard_finish']['root_ref']='foreign'
+                    data['events'][3]['outcome']=copy.deepcopy(r)
+                elif mode in ('reopened_owner','foreign_document'):
+                    r=data['tools'][6]['result']
+                    if mode=='reopened_owner':r['output']['wizard']['owner_context']['node']['tid']='foreign'
+                    else:r['output']['dom_epoch']['document']='foreign'
+                    data['events'][6]['outcome']=copy.deepcopy(r)
+                else:
+                    r=data['tools'][4]['result'];t=r['trace'][-1]
+                    if mode=='previous_owner':t['previous_owner']['tid']='foreign'
+                    if mode=='trace_label':t['label']='foreign.csv'
+                    if mode=='duplicate_trace':r['trace'].append(copy.deepcopy(t))
+                    if mode=='foreign_body':r['output']['ui']['elements'][0]['graph_node']['node_label']='foreign'
+                    if mode!='unbound':data['events'][4]['outcome']=copy.deepcopy(r)
+                    else:data['events'][4]['outcome']['trace'][-1]['label']='foreign'
+                self.assertEqual(self.diagnose(data),[])
+
     def test_complete_rendered_sequence_with_optional_selection(self):
         for selection in (False, True):
             proofs = self.diagnose(fixture(selection))
@@ -318,3 +374,161 @@ class ImportRoundtripTests(unittest.TestCase):
             self.assertFalse(ir._graph(state,owner))
         state=copy.deepcopy(data['tools'][4]['result']['output']);state.pop('workflow_ref')
         self.assertFalse(ir._graph(state,owner));self.assertFalse(ir._graph(None,owner))
+
+    def wizard_refusal_fixture(self, finish=False):
+        data=fixture();index=4 if finish else 3;prior=index-1
+        verb='finish_wizard' if finish else 'wizard_step';ref='finish' if finish else 'next'
+        for outcome in (data['tools'][prior]['result'],data['events'][prior]['outcome']):
+            wizard=outcome['output']['wizard'];wizard['root_tid']='MF;TF-1;WizrdMCF'
+            element=outcome['output']['ui']['elements'][0]
+            element.update(enabled=True,visible=True,tid=wizard['root_tid']+(';btnDone' if finish else ';btnNext'))
+            if finish:
+                wizard['completion']['ready']=True
+                element['wizard_finish']={'root_ref':wizard['root_ref'],'owner':copy.deepcopy(wizard['owner_context']),
+                                          'completion':copy.deepcopy(wizard['completion'])}
+            else:element['wizard_step']={'direction':'next','root_ref':wizard['root_ref'],'stage':wizard['stage']}
+        row=data['calls'][index]['row']
+        for record in data['calls']+data['tools']:
+            if record['row']>=row:record['row']+=2
+        call={'session_id':'s','tool_call_id':'wizard-refusal','tool':'dock_ui_action','row':row,
+              'arguments':{'operation_id':'wizard-refusal-op','observation_id':'obs'+str(prior),
+                           'action':{'verb':verb,'ref':ref,'expected_stage':'done'}}}
+        if finish:
+            result={'status':'FAILED','action_key':'request.validate','operation_id':None,'phase':'request_rejected',
+                    'request_rejected':True,'effect_possible':False,'trace':[],'error':{'code':'REQUEST_REJECTED'},
+                    'output':{'operation':{'state':'idle','operation_id':None,'cleanup_confirmed':True,'effect_state':'none'}}}
+            # The corrected dispatch reuses the ID, exactly as in the live receipt.
+            call['arguments']['operation_id']=data['tools'][index]['result']['operation_id']
+            data['calls'][index]['arguments']['operation_id']=call['arguments']['operation_id']
+        else:
+            result={'status':'NOT_APPLIED','action_key':'ui.act','operation_id':'wizard-refusal-op','phase':'preconditions',
+                    'effect_possible':False,'cleanup_complete':True,'error':{'code':'UI_EPOCH_CHANGED'},
+                    'trace':[{'event':'ui_action_failed','code':'UI_EPOCH_CHANGED'}],
+                    'output':copy.deepcopy(data['tools'][prior]['result']['output'])}
+            data['events'].append({'phase':'completed','operation_id':'wizard-refusal-op','outcome':copy.deepcopy(result)})
+        data['calls'].append(call);data['tools'].append({**call,'row':row+1,'result':result})
+        if finish:
+            for record in data['calls']+data['tools']:
+                if record['row']>=row+2:record['row']+=2
+            read={'session_id':'s','tool_call_id':'fresh-done','tool':'dock_workspace_observe','row':row+2,'arguments':{}}
+            state=copy.deepcopy(data['tools'][prior]['result']['output']);state['observation_id']='fresh-done'
+            raw={'status':'SUCCEEDED','operation_id':'fresh-done-op','output':state}
+            data['calls'].append(read);data['tools'].append({**read,'row':row+3,'result':raw})
+            data['events'].append({'phase':'observation_completed','operation_id':'fresh-done-op','outcome':copy.deepcopy(raw)})
+            data['calls'][index]['arguments']['observation_id']='fresh-done'
+        return data
+
+    def test_next_and_finish_proven_pre_effect_refusals_preserve_roundtrip(self):
+        for finish in (False,True):
+            with self.subTest(finish=finish):
+                proofs=self.diagnose(self.wizard_refusal_fixture(finish))
+                self.assertEqual(len(proofs),1)
+                self.assertEqual(proofs[0]['pre_effect_rejections'],['wizard-refusal'])
+
+    def test_no_effect_reply_can_issue_fresh_ref_without_becoming_transition(self):
+        for mode in ('valid','unbound','effect','duplicate','foreign'):
+            with self.subTest(mode=mode):
+                data=self.wizard_refusal_fixture()
+                reply=next(t for t in data['tools'] if t['tool_call_id']=='wizard-refusal')
+                event=next(e for e in data['events'] if e.get('operation_id')=='wizard-refusal-op')
+                reply['result']['output']['observation_id']='fresh-refusal-page'
+                event['outcome']['output']['observation_id']='fresh-refusal-page'
+                data['calls'][3]['arguments']['observation_id']='fresh-refusal-page'
+                if mode=='unbound':reply['result']['output']['wizard']['root_ref']='foreign-root'
+                if mode=='effect':reply['result']['effect_possible']=True
+                if mode=='duplicate':data['events'].append(copy.deepcopy(event))
+                if mode=='foreign':reply['session_id']='foreign'
+                proofs=self.diagnose(data)
+                self.assertEqual(len(proofs),int(mode=='valid'))
+                if proofs:self.assertNotIn('wizard-refusal-op',proofs[0]['operations'])
+
+    def test_epoch_refusal_accepts_only_origin_root_slash_projection(self):
+        data=self.wizard_refusal_fixture()
+        reply=next(t for t in data['tools'] if t['tool_call_id']=='wizard-refusal')
+        raw=next(e['outcome'] for e in data['events'] if e.get('operation_id')=='wizard-refusal-op')
+        original=reply['result']['output']['origin'].rstrip('/')
+        for result in (reply['result'],raw):result['output']['origin']=original+'/'
+        self.assertEqual(len(self.diagnose(data)),1)
+        for changed in (original+'/other',original+'//',original+'?x=1',original+'#x',
+                        original.replace('://','://other.'),original.replace('http:','https:'),
+                        original.replace('://','://user@'),None):
+            with self.subTest(origin=changed):
+                altered=copy.deepcopy(data)
+                next(t for t in altered['tools'] if t['tool_call_id']=='wizard-refusal')['result']['output']['origin']=changed
+                next(e for e in altered['events'] if e.get('operation_id')=='wizard-refusal-op')['outcome']['output']['origin']=changed
+                self.assertEqual(self.diagnose(altered),[])
+
+    def test_wizard_refusal_requires_exact_issued_control_context_and_no_effect(self):
+        modes=('effect','pending','duplicate_reply','duplicate_call','duplicate_event','foreign_session','overlap',
+               'unissued','wrong_ref','wrong_verb','wrong_next','extra_field','wrong_tid','disabled','wrong_root',
+               'wrong_stage','wrong_owner','wrong_origin','wrong_build','wrong_document','unbound')
+        for finish in (False,True):
+            for mode in modes:
+                with self.subTest(finish=finish,mode=mode):
+                    data=self.wizard_refusal_fixture(finish);prior=3 if finish else 2
+                    call=next(c for c in data['calls'] if c['tool_call_id']=='wizard-refusal')
+                    reply=next(t for t in data['tools'] if t['tool_call_id']=='wizard-refusal')
+                    if mode=='effect':reply['result']['effect_possible']=True
+                    if mode=='pending':reply['result']['status']='AMBIGUOUS'
+                    if mode=='duplicate_reply':data['tools'].append(copy.deepcopy(reply))
+                    if mode=='duplicate_call':data['calls'].append(copy.deepcopy(call))
+                    if mode=='duplicate_event':data['events'].append(copy.deepcopy(data['events'][4 if finish else -1]))
+                    if mode=='foreign_session':call['session_id']=reply['session_id']='other'
+                    if mode=='overlap':reply['row']=data['calls'][4 if finish else 3]['row']
+                    if mode=='unissued':call['arguments']['observation_id']='other'
+                    if mode=='wrong_ref':call['arguments']['action']['ref']='other'
+                    if mode=='wrong_verb':call['arguments']['action']['verb']='click'
+                    if mode=='wrong_next':call['arguments']['action']['expected_stage']='text_import_file'
+                    if mode=='extra_field':call['arguments']['action']['text']='unexpected'
+                    if mode=='unbound':data['events'].pop(4 if finish else -1)
+                    for outcome in (data['tools'][prior]['result'],data['events'][prior]['outcome']):
+                        state=outcome['output'];element=state['ui']['elements'][0];wizard=state['wizard']
+                        if mode=='wrong_tid':element['tid']='MF;TF-1;WizrdMCF;btnBack'
+                        if mode=='disabled':element['enabled']=False
+                        if mode=='wrong_root':element['wizard_finish' if finish else 'wizard_step']['root_ref']='other'
+                        if mode=='wrong_stage':wizard['stage']='calculator'
+                        if mode=='wrong_owner':wizard['owner_context']['node']['label']='other'
+                        if mode=='wrong_origin':state['origin']='https://other.invalid/'
+                        if mode=='wrong_build':state['loginom_build']='other'
+                        if mode=='wrong_document':state['dom_epoch']['document']='other'
+                    self.assertEqual(self.diagnose(data),[])
+
+    def test_finish_refusal_requires_fresh_read_and_single_bound_dispatch(self):
+        for mode in ('old_observation','foreign_event','unknown_phase','duplicate_prepared','different_parameters',
+                     'missing_fresh','changed_completion','unknown_mutation'):
+            with self.subTest(mode=mode):
+                data=self.wizard_refusal_fixture(True);op=data['tools'][4]['result']['operation_id']
+                if mode=='old_observation':data['calls'][4]['arguments']['observation_id']='obs3'
+                if mode=='missing_fresh':data['events']=[e for e in data['events'] if e['operation_id']!='fresh-done-op']
+                if mode in ('foreign_event','unknown_phase','duplicate_prepared','different_parameters'):
+                    event={'phase':'prepared','operation_id':op}
+                    if mode=='foreign_event':event['session_id']='other'
+                    if mode=='unknown_phase':event['phase']='other'
+                    if mode=='different_parameters':event['parameters']={}
+                    data['events'].append(event)
+                    if mode=='duplicate_prepared':data['events'].append(copy.deepcopy(event))
+                if mode=='changed_completion':
+                    for outcome in (next(t for t in data['tools'] if t['tool_call_id']=='fresh-done')['result'],
+                                    next(e for e in data['events'] if e['operation_id']=='fresh-done-op')['outcome']):
+                        outcome['output']['wizard']['completion']['fields']['label']['value']='different'
+                if mode=='unknown_mutation':
+                    data['calls'].append({'row':11,'session_id':'s','tool_call_id':'unknown','tool':'dock_action_run','arguments':{}})
+                self.assertEqual(self.diagnose(data),[])
+
+    def test_wizard_refusal_cannot_reuse_older_issued_observation_or_changed_result(self):
+        for mode in ('old_issued','changed_result','unknown_error'):
+            data=self.wizard_refusal_fixture()
+            failed=next(t for t in data['tools'] if t['tool_call_id']=='wizard-refusal')
+            if mode=='old_issued':
+                row=next(c for c in data['calls'] if c['tool_call_id']=='wizard-refusal')['row']
+                for record in data['calls']+data['tools']:
+                    if record['row']>=row:record['row']+=2
+                read={'row':row,'session_id':'s','tool_call_id':'newer','tool':'dock_workspace_observe','arguments':{}}
+                raw=copy.deepcopy(data['tools'][2]['result']);raw['operation_id']='newer-op';raw['output']['observation_id']='newer'
+                data['calls'].append(read);data['tools'].append({**read,'row':row+1,'result':raw})
+                data['events'].append({'phase':'observation_completed','operation_id':'newer-op','outcome':copy.deepcopy(raw)})
+            else:
+                if mode=='changed_result':failed['result']['output']['wizard']['root_ref']='other'
+                else:failed['result']['error']['code']='UNKNOWN'
+                next(e for e in data['events'] if e['operation_id']=='wizard-refusal-op')['outcome']=copy.deepcopy(failed['result'])
+            self.assertEqual(self.diagnose(data),[],mode)

@@ -49,6 +49,19 @@ export function createObservationPages({ maxBytes = 12000, maxRecords = 32, capa
     // Palette paging must lead with the currently reachable rows after scroll,
     // while retaining offscreen entries on subsequent pages for inventory.
     if (scope === 'palette') uiElements.sort((a,b) => Number(b.interaction?.state === 'point_observed') - Number(a.interaction?.state === 'point_observed'));
+    // A wizard's draft metadata is repeated on every page. Deliver its actual
+    // forward/finish and editable controls before the larger schema inventory,
+    // so the first page contains usable refs rather than metadata-only refs.
+    // Sorting never manufactures a record or bypasses issuance/allowed actions.
+    else if (snapshot.wizard?.status === 'observed' && ['all', 'dialogs'].includes(scope)) {
+      const rank = item => item.signature?.dialog_ref || item.role === 'menuitem' ? -2
+        : item.wizard_combo?.kind === 'picker' && item.wizard_combo.field?.scope === 'import_column' ? -1
+        : item.allowed_actions?.includes('select_wizard_option') ? 0
+        : item.allowed_actions?.includes('finish_wizard') || item.wizard_step?.direction === 'next' && item.allowed_actions?.includes('wizard_step') ? 0.5
+        : item.wizard_field && item.allowed_actions?.includes('set_wizard_field') ? 1
+        : item.allowed_actions?.some(action => ['wizard_step', 'finish_wizard'].includes(action)) ? 2 : 3;
+      uiElements.sort((a,b) => rank(a) - rank(b));
+    }
     for (const item of uiElements) {
       const palette = /;ModelForm;colVendors_Компоненты>/.test(item.tid ?? '');
       if (scope === 'palette' && !palette || scope === 'graph' && !['graph', 'graph_editor'].includes(item.scope)
@@ -63,7 +76,7 @@ export function createObservationPages({ maxBytes = 12000, maxRecords = 32, capa
   };
   const render = (entry, offset) => {
     const snapshot = entry.snapshot;
-    const output = Object.fromEntries(['origin', 'authenticated', 'loginom_build', 'workflow_ref', 'active_identity', 'active_tab_ref', 'navigation_context', 'graph_identity', 'package_identity', 'workarea', 'verification_required', 'gesture_applied', 'scan', 'dom_epoch', 'observation_root', 'observation_kind', 'file_storage', 'observation_filter', 'wizard']
+    const output = Object.fromEntries(['origin', 'authenticated', 'loginom_build', 'workflow_ref', 'active_identity', 'active_tab_ref', 'navigation_context','node_context', 'graph_identity', 'package_identity', 'workarea', 'verification_required', 'gesture_applied', 'scan', 'dom_epoch', 'observation_root', 'observation_kind', 'file_storage', 'observation_filter', 'wizard', 'table_settings', 'table_coverage', 'process_console']
       .filter(key => key in snapshot).map(key => [key, structuredClone(snapshot[key])]));
     output.operation = compactOperation(snapshot.operation);
     if (snapshot.recovery) output.recovery = compactOperation(snapshot.recovery);

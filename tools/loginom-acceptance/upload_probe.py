@@ -1,5 +1,8 @@
 """Declared synthetic upload probe; never a complete data-pipeline verdict."""
+from prepare_binding import successful_prepare
 import re
+import copy
+import rename_effect
 from destinations import storage_segments, render_goal
 
 FIXTURE = 'fixtures/data-pipeline/sales.csv'
@@ -20,6 +23,42 @@ def prompt(template, package_path, directory, run_id):
     return render_goal(template, package_path, directory).replace('__UPLOAD_NAME__', artifact['name'])
 
 
+def delivered_directory(reads, evidence, call, directory):
+    """One issued snapshot can be delivered through multiple authenticated pages."""
+    if not reads or any(r.get('session_id') != call.get('session_id') or
+            r['result'].get('output', {}).get('file_storage', {}).get('directory') != directory for r in reads):
+        return False
+    if len(reads) == 1:
+        return True
+    try:
+        previous = None
+        revision = reads[0]['result']['output']['observation_revision']
+        for read in sorted(reads, key=lambda r: r['row']):
+            result = copy.deepcopy(read['result'])
+            result['output'].pop('operation', None)
+            page = result['output']['page']
+            records = [e for e in evidence['events'] if e.get('phase') == 'observation_completed'
+                       and e.get('operation_id') == result.get('operation_id')]
+            calls = [c for c in evidence['calls'] if c.get('session_id') == read['session_id']
+                     and c.get('tool_call_id') == read['tool_call_id'] and c.get('tool') == read['tool']
+                     and c['row'] < read['row']]
+            if (len(records) != 1 or len(calls) != 1
+                    or result['output']['observation_revision'] != revision
+                    or not rename_effect.journal_equal(records[0]['outcome'], result)):
+                return False
+            if previous is None:
+                if page['offset'] != 0 or calls[0]['arguments'].get('cursor'):
+                    return False
+            elif (page['offset'] != previous['offset'] + previous['returned']
+                  or calls[0]['arguments'].get('cursor') != previous['next_cursor']
+                  or page['total_records'] != previous['total_records']):
+                return False
+            previous = page
+        return True
+    except (KeyError, TypeError, ValueError):
+        return False
+
+
 def audit(evidence, checks, request, prefix, mutations, storage_audit):
     """Prove one input submission and retained uncertainty, not server success."""
     def check(name, passed):
@@ -38,8 +77,8 @@ def audit(evidence, checks, request, prefix, mutations, storage_audit):
     before = {**evidence, 'calls': [c for c in calls if c['row'] < call['row']],
               'tools': [t for t in tools if t['row'] < call['row']]}
     storage_audit(before, checks, request['storage_directory'])
-    prepared = [t['result'] for t in before['tools'] if t['tool'] == prefix+'dock_prepare']
-    artifacts = prepared[0].get('input_artifacts', []) if len(prepared) == 1 else []
+    prepared = successful_prepare(evidence, prefix, call['session_id'], call['row'])
+    artifacts = prepared.get('input_artifacts', []) if prepared else []
     matching = [a for a in artifacts if a.get('artifact_id') == args.get('artifact_id')]
     artifact = matching[0] if len(matching) == 1 else {}
     grant = artifact.get('upload', {})
@@ -51,7 +90,7 @@ def audit(evidence, checks, request, prefix, mutations, storage_audit):
           and args.get('upload_grant_id') == grant.get('grant_id'))
     reads = [t for t in before['tools'] if t['tool'] == prefix+'dock_workspace_observe'
              and t['result'].get('output', {}).get('observation_id') == args.get('observation_id')]
-    check('upload_uses_delivered_destination', len(reads) == 1 and reads[0]['result'].get('output', {}).get('file_storage', {}).get('directory') == expected['upload']['directory'])
+    check('upload_uses_delivered_destination', delivered_directory(reads, evidence, call, expected['upload']['directory']))
     replies = [t for t in tools if t['session_id'] == call['session_id'] and t['tool_call_id'] == call['tool_call_id']
                and t['tool'] == call['tool'] and t['row'] > call['row']]
     result = replies[0]['result'] if len(replies) == 1 else {}

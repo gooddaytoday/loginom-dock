@@ -47,7 +47,7 @@ class DataPipelineTest(unittest.TestCase):
         proof=report['wizard_settings_readback_diagnostics']
         self.assertTrue(proof['wizard_settings_readback'],proof)
         self.assertFalse(proof['source_identity_verified']);self.assertFalse(proof['package_persistence_verified'])
-        self.assertEqual(report['missing_domain_verifiers'],list(data_pipeline.DOMAIN_GATES[1:]))
+        self.assertEqual(report['missing_domain_verifiers'],list(data_pipeline.DOMAIN_GATES[2:]))
         self.assertFalse(report['all_assertions_passed'])
 
     def test_wizard_gate_rejects_unbound_or_incomplete_roundtrip(self):
@@ -198,7 +198,7 @@ class DataPipelineTest(unittest.TestCase):
         report=data_pipeline.audit(evidence,[],request,PREFIX,MUTATIONS,file_storage_inspect,rejected_before_browser)
         self.assertTrue(report['transfer_verified'],report)
         self.assertFalse(report['all_assertions_passed'])
-        self.assertEqual(report['missing_domain_verifiers'],list(data_pipeline.DOMAIN_GATES[1:]))
+        self.assertEqual(report['missing_domain_verifiers'],list(data_pipeline.DOMAIN_GATES[2:]))
 
     def test_mutation_before_resolved_inspection_does_not_prove_transfer(self):
         evidence,request=UploadVerifyTest().fixture()
@@ -251,14 +251,14 @@ class DataPipelineTest(unittest.TestCase):
             self.assertIsNone(data_pipeline.declared_source_path(changed))
         self.assertIsNone(data_pipeline.declared_source_path({}))
 
-    def test_short_import_goal_pins_upload_and_never_claims_full_p3(self):
-        template=Path(data_pipeline.__file__).with_name('goals').joinpath('import-roundtrip.txt').read_text()
-        prompt=data_pipeline.upload_probe.prompt(template,'/analyst/packages/a.lgp','/analyst','20260905-120000-1234abcd')
-        self.assertNotIn('__',prompt)
-        self.assertIn('/analyst/Dock-upload-20260905-120000-1234abcd.csv',prompt)
-        self.assertIn('finish_wizard',prompt);self.assertIn('open_wizard',prompt)
-        evidence,request=UploadVerifyTest().fixture();request['goal_id']='import-roundtrip'
-        report=data_pipeline.audit(evidence,[],request,PREFIX,MUTATIONS,file_storage_inspect,rejected_before_browser)
-        self.assertEqual(report['goal'],'import-roundtrip')
-        self.assertFalse(report['all_assertions_passed'])
-        self.assertEqual(report['missing_domain_verifiers'],list(data_pipeline.DOMAIN_GATES[1:]))
+    def test_partial_goals_pin_upload_and_never_claim_full_p3(self):
+        for goal in ('import-roundtrip','calculator-roundtrip'):
+            template=Path(data_pipeline.__file__).with_name('goals').joinpath(goal+'.txt').read_text()
+            prompt=data_pipeline.upload_probe.prompt(template,'/analyst/packages/a.lgp','/analyst','20260905-120000-1234abcd')
+            self.assertNotIn('__',prompt)
+            self.assertIn('/analyst/Dock-upload-20260905-120000-1234abcd.csv',prompt)
+            evidence,request=UploadVerifyTest().fixture();request['goal_id']=goal
+            report=data_pipeline.audit(evidence,[],request,PREFIX,MUTATIONS,file_storage_inspect,rejected_before_browser)
+            self.assertEqual(report['goal'],goal)
+            self.assertFalse(report['all_assertions_passed'])
+            self.assertEqual(report['missing_domain_verifiers'],list(data_pipeline.DOMAIN_GATES[2:]))

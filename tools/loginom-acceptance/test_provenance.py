@@ -75,17 +75,19 @@ class ProvenanceTest(unittest.TestCase):
             config.write_text('{"api_key":"synthetic-not-real"}')
             args = SimpleNamespace(run=False, timeout=1200, max_turns=60, manifest_uri=None, manifest_sha256=None,
                                    hermes_home=root, dock_config=config, node=root / "node", browsers=root / "browsers",
-                                   hermes=root / "hermes", output=root / "preflight.json")
+                                   hermes=root / "hermes", hermes_python=root / 'python', hermes_source=root / 'source',
+                                   output=root / "preflight.json")
             prior_umask = os.umask(0o077)
             try:
                 with patch.object(run.sys, "platform", "darwin"), patch.object(run, "connection", return_value={"providers":{"openai-codex":{"tokens":{"access_token":"synthetic"}}}}), \
                      patch.object(run, "preflight", return_value={"source": {}, "runtime": {"client_revision": "a" * 64}}), \
                      patch.object(run.subprocess, "run", side_effect=[SimpleNamespace(stdout='{"node":"24.19.0"}'),
-                        SimpleNamespace(stdout="Hermes Agent v0.21.0 (fixture)")]) as process, \
+                        SimpleNamespace(stdout="Hermes Agent v0.21.0 (fixture)"),
+                        SimpleNamespace(stdout="Hermes Agent v0.21.0 (fixture)",returncode=0)]) as process, \
                      patch.object(run.subprocess, "Popen") as model:
                     self.assertEqual(run.execute(args), 0)
                     model.assert_not_called()
-                    self.assertEqual(process.call_count, 2)
+                    self.assertEqual(process.call_count, 3)
                     self.assertIn("runtime-check.mjs", process.call_args_list[0].args[0][1])
                     self.assertEqual(process.call_args_list[1].args[0][-1], "--version")
                 report = json.loads(args.output.read_text())

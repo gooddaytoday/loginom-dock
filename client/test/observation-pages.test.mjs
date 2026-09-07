@@ -221,3 +221,34 @@ test('diagnostic mutation counters refresh without reviving a changed guard epoc
   fresh.output.dom_epoch.revision=1;
   assert.throws(()=>pages.next(next.output.page.next_cursor,fresh),/Workspace changed/);
 });
+
+test('wizard paging delivers editable settings before preview inventory without issuing metadata refs', () => {
+  const source = fixture(40);
+  source.output.wizard = {status:'observed', settings:{fields:{null_marker:{input_ref:'null-input'}, absent:{input_ref:'metadata-only'}}}};
+  const add = (ref, properties) => source.output.ui.elements.push({ref, scope:'dialog', ...properties});
+  add('next-button', {wizard_step:{direction:'next'},allowed_actions:['wizard_step']});
+  add('disabled-input', {wizard_field:{name:'disabled'}, allowed_actions:[]});
+  add('null-input', {wizard_field:{name:'null_marker'}, allowed_actions:['set_wizard_field']});
+  add('decimal-input', {wizard_field:{name:'decimal_separator'}, allowed_actions:['set_wizard_field']});
+  add('option', {allowed_actions:['select_wizard_option']});
+  const pages = createObservationPages({maxRecords:3});
+  let current = pages.retain(structuredClone(source));
+  const id = current.output.observation_id;
+  assert.deepEqual(current.output.ui.elements.map(e=>e.ref), ['option','next-button','null-input']);
+  pages.assertIssued(id,{ref:'next-button'});
+  pages.assertIssued(id,{ref:'null-input'});
+  for (const ref of ['decimal-input','disabled-input','metadata-only']) assert.throws(()=>pages.assertIssued(id,{ref}), /not been delivered/);
+  const refs = [];
+  do {
+    assert.ok(Buffer.byteLength(JSON.stringify(current.output)) <= 12000);
+    refs.push(...current.output.ui.elements.map(e=>e.ref));
+    const cursor = current.output.page.next_cursor;
+    if (!cursor) break;
+    current = pages.next(cursor, structuredClone(source));
+  } while (true);
+  assert.equal(refs[3], 'decimal-input');
+  assert.equal(new Set(refs).size,source.output.ui.elements.length);
+  assert.deepEqual(new Set(refs),new Set(source.output.ui.elements.map(e=>e.ref)));
+  assert.throws(()=>pages.assertIssued(id,{ref:'metadata-only'}), /not been delivered/);
+  assert.deepEqual(pages.get(id).ui.elements, source.output.ui.elements);
+});

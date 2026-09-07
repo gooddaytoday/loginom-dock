@@ -19,6 +19,35 @@ test('storage-name lookup rejects invalid combinations before browser work', asy
     {cursor:'cursor',storageName:'data'}]) await assert.rejects(()=>engine.observe(args),/storage_name/);
 });
 
+test('wizard scope narrows only a unique observed current wizard and journals the chosen root',async()=>{
+ for(const mode of ['valid','absent','duplicate','foreign','unbound','detached']) {
+  const page=linkPage(),evaluate=page.evaluate,reads=[],records=[];
+  page.evaluate=async function(fn,arg){
+   if(arg && 'discoverRoots' in arg){
+    reads.push({...arg});
+    if(arg.rootRef && mode==='detached'){const e=new Error('detached');e.code='UI_ROOT_STALE';throw e;}
+    const s=await evaluate.call(this,fn,arg);
+    s.wizard={status:mode==='absent'?'absent':'observed',root_ref:'ui-wizard',stage:'text_import_file'};
+    if(arg.discoverRoots){s.observation_kind='roots';s.ui.elements=[{ref:mode==='unbound'?'ui-other':'ui-wizard',
+      tid:(mode==='foreign'?'MF;TF-2':s.workflow_ref.prefix)+';WizrdMCF',kind:'region',allowed_actions:[]}];
+      if(mode==='duplicate')s.ui.elements.push({...s.ui.elements[0]});
+    }else if(arg.rootRef)s.observation_root={ref:arg.rootRef};
+    return s;
+   }
+   return evaluate.call(this,fn,arg);
+  };
+  const engine=runtime(page,{onRecord:async r=>records.push(r)}),out=await engine.observe({scope:'wizard'});
+  assert.equal(records.length,1,mode);assert.equal(page.events.filter(e=>e==='click').length,0);
+  if(['valid','detached'].includes(mode)){
+   assert.equal(reads[0].discoverRoots,true);assert.equal(reads[1].rootRef,'ui-wizard');
+   assert.equal(out.trace.at(-1).reason,'unique_observed_wizard');
+   if(mode==='valid'){assert.equal(out.output.observation_root.ref,'ui-wizard');assert.equal(out.output.page.scope,'all');}
+   else assert.equal(out.status,'NOT_APPLIED');
+  }else{assert.equal(reads.length,1,mode);assert.equal(out.output.page.scope,'roots');assert.equal(out.trace.at(-1).reason,'unique_wizard_not_observed');}
+  assert.equal(records[0].outcome.trace.at(-1).requested_scope,'wizard');
+ }
+});
+
 function partialInputAdd() {
   const page = linkPage();
   page.nodes[1].ports = ['Input_Add', 'Input_Data-0', 'Input_Data-1'];

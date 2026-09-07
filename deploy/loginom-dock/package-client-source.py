@@ -49,6 +49,7 @@ INDIVIDUAL = {
     "executor/schemas/replay-acceptance.schema.json",
     "landing/instructions.mjs",
     "landing/release.json",
+    "tools/loginom-acceptance/rename_effect.py",
 }
 
 def is_client_source(name):
