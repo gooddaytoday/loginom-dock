@@ -6,7 +6,7 @@
         "scripts/launch.sh",
         "mcp",
         "codex",
-        "0.1.0-rc.2"
+        "0.1.0-rc.5"
       ],
       "cwd": ".",
       "startup_timeout_sec": 90,

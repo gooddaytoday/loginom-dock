@@ -7,9 +7,10 @@ import { homedir } from 'node:os';
 import { spawnSync } from 'node:child_process';
 import { createHash, randomUUID } from 'node:crypto';
 import { installBundle, rollbackBundle, verifyBundle, restoreRuntime } from '../lib/install.mjs';
-import { nativeSnapshot, validateNativeInstall, registerNative, restoreNative, unregisterNative } from '../lib/native.mjs';
+import { nativeSnapshot, validateNativeInstall, registerNative, restoreNative, unregisterNative, createNativeCommand } from '../lib/native.mjs';
 import { loadConfig } from '../lib/config.mjs';
-import { agentVersionSupported, supportedAgents, diagnoseConnection } from '../lib/diagnostics.mjs';
+import { agentVersionGuidance, diagnoseConnection } from '../lib/diagnostics.mjs';
+import { createAgentLauncher } from '../lib/agent-command.mjs';
 import { privateDirectory, privatePath, readRuntimePointer } from '../lib/platform.mjs';
 
 process.umask(0o077);
@@ -56,6 +57,8 @@ try {
     ? resolve(values['hermes-home'] || process.env.HERMES_HOME || join(homedir(), '.hermes'))
     : resolve(process.env.CODEX_HOME || join(homedir(), '.codex'));
   const nativeEnv = { ...process.env, HERMES_HOME: profile, LOGINOM_DOCK_HOME: root };
+  const agentLauncher = createAgentLauncher(values.agent || '', { env: nativeEnv });
+  const runNative = createNativeCommand(agentLauncher);
   const recordFile = join(root, 'registration-' + createHash('sha256').update(values.agent + ':' + profile).digest('hex').slice(0, 16) + '.json');
   if (!values['runtime-only'] && root !== join(homedir(), '.loginom-dock')) {
     guidance = 'Native-плагины этой версии используют ~/.loginom-dock. --home поддержан для runtime-only проверок.';
@@ -65,7 +68,7 @@ try {
     if (!['codex', 'hermes'].includes(values.agent)) throw new Error('Specify the agent to change');
     stage = values.uninstall ? 'удаление плагина Dock' : 'восстановление плагина Dock';
     if (values.uninstall) {
-      await unregisterNative({ agent: values.agent, env: nativeEnv });
+      await unregisterNative({ agent: values.agent, env: nativeEnv, run: runNative });
       await rm(recordFile, { force: true });
       console.log('Плагин и подключение Dock удалены из выбранного агента. Локальные профили, артефакты, очередь и общая история сохранены.');
     } else {
@@ -74,7 +77,7 @@ try {
         await restoreRuntime(root, record.previousRelease);
         if (record.hadConfig) await writeFile(join(root, 'config.json'), await readFile(recordFile + '.config-before'), { mode: 0o600 });
         else await rm(join(root, 'config.json'), { force: true });
-        await restoreNative({ agent: values.agent, env: nativeEnv, before: record.before });
+        await restoreNative({ agent: values.agent, env: nativeEnv, run: runNative, before: record.before });
         if (record.previousRecord) await saveRecord(recordFile, record.previousRecord);
         else await rm(recordFile, { force: true });
         console.log('Прерванная установка отменена; прежняя регистрация Dock восстановлена.');
@@ -82,15 +85,15 @@ try {
       }
       if (record.state !== 'installed' || !record.previousRelease) throw new Error('No completed installation with a previous release');
       await verifyBundle(join(root, record.previousRelease), { checkNode: false });
-      const currentNative = await nativeSnapshot(values.agent, nativeEnv);
+      const currentNative = await nativeSnapshot(values.agent, nativeEnv, runNative);
       const currentRelease = await readRuntimePointer(root);
       try {
         await restoreRuntime(root, record.previousRelease);
-        await restoreNative({ agent: values.agent, env: nativeEnv, before: record.before });
+        await restoreNative({ agent: values.agent, env: nativeEnv, run: runNative, before: record.before });
         await saveRecord(recordFile, { ...record, before: currentNative, previousRelease: currentRelease, release: record.previousRelease });
       } catch (error) {
         await restoreRuntime(root, currentRelease);
-        await restoreNative({ agent: values.agent, env: nativeEnv, before: currentNative });
+        await restoreNative({ agent: values.agent, env: nativeEnv, run: runNative, before: currentNative });
         throw error;
       }
       console.log('Предыдущие runtime и native-плагин Dock восстановлены. Credentials и уже запущенные сессии сохранены.');
@@ -100,12 +103,10 @@ try {
   if (!values.bundle || !['codex', 'hermes'].includes(values.agent)) throw new Error('Specify the release bundle and agent');
   const bundle = resolve(values.bundle), manifest = await verifyBundle(bundle);
   stage = 'проверка установленного агента';
-  const agentVersion = spawnSync(values.agent, ['--version'], { encoding: 'utf8' });
-  if (agentVersion.error || agentVersion.status !== 0 || !agentVersionSupported(values.agent, agentVersion.stdout)) {
-    guidance = `Требуется ${values.agent} версии не ниже ${supportedAgents[values.agent]} в поддерживаемой основной ветке.`;
-    throw new Error('Unsupported agent');
-  }
-  const before = values['runtime-only'] ? null : await nativeSnapshot(values.agent, nativeEnv);
+  const agentVersion = agentLauncher.run(['--version'], { encoding: 'utf8', windowsHide: true });
+  guidance = agentVersionGuidance(values.agent, agentVersion);
+  if (guidance) throw new Error('Agent preflight failed');
+  const before = values['runtime-only'] ? null : await nativeSnapshot(values.agent, nativeEnv, runNative);
   if (before) validateNativeInstall(values.agent, manifest, before);
   if (before) {
     const saved = await readFile(recordFile, 'utf8').then(JSON.parse).catch(error => { if (error.code !== 'ENOENT') throw error; return null; });
@@ -152,7 +153,7 @@ try {
   const previousRelease = await readRuntimePointer(root);
   const previousConfig = await readFile(join(root, 'config.json')).catch(error => { if (error.code !== 'ENOENT') throw error; return null; });
   const oldRecord = await readFile(recordFile).catch(error => { if (error.code !== 'ENOENT') throw error; return null; });
-  recovery = { root, before, nativeEnv, agent: values.agent, previousRelease, previousConfig, recordFile, oldRecord, nativeStarted: false };
+  recovery = { root, before, nativeEnv, runNative, agent: values.agent, previousRelease, previousConfig, recordFile, oldRecord, nativeStarted: false };
   if (before) {
     if (previousConfig) await writeFile(recordFile + '.config-before', previousConfig, { mode: 0o600 });
     await saveRecord(recordFile, { state: 'pending', agent: values.agent, profile, before, previousRelease,
@@ -169,7 +170,7 @@ try {
   if (!values['runtime-only']) {
     stage = 'регистрация плагина и подключения агента';
     recovery.nativeStarted = true;
-    await registerNative({ agent: values.agent, destination: installed.destination, root, manifest, env: nativeEnv, before });
+    await registerNative({ agent: values.agent, destination: installed.destination, root, manifest, env: nativeEnv, run: runNative, before });
     const prior = oldRecord ? JSON.parse(oldRecord) : null;
     // Reinstalling an identical version must not erase the useful rollback target.
     const same = prior?.state === 'installed' && prior.release === 'releases/' + installed.manifest.id;
@@ -192,7 +193,7 @@ try {
       await restoreRuntime(recovery.root, recovery.previousRelease);
       if (recovery.previousConfig) await writeFile(join(recovery.root, 'config.json'), recovery.previousConfig, { mode: 0o600 });
       else await rm(join(recovery.root, 'config.json'), { force: true });
-      if (recovery.nativeStarted) await restoreNative({ agent: recovery.agent, env: recovery.nativeEnv, before: recovery.before });
+      if (recovery.nativeStarted) await restoreNative({ agent: recovery.agent, env: recovery.nativeEnv, run: recovery.runNative, before: recovery.before });
       if (recovery.oldRecord) await writeFile(recovery.recordFile, recovery.oldRecord, { mode: 0o600 });
       else await rm(recovery.recordFile, { force: true });
       console.error('Прежняя установка Dock восстановлена после ошибки.');

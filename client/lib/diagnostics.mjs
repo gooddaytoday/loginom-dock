@@ -11,6 +11,17 @@ export function agentVersionSupported(agent, output) {
   return actual[1] > minimum[1] || (actual[1] === minimum[1] && actual[2] >= minimum[2]);
 }
 
+export function agentVersionGuidance(agent, result) {
+  const selected = result.executable ? ` Команда: ${JSON.stringify(result.executable)}.` : '';
+  if (result.error) return `Не удалось запустить ${agent}: ${result.error.code || 'ошибка запуска'}. Проверьте установку агента и PATH.${selected}`;
+  if (result.status !== 0) return `${agent} --version завершился с кодом ${result.status}; сигнал: ${result.signal || 'нет'}.${selected}`;
+  if (!agentVersionSupported(agent, result.stdout)) {
+    const output = JSON.stringify(String(result.stdout || '').slice(0, 200));
+    return `Версия ${agent} не распознана или не поддерживается. Требуется не ниже ${supportedAgents[agent]} в поддерживаемой основной ветке.${selected} Ответ: ${output}.`;
+  }
+  return '';
+}
+
 export async function diagnoseConnection(config, { fetcher = fetch, manifest = () => skillTransport(config).manifest(),
   platform = process.platform, environment = process.env } = {}) {
   const displayAvailable = platform !== 'linux' || Boolean(environment.DISPLAY || environment.WAYLAND_DISPLAY);
