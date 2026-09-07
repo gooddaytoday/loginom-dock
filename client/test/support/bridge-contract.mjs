@@ -79,7 +79,7 @@ test('MCP application refusals remain typed normal content and the same connecti
     assert.equal(browserCalls,0);
     const available = await client.callTool({ name: 'dock_action_describe', arguments: {} });
     assert.notEqual(available.isError, true);
-    assert.deepEqual(JSON.parse(available.content[0].text).available_actions, ['node.add', 'link.create', 'package.save_as']);
+    assert.deepEqual(JSON.parse(available.content[0].text).available_actions, ['node.add', 'link.create', 'package.save_as', 'node.configure_text_import']);
     assert.equal(browserCalls, 0);
 
     const bootstrap = await client.callTool({ name: 'dock_workspace_observe', arguments: { scope: 'bootstrap' } });
@@ -105,7 +105,7 @@ test('MCP application refusals remain typed normal content and the same connecti
     assert.equal(metadata.prepared, true);
     assert.deepEqual(metadata.input_artifacts,[admitted]);
     assert.equal(JSON.stringify(metadata.input_artifacts).includes(sourcePath),false);
-    assert.deepEqual(metadata.executor.available_actions, ['node.add', 'link.create', 'package.save_as']);
+    assert.deepEqual(metadata.executor.available_actions, ['node.add', 'link.create', 'package.save_as', 'node.configure_text_import']);
     assert.ok(prepared.content.some(block => block.type === 'text' && block.text.includes('dock_ui_action') && block.text.includes('supersede')));
     const beforeInvalid = browserCalls;
     for (const key of ['canvas.add_node', 'node.rename', 'workflow.create']) {
@@ -119,7 +119,7 @@ test('MCP application refusals remain typed normal content and the same connecti
       assert.equal(response.content.length, 2);
       assert.equal(response.content[1].type, 'text');
       assert.equal(Object.hasOwn(outcome, 'knowledge_context'), false);
-      assert.deepEqual(outcome.output.available_actions, ['node.add', 'link.create', 'package.save_as']);
+      assert.deepEqual(outcome.output.available_actions, ['node.add', 'link.create', 'package.save_as', 'node.configure_text_import']);
     }
     assert.equal(browserCalls, beforeInvalid);
     const succeeded = await client.callTool({ name: 'dock_action_run', arguments: { action_key: 'node.add', parameters: nodeParameters, operation_id: 'after-three-refusals' } });

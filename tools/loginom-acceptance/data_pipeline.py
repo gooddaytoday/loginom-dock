@@ -16,6 +16,7 @@ import settings_evidence
 import import_settings_evidence
 import import_roundtrip_evidence
 import calculator_evidence
+import node_procedure_evidence
 
 FIXTURES = tuple('fixtures/data-pipeline/'+name for name in ('sales.csv','expected.json','task.txt'))
 DOMAIN_GATES = ('wizard_settings_readback', 'calculator_expression_and_mappings',
@@ -148,6 +149,15 @@ def audit(evidence, checks, request, prefix, mutations, storage_audit, rejected_
     # Each implemented settings gate independently rebinds its receipts.
     # Remaining domain gates stay closed regardless of model summaries.
     expected=json.loads(Path(__file__).with_name('fixtures').joinpath('data-pipeline/expected.json').read_text())
+    if request.get('goal_id') == 'node-import-roundtrip':
+        check('node_import_pinned_fixture', fixture_schema(request, expected))
+        proof = node_procedure_evidence.audit_bound_operation(evidence, request, expected,
+            declared_source_path(request), prefix, transfer_passed)
+        check('node_import_internal_roundtrip', proof['passed'])
+        return {'all_assertions_passed': all(c['passed'] for c in checks), 'assertions': checks,
+                'goal': 'node-import-roundtrip', 'node_import_diagnostics': proof,
+                'acceptance_status': 'bounded_import_only',
+                'limitations': ['This goal does not accept P3, package persistence, execution or Calculator.']}
     roundtrips=import_roundtrip_evidence.diagnose(evidence,expected,prefix,expected_source_path=declared_source_path(request))
     wizard=wizard_readback(evidence,request,prefix,expected,roundtrips,transfer_passed)
     check('wizard_settings_readback',wizard['wizard_settings_readback'])

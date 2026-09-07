@@ -453,7 +453,7 @@ test('empty action discovery lists callable keys and both public schemas guide t
   const engine = runtime(page, { execute: code => { calls++; return page.execute(code); } });
   assert.doesNotThrow(() => validateActionParameters(actionDescribeTool.inputSchema, {}));
   const described = engine.describe();
-  assert.deepEqual(described.available_actions, ['node.add', 'link.create', 'package.save_as']);
+  assert.deepEqual(described.available_actions, ['node.add', 'link.create', 'package.save_as', 'node.configure_text_import']);
   assert.equal(described.observation_tool, 'dock_workspace_observe');
   assert.equal(described.ui_action_tool, 'dock_ui_action');
   assert.equal(calls, 0);
@@ -465,7 +465,7 @@ test('empty action discovery lists callable keys and both public schemas guide t
   assert.throws(() => validateActionParameters(actionDescribeTool.inputSchema, { action_key: 'canvas.add_node' }), /allowed value|enum|one of|not in/i);
   assert.throws(() => validateActionParameters(actionRunTool.inputSchema, { action_key: 'node.rename', parameters: {} }), /allowed value|enum|one of|not in/i);
   described.available_actions.push('made.up');
-  assert.equal(engine.describe().available_actions.length, 3);
+  assert.equal(engine.describe().available_actions.length, 4);
 });
 
 test('bad action names are bounded typed request feedback and do not prevent a subsequent valid action', async () => {

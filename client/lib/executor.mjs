@@ -4,6 +4,8 @@ import { actionDescribeTool, actionRunTool, assertActionOutcome, validateActionP
 import { makeWorkspaceUiCode, validateUiAction, uiActionSchema } from './workspace-ui.mjs';
 import { createObservationPages } from './observation-pages.mjs';
 import { makeWorkspaceBootstrapCode } from './workspace.mjs';
+import { createNodeProcedure } from './node-procedure.mjs';
+import { configureTextImportDraft, validateTextImportRequest } from './text-import-procedure.mjs';
 
 const identifier = { type: 'string', minLength: 1, maxLength: 128, pattern: '^[A-Za-z0-9._:-]+$' };
 const operationInspectTool = { name: 'dock_operation_inspect',
@@ -977,7 +979,7 @@ function browserReceipt(page, task, perform) {
     catch (error) { entry.state = 'unknown'; throw error; }
   })();
 }
-function withBrowserReceipt(body, options) {
+export function withBrowserReceipt(body, options) {
   return `async (page) => (${browserReceipt.toString()})(page, ${JSON.stringify(options)}, () => ${body})`;
 }
 
@@ -1024,7 +1026,60 @@ export function createActionRuntime({ pinned, execute, artifactStore, allowCandi
     operation.lastReceipt = { id, signature, action_key: key, operation_id: id };
     return { receipt_namespace: receiptNamespace, receipt_id: id, receipt_signature: signature };
   };
-  const invoke = async (operation, mode, { receiptId, ...options } = {}) => {
+  const invoke = async (operation, mode, { receiptId, stopSignal, ...options } = {}) => {
+    if (operation.action.capability === 'node.configure_text_import.v1') {
+      const result = (status, phase, output, error = null) => ({ status, phase, output, error,
+        action_key: operation.action.action_key, action_revision: operation.action.revision,
+        operation_id: operation.id, effect_possible: operation.nodeEffectPossible === true || operation.transportUncertain === true,
+        cleanup_complete: operation.cleanupConfirmed === true, trace: [] });
+      if (mode === 'prepare') {
+        validateTextImportRequest(operation.parameters.settings);
+        const transfer = operations.get(operation.parameters.source_transfer_operation_id);
+        const proof = transfer?.outcome?.output?.server_copy_verification;
+        if (transfer?.action.capability !== 'artifact.upload' || transfer.outcome?.status !== 'SUCCEEDED'
+          || proof?.upload_completion_verified !== true || proof.destination !== operation.parameters.settings.source.source_path) {
+          throw new Error('Text import requires the completed verified upload for its exact source path');
+        }
+        const raw = await execute(makeWorkspaceUiCode({ mode: 'observe', operation_id: operation.id,
+          expected_origin: targetOrigin, expected_build: targetBuild }), { ...options, timeout: 35000 });
+        const state = raw.output, node = operation.parameters.node_ref, owner = state?.wizard?.owner_context;
+        if (raw.status !== 'SUCCEEDED' || JSON.stringify(state.workflow_ref) !== JSON.stringify(node.workflow_ref)
+          || !state.dom_epoch?.document || state.wizard?.stage !== 'text_import_file' || owner?.status !== 'observed'
+          || owner.node?.tid !== owner.path?.at(-3)?.tid + '>' + node.node_label) {
+          throw new Error('Open the exact target text-import wizard at its source page before configuring it');
+        }
+        return { ...result('NOT_APPLIED', 'prepared', {}), checkpoint: { workflow_ref: state.workflow_ref,
+          document_id: state.dom_epoch.document, owner: structuredClone(owner),
+          source_transfer_operation_id: transfer.id, original_source: structuredClone(state.wizard.import_source) } };
+      }
+      if (mode === 'reconcile') {
+        // A completed child receipt is never proof of the whole configuration.
+        // Inspection cannot restart a partial wizard or click Done again.
+        return { ...structuredClone(operation.outcome), cleanup_complete: operation.cleanupConfirmed === true,
+          output: { ...structuredClone(operation.outcome?.output), partial_configuration: true, automatic_resume_available: false } };
+      }
+      if (mode !== 'apply') throw new Error('Unsupported text import procedure mode');
+      operation.cleanupConfirmed = true;
+      const channel = createNodeProcedure({ operation, execute, record: onRecord, targetOrigin, targetBuild, now, signal: stopSignal,
+        wrapMutation: (code, reference) => {
+          const receipt = receiptOptions(operation, reference.id, reference.action_key, reference.signature);
+          return withBrowserReceipt('(' + code + ')(page)', { ...receipt, operation_id: reference.id });
+        } });
+      try {
+        const configured = await configureTextImportDraft(channel, operation.parameters.settings, operation.checkpoint.owner);
+        const outcome = result('SUCCEEDED', 'settings_verified', {
+          node_ref: { ...operation.parameters.node_ref, node_label: configured.node_label },
+          settings_readback_verified: true, package_saved: false, execution_started: false, internal_steps: channel.steps });
+        outcome.trace.push({ event: 'postcondition_verified', proof: 'text_import_settings_roundtrip', internal_steps: channel.steps });
+        validateActionParameters(operation.action.output_schema, outcome.output, 'output');
+        return outcome;
+      } catch (error) {
+        return result(operation.nodeEffectPossible || operation.transportUncertain ? 'AMBIGUOUS' : 'NOT_APPLIED',
+          'procedure_stopped', { internal_steps: channel.steps, settings_readback_verified: false,
+            partial_configuration: operation.nodeEffectPossible === true, automatic_resume_available: false },
+          { code: 'NODE_PROCEDURE_STOPPED', message: String(error?.message ?? error).slice(0, 1000) });
+      }
+    }
     const mutation = ['apply', 'recover_link'].includes(mode);
     const receipt = mutation ? receiptOptions(operation, receiptId ?? operation.id, operation.action.action_key,
       fingerprint(mode, [operation.action.action_key, operation.parameters, operation.checkpoint])) : {};
@@ -1133,6 +1188,9 @@ export function createActionRuntime({ pinned, execute, artifactStore, allowCandi
   };
   const reconcilePending = async () => {
     const operation = pending;
+    if (running && operation.action.capability === 'node.configure_text_import.v1') {
+      return failed(operation, 'OPERATION_STILL_PENDING', 'The bounded node procedure is still running');
+    }
     try {
       const verification=operation.verification;
       if(operation.action.capability==='artifact.upload' && verification && !verification.settled) {
@@ -1616,7 +1674,7 @@ export function createActionRuntime({ pinned, execute, artifactStore, allowCandi
         try {
           // Keep the browser gate until the bounded mutation reports completion,
           // even when its caller cancels. Cancellation never frees a live action.
-          outcome = await invoke(operation, 'apply');
+          outcome = await invoke(operation, 'apply', { stopSignal: signal });
         } catch (error) {
           operation.transportUncertain = true;
           outcome = failed(operation, 'BROWSER_CALL_UNCERTAIN', String(error?.message ?? error).slice(0, 1000));

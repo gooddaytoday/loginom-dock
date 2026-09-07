@@ -826,14 +826,14 @@ def audit(request, evidence, prompt):
         check("run_identity_and_owned_package", bool(re.fullmatch(r"\d{8}-\d{6}-[a-f0-9]{8}", run_id))
               and evidence["run_id"] == run_id and request["package_path"] == path)
         goal_id=request.get('goal_id','basic-graph')
-        if goal_id not in ('prepare-workspace','basic-graph','auto-link-retain','auto-link-remove','palette-inventory','checkbox-roundtrip','context-menu-checkbox','root-checkbox','file-storage-inspect','file-upload-probe','file-upload-verify','data-pipeline','import-roundtrip','calculator-roundtrip'):
+        if goal_id not in ('prepare-workspace','basic-graph','auto-link-retain','auto-link-remove','palette-inventory','checkbox-roundtrip','context-menu-checkbox','root-checkbox','file-storage-inspect','file-upload-probe','file-upload-verify','data-pipeline','import-roundtrip','calculator-roundtrip','node-import-roundtrip'):
             raise ValueError('Unsupported goal')
         goal=GOAL.with_name(goal_id+'.txt')
         expected=copy.deepcopy(EXPECTED)
         if goal_id=='auto-link-retain':
             expected['ports']['Объединение'].remove('Input_Data[2]')
             expected['links']=['Источник|Output_Data[0]|Объединение|Input_Data[0]']
-        expected_prompt=upload_probe.prompt(goal.read_text(),path,destination,run_id) if goal_id in ('file-upload-probe','file-upload-verify','data-pipeline','import-roundtrip','calculator-roundtrip') else render_goal(goal.read_text(),path,destination)
+        expected_prompt=upload_probe.prompt(goal.read_text(),path,destination,run_id) if goal_id in ('file-upload-probe','file-upload-verify','data-pipeline','import-roundtrip','calculator-roundtrip','node-import-roundtrip') else render_goal(goal.read_text(),path,destination)
         if goal_id=='data-pipeline':
             expected_prompt=data_pipeline.prompt(goal.read_text(),path,destination,run_id)
         check("original_goal_only_prompt", prompt == expected_prompt
@@ -886,7 +886,7 @@ def audit(request, evidence, prompt):
         if variant is False:
             check("no_fault_in_basic_goal", evidence.get("operator_fault_receipt") is None)
         tools = evidence["tools"]; calls = evidence["calls"]; events = evidence["events"]
-        check('upload_only_in_declared_probe',goal_id in ('file-upload-probe','file-upload-verify','data-pipeline','import-roundtrip','calculator-roundtrip') or not any(c['tool'] in (PREFIX+'dock_artifact_upload',PREFIX+'dock_artifact_verify') for c in calls))
+        check('upload_only_in_declared_probe',goal_id in ('file-upload-probe','file-upload-verify','data-pipeline','import-roundtrip','calculator-roundtrip','node-import-roundtrip') or not any(c['tool'] in (PREFIX+'dock_artifact_upload',PREFIX+'dock_artifact_verify') for c in calls))
         check("nonempty_complete_export", tools and calls and events and evidence["export_complete"] is True)
         check("only_supported_dock_tools", all(c["tool"] in TOOLS | {"tool_search", "tool_describe"} for c in calls)
               and all(t["tool"] in TOOLS for t in tools))
@@ -916,7 +916,7 @@ def audit(request, evidence, prompt):
         check("actual_journal_pins", bool(re.fullmatch(r"[a-f0-9]{64}", revision)) and all(
             e["runtime_revision"] == revision and e["manifest_sha256"] == request["manifest_sha256"]
             and e["session_id"] == prepared["sessionId"] for e in events))
-        if goal_id in ('data-pipeline','import-roundtrip','calculator-roundtrip'):
+        if goal_id in ('data-pipeline','import-roundtrip','calculator-roundtrip','node-import-roundtrip'):
             return data_pipeline.audit(evidence,checks,request,PREFIX,MUTATIONS,file_storage_inspect,rejected_before_browser)
         if goal_id=='file-upload-verify':
             return upload_verify.audit(evidence,checks,request,PREFIX,MUTATIONS,file_storage_inspect)
@@ -1052,7 +1052,7 @@ def audit_directory(run):
               and (not request.get("allow_manual_reopen") or request.get("harness_inputs",{}).get("manual_reopen.py")==sha(Path(manual_reopen.__file__).read_bytes()))
               and (request.get("goal_id", "basic-graph") in ("basic-graph","palette-inventory") or request.get("harness_inputs", {}).get("auto_link_delete.py")==sha(Path(auto_link_delete.__file__).read_bytes())))
     report["assertions"].append({"name": "auditor_matches_predeclared_contract", "passed": frozen})
-    if request.get('goal_id') in ('checkbox-roundtrip','context-menu-checkbox','root-checkbox','file-storage-inspect','file-upload-probe','file-upload-verify','data-pipeline','import-roundtrip','calculator-roundtrip'):
+    if request.get('goal_id') in ('checkbox-roundtrip','context-menu-checkbox','root-checkbox','file-storage-inspect','file-upload-probe','file-upload-verify','data-pipeline','import-roundtrip','calculator-roundtrip','node-import-roundtrip'):
         frozen = frozen and all(request.get('harness_inputs', {}).get(name) == sha(Path(__file__).with_name(name).read_bytes())
                                 for name in ('checked_state.py', 'rename_effect.py'))
         report['assertions'].append({'name': 'checkbox_auditor_dependencies_frozen', 'passed': frozen})
@@ -1062,16 +1062,16 @@ def audit_directory(run):
     if request.get('schema_version')==2:
         frozen = frozen and request.get('harness_inputs',{}).get('destinations.py') == sha(Path(__file__).with_name('destinations.py').read_bytes())
         report['assertions'].append({'name':'destination_contract_frozen','passed':frozen})
-    if request.get('goal_id') in ('file-upload-probe','file-upload-verify','data-pipeline','import-roundtrip','calculator-roundtrip'):
+    if request.get('goal_id') in ('file-upload-probe','file-upload-verify','data-pipeline','import-roundtrip','calculator-roundtrip','node-import-roundtrip'):
         frozen=frozen and request.get('harness_inputs',{}).get('upload_probe.py')==sha(Path(upload_probe.__file__).read_bytes())
         frozen=frozen and request.get('harness_inputs',{}).get('prepare_binding.py')==sha(Path(__file__).with_name('prepare_binding.py').read_bytes())
         frozen=frozen and request.get('harness_inputs',{}).get(upload_probe.FIXTURE)==sha(Path(__file__).with_name('fixtures').joinpath('data-pipeline/sales.csv').read_bytes())
         report['assertions'].append({'name':'upload_probe_dependencies_frozen','passed':frozen})
-    if request.get('goal_id') in ('file-upload-verify','data-pipeline','import-roundtrip','calculator-roundtrip'):
+    if request.get('goal_id') in ('file-upload-verify','data-pipeline','import-roundtrip','calculator-roundtrip','node-import-roundtrip'):
         frozen=frozen and request.get('harness_inputs',{}).get('upload_verify.py')==sha(Path(upload_verify.__file__).read_bytes())
         report['assertions'].append({'name':'upload_verify_auditor_frozen','passed':frozen})
-    if request.get('goal_id') in ('data-pipeline','import-roundtrip','calculator-roundtrip'):
-        frozen=frozen and all(request.get('harness_inputs',{}).get(name)==sha(Path(__file__).parent.joinpath(name).read_bytes()) for name in ('data_pipeline.py','rendered_results.py','settings_evidence.py','import_settings_evidence.py','import_roundtrip_evidence.py','calculator_evidence.py','calculator_receipts.py',*data_pipeline.FIXTURES))
+    if request.get('goal_id') in ('data-pipeline','import-roundtrip','calculator-roundtrip','node-import-roundtrip'):
+        frozen=frozen and all(request.get('harness_inputs',{}).get(name)==sha(Path(__file__).parent.joinpath(name).read_bytes()) for name in ('data_pipeline.py','rendered_results.py','settings_evidence.py','import_settings_evidence.py','import_roundtrip_evidence.py','calculator_evidence.py','calculator_receipts.py','node_procedure_evidence.py',*data_pipeline.FIXTURES))
         report['assertions'].append({'name':'pipeline_fixture_and_auditor_frozen','passed':frozen})
     report["all_assertions_passed"] = report["all_assertions_passed"] and frozen
     return report

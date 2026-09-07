@@ -24,6 +24,7 @@ export function createExecutionJournal({ directory, metadata, knownSecrets = [] 
         await handle.sync();
       } finally { await handle.close(); }
       if (cleaned.type === 'redaction_failure') throw new Error('Execution evidence could not be redacted');
+      return cleaned;
     };
     const next = pending.then(write);
     pending = next.catch(() => {});

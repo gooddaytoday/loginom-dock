@@ -16,8 +16,14 @@ export function outcomeVerification(outcome, action) {
     if (success && events.includes('postcondition_verified')) {
       validateActionParameters(action.output_schema, outcome.output, 'output');
       // A permissive server schema cannot weaken this local save contract.
-      if (entry.actionKey !== 'package.save_as' || (outcome.output.reopened === true
-          && events.includes('reopened_package_observed'))) domain.state = 'verified';
+      const saveReady = entry.actionKey !== 'package.save_as' || (outcome.output.reopened === true
+          && events.includes('reopened_package_observed'));
+      const configureReady = entry.actionKey !== 'node.configure_text_import' || (
+        outcome.output.settings_readback_verified === true && outcome.output.package_saved === false
+        && outcome.output.execution_started === false && Number.isInteger(outcome.output.internal_steps)
+        && outcome.output.internal_steps > 0 && outcome.output.internal_steps <= 96
+        && outcome.trace.some(e => e.event === 'postcondition_verified' && e.proof === 'text_import_settings_roundtrip'));
+      if (saveReady && configureReady) domain.state = 'verified';
     } else if (outcome.status === 'NOT_APPLIED' && outcome.cleanup_complete === true) domain.state = 'not_applied';
   }
   const truncation = outcome.output.ui?.truncated;
@@ -32,7 +38,7 @@ export function outcomeVerification(outcome, action) {
       completeness: observed && truncation && Object.values(truncation).some(value => value === true)
         ? 'truncated' : 'not_proven',
       limitations: observed ? ['visible_DOM_only', 'no_dataset_revision', 'no_full_graph_proof'] : [] },
-    settings: { state: 'not_checked' }, data: { state: 'not_checked' },
+    settings: { state: domain.kind === 'configure' && domain.state === 'verified' ? 'verified' : 'not_checked' }, data: { state: 'not_checked' },
     goal: { state: 'not_verified', obligations: [] },
   };
 }

@@ -18,7 +18,7 @@ FILES = ("actions.json", "selectors.json", "source-index.json")
 EXECUTOR_PROFILE = json.loads((Path(__file__).resolve().parents[2] / "executor/capability-abi.json").read_text())
 CHECKS = ("node_add", "link_create_standard", "link_create_input_add", "package_save_as",
           "reopen", "negative", "ambiguous", "cleanup", "agent_partial_link_recovery",
-          "agent_ui_recovery", "transport_receipt_recovery")
+          "agent_ui_recovery", "transport_receipt_recovery", "node_configure_text_import")
 SHA256 = re.compile(r"[a-f0-9]{64}\Z")
 
 

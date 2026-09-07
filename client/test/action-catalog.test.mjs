@@ -58,7 +58,7 @@ async function fixture({ mutate } = {}) {
 test('pins and verifies the complete production release once', async () => {
   const data = await fixture();
   const pinned = await pinActionCatalog(data.remote);
-  assert.equal(pinned.actions.size, 3);
+  assert.equal(pinned.actions.size, 4);
   assert.equal(pinned.selectors.get('workflow.port.input.add').strategy, 'data_tid');
   assert.equal(pinned.pins.capabilityAbi, 1);
   assert.equal(pinned.pins.e2eCommit, '2cad5602158fd2e4836d821d644a2b8d92f571a2');

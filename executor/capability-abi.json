@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
   "abi": 1,
-  "executor_revision": "1.1.0",
+  "executor_revision": "1.2.0",
   "outcomes": [
     "SUCCEEDED",
     "NOT_APPLIED",
@@ -38,6 +38,15 @@
       "action_key": "package.save_as",
       "effect_kind": "save",
       "effect_resource": "package"
+    },
+    "node.configure_text_import.v1": {
+      "mutates": [
+        "workflow.node.settings"
+      ],
+      "reconciliation": "completed child receipt plus original and current wizard state; no automatic restart of a partial procedure",
+      "action_key": "node.configure_text_import",
+      "effect_kind": "configure",
+      "effect_resource": "workflow.node"
     }
   },
   "effect_contract_version": 1,

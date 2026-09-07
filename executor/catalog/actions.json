@@ -577,6 +577,306 @@
         "close transient menu and dialog on a conclusive conflict",
         "leave the reopened package active after success"
       ]
+    },
+    {
+      "action_key": "node.configure_text_import",
+      "revision": "1",
+      "status": "candidate",
+      "capability": "node.configure_text_import.v1",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "node_ref": {
+            "type": "object",
+            "properties": {
+              "kind": {
+                "type": "string",
+                "enum": [
+                  "node"
+                ]
+              },
+              "node_label": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 200
+              },
+              "workflow_ref": {
+                "type": "object",
+                "properties": {
+                  "tab_tid": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 1000
+                  },
+                  "prefix": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 1000
+                  }
+                },
+                "required": [
+                  "tab_tid",
+                  "prefix"
+                ],
+                "additionalProperties": false
+              }
+            },
+            "required": [
+              "kind",
+              "node_label",
+              "workflow_ref"
+            ],
+            "additionalProperties": false
+          },
+          "source_transfer_operation_id": {
+            "type": "string",
+            "maxLength": 128
+          },
+          "settings": {
+            "type": "object",
+            "properties": {
+              "source": {
+                "type": "object",
+                "properties": {
+                  "source_path": {
+                    "type": "string",
+                    "maxLength": 2048
+                  },
+                  "encoding": {
+                    "type": "string",
+                    "maxLength": 100
+                  },
+                  "rows_to_skip": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 1000000
+                  },
+                  "first_line_as_title": {
+                    "type": "boolean"
+                  }
+                },
+                "required": [
+                  "source_path",
+                  "encoding",
+                  "rows_to_skip",
+                  "first_line_as_title"
+                ],
+                "additionalProperties": false
+              },
+              "format": {
+                "type": "object",
+                "properties": {
+                  "delimiter": {
+                    "type": "string",
+                    "maxLength": 1
+                  },
+                  "decimal_separator": {
+                    "type": "string",
+                    "maxLength": 1
+                  },
+                  "text_qualifier": {
+                    "type": "string",
+                    "maxLength": 1
+                  },
+                  "null_marker": {
+                    "type": "string",
+                    "maxLength": 256
+                  }
+                },
+                "required": [
+                  "delimiter",
+                  "decimal_separator",
+                  "text_qualifier",
+                  "null_marker"
+                ],
+                "additionalProperties": false
+              },
+              "columns": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "name": {
+                      "type": "string",
+                      "maxLength": 120
+                    },
+                    "label": {
+                      "type": "string",
+                      "maxLength": 120
+                    },
+                    "type": {
+                      "type": "string",
+                      "enum": [
+                        "integer",
+                        "real",
+                        "string",
+                        "boolean",
+                        "datetime"
+                      ]
+                    },
+                    "data_kind": {
+                      "type": "string",
+                      "enum": [
+                        "Неопределенное",
+                        "Непрерывный",
+                        "Дискретный"
+                      ]
+                    },
+                    "used": {
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "name",
+                    "label",
+                    "type",
+                    "data_kind",
+                    "used"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            },
+            "required": [
+              "source",
+              "format",
+              "columns"
+            ],
+            "additionalProperties": false
+          }
+        },
+        "required": [
+          "node_ref",
+          "source_transfer_operation_id",
+          "settings"
+        ],
+        "additionalProperties": false
+      },
+      "output_schema": {
+        "type": "object",
+        "properties": {
+          "node_ref": {
+            "type": "object",
+            "properties": {
+              "kind": {
+                "type": "string",
+                "enum": [
+                  "node"
+                ]
+              },
+              "node_label": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 200
+              },
+              "workflow_ref": {
+                "type": "object",
+                "properties": {
+                  "tab_tid": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 1000
+                  },
+                  "prefix": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 1000
+                  }
+                },
+                "required": [
+                  "tab_tid",
+                  "prefix"
+                ],
+                "additionalProperties": false
+              }
+            },
+            "required": [
+              "kind",
+              "node_label",
+              "workflow_ref"
+            ],
+            "additionalProperties": false
+          },
+          "settings_readback_verified": {
+            "type": "boolean",
+            "enum": [
+              true
+            ]
+          },
+          "package_saved": {
+            "type": "boolean",
+            "enum": [
+              false
+            ]
+          },
+          "execution_started": {
+            "type": "boolean",
+            "enum": [
+              false
+            ]
+          },
+          "internal_steps": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 96
+          }
+        },
+        "required": [
+          "node_ref",
+          "settings_readback_verified",
+          "package_saved",
+          "execution_started",
+          "internal_steps"
+        ],
+        "additionalProperties": false
+      },
+      "selector_symbols": [
+        "workflow.graph"
+      ],
+      "evidence": [
+        {
+          "path": "bg/helpers/wizard.ts",
+          "line_start": 1,
+          "line_end": 80,
+          "commit": "2cad5602158fd2e4836d821d644a2b8d92f571a2",
+          "sha256": "700b25194c65dd0d729c76598d2dcfd49f7d8604c1c6f4b9d96995fd4c9e4335",
+          "role": "helper"
+        },
+        {
+          "path": "bg/sels/import/sImportTxt.ts",
+          "line_start": 1,
+          "line_end": 71,
+          "commit": "2cad5602158fd2e4836d821d644a2b8d92f571a2",
+          "sha256": "88e1e86bd904233b93d54872b0ac6199c4939bafcacfd39c0c88252576d11eff",
+          "role": "selectors"
+        }
+      ],
+      "preconditions": [
+        "the exact text import node wizard is open at its source page",
+        "the source is a completed byte-verified upload in this session",
+        "one explicit file and one to eight fully visible columns; existing names labels and selection match"
+      ],
+      "postconditions": [
+        "Done saves the node without starting execution",
+        "source format schema and output mapping match after reopening the same node"
+      ],
+      "effect": {
+        "kind": "configure",
+        "resource": "workflow.node"
+      },
+      "idempotency": {
+        "policy": "reconcile_before_retry",
+        "reconcile": "inspect the last child receipt; a partial procedure is never automatically restarted"
+      },
+      "timeout_ms": 300000,
+      "retry_budget": 0,
+      "required_capabilities": [
+        "node.configure_text_import.v1"
+      ],
+      "min_executor_revision": "1.2.0",
+      "cleanup": [
+        "release held input; do not discard a partial wizard as automatic rollback"
+      ]
     }
   ]
 }

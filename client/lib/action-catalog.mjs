@@ -3,18 +3,18 @@ import { ACTION_KEYS, CAPABILITIES, requireCapability } from './capability-regis
 
 export const ACTION_CATALOG_ROOT = 'viking://resources/loginom-dock/catalogs/executor-preview';
 export const CAPABILITY_ABI = 1;
-export const EXECUTOR_REVISION = '1.1.0';
+export const EXECUTOR_REVISION = '1.2.0';
 
 const SHA256 = /^[a-f0-9]{64}$/;
 const OUTCOMES = new Set(['SUCCEEDED', 'NOT_APPLIED', 'FAILED', 'AMBIGUOUS']);
 const FILE_NAMES = ['actions.json', 'selectors.json', 'source-index.json'];
 export const ACCEPTANCE_CHECKS = ['node_add', 'link_create_standard', 'link_create_input_add',
   'package_save_as', 'reopen', 'negative', 'ambiguous', 'cleanup',
-  'agent_partial_link_recovery', 'agent_ui_recovery', 'transport_receipt_recovery'];
+  'agent_partial_link_recovery', 'agent_ui_recovery', 'transport_receipt_recovery', 'node_configure_text_import'];
 
 export const actionDescribeTool = {
   name: 'dock_action_describe',
-  description: 'List available actions when called with {} or describe one exact action: node.add, link.create, package.save_as. Other operations use dock_workspace_observe and dock_ui_action. Does not change Loginom.',
+  description: 'List the pinned available actions with {} or describe one exact action. Supported local handlers include node.add, link.create, package.save_as and node.configure_text_import. Only actions present in this session catalog are callable. Does not change Loginom.',
   inputSchema: {
     type: 'object',
     properties: { action_key: { type: 'string', enum: [...ACTION_KEYS] } },
@@ -25,7 +25,7 @@ export const actionDescribeTool = {
 
 export const actionRunTool = {
   name: 'dock_action_run',
-  description: 'Run node.add, link.create or package.save_as. Call dock_action_describe first to get exact parameters. Other UI tasks use dock_ui_action after observation. Invalid arguments are task feedback, not a connection failure.',
+  description: 'Run a pinned action (node.add, link.create, package.save_as or node.configure_text_import); call dock_action_describe first for its exact parameters. node.configure_text_import configures one already-open text-import wizard from a verified session upload, saves with Done and checks settings after reopening; it does not execute the node or save the package. Other UI tasks use dock_ui_action after observation. Invalid arguments are task feedback, not a connection failure.',
   inputSchema: {
     type: 'object',
     properties: {
