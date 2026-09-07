@@ -5,7 +5,7 @@ import os
 import subprocess
 from pathlib import Path
 
-ADAPTER_REVISION = "0.1.0-rc.5"
+ADAPTER_REVISION = "0.1.0-rc.2-fix"
 
 
 def register(ctx):
