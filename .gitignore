@@ -83,6 +83,9 @@ venv.bak/
 .vscode/
 .idea/
 .obsidian/
+# Local browser diagnostics; retain on disk, exclude from source commits.
+/.playwright-cli/
+/.playwright-mcp/
 *.swp
 *.swo
 *~
