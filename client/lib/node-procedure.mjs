@@ -2,7 +2,8 @@ import { createHash } from 'node:crypto';
 import { makeWorkspaceUiCode, validateUiAction } from './workspace-ui.mjs';
 import {validatePreparedNodeContext} from './node-context.mjs';
 import {makeNodeMappingContextCode} from './node-mapping-context.mjs';
-import {makePreparedOutputPortOpenCode} from './node-port-open.mjs';
+import {makeCalculatorContextCode} from './calculator-context.mjs';
+import {makePreparedOutputPortOpenCode,makePreparedInputPortOpenCode} from './node-port-open.mjs';
 import {makeNodeProcessContextCode} from './node-process-context.mjs';
 import {makeNodeOutputContextCode} from './node-output-context.mjs';
 import {makeNodeTableContextCode} from './node-table-context.mjs';
@@ -55,11 +56,15 @@ export function createNodeProcedure({ operation, execute, record, wrapMutation,
     action_key: operation.action.action_key, action_revision: operation.action.revision,
     phase, internal_provenance: 'client_node_procedure_v1', ...details });
   const allowedDialog=(d,dialog)=>dialog && d.identity?.anchor_tid===dialog.table.table_tid+';ModalWindow_Browse'+(dialog.kind==='format'?'Format':'Filter');
-  const allowedOutputEditor=(dialog,state)=>state.wizard?.stage==='output_mapping'
+  const allowedOutputEditor=(dialog,state)=>['output_mapping','input_mapping'].includes(state.wizard?.stage)
     &&state.wizard.column_parameters?.status==='observed'&&state.wizard.column_parameters.portal_bound===true
-    &&state.wizard.column_parameters.root_tid==='EditColumnDefForm'
+    &&state.wizard.column_parameters.root_tid===(state.wizard.stage==='input_mapping'?'EditTuneColumnDefForm':'EditColumnDefForm')
     &&state.wizard.column_parameters.selected_column?.status==='observed'
-    &&dialog.ref===state.wizard.column_parameters.root_ref&&dialog.identity?.anchor_tid==='EditColumnDefForm';
+    &&dialog.ref===state.wizard.column_parameters.root_ref&&dialog.identity?.anchor_tid===state.wizard.column_parameters.root_tid;
+  const allowedExpressionEditor=(dialog,state)=>state.wizard?.stage==='calculator'
+    &&state.wizard.expression_parameters?.status==='observed'&&state.wizard.expression_selection?.status==='observed'
+    &&state.wizard.expression_parameters.selected_expression?.tid===state.wizard.root_tid+';CalcDataWizard;colExpressionName_'+state.wizard.expression_selection.name
+    &&dialog.ref===state.wizard.expression_parameters.root_ref&&dialog.identity?.anchor_tid===state.wizard.root_tid+';ExprDataEditForm';
   const assertContext = (state, allowTransient = false, tableDialog = null, rootsOnly = false, wizardConfirmation = null) => {
     if(preparedNodeContext) {
       const b=state.prepared_node_context;
@@ -78,30 +83,35 @@ export function createNodeProcedure({ operation, execute, record, wrapMutation,
     // A rediscovery never authorizes a gesture; its next full read checks them.
     if(rootsOnly)return;
     const closing=boundWizardConfirmation(state,wizardConfirmation,false);
+    const expressionModal=state.ui?.dialogs?.length===1&&allowedExpressionEditor(state.ui.dialogs[0],state);
+    const expressionMask=m=>expressionModal&&m.kind==='modal_background'&&m.target_tid===state.wizard.root_tid&&m.ref===state.wizard.root_ref;
     if (!Array.isArray(state.ui?.masks) || !Array.isArray(state.ui?.dialogs)
-      || (!allowTransient && !closing && state.ui.masks.length)
-      || !closing && state.ui.dialogs.some(d => !allowedDialog(d,tableDialog) && !allowedOutputEditor(d,state) && (!allowTransient || d.identity?.anchor_tid !== 'toast'))
+      || (!allowTransient && !closing && state.ui.masks.some(m=>!expressionMask(m)))
+      || !closing && state.ui.dialogs.some(d => !allowedDialog(d,tableDialog) && !allowedOutputEditor(d,state) && !allowedExpressionEditor(d,state) && (!allowTransient || d.identity?.anchor_tid !== 'toast'))
       || ['dialogs','masks'].some(key => state.ui.truncated?.[key] !== false)
       || state.scan?.complete !== true) {
       throw new Error('Node procedure is blocked by a mask or dialog');
     }
   };
   const channel = {
-    async openOutputPort(port) {
+    async openOutputPort(port) {return channel.openPort('output',port);},
+    async openInputPort(port) {return channel.openPort('input',port);},
+    async openPort(direction,port) {
+      if(!['input','output'].includes(direction))throw Error('Explicit port direction required');
       checkBudget();
       if(!preparedNodeContext||!Number.isInteger(port)||port<0||port>99)throw Error('A prepared output port index is required');
       const before=await channel.observe({condition:'prepared graph before opening output port',
         ready:s=>s.prepared_node_context?.surface==='graph'&&s.prepared_node_context.locked===false&&s.wizard?.status==='absent'});
       assertContext(before);
       checkBudget();
-      const step=++sequence,id=operation.id+':n'+step,action={verb:'open_output_port',port},actionKey='node.output_port.open.internal';
+      const step=++sequence,id=operation.id+':n'+step,action={verb:'open_'+direction+'_port',port},actionKey='node.'+direction+'_port.open.internal';
       const signature=digest([id,action,evidenceSnapshot]),observationHash=digest(evidenceSnapshot);
       snapshot=null;evidenceSnapshot=null;
       const prepared=await entry('node_step_prepared',{step,internal_operation_id:id,action,observation_sha256:observationHash,signature});
       if(prepared?.signature!==signature||JSON.stringify(prepared.action)!==JSON.stringify(action))throw Error('Port opening was not durably prepared');
       signal?.throwIfAborted();
       if(now()>=operation.deadline)throw Error('Port opening deadline elapsed before mutation');
-      const code=makePreparedOutputPortOpenCode(preparedNodeContext,{port,operation_id:id,origin:targetOrigin,build:targetBuild,
+      const code=(direction==='input'?makePreparedInputPortOpenCode:makePreparedOutputPortOpenCode)(preparedNodeContext,{port,operation_id:id,origin:targetOrigin,build:targetBuild,
         deadline:Math.min(operation.deadline,now()+15000)});
       const envelope=`async page=>{const r=await (${code})(page);return {status:r.status,action_key:${JSON.stringify(actionKey)},action_revision:'1',operation_id:${JSON.stringify(id)},phase:'port_open',effect_possible:r.effect_possible,cleanup_complete:r.cleanup_complete,output:r,error:r.error?{code:'OUTPUT_PORT_OPEN_UNCONFIRMED',message:r.error}:null,trace:r.trace}}`;
       let result;
@@ -112,13 +122,13 @@ export function createNodeProcedure({ operation, execute, record, wrapMutation,
       const completed=await entry('node_step_completed',{step,internal_operation_id:id,outcome:structuredClone(result)});
       if(completed?.outcome?.operation_id!==id||JSON.stringify(completed.outcome)!==JSON.stringify(result))throw Error('Port opening outcome was not durably preserved');
       const owner=result.output;
-      if(result.status!=='SUCCEEDED'||!operation.cleanupConfirmed||owner?.verified!==true||owner.port!==port
+      if(result.status!=='SUCCEEDED'||!operation.cleanupConfirmed||owner?.verified!==true||owner.direction!==direction||owner.port!==port
         ||owner.opening_operation_id!==id||owner.document_id!==preparedNodeContext.document_id
         ||owner.workflow_id!==preparedNodeContext.workflow_ref.workflow_id||owner.node_id!==preparedNodeContext.node.node_id)
         throw new NodeProcedureStepError(result);
       return structuredClone(result);
     },
-    async observe({ condition, ready, confirmIdentity, timeoutMs = 15000, importColumnPage, outputColumnPage, readProcesses = false, readOutputs = false, readMappings = false, readNavigation = false, tablePage, tableDialog, tableFormatPage, wizardConfirmation } = {}) {
+    async observe({ condition, ready, confirmIdentity, timeoutMs = 15000, importColumnPage, outputColumnPage, readProcesses = false, readOutputs = false, readMappings = false, readCalculator = false, readNavigation = false, tablePage, tableDialog, tableFormatPage, wizardConfirmation } = {}) {
       checkBudget();
       if (typeof condition !== 'string' || !condition.trim() || typeof ready !== 'function'
         || !Number.isFinite(timeoutMs) || timeoutMs <= 0 || timeoutMs > 15000) {
@@ -129,7 +139,7 @@ export function createNodeProcedure({ operation, execute, record, wrapMutation,
       if(tableDialog && (!['format','filter'].includes(tableDialog.kind)||!tableDialog.table))throw new Error('A typed Table dialog binding is required');
       if(tablePage)makeNodeTableContextCode(preparedNodeContext,tablePage.table,tablePage.page);
       if(tableDialog)makeNodeTableContextCode(preparedNodeContext,tableDialog.table,{row_offset:0,row_limit:0,column_offset:0,column_limit:1});
-      if ((readProcesses || readOutputs || readMappings) && !preparedNodeContext) throw new Error('Native process/output reads require a prepared node');
+      if ((readProcesses || readOutputs || readMappings || readCalculator) && !preparedNodeContext) throw new Error('Native process/output reads require a prepared node');
       // A failed wait must invalidate even a previously usable observation.
       snapshot = null;
       evidenceSnapshot = null;
@@ -165,11 +175,13 @@ export function createNodeProcedure({ operation, execute, record, wrapMutation,
         const navigationRoot=readNavigation&&preparedNodeContext?(roots.output.ui?.elements??[]).find(e=>e.tid===preparedNodeContext.workflow_ref.prefix+';NavigationBar;NavigationPanel')?.ref:undefined;
         const graphRoot=preparedNodeContext?(roots.output.ui?.elements??[]).find(e=>e.tid===preparedNodeContext.workflow_ref.prefix+';ModelForm;cmpDiagram')?.ref:undefined;
         if(readNavigation&&!navigationRoot)throw Error('Prepared workflow navigation region unavailable');
-        const outputEditors=wizard?.stage==='output_mapping'?(roots.output.ui?.elements??[]).filter(e=>e.tid==='EditColumnDefForm'):[];
+        const outputEditors=['output_mapping','input_mapping'].includes(wizard?.stage)?(roots.output.ui?.elements??[]).filter(e=>e.tid===(wizard.stage==='input_mapping'?'EditTuneColumnDefForm':'EditColumnDefForm')):[];
         if(outputEditors.length>1)throw Error('Output field editor is ambiguous');
+        const expressionEditors=wizard?.stage==='calculator'?(roots.output.ui?.elements??[]).filter(e=>e.tid===wizard.root_tid+';ExprDataEditForm'):[];
+        if(expressionEditors.length>1)throw Error('Calculator expression editor is ambiguous');
         // This is read-only root selection. The subsequent full read must prove
         // its native ownership before any dialog or mutation is admitted.
-        const root = dialogRoot[0]?.ref ?? outputEditors[0]?.ref ?? navigationRoot ?? processRoot ?? outputRoot ?? (portals.length===1 ? portals[0].ref : wizard?.status === 'observed' ? wizard.root_ref : graphRoot);
+        const root = dialogRoot[0]?.ref ?? outputEditors[0]?.ref ?? navigationRoot ?? processRoot ?? outputRoot ?? (portals.length===1 ? portals[0].ref : expressionEditors[0]?.ref ?? (wizard?.status === 'observed' ? wizard.root_ref : graphRoot));
         if (now() >= deadline) break;
         result = await execute(makeWorkspaceUiCode({ mode: 'observe', operation_id: id,
           ...boundOptions,
@@ -207,7 +219,8 @@ export function createNodeProcedure({ operation, execute, record, wrapMutation,
         // prepared node before and after. Preserve them in the same journal
         // observation; they are not an execution or data-freshness claim.
         for (const [requested,key,makeCode] of [[readProcesses,'node_processes',makeNodeProcessContextCode],
-          [readOutputs,'node_outputs',makeNodeOutputContextCode], [readMappings,'node_mapping',makeNodeMappingContextCode]]) {
+          [readOutputs,'node_outputs',makeNodeOutputContextCode], [readMappings,'node_mapping',makeNodeMappingContextCode],
+          [readCalculator,'node_calculator',makeCalculatorContextCode]]) {
           if (!requested) continue;
           if (now() >= deadline) break;
           const native=await execute(makeCode(preparedNodeContext),{timeout:Math.min(35000,Math.max(1,deadline-now()))});
@@ -229,7 +242,9 @@ export function createNodeProcedure({ operation, execute, record, wrapMutation,
           result.output.node_table_dialog=structuredClone(tableDialog);
         }
         satisfied = (boundWizardConfirmation(result.output,wizardConfirmation)
-          || !result.output.ui.masks.length && result.output.ui.dialogs.every(d=>allowedDialog(d,tableDialog)||allowedOutputEditor(d,result.output)))
+          || result.output.ui.masks.every(m=>result.output.ui.dialogs.length===1&&allowedExpressionEditor(result.output.ui.dialogs[0],result.output)
+            &&m.kind==='modal_background'&&m.target_tid===result.output.wizard.root_tid&&m.ref===result.output.wizard.root_ref)
+            &&result.output.ui.dialogs.every(d=>allowedDialog(d,tableDialog)||allowedOutputEditor(d,result.output)||allowedExpressionEditor(d,result.output)))
           && ready(result.output) === true && now() < deadline;
         const identity = satisfied && confirmIdentity ? digest(confirmIdentity(result.output)) : null;
         confirmations = satisfied ? (confirmIdentity ? (identity === previousIdentity ? confirmations + 1 : 1) : 1) : 0;
@@ -326,6 +341,7 @@ export function createNodeProcedure({ operation, execute, record, wrapMutation,
           wizardConfirmation:initialObservation?.node_wizard_confirmation,
           readNavigation:initialObservation?.node_navigation_read===true,
           readMappings:initialObservation?.node_mapping!==undefined,
+          readCalculator:initialObservation?.node_calculator!==undefined,
           readProcesses:initialObservation?.node_processes!==undefined,readOutputs:initialObservation?.node_outputs!==undefined,tableDialog:initialObservation?.node_table_dialog,
           tableFormatPage:initialObservation?.table_settings?.format?.page?{offset:initialObservation.table_settings.format.page.offset,limit:initialObservation.table_settings.format.page.limit}:undefined });
         const action = resolve(observed), object = identity(observed);

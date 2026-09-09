@@ -34,7 +34,7 @@ export async function createPublicNodeWire(runtime,{directory,browserSequence}) 
   if(JSON.stringify(result)!==JSON.stringify(reply.structuredContent))throw Error('MCP text and structured result differ');
   return result;
  };
- return {runtime:{...runtime,
+ return {call,runtime:{...runtime,
   deliverArtifact:request=>call('dock_artifact_deliver',request),
   resumeArtifactDelivery:request=>call('dock_artifact_delivery_resume',request),
   artifactDeliveryStatus:id=>call('dock_artifact_delivery_status',{operation_id:id}),

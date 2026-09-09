@@ -42,7 +42,7 @@ export function validateNodeApplyRequest(request, handlers) {
           && Object.keys(field).every(k=>['source','name','label','excluded'].includes(k)), 'Invalid mapping field');
         if(field.source?.kind==='configured_field') {
           object(field.source,['kind','name']);
-          requireValue(mapping.direction==='output' && typeof field.source.name==='string' && field.source.name.length>0
+          requireValue(typeof field.source.name==='string' && field.source.name.length>0
             && field.source.name.length<=200 && !/[\x00-\x1f]/.test(field.source.name),'Configured output source name required');
         } else {
           object(field.source, ['schema_id','field_id']);
@@ -246,7 +246,7 @@ export async function applyNode({request, operation, handlers, drivers, record,
       phases:state.phases.map(({value,...p})=>p),node:state.node,execution:state.execution,output:state.output,
       package_saved:false,cleanup_complete:state.cleanup_complete,warnings:[],
       pending_phase:state.pending?.phase??null,error:{code:'NODE_APPLY_STOPPED',message:String(error.message).slice(0,1000),
-        ...(error.receipt?.error?.code==='WIZARD_SOURCE_VALIDATION_FAILED'?{cause:{code:'WIZARD_SOURCE_VALIDATION_FAILED',
+        ...(['WIZARD_SOURCE_VALIDATION_FAILED','WIZARD_CALCULATOR_VALIDATION_FAILED'].includes(error.receipt?.error?.code)?{cause:{code:error.receipt.error.code,
           message:String(error.receipt.error.message??'').slice(0,240)}}:{})}};
   }
 }

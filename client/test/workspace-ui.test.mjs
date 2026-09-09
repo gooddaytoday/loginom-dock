@@ -1469,6 +1469,20 @@ test('wizard step clicks once and verifies only the requested stage in the same 
   }
 });
 
+test('Calculator validation accepts either owned conditional destination after one click',async()=>{
+ for(const destination of ['done','output_mapping','input_mapping']) {
+  const page=new Page(),c=wizardStepFixture(page);c.marker.attrs['data-tid']=c.base+';CalcDataWizard;btnAddExpr';
+  const snapshot=await page.observe(),button=snapshot.ui.elements.find(e=>e.wizard_step);
+  page.waitForTimeout=async()=>{};const click=page.mouse.click;
+  page.mouse.click=async(...args)=>{await click(...args);c.marker.remove();page.add('div',c.base+(destination==='done'?';DoneWizard;edtDisplayName':destination==='output_mapping'?';DerivedDataSourceMappingEngineOutputPortWizard;btnAddMappingColumn':';TuneDataSourceInputPortWizard;btnAddMappingColumn'),'',undefined,c.form);};
+  const result=await page.act({verb:'wizard_step',ref:button.ref,expected_stage:['output_mapping','done']},snapshot);
+  assert.equal(result.status,destination==='input_mapping'?'AMBIGUOUS':'SUCCEEDED',JSON.stringify(result.error));
+  assert.equal(page.events.filter(e=>e==='click').length,1);
+ }
+ const page=new Page();wizardStepFixture(page);const s=await page.observe(),b=s.ui.elements.find(e=>e.wizard_step);
+ assert.throws(()=>validateUiAction({verb:'wizard_step',ref:b.ref,expected_stage:['output_mapping','done']},s),/Calculator/);
+});
+
 test('wizard transition waits through a transient mask without repeating its click',async()=>{
   const page=new Page(),c=wizardStepFixture(page),snapshot=await page.observe();
   const button=snapshot.ui.elements.find(e=>e.wizard_step);let mask,waits=0;
@@ -2263,23 +2277,24 @@ test('output column typed editing preserves the selected row and all other param
   }
 });
 
-test('output editor apply and cancel verify all row properties after one click',async()=>{
-  for(const mode of ['apply','cancel','wrong_type','wrong_kind','cancel_replaced','lost_reply']) {
+test('input and output editors apply and cancel verify all row properties after one click',async()=>{
+  for(const direction of ['input','output'])for(const mode of ['apply','cancel','wrong_type','wrong_kind','cancel_replaced','lost_reply']) {
     const page=new Page(),base='MF;TF-1;WizrdMCF;',form=page.add('div',base.slice(0,-1));
-    const stem=base+'DerivedDataSourceOutputSocketWizard;';page.add('button',stem+'btnAddMappingColumn','',undefined,form);
+    const editor=direction==='input'?'EditTuneColumnDefForm':'EditColumnDefForm',usageColumn=direction==='input'?'colUsageType_':'colDefaultUsageType_';
+    const stem=base+(direction==='input'?'TuneDataSourceMappingWizard;':'DerivedDataSourceOutputSocketWizard;');page.add('button',stem+'btnAddMappingColumn','',undefined,form);
     let table;
     const createRow=(name='Quantity',type='Integer',kind='Непрерывный')=>{
       table=page.add('table',null,'',undefined,form);table.attrs.class='x-grid-item-selected';
       page.add('td',stem+'colName_'+name,name,undefined,table);
       const label=page.add('td',stem+'colDisplayName_'+name,'Sum',undefined,table);page.add('span',null,'',undefined,label).attrs.class='bg-TBGDataType-dt'+type;
-      page.add('td',stem+'colDataKind_'+name,kind,undefined,table);page.add('td',stem+'colDefaultUsageType_'+name,'Не задано',undefined,table);
+      page.add('td',stem+'colDataKind_'+name,kind,undefined,table);page.add('td',stem+usageColumn+name,'Не задано',undefined,table);
     };createRow();
-    const dialog=page.add('div',base+'EditColumnDefForm');dialog.attrs.class='x-window';
+    const dialog=page.add('div',base+editor);dialog.attrs.class='x-window';
     for(const [key,value] of [['edtName','QuantitySum'],['edtDisplayName','Sum'],['cbxDataType','Целый'],['cbxDataKind','Непрерывный'],['cbxUsageType','Не задано']]) {
-      const owner=page.add('div',base+'EditColumnDefForm;'+key,'',undefined,dialog);page.add('input',null,'',undefined,owner).value=value;
+      const owner=page.add('div',base+editor+';'+key,'',undefined,dialog);page.add('input',null,'',undefined,owner).value=value;
     }
     const cancel=mode.startsWith('cancel'),verb=cancel?'cancel_output_column':'apply_output_column';
-    page.add('button',base+'EditColumnDefForm;'+(cancel?'btnCancel':'btnApply'),'Close',{x:600,y:400,width:80,height:25},dialog);
+    page.add('button',base+editor+';'+(cancel?'btnCancel':'btnApply'),'Close',{x:600,y:400,width:80,height:25},dialog);
     const full=await page.observe(),read=await page.execute({mode:'observe',root_ref:full.wizard.column_parameters.root_ref});
     const target=read.output.ui.elements.find(e=>e.column_close);assert.ok(target);
     const click=page.mouse.click;page.mouse.click=async(...args)=>{await click(...args);dialog.remove();
@@ -2293,22 +2308,26 @@ test('output editor apply and cancel verify all row properties after one click',
 });
 
 test('output-port context binds distinct node and port breadcrumbs and rejects wrong ownership',async()=>{
-  for(const mode of ['valid','input_port','wrong_folder','missing_workflow','duplicate']) {
+  for(const mode of ['valid','input_port','wrong_folder','missing_workflow','duplicate','overflow_bound','overflow_unbound']) {
     const page=new Page(),base='MF;TF-1;',wizard=page.add('div',base+'WizrdMCF');
     page.add('button',base+'WizrdMCF;DerivedDataSourceOutputSocketWizard;btnAddMappingColumn','',undefined,wizard);
     const panel=page.add('div',base+'NavigationBar;NavigationPanel');let path='';
     const items=[['Package','maptree-icon-package'],['Workflow',mode==='missing_workflow'?'':'maptree-icon-workflow'],['Group','bg-vendor-icon-groupdata'],
       ['Outputs',mode==='wrong_folder'?'maptree-icon-modelinputports':'maptree-icon-modeloutputports'],
-      ['Result',mode==='input_port'?'bg-vendor-icon-inputdatasourcesocketdef':'bg-vendor-icon-deriveddatasourceoutputsocketdef'],['Settings','maptree-icon-wizard']];
+      ['Result',mode==='input_port'?'bg-vendor-icon-inputdatasourcesocketdef':'bg-vendor-icon-deriveddatasourceoutputsocketdef'],[mode.startsWith('overflow')?'Настройка':'Settings','maptree-icon-wizard']];
     for(const [label,icon] of items){path+=(path?'>':'')+label;const tid=base+'cnrNaviMode;b.s_'+path;
       const crumb=page.add('a',tid,label,undefined,panel);page.add('span',null,'',undefined,crumb).attrs.class=icon;
+      if(mode.startsWith('overflow')&&label==='Настройка')crumb.style.display='none';
       if(mode==='duplicate' && label==='Result')page.add('a',tid,label,undefined,panel);
     }
+    if(mode==='overflow_bound')page.execute=async options=>clone(await vm.runInContext('('+workspaceUiCapability.toString()+')',page.context)(page,
+      {expected_build:build,expected_origin:origin,prepared_node_context:{node:{node_id:'node'},workflow_ref:{prefix:'MF;TF-1',navigation_path:[]}},...options},
+      async()=>({verified:true,surface:'wizard',node_id:'node',output_port:{direction:'output',port:0}})));
     const full=await page.observe(),narrow=await page.execute({mode:'observe',root_ref:full.wizard.root_ref});
     const context=narrow.output.wizard.port_context;
     assert.deepEqual(context,full.wizard.port_context);assert.notEqual(narrow.output.wizard.owner_context.status,'observed');
     assert.equal(context.opening_verified,false);
-    if(mode==='valid'){assert.equal(context.status,'observed');assert.equal(context.node.label,'Group');assert.equal(context.port.label,'Result');assert.equal(context.kind,'output_data');}
+    if(['valid','overflow_bound'].includes(mode)){assert.equal(context.status,'observed');assert.equal(context.node.label,'Group');assert.equal(context.port.label,'Result');assert.equal(context.kind,'output_data');}
     else assert.notEqual(context.status,'observed',mode);
   }
 });
@@ -3389,6 +3408,20 @@ test('input port context observes exact node path and display caption without po
   assert.equal(c.node_path.length,6);assert.equal(c.port_path.length,8);assert.equal(c.path.length,9);
   const narrow=await page.execute({mode:'observe',root_ref:full.wizard.root_ref});
   assert.deepEqual(narrow.output.wizard.input_port_context,c);assert.deepEqual(page.events,[]);
+});
+
+test('input port overflow caption requires native binding and the exact hidden caption',async()=>{
+ for(const mode of ['bound','unbound','wrong_caption','missing_icon']) {
+  const {page,crumbs}=await inputPortContextFixture();crumbs[8].style.display='none';
+  if(mode==='wrong_caption')crumbs[8].ownText='Other';
+  if(mode==='missing_icon')crumbs[8].children[0].remove();
+  if(mode!=='unbound')page.execute=async options=>clone(await vm.runInContext('('+workspaceUiCapability.toString()+')',page.context)(page,
+   {expected_build:build,expected_origin:origin,prepared_node_context:{node:{node_id:'node'},workflow_ref:{prefix:'MF;TF-5',navigation_path:[]}},...options},
+   async()=>({verified:true,surface:'wizard',node_id:'node',input_port:{direction:'input',port:0}})));
+  const full=await page.observe(),narrow=await page.execute({mode:'observe',root_ref:full.wizard.root_ref});
+  assert.deepEqual(narrow.output.wizard.input_port_context,full.wizard.input_port_context);
+  assert.equal(full.wizard.input_port_context.status==='observed',mode==='bound',mode);
+ }
 });
 
 test('input port context rejects foreign duplicated hidden and incomplete breadcrumb evidence',async()=>{

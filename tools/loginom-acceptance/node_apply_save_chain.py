@@ -7,7 +7,7 @@ import json
 import re
 
 
-def verify_save_chain(events, seed_request, final_path, revisions):
+def verify_save_chain(events, seed_request, final_path, revisions, *, expected_graphs=None):
     failures = []
     keys = ('package.save_checkpoint', 'package.save_as')
     if (set(revisions) != set(keys) or any(not isinstance(v, str) or not v for v in revisions.values())
@@ -23,6 +23,9 @@ def verify_save_chain(events, seed_request, final_path, revisions):
     tid = re.sub(r'\s', '_', str(label)).replace(',', '')
     graph = dict(nodes=[label], ports=[dict(node_label=label, tids=[tid+';Input_Connection[0]',
                  tid+';Input_Var[0]', tid+';Output_Data[0]'])], links=[])
+    graphs=[graph,graph] if expected_graphs is None else expected_graphs
+    if not isinstance(graphs,list) or len(graphs)!=2 or any(not isinstance(g,dict) or set(g)!={'nodes','ports','links'} for g in graphs):
+        return dict(passed=False,failures=['save_chain_expected_graphs'])
     flow = {k: seed_request.get('workflow_ref', {}).get(k) for k in ('tab_tid', 'prefix')}
     identity = lambda e: (e.get('session_id'), e.get('runtime_revision'), json.dumps(e.get('target'), sort_keys=True))
     if any(not seed_event.get(k) for k in ('session_id', 'runtime_revision', 'target')) or not all(flow.values()):
@@ -30,6 +33,7 @@ def verify_save_chain(events, seed_request, final_path, revisions):
     paths = (final_path+'.draft.lgp', final_path)
     operation_ids = []
     for index, (key, path) in enumerate(zip(keys, paths)):
+        graph=graphs[index]
         starts = [(i, e) for i, e in enumerate(events) if e.get('phase') == 'prepared' and e.get('action_key') == key]
         ends = [(i, e) for i, e in enumerate(events) if e.get('phase') == 'completed' and e.get('action_key') == key]
         if len(starts) != 1 or len(ends) != 1:

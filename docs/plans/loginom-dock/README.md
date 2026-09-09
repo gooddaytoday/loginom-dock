@@ -1,12 +1,14 @@
 # Подпланы реализации Loginom Dock
 
-Редакция: 8 сентября 2026 года. Подплан 01 реализован локально; goal-only приёмка
+Редакция: 9 сентября 2026 года. Подплан 01 реализован локально; goal-only приёмка
 нового черновика — 17/17 PASS. Подплан 02 — **implemented / live_verified**:
 внутренний графовый драйвер, Hermes 15/15 audit PASS; не released.
 Подплан 03 — **implemented / live_verified (source runtime)**: общий node.apply,
 импорт и безопасное продолжение приняты, Hermes30/30 PASS.
 [Проверка каждого требования](03-completion-audit.md); не released.
-Подпланы 04–10 остаются **planned**.
+Подплан 04 — **implemented / live_verified (source runtime)**, Hermes45/45 PASS.
+[Проверка каждого требования](04-completion-audit.md); не released.
+Подпланы 05–10 остаются **planned**.
 Это конкретизация [действующего плана](../2026-09-02-loginom-dock-implementation-plan.md),
 а не отчёт о выполнении. Наличие прежнего пилота или примитива не закрывает подплан.
 
@@ -115,6 +117,7 @@ live_verified по мокам, исходникам, коду возврата �
 [implementation-status](../../loginom-dock/implementation-status.md),
 текущую точку продолжения — в
 [resume-checkpoint](../../loginom-dock/resume-checkpoint.md).
-После принятия общей основы03 следующий обработчик — подплан04 (Калькулятор),
+После принятия общей основы03 и Калькулятора04 следующий обработчик — подплан07
+(Группировка),
 как отдельная задача. V1 в целом не завершён. Границы приёмки01 описаны
 в [контракте подготовки](../../loginom-dock/workspace-preparation.md).

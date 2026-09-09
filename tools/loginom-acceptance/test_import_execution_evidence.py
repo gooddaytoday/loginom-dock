@@ -21,6 +21,23 @@ class ExecutionEvidenceTests(unittest.TestCase):
     def audit(self):
         return verify_execution_observations(self.observations,self.mutations,self.node)
 
+    def test_graph_launch_requires_selected_native_node_and_exact_gesture(self):
+        s=self.observations[0][1]
+        s.update(wizard=dict(status='absent'),prepared_node_context=self.node,
+            node_outputs=dict(node_selected=True),ui=dict(elements=[dict(ref='launch',graph_execution=dict(node_id='node',source='native_selected_graph_node'))]))
+        outcome=dict(status='SUCCEEDED',cleanup_complete=True,output=dict(gesture_applied=True),trace=[
+            dict(event='ui_preconditions_verified',verb='execute_graph_node',refs=['launch']),
+            dict(event='ui_gesture_applied',verb='execute_graph_node')])
+        self.mutations[0]=(2,dict(verb='execute_graph_node',ref='launch'),outcome)
+        audit=lambda:verify_execution_observations(self.observations,self.mutations,self.node,launch_mode='graph')
+        self.assertTrue(audit()['passed'])
+        self.assertFalse(self.audit()['passed'])
+        s['ui']['elements'][0]['graph_execution']['node_id']='foreign'
+        self.assertFalse(audit()['passed'])
+        s['ui']['elements'][0]['graph_execution']['node_id']='node'
+        outcome['trace'].pop()
+        self.assertFalse(audit()['passed'])
+
     def test_complete_chain(self):
         r=self.audit();self.assertTrue(r['passed'],r);self.assertEqual(r['execution_id'],'doc:root:1')
 

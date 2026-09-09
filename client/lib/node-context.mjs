@@ -58,19 +58,19 @@ export async function readPreparedNodeContext(page, binding) {
       if(!nodeTree)return pending();
       if(!nodeTree.FModelNode || model.FModelNode!==nodeTree.FModelNode) {
         const w=card.Controller.Node?.data?.node,portTree=w?.ParentNode,group=portTree?.ParentNode;
-        const openings=[...(p.outputPortOpenReceipts?.values()??[])].filter(o=>o.phase==='verified'
+        const openings=[...(p.outputPortOpenReceipts?.values()??[]),...(p.inputPortOpenReceipts?.values()??[])].filter(o=>o.phase==='verified'
           &&o.document_id===b.document_id&&o.workflow_id===b.workflow_ref.workflow_id&&o.node_id===b.node.node_id
           &&o.wizard===model&&o.nodeTree===nodeTree&&o.portTree===portTree);
-        const o=openings[0],roots=exact(b.workflow_ref.prefix+';WizrdMCF');
+        const o=openings[0],input=o?.direction==='input',groupType=input?app.ModelInputPortsTreeNode:app.ModelOutputPortsTreeNode,roots=exact(b.workflow_ref.prefix+';WizrdMCF');
         if(openings.length!==1||!app.WizardTreeNode||!(w instanceof app.WizardTreeNode)
           ||!app.ModelPortTreeNode||!(portTree instanceof app.ModelPortTreeNode)
-          ||!app.ModelOutputPortsTreeNode||!(group instanceof app.ModelOutputPortsTreeNode)||group.ParentNode!==nodeTree
+          ||!groupType||!(group instanceof groupType)||group.ParentNode!==nodeTree
           ||o.workflow!==workflowNode||o.packageNode!==packageNode||o.node.FGuid!==o.node_id
           ||o.node.data!==o.nodeData||o.port.data!==o.portData||o.port.FGuid!==o.portGuid||o.node.data!==nodeTree.FModelNode
           ||o.port.data!==portTree.FModelNodePort||o.port.parent!==o.node||o.port.FPortIndex!==undefined&&o.port.FPortIndex!==o.nativeIndex
-          ||portTree.FIndex!==o.nativeIndex||!o.enginePort||model.FModelEnginePort!==o.enginePort||model.FModelNode
+          ||portTree.FIndex!==o.nativeIndex||!o.enginePort||(input?model.FModelSocket:model.FModelEnginePort)!==o.enginePort||model.FModelNode
           ||roots.length!==1||model.FView?.el?.dom!==roots[0])return reject('wizard_model');
-        outputPort={direction:'output',port:o.portIndex,native_index:o.nativeIndex,port_guid:o.port.FGuid,opening_operation_id:o.operation_id};
+        outputPort={direction:input?'input':'output',port:o.portIndex,native_index:o.nativeIndex,port_guid:o.port.FGuid,opening_operation_id:o.operation_id};
       }
       tid=b.workflow_ref.prefix+';WizrdMCF'; surface='wizard';
     } else if(model?.constructor?.name==='ViewsForm') {
@@ -86,7 +86,7 @@ export async function readPreparedNodeContext(page, binding) {
     if(elements[0].getBoundingClientRect().width<=0 || elements[0].getBoundingClientRect().height<=0
       || getComputedStyle(elements[0]).visibility==='hidden')return pending();
     return {verified:true,document_id:b.document_id,workflow_id:b.workflow_ref.workflow_id,node_id:b.node.node_id,surface,tid,
-      ...(outputPort?{output_port:outputPort}:{}),
+      ...(outputPort?{[outputPort.direction==='input'?'input_port':'output_port']:outputPort}:{}),
       ...(surface==='graph'?{locked}:{})};
   },binding);
 }

@@ -51,6 +51,7 @@ async function readGraph(page, task) {
       const inputs = [], outputs = [], allPorts=[];
       for (const ports of n.FPorts ?? []) for (const p of ports.FCollection ?? []) {
         const element = graph.view.getState(p.FCell)?.shape?.node, ptid = element?.getAttribute('data-tid');
+        if (p.FCell?.visible===true && (!ptid || !containers[0].contains(element))) fail('Visible port identity is not rendered');
         if (!ptid || !containers[0].contains(element)) continue; // Hidden service ports are outside tabular phase.
         const suffix = ptid.slice(tid.length + 1), m = /^(Input|Output)_Data-(\d+)$/.exec(suffix);
         allPorts.push(suffix);

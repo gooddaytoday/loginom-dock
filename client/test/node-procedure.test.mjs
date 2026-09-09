@@ -326,7 +326,7 @@ test('output port opening uses the parent journal and receipt wrapper before any
     if(typeof code==='string')return {status:'SUCCEEDED',output:structuredClone(state)};
     order.push('effect');if(mode==='transport')throw Error('transport');
     return {status:'SUCCEEDED',operation_id:mode==='foreign'?'other':code.r.id,action_key:code.r.action_key,effect_possible:true,cleanup_complete:true,
-     output:{verified:true,port:0,opening_operation_id:code.r.id,...binding.node,node_id:mode==='owner'?'other':'node'}};
+     output:{verified:true,direction:'output',port:0,opening_operation_id:code.r.id,...binding.node,node_id:mode==='owner'?'other':'node'}};
    }});
   if(mode==='success'){
    assert.equal((await channel.openOutputPort(0)).status,'SUCCEEDED');
@@ -337,5 +337,28 @@ test('output port opening uses the parent journal and receipt wrapper before any
    if(['journal','budget'].includes(mode))assert.ok(!order.includes('effect'));
    if(['foreign','transport'].includes(mode)){assert.equal(op.transportUncertain,true);assert.equal(op.cleanupConfirmed,false);}
   }
+ }
+});
+
+test('calculator parameter portal admits only its bound modal background',async()=>{
+ for(const mode of ['bound','foreign_dialog','foreign_selection','foreign_mask','busy','extra_dialog']) {
+  const base='MF;TF-1;WizrdMCF';
+  const state={origin:'http://example.test',loginom_build:'7.4.2',workflow_ref:{prefix:'MF;TF-1',tab_tid:'tab'},dom_epoch:{document:'doc'},scan:{complete:true},
+   wizard:{status:'observed',stage:'calculator',root_tid:base,root_ref:'wizard',expression_selection:{status:'observed',name:'Expr1'},
+    expression_parameters:{status:'observed',root_ref:'editor',selected_expression:{tid:base+';CalcDataWizard;colExpressionName_Expr1'}}},
+   ui:{elements:[{tid:base+';ExprDataEditForm',ref:'editor'}],masks:[{kind:'modal_background',target_tid:base,ref:'wizard'}],
+    dialogs:[{ref:'editor',identity:{anchor_tid:base+';ExprDataEditForm'}}],truncated:{dialogs:false,masks:false}}};
+  if(mode==='foreign_dialog')state.ui.dialogs[0].ref='other';
+  if(mode==='foreign_selection')state.wizard.expression_parameters.selected_expression.tid+='Other';
+  if(mode==='foreign_mask')state.ui.masks[0].target_tid='Other';
+  if(mode==='busy')state.ui.masks[0].kind='loading';
+  if(mode==='extra_dialog')state.ui.dialogs.push({ref:'other',identity:{anchor_tid:'msgbox'}});
+  let clock=1;const roots=[];
+  const channel=createNodeProcedure({operation:{id:'calc',action:{action_key:'node.apply',revision:'1'},deadline:10000,checkpoint:{document_id:'doc',workflow_ref:state.workflow_ref}},
+   targetOrigin:state.origin,targetBuild:state.loginom_build,now:()=>clock++,wait:async()=>{clock+=1000},record:async e=>structuredClone(e),
+   execute:async code=>{if(!code.includes('"discover_roots":true'))roots.push(code.includes('"root_ref":"editor"'));return {status:'SUCCEEDED',output:structuredClone(state)};}});
+  const read=()=>channel.observe({condition:'calculator editor',ready:()=>true,timeoutMs:2000});
+  if(mode==='bound'){assert.equal((await read()).wizard.expression_parameters.root_ref,'editor');assert.ok(roots.every(Boolean));}
+  else await assert.rejects(read());
  }
 });

@@ -2,14 +2,15 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import vm from 'node:vm';
 import {readMappingBrowser,readNodeMapping} from '../lib/node-mapping-context.mjs';
-function fixture({grouped=false}={}) {
- const base='MF;TF;WizrdMCF;'+(grouped?'DerivedDataSourceOutputSocketWizard':'ColumnsMappingEngineOutputPortWizard')+';',all=[],views={};
+function fixture({grouped=false,input=false}={}) {
+ const base='MF;TF;WizrdMCF;'+(input?'TuneDataSourceMappingWizard':grouped?'DerivedDataSourceOutputSocketWizard':'ColumnsMappingEngineOutputPortWizard')+';',all=[],views={};
  const el=(tid,text='',parent=null)=>{const e={tid,textContent:text,parent,id:'e'+all.length,attrs:{},checkVisibility:()=>true,
   getAttribute(k){return k==='data-tid'?this.tid:this.attrs[k]??null;},contains(other){return other===this||!!other.parent&&this.contains(other.parent);},
   querySelectorAll(q){return all.filter(x=>x!==this&&this.contains(x)&&q==='table.x-grid-item'&&x.row);},classList:{contains:()=>false}};all.push(e);return e;};
  const root=el(base.slice(0,-1)),grids=['grdSourceColumns;tbl','grdTargetColumns;tbl'].map(s=>el(base+s,'',root));
  const source=['A','B'].map((name,i)=>({isModel:true,internalId:'s'+i,data:{ID:i,Index:i,Name:name,DisplayName:'Same',DataType:5,Broken:false,Required:false}}));
  const target=source.map((s,i)=>{const t={isModel:true,internalId:'t'+i,data:{...s.data,Name:'Out'+i,DataKind:2,ConnectedRecord:s,SourceDisplayName:'Same',SourceDataType:5}};s.data.ConnectedRecord=t;return t;});
+ if(input)for(const t of target)Object.assign(t.data,{UsageType:3,DefaultUsageType:0,OriginType:0,ReverseBroken:false,IsDerived:false});
  if(grouped){for(const s of source)s.data.GroupField='';for(const t of target)Object.assign(t.data,{GroupField:'',IsDerived:false});}
  const stores=[source,target].map(items=>({$className:'Ext.data.Store',isLoading:()=>false,getCount:()=>items.length,getTotalCount:()=>items.length,getData:()=>({items,getSource:()=>({items})})}));
  grids.forEach((g,i)=>{views[g.id]={el:{dom:g},getStore:()=>stores[i]};});
@@ -118,4 +119,17 @@ for(const [name,change] of Object.entries({wrong_total:f=>f.stores[1].getTotalCo
  source_total:f=>f.stores[0].getTotalCount=()=>1,
 }))test('active-only target total rejects '+name,()=>{
  const f=excludedFixture();f.stores[1].getTotalCount=()=>1;change(f);assert.equal(f.read().verified,false);
+});
+
+test('input mapping retains usage and rejects a broken reverse connection',()=>{
+ const f=fixture({input:true}),r=f.read();assert.equal(r.verified,true);assert.equal(r.mapping_wizard,'TuneDataSourceMappingWizard');assert.equal(r.target_fields[0].usage_type,3);
+ f.target[0].data.ReverseBroken=true;assert.equal(f.read().verified,false);
+});
+
+test('conditional calculator mapping keeps the same strict excluded-record proof',()=>{
+ const f=excludedFixture();
+ for(const e of f.all)if(e.tid)e.tid=e.tid.replace('DerivedDataSourceOutputSocketWizard','DerivedDataSourceMappingEngineOutputPortWizard');
+ const r=f.read();assert.equal(r.verified,true);assert.equal(r.mapping_wizard,'DerivedDataSourceMappingEngineOutputPortWizard');
+ assert.equal(r.target_fields[1].exclusion_source.record_id,'s1');
+ f.target[1].data.IsDerived=true;assert.equal(f.read().verified,false);
 });

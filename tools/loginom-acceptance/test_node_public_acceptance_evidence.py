@@ -62,6 +62,33 @@ class PublicNodeAcceptanceTests(unittest.TestCase):
                 mutate(self.evidence)
                 self.assertFalse(self.audit()['passed'])
 
+    def test_validation_refusal_is_optional_and_requires_no_allocated_effect(self):
+        import json
+        error=dict(status='FAILED',action_key='request.validate',operation_id=None,phase='request_rejected',
+            effect_possible=False,request_rejected=True,trace=[],error=dict(code='REQUEST_REJECTED'),
+            output=dict(operation=dict(operation_id=None,state='idle',outcome=None,cleanup_confirmed=True,effect_state='none')))
+        call=dict(tool=PREFIX+'dock_node_apply',arguments=dict(operation_id='bad'),row=9,session_id='caller',tool_call_id='rejected')
+        reply=dict(tool=call['tool'],row=10,session_id='caller',tool_call_id='rejected',result=dict(isError=True,error=json.dumps(error)+'Read the current state before continuing.'))
+        self.evidence['calls'].append(call);self.evidence['tools'].append(reply)
+        def audit():return verify_public_nodes_and_saves(self.evidence,{'import':self.request},['save'],allow_validation_refusals=True)
+        self.assertFalse(self.audit()['passed'])
+        self.assertTrue(audit()['passed'],audit());self.assertEqual(audit()['validation_refusals'],['bad'])
+        for mutate in [lambda e:e.update(effect_possible=True),lambda e:e.update(status='AMBIGUOUS'),
+                lambda e:e.update(request_rejected=False),lambda e:e.update(operation_id='bad'),
+                lambda e:e.update(trace=[dict(verb='execute')]),
+                lambda e:e['output']['operation'].update(state='running'),
+                lambda e:e['output']['operation'].update(cleanup_confirmed=False),
+                lambda e:e['output']['operation'].update(effect_state='unknown')]:
+            changed=copy.deepcopy(error);mutate(changed);reply['result']['error']=json.dumps(changed)
+            self.assertFalse(audit()['passed'])
+        reply['result']['error']=json.dumps(error)
+        self.evidence['events'].append(dict(operation_id='bad',phase='prepared'))
+        self.assertFalse(audit()['passed'])
+        self.evidence['events'].pop();reply['result']['error']='unknown failure'
+        self.assertFalse(audit()['passed'])
+        reply['result']['error']=json.dumps(error);reply['session_id']='foreign'
+        self.assertFalse(audit()['passed'])
+
 
 if __name__ == '__main__':
     unittest.main()

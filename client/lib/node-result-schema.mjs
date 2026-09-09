@@ -23,12 +23,20 @@ const output=object({status:values('not_refreshed','partial','complete'),evidenc
 const readbackColumn=object({index:integer,name:str,label:str,type:str,data_kind:str,used:bool});
 const readbackMappingField=object({index:integer,name:str,label:str,type:str,data_kind:str,source_name:str});
 const boundedFields=items=>({...array(items),maxItems:1000});
-const configurationReadback=object({kind:values('text_import'),scope:values('observed_before_verified_finish'),node:ref,
+const importConfigurationReadback=object({kind:values('text_import'),scope:values('observed_before_verified_finish'),node:ref,
  receipt_ids:{...array(str),minItems:3,maxItems:3},values_are:values('observed_ui_values'),
  source:object({source_path:str,connection:str,encoding:str,rows_to_skip:str,first_line_as_title:bool}),
  format:object({delimiter:str,text_qualifier:str,null_marker:str,decimal_separator:str}),
  columns:boundedFields(readbackColumn),output_mapping:object({port:{type:'integer',const:0},autosync:bool,fields:boundedFields(readbackMappingField)}),
  package_persistence_verified:{type:'boolean',const:false}});
+const calculatorConfigurationReadback=object({kind:values('calculator'),scope:values('observed_before_verified_finish'),node:ref,
+ receipt_ids:{...array(str),minItems:5,maxItems:5},values_are:values('observed_ui_values'),mode:values('expression'),
+ expressions:{...array(object({index:integer,name:str,label:str,type:str,formula:str,replace:bool,intermediate:bool,cached:bool,description:str})),minItems:1,maxItems:128},
+ input_mapping:object({port:{type:'integer',const:0},autosync:bool,fields:boundedFields(object({...readbackMappingField.properties,excluded:bool}))}),
+ input_fields:boundedFields(object({name:str,label:str,type:str})),syntax_validation:values('accepted_by_loginom_next'),
+ output_mapping:object({port:{type:'integer',const:0},autosync:bool,fields:boundedFields(object({...readbackMappingField.properties,excluded:bool}))}),
+ package_persistence_verified:{type:'boolean',const:false}});
+const configurationReadback={anyOf:[importConfigurationReadback,calculatorConfigurationReadback]};
 export const nodeApplyResultSchema=object({operation_id:str,status:values('SUCCEEDED','FAILED','NOT_APPLIED','AMBIGUOUS'),
  effect_possible:bool,phases:array(receipt),node:nullable(ref),execution,output,
  package_saved:{type:'boolean',const:false},cleanup_complete:bool,warnings:array(str),

@@ -1,6 +1,8 @@
 # 04. Настройка Калькулятора
 
-Статус: **planned**. Этап V3.
+Статус: **implemented / live_verified (source runtime)**. Этап V3; не released.
+Hermes45/45 PASS. [Итоговая матрица](04-completion-audit.md),
+[история диагностики](04-progress.md).
 Навигация: [все подпланы](README.md), [основной план](../2026-09-02-loginom-dock-implementation-plan.md).
 
 ## Результат и зависимости
@@ -19,7 +21,10 @@
 
 В [workspace-ui.mjs](../../../client/lib/workspace-ui.mjs) и
 [node-procedure.mjs](../../../client/lib/node-procedure.mjs) есть наблюдение
-Калькулятора и ограниченные операции редактора, но нового полного handler нет.
+Калькулятора и ограниченные операции редактора служили исходной точкой.
+Полный handler реализован в [calculator-node.mjs](../../../client/lib/calculator-node.mjs),
+параметры и сохранность выражений — в calculator-parameters/calculator-procedure,
+независимые проверки — в calculator_configuration_evidence и calculator_output_evidence.
 Использовать [calculator_evidence.py](../../../tools/loginom-acceptance/calculator_evidence.py),
 [calculator_receipts.py](../../../tools/loginom-acceptance/calculator_receipts.py)
 и [calculator_test_fixtures.py](../../../tools/loginom-acceptance/calculator_test_fixtures.py).
@@ -36,7 +41,11 @@ calc_fields.ts, expression_code_syntax.ts, calculator_logical_operations_and_dat
 
 Наблюдённый UI 7.4.2: мастер Калькулятора идёт от выражений к завершению.
 Настройки входа и выхода — отдельные мастера портов через контекстное меню
-на графе. Next не открывает их. Перед реализацией перепроверить текущий стенд.
+на графе. Next не открывает эти отдельные мастера. При добавлении выражений
+в существующий узел с выключенной autosync дополнительно наблюдается внутренняя
+страница DerivedDataSourceMappingEngineOutputPortWizard; handler проверяет её
+и сохранность прежних полей после однократной синхронизации. Наблюдения текущего
+стенда и проверенные ограничения записаны в [04-progress](04-progress.md).
 
 ## Вход и выход
 

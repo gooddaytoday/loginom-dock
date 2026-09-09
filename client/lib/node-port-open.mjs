@@ -1,25 +1,33 @@
 import {readPreparedNodeContext,validatePreparedNodeContext} from './node-context.mjs';
 
 export function makePreparedOutputPortOpenCode(binding,options) {
+ return makePreparedPortOpenCode(binding,options,'output');
+}
+export function makePreparedInputPortOpenCode(binding,options) {
+ return makePreparedPortOpenCode(binding,options,'input');
+}
+function makePreparedPortOpenCode(binding,options,direction) {
  validatePreparedNodeContext(binding);
  if(!options||Object.keys(options).sort().join(',')!=='build,deadline,operation_id,origin,port'
    ||!Number.isInteger(options.port)||options.port<0||options.port>99
    ||typeof options.operation_id!=='string'||! /^[A-Za-z0-9_.:-]{1,160}$/.test(options.operation_id)
    ||!Number.isSafeInteger(options.deadline)||typeof options.origin!=='string'||typeof options.build!=='string')throw Error('Exact bounded output port opening required');
- return `async page=>(${openPreparedOutputPort.toString()})(page,${JSON.stringify({binding,...options})},${readPreparedNodeContext.toString()})`;
+ return `async page=>(${openPreparedOutputPort.toString()})(page,${JSON.stringify({binding,...options,direction})},${readPreparedNodeContext.toString()})`;
 }
 
 // A local opening receipt retains UI object identity across graph -> port wizard.
 // Proxy objects are compared by reference only; no proxy property/method is used.
 export async function openPreparedOutputPort(page,task,readNode=readPreparedNodeContext) {
- let effect=false;const trace=[];
+ let effect=false;const trace=[],direction=task.direction??'output';
  const remaining=()=>{const n=task.deadline-Date.now();if(n<=0)throw Error('Output port opening deadline');return n;};
  const at=tid=>page.locator('[data-tid='+JSON.stringify(tid)+']');
  const inspect=mode=>page.evaluate(({task,mode})=>{
+  const direction=task.direction??'output',input=direction==='input';
+  if(!['input','output'].includes(direction))throw Error('Invalid port direction');
   const b=task.binding,app=globalThis.bg?.app,p=globalThis.__loginomDockPreparationV1;
   const fail=m=>{throw Error(m);},exact=t=>[...document.querySelectorAll('[data-tid='+JSON.stringify(t)+']')];
   if(location.origin!==task.origin||app?.Version!==task.build||p?.document!==document||p.id!==b.document_id)fail('Port opening document changed');
-  const receipts=p.outputPortOpenReceipts??=new Map(),r=receipts.get(task.operation_id);
+  const receipts=input?(p.inputPortOpenReceipts??=new Map()):(p.outputPortOpenReceipts??=new Map()),r=receipts.get(task.operation_id);
   if(r&&r.request!==JSON.stringify(b)+':'+task.port)fail('Port opening operation reused with another target');
   if(mode==='release_reserved'){if(r?.phase==='reserved')receipts.delete(task.operation_id);return null;}
   const records=[...p.receipts.values()].filter(r=>r.phase==='verified'&&r.workflowId===b.workflow_ref.workflow_id);
@@ -68,7 +76,7 @@ export async function openPreparedOutputPort(page,task,readNode=readPreparedNode
   if(mode==='begin') {
    if(r)fail('Port opening already reserved');
    if(receipts.size>=128)fail('Port opening receipt bound exceeded');
-   const pending=[...receipts.values()].some(v=>v.workflow===prepared.nodeTargetWorkflowNode&&v.phase!=='verified');
+   const pending=[...(p.inputPortOpenReceipts?.values()??[]),...(p.outputPortOpenReceipts?.values()??[])].some(v=>v.workflow===prepared.nodeTargetWorkflowNode&&v.phase!=='verified');
    if(pending)fail('Another output port opening is unresolved');
    const d=model?.FDiagram,roots=exact(b.workflow_ref.prefix+';ModelForm;cmpDiagram');
    if(!(model instanceof app.ModelForm)||roots.length!==1||d?.FmxGraph?.container!==roots[0])fail('Port opening graph unavailable');
@@ -79,8 +87,8 @@ export async function openPreparedOutputPort(page,task,readNode=readPreparedNode
    const candidates=[];
    for(const list of node.FPorts){if(!Array.isArray(list.FCollection)||list.FCollection.length>100)fail('Port inventory bound');candidates.push(...list.FCollection);}
    const ports=[],graphBox=roots[0].getBoundingClientRect();
-   for(const dom of document.querySelectorAll('[data-tid^='+JSON.stringify(tid+';Output_Data-')+']')) {
-    const ptid=dom.getAttribute('data-tid'),suffix=ptid.slice((tid+';Output_Data-').length);
+   for(const dom of document.querySelectorAll('[data-tid^='+JSON.stringify(tid+';'+(input?'Input':'Output')+'_Data-')+']')) {
+    const ptid=dom.getAttribute('data-tid'),suffix=ptid.slice((tid+';'+(input?'Input':'Output')+'_Data-').length);
     if(!/^[0-9]{1,2}$/.test(suffix))fail('Unknown output port identifier');
     const index=Number(suffix),box=dom.getBoundingClientRect();
     if(!roots[0].contains(dom)||box.width<=0||box.height<=0||exact(ptid).length!==1)fail('Port DOM unavailable');
@@ -93,7 +101,7 @@ export async function openPreparedOutputPort(page,task,readNode=readPreparedNode
    if(new Set(ports.map(v=>v.index)).size!==ports.length||new Set(ports.map(v=>v.port.FGuid)).size!==ports.length)fail('Duplicate output ports');
    const target=ports[task.port];if(!target)fail('Requested output port absent');
    if(exact('mn').some(e=>e.checkVisibility({checkVisibilityCSS:true})))fail('An existing context menu is open');
-   const rec={request:JSON.stringify(b)+':'+task.port,phase:'reserved',graph:model,node,nodeData:node.data,
+   const rec={direction,request:JSON.stringify(b)+':'+task.port,phase:'reserved',graph:model,node,nodeData:node.data,
     port:target.port,portData:target.port.data,portGuid:target.port.FGuid,portDom:target.dom,
     portTid:target.tid,nativeIndex:target.index,portIndex:task.port,workflow:prepared.nodeTargetWorkflowNode,packageNode:prepared.packageNode,
     document_id:b.document_id,workflow_id:b.workflow_ref.workflow_id,node_id:b.node.node_id,operation_id:task.operation_id};
@@ -123,15 +131,15 @@ export async function openPreparedOutputPort(page,task,readNode=readPreparedNode
    const wizardTree=card.Controller.Node?.data?.node,portTree=wizardTree?.ParentNode,group=portTree?.ParentNode,nodeTree=group?.ParentNode;
    const roots=exact(b.workflow_ref.prefix+';WizrdMCF');
    if(!(wizardTree instanceof app.WizardTreeNode)||!(portTree instanceof app.ModelPortTreeNode)
-    ||!(group instanceof app.ModelOutputPortsTreeNode)||!(nodeTree instanceof app.ModelNodeTreeNode)
+    ||!(group instanceof (input?app.ModelInputPortsTreeNode:app.ModelOutputPortsTreeNode))||!(nodeTree instanceof app.ModelNodeTreeNode)
     ||nodeTree.FGuid!==r.node_id||nodeTree.FModelNode!==r.node.data||portTree.FModelNodePort!==r.port.data
     ||portTree.FIndex!==r.nativeIndex||nodeTree.ParentNode!==r.workflow
-    ||model?.constructor?.name!=='WizardModelComponentForm'||!model.FModelEnginePort||model.FModelNode
+    ||model?.constructor?.name!=='WizardModelComponentForm'||!(input?model.FModelSocket:model.FModelEnginePort)||model.FModelNode
     ||roots.length!==1||model.FView?.el?.dom!==roots[0])fail('Opened port wizard owner differs');
-   if(r.phase==='verified'&&(r.wizard!==model||r.enginePort!==model.FModelEnginePort||r.portTree!==portTree||r.nodeTree!==nodeTree))fail('Port wizard receipt became stale');
-   r.wizard=model;r.enginePort=model.FModelEnginePort;r.portTree=portTree;r.nodeTree=nodeTree;r.phase='verified';
+   if(r.phase==='verified'&&(r.wizard!==model||r.enginePort!==(input?model.FModelSocket:model.FModelEnginePort)||r.portTree!==portTree||r.nodeTree!==nodeTree))fail('Port wizard receipt became stale');
+   r.wizard=model;r.enginePort=input?model.FModelSocket:model.FModelEnginePort;r.portTree=portTree;r.nodeTree=nodeTree;r.phase='verified';
    return {phase:r.phase,verified:true,document_id:r.document_id,workflow_id:r.workflow_id,node_id:r.node_id,
-    direction:'output',port:r.portIndex,native_index:r.nativeIndex,port_guid:r.port.FGuid,opening_operation_id:r.operation_id};
+    direction,port:r.portIndex,native_index:r.nativeIndex,port_guid:r.port.FGuid,opening_operation_id:r.operation_id};
   }
   fail('Unknown port opening phase');
  },{task,mode});
@@ -142,30 +150,30 @@ export async function openPreparedOutputPort(page,task,readNode=readPreparedNode
   if(existing){effect=existing.phase!=='reserved';const result=await finish();return {status:'SUCCEEDED',...result,effect_possible:false,cleanup_complete:true,replayed:true,trace};}
   const before=await readNode(page,task.binding);
   if(before?.verified!==true||before.surface!=='graph'||before.locked!==false)throw Error('Prepared unlocked graph required for port opening');
-  const target=await inspect('begin');trace.push({event:'output_port_reserved',...target});
+  const target=await inspect('begin');trace.push({event:direction+'_port_reserved',...target});
   await at(target.port_tid).click({button:'right',trial:true,timeout:remaining()});
   if(JSON.stringify(await readNode(page,task.binding))!==JSON.stringify(before))throw Error('Prepared node changed before port opening');
   await inspect('menu_issued');effect=true;
   await at(target.port_tid).click({button:'right',timeout:remaining()});
   await at('mn;mniConfigurePort').waitFor({state:'visible',timeout:remaining()});
-  trace.push({event:'output_port_menu_verified',...await inspect('menu')});
+  trace.push({event:direction+'_port_menu_verified',...await inspect('menu')});
   await at('mn;mniConfigurePort').click({trial:true,timeout:remaining()});await inspect('open_issued');
   await at('mn;mniConfigurePort').click({timeout:remaining()});
   while(remaining()>0) {
    const transition=await inspect('await_open');
    if(transition.wizard)break;
    if(transition.deactivation) {
-    trace.push({event:'output_port_deactivation_question_verified',...transition});
+    trace.push({event:direction+'_port_deactivation_question_verified',...transition});
     await at('msgbox;tlb;yes').click({trial:true,timeout:remaining()});
     const issued=await inspect('deactivation_issued');
-    trace.push({event:'output_port_deactivation_issued',...issued});
+    trace.push({event:direction+'_port_deactivation_issued',...issued});
     await at('msgbox;tlb;yes').click({timeout:remaining()});
     break;
    }
    await page.waitForTimeout(Math.min(100,remaining()));
   }
   await at(task.binding.workflow_ref.prefix+';WizrdMCF').waitFor({state:'visible',timeout:remaining()});
-  const result=await finish();trace.push({event:'output_port_wizard_verified',...result});
+  const result=await finish();trace.push({event:direction+'_port_wizard_verified',...result});
   return {status:'SUCCEEDED',...result,effect_possible:true,cleanup_complete:true,replayed:false,trace};
  }catch(error){if(!effect){try{await inspect('release_reserved');}catch{}}return {status:effect?'AMBIGUOUS':'NOT_APPLIED',verified:false,effect_possible:effect,cleanup_complete:!effect,
   error:String(error.message).slice(0,500),trace};}

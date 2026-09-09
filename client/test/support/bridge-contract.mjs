@@ -117,7 +117,9 @@ test('MCP application refusals remain typed normal content and the same connecti
     const nodeCards=JSON.parse(cards.content[0].text).node_types;
     assert.equal(nodeCards[0].candidate_node_apply_available,true);
     assert.equal(nodeCards[0].full_node_apply_available,false);
-    assert.equal(nodeCards[1].candidate_node_apply_available,false);
+    assert.equal(nodeCards[1].candidate_node_apply_available,true);
+    assert.equal(nodeCards[1].full_node_apply_available,false);
+    assert.deepEqual(nodeCards[1].parameter_schema.required,['expressions']);
     for(const [name,args] of [['dock_node_apply',{}],['dock_node_wait',{operation_id:'missing',timeout_ms:0}],
       ['dock_artifact_deliver',{operation_id:'test',artifact_id:admitted.artifact_id,upload_grant_id:'missing',budget_ms:1000}]]) {
       const response=await client.callTool({name,arguments:args});

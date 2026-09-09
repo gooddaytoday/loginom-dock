@@ -128,10 +128,10 @@ test('source validation preserves a bounded cause and partial effects without fi
  const count=f.calls.length;await assert.rejects(f.run(request(),{resume:true}),/unresolved/);assert.equal(f.calls.length,count);
 });
 
-test('self source references are explicit output-only names and cannot mix opaque IDs',()=>{
+test('self source references name the current port source and cannot mix opaque IDs',()=>{
  const f=fixture(),p=request();p.mappings=[{direction:'output',port:0,fields:[{source:{kind:'configured_field',name:'Сумма'}}]}];
  assert.doesNotThrow(()=>validateNodeApplyRequest(p,f.handlers));
- p.mappings[0].direction='input';assert.throws(()=>validateNodeApplyRequest(p,f.handlers));
+ p.mappings[0].direction='input';assert.doesNotThrow(()=>validateNodeApplyRequest(p,f.handlers));
  p.mappings[0].direction='output';p.mappings[0].fields[0].source.schema_id='foreign';assert.throws(()=>validateNodeApplyRequest(p,f.handlers));
 });
 

@@ -30,7 +30,7 @@ def verify_process_scroll_observations(observations, mutations):
     return sorted(set(failures))
 
 
-def verify_execution_observations(observations, mutations, node):
+def verify_execution_observations(observations, mutations, node, *, launch_mode='wizard'):
     failures = []
     same_node = lambda n: n.get('verified') is True and all(n.get(k) == node[k] for k in ('document_id', 'workflow_id', 'node_id'))
     def inventory(s):
@@ -48,16 +48,34 @@ def verify_execution_observations(observations, mutations, node):
             valid = all((r.get('parent_id') is None and '.' not in r['process_id'])
                         or (r.get('parent_id') in ids and r['process_id'].rsplit('.', 1)[0] == r['parent_id']) for r in rows)
         return p if valid else None
-    launches = [(step, a, o) for step, a, o in mutations if a.get('verb') == 'execute_wizard']
+    launches = [(step, a, o) for step, a, o in mutations if a.get('verb') in ('execute_wizard','execute_graph_node')]
     navigation = [(step, a, o) for step, a, o in mutations if a.get('verb') == 'show_process_node']
     if len(launches) != 1 or len(navigation) != 1:
         return dict(passed=False, failures=['one_launch_one_owner_navigation'], execution_id=None)
-    launch, _, launch_outcome = launches[0]
+    launch, launch_action, launch_outcome = launches[0]
     go, action, _ = navigation[0]
     failures.extend(verify_process_scroll_observations(observations, [(n,a,o) for n,a,o in mutations if launch<n<go]))
-    if go <= launch or not any(t.get('event') == 'wizard_execute_graph_verified'
-                               and t.get('launch_gesture_verified') is True and t.get('execution_completed') is False
-                               for t in launch_outcome.get('trace', [])):
+    if launch_mode=='wizard':
+        gesture=(launch_action.get('verb')=='execute_wizard' and any(t.get('event')=='wizard_execute_graph_verified'
+            and t.get('launch_gesture_verified') is True and t.get('execution_completed') is False
+            for t in launch_outcome.get('trace',[])))
+    elif launch_mode=='graph':
+        state=next((s for n,s in reversed(observations) if n<launch),{})
+        controls=[e for e in state.get('ui',{}).get('elements',[]) if e.get('ref')==launch_action.get('ref')]
+        trace=launch_outcome.get('trace',[])
+        gesture=(launch_action.get('verb')=='execute_graph_node' and launch_outcome.get('status')=='SUCCEEDED'
+            and launch_outcome.get('cleanup_complete') is True and launch_outcome.get('output',{}).get('gesture_applied') is True
+            and state.get('wizard',{}).get('status')=='absent'
+            and same_node(state.get('prepared_node_context',{}))
+            and state.get('node_outputs',{}).get('node_selected') is True
+            and len(controls)==1 and controls[0].get('graph_execution',{}).get('node_id')==node['node_id']
+            and controls[0].get('graph_execution',{}).get('source')=='native_selected_graph_node'
+            and len([t for t in trace if t.get('event')=='ui_preconditions_verified'
+                and t.get('verb')=='execute_graph_node' and t.get('refs')==[launch_action['ref']]])==1
+            and len([t for t in trace if t.get('event')=='ui_gesture_applied' and t.get('verb')=='execute_graph_node'])==1)
+    else:
+        gesture=False
+    if go<=launch or not gesture:
         failures.append('launch_gesture_proof')
     before = [(step, inventory(s)) for step, s in observations if step < launch and inventory(s)]
     after = [(step, s, inventory(s)) for step, s in observations if step > launch and inventory(s)]

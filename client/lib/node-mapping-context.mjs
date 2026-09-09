@@ -19,10 +19,10 @@ export function readMappingBrowser(prefix) {
   const fail=reason=>({verified:false,reason,source_identity_verified:false});
   const types={1:'boolean',2:'datetime',3:'real',4:'integer',5:'string',6:'variant'};
   const exact=tid=>[...document.querySelectorAll('[data-tid]')].filter(e=>e.getAttribute('data-tid')===tid);
-  const forms=['ColumnsMappingEngineOutputPortWizard','DerivedDataSourceOutputSocketWizard'];
+  const forms=['ColumnsMappingEngineOutputPortWizard','DerivedDataSourceOutputSocketWizard','TuneDataSourceMappingWizard','DerivedDataSourceMappingEngineOutputPortWizard'];
   const candidates=forms.flatMap(form=>exact(prefix+';WizrdMCF;'+form).filter(e=>e.checkVisibility({checkVisibilityCSS:true})).map(root=>({form,root})));
   if(candidates.length!==1)return fail('mapping_root');
-  const {form,root}=candidates[0],grouped=form==='DerivedDataSourceOutputSocketWizard';
+  const {form,root}=candidates[0],input=form==='TuneDataSourceMappingWizard',grouped=['DerivedDataSourceOutputSocketWizard','DerivedDataSourceMappingEngineOutputPortWizard'].includes(form);
   const base=prefix+';WizrdMCF;'+form+';';
   if([...document.querySelectorAll('.x-mask,.x-mask-msg,.bg-mask-message')].some(e=>e.checkVisibility({checkVisibilityCSS:true})))return fail('mapping_mask');
   const grids=['grdSourceColumns;tbl','grdTargetColumns;tbl'].map(s=>exact(base+s));
@@ -61,6 +61,7 @@ export function readMappingBrowser(prefix) {
   const describe=r=>({record_id:String(r.internalId),field_id:String(r.data.ID),index:r.data.Index,
     name:r.data.Name,label:r.data.DisplayName,type:types[r.data.DataType],required:r.data.Required});
   for(const target of targets) {
+    if(input&&(![0,1,2,3,4,5].includes(target.data.UsageType)||typeof target.data.ReverseBroken!=='boolean'||target.data.ReverseBroken))return fail('mapping_input_usage');
     if(![0,1,2].includes(target.data.DataKind))return fail('mapping_target_kind');
     if(grouped&&typeof target.data.IsDerived!=='boolean')return fail('mapping_inherited');
     const source=target.data.ConnectedRecord;
@@ -100,9 +101,10 @@ export function readMappingBrowser(prefix) {
   if(buttons.length!==1||!root.contains(button)||!button.checkVisibility({checkVisibilityCSS:true})||native?.el?.dom!==button
     ||typeof native.pressed!=='boolean'||native.pressed!==button.classList.contains('x-btn-pressed'))return fail('mapping_autosync');
   return {verified:true,source_identity_verified:true,inventory_complete:true,
-    ...(grouped?{mapping_wizard:form}:{}),
+    ...(grouped||input?{mapping_wizard:form}:{}),
     state_source:'cached_mapping_stores',autosync:native.pressed,
     source_fields:sources.map(describe),target_fields:targets.map((t,i)=>({...describe(t),
+      ...(input?{usage_type:t.data.UsageType,default_usage_type:t.data.DefaultUsageType,origin_type:t.data.OriginType,inherited:t.data.IsDerived}:{}),
       ...(grouped?{index:i,group_index:t.data.Index,excluded:excludedSources.has(t),inherited:t.data.IsDerived,
         exclusion_source:excludedSources.has(t)?describe(excludedSources.get(t)):null}:{}),
       data_kind:{0:'Неопределенное',1:'Непрерывный',2:'Дискретный'}[t.data.DataKind],

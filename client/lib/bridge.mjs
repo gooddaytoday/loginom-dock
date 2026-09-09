@@ -12,7 +12,7 @@ import { openArchive } from './archive.mjs';
 import { diagnoseConnection } from './diagnostics.mjs';
 import { pinActionCatalog, assertCatalogTarget, validateActionParameters } from './action-catalog.mjs';
 import { createActionRuntime, parseCapabilityResult } from './executor.mjs';
-import {createTextImportNodeSupport} from './text-import-node.mjs';
+import {createCandidateNodeSupport} from './node-support.mjs';
 import {isNodeApiTool,dispatchNodeApi} from './node-api.mjs';
 import { makeWorkspacePrepareCode, parseWorkspacePreparation, prepareWorkspaceSession, requirePreparedWorkspace, workspaceObserveTool } from './workspace.mjs';
 import { createExecutionJournal } from './execution-journal.mjs';
@@ -104,7 +104,7 @@ export async function createBridge(config, session) {
       recoveryContext = createRecoveryContext({ remote, pinned, knownSecrets: [config.apiKey] });
       Object.assign(session.metadata, pinned.pins);
       actionRuntime = createActionRuntime({ pinned,
-        ...(replay?createTextImportNodeSupport({targetOrigin:config.loginomUrl?new URL(config.loginomUrl).origin:undefined,targetBuild:pinned.compatibility?.loginom_build}):{}),
+        ...(replay?createCandidateNodeSupport({targetOrigin:config.loginomUrl?new URL(config.loginomUrl).origin:undefined,targetBuild:pinned.compatibility?.loginom_build}):{}),
         getNodeContractPins: () => ({...pinned.pins, skillRevision:session.metadata.skillRevision, loginomProfile:session.metadata.targetIdentity ?? pinned.compatibility}),
         artifactStore:session.artifactStore, allowCandidate: replay, onRecord: recordExecution,
         targetOrigin: config.loginomUrl ? new URL(config.loginomUrl).origin : undefined, execute: async (code, options) => {

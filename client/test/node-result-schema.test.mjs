@@ -29,3 +29,13 @@ test('delivery result distinguishes unresolved transfer from a worker or success
   outcome:{status:'AMBIGUOUS',effect_possible:true},error:{code:'ARTIFACT_DELIVERY_INCOMPLETE',message:'Inspect original upload'}};
  assert.equal(check(r).valid,true);assert.equal(check({...r,state:'completed'}).valid,false);assert.equal(check(result()).valid,false);
 });
+test('calculator readback has its own public shape and cannot masquerade as text import or persistence',()=>{
+ const r=result();r.configuration={status:'applied',readback:{kind:'calculator',input_mapping:{port:0,autosync:false,fields:[]},scope:'observed_before_verified_finish',node:{document_id:'d',workflow_id:'w',node_id:'n'},
+ receipt_ids:['op:input_mapping','op:configure','op:node_finish','op:output_mapping','op:finish'],values_are:'observed_ui_values',mode:'expression',
+ expressions:[{index:0,name:'R',label:'R',type:'real',formula:'A * 2',replace:false,intermediate:false,cached:false,description:''}],
+ input_fields:[{name:'A',label:'A',type:'real'}],syntax_validation:'accepted_by_loginom_next',output_mapping:{port:0,autosync:true,fields:[{index:0,name:'R',label:'R',type:'real',data_kind:'Непрерывный',source_name:'R',excluded:false}]},package_persistence_verified:false}};
+ assert.equal(validate(r).valid,true);
+ for(const change of [v=>v.kind='text_import',v=>v.mode='javascript',v=>v.package_persistence_verified=true,v=>v.receipt_ids.pop(),v=>delete v.expressions[0].formula]){
+  const invalid=structuredClone(r);change(invalid.configuration.readback);assert.equal(validate(invalid).valid,false);
+ }
+});

@@ -1,4 +1,4 @@
-"""Independent journal checks for the private text-import procedure.
+"""Independent journal checks for the private node procedures.
 
 Input must come from the authenticated session journal. This verifier does not
 admit a catalog, authenticate a journal file, or establish Hermes acceptance.
@@ -86,16 +86,53 @@ def bound_table_dialogs(state):
 def bound_output_column_dialog(state):
     wizard=state.get('wizard',{});params=wizard.get('column_parameters',{});dialogs=state.get('ui',{}).get('dialogs',[])
     selected=params.get('selected_column',{})
-    if (wizard.get('stage')!='output_mapping' or params.get('status')!='observed'
-        or params.get('portal_bound') is not True or params.get('root_tid')!='EditColumnDefForm'
+    root='EditTuneColumnDefForm' if wizard.get('stage')=='input_mapping' else 'EditColumnDefForm'
+    if (wizard.get('stage') not in ('output_mapping','input_mapping') or params.get('status')!='observed'
+        or params.get('portal_bound') is not True or params.get('root_tid')!=root
         or not isinstance(dialogs,list) or len(dialogs)!=1
         or dialogs[0].get('ref')!=params.get('root_ref')
-        or dialogs[0].get('identity',{}).get('anchor_tid')!='EditColumnDefForm'
+        or dialogs[0].get('identity',{}).get('anchor_tid')!=root
         or selected.get('status')!='observed' or selected.get('selected') is not True):return False
     matches=[f for f in wizard.get('output_columns',{}).get('fields',[]) if f==selected]
     fields=params.get('fields',{})
     return len(matches)==1 and set(fields)=={'name','label','type_label','data_kind','usage'} and all(
         f.get('status')=='observed' and f.get('truncated') is False for f in fields.values())
+
+
+def bound_expression_dialog(state):
+    wizard=state.get('wizard',{});params=wizard.get('expression_parameters',{})
+    selection=wizard.get('expression_selection',{});ui=state.get('ui',{})
+    dialogs,masks=ui.get('dialogs'),ui.get('masks')
+    root=wizard.get('root_tid','')
+    if (wizard.get('stage')!='calculator' or wizard.get('status')!='observed'
+            or params.get('status')!='observed' or selection.get('status')!='observed'
+            or not isinstance(selection.get('name'),str) or not selection['name']
+            or params.get('selected_expression',{}).get('tid')!=root+';CalcDataWizard;colExpressionName_'+selection['name']
+            or not isinstance(dialogs,list) or len(dialogs)!=1
+            or dialogs[0].get('ref')!=params.get('root_ref')
+            or dialogs[0].get('identity',{}).get('anchor_tid')!=root+';ExprDataEditForm'
+            or not isinstance(masks,list) or any(m.get('kind')!='modal_background'
+                or m.get('target_tid')!=root or m.get('ref')!=wizard.get('root_ref') for m in masks)):
+        return False
+    fields=params.get('fields',{})
+    return set(fields)=={'name','label','type_label'} and all(
+        f.get('status')=='observed' and f.get('truncated') is False for f in fields.values())
+
+
+def bound_port_open(action, outcome, state):
+    direction={'open_input_port':'input','open_output_port':'output'}.get(action.get('verb'))
+    if direction is None or set(action)!={'verb','port'} or type(action['port']) is not int:
+        return False
+    owner=state.get('prepared_node_context',{});actual=outcome.get('output',{})
+    if (owner.get('verified') is not True or owner.get('surface')!='graph' or owner.get('locked') is not False
+            or state.get('wizard',{}).get('status')!='absent'
+            or actual.get('verified') is not True or actual.get('direction')!=direction
+            or actual.get('port')!=action['port'] or actual.get('opening_operation_id')!=outcome.get('operation_id')
+            or any(not owner.get(k) or actual.get(k)!=owner[k] for k in ('document_id','workflow_id','node_id'))):
+        return False
+    proofs=[e for e in outcome.get('trace',[]) if e.get('event')==direction+'_port_wizard_verified']
+    return len(proofs)==1 and all(proofs[0].get(k)==actual.get(k) for k in
+        ('direction','port','opening_operation_id','document_id','workflow_id','node_id','verified'))
 
 
 def verify_internal_sequence(events, operation_id, *, max_steps=96):
@@ -165,7 +202,7 @@ def verify_internal_sequence(events, operation_id, *, max_steps=96):
             if outcome.get('status') != 'SUCCEEDED' or not samples or samples[-1].get('outcome') != outcome:
                 failures.append('observation_not_backed_by_sample')
             recent = [s.get('outcome', {}).get('output', {}) for s in samples[-required_samples:]]
-            if len(recent) != required_samples or any((not semantic and s.get('dom_epoch') != state.get('dom_epoch')) or s.get('ui', {}).get('masks') and not bound_wizard_confirmation(s) for s in recent):
+            if len(recent) != required_samples or any((not semantic and s.get('dom_epoch') != state.get('dom_epoch')) or s.get('ui', {}).get('masks') and not (bound_wizard_confirmation(s) or bound_expression_dialog(s)) for s in recent):
                 failures.append('observation_not_settled')
             doc = state.get('dom_epoch', {}).get('document')
             if document is None:
@@ -173,7 +210,7 @@ def verify_internal_sequence(events, operation_id, *, max_steps=96):
             if not doc or (doc, state.get('workflow_ref'), state.get('origin'), state.get('loginom_build')) != (document, workflow, origin, build):
                 failures.append('document_context_mismatch')
             ui = state.get('ui', {})
-            if state.get('scan', {}).get('complete') is not True or (ui.get('masks') != [] or not (bound_table_dialogs(state) or bound_output_column_dialog(state))) and not bound_wizard_confirmation(state):
+            if state.get('scan', {}).get('complete') is not True or (ui.get('masks') != [] or not (bound_table_dialogs(state) or bound_output_column_dialog(state))) and not (bound_wizard_confirmation(state) or bound_expression_dialog(state)):
                 failures.append('observation_blocked')
             current = state
             observations.append((step, state))
@@ -224,7 +261,12 @@ def verify_internal_sequence(events, operation_id, *, max_steps=96):
             outcome = row.get('outcome', {})
             if not pending or pending.get('step') != step:
                 failures.append('completion_without_preparation')
-            if outcome.get('operation_id') != row.get('internal_operation_id') or outcome.get('action_key') != 'ui.act':
+            action=(pending or {}).get('action',{})
+            direction={'open_input_port':'input','open_output_port':'output'}.get(action.get('verb'))
+            key='node.'+direction+'_port.open.internal' if direction else 'ui.act'
+            if direction and not bound_port_open(action,outcome,prepared_state or {}):
+                failures.append('unbound_port_open')
+            if outcome.get('operation_id') != row.get('internal_operation_id') or outcome.get('action_key') != key:
                 failures.append('receipt_identity_mismatch')
             strict_refusal = (outcome.get('status') == 'NOT_APPLIED' and outcome.get('phase') == 'preconditions'
                 and outcome.get('effect_possible') is False and outcome.get('cleanup_complete') is True

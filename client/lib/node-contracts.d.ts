@@ -35,7 +35,7 @@ export interface NodeHandler<T extends NodeType, P> {
   configure(context: NodeProcedureContext, parameters: P): Promise<VerifiedNodePhase>;
   /** Pure projection of accepted receipts; never executes or rereads the UI. */
   configurationReadback?(context: {node: NodeRef; operation_id: string;
-    phases: Array<PhaseReceipt & {value: VerifiedNodePhase}>}): TextImportConfigurationReadback;
+    phases: Array<PhaseReceipt & {value: VerifiedNodePhase}>}): TextImportConfigurationReadback | CalculatorConfigurationReadback;
 }
 export interface VerifiedNodePhase { verified: true; cleanup_complete: true; effect_possible: boolean }
 export interface NodeProcedureContext {
@@ -52,7 +52,7 @@ export interface NodeApplyResult {
   execution: NodeExecution; output: NodeOutput;
   /** A local node checkpoint never proves that the package was saved. */
   package_saved: false; cleanup_complete: boolean; warnings: string[];
-  configuration?: {status: 'applied' | 'discarded'; readback?: TextImportConfigurationReadback};
+  configuration?: {status: 'applied' | 'discarded'; readback?: TextImportConfigurationReadback | CalculatorConfigurationReadback};
   checkpoint_kind?: 'local_node_checkpoint' | 'local_node_cancellation' | 'local_node_stopped';
   persisted_package_verified?: false; pending_phase?: PhaseName | null; error?: NodeError;
 }
@@ -64,6 +64,25 @@ export interface TextImportConfigurationReadback {
   columns: Array<{index: number; name: string; label: string; type: string; data_kind: string; used: boolean}>;
   output_mapping: {port: 0; autosync: boolean;
     fields: Array<{index: number; name: string; label: string; type: string; data_kind: string; source_name: string}>};
+}
+export interface CalculatorParameters {
+  expressions: Array<{target: {kind: 'new'} | {kind: 'existing'; name: string};
+    name?: string; label?: string; type?: 'integer' | 'real' | 'string' | 'boolean' | 'datetime';
+    formula?: string; replace?: boolean}>;
+  /** Complete ordered list of resulting expression names. */
+  order?: string[];
+}
+export interface CalculatorConfigurationReadback {
+  kind: 'calculator'; scope: 'observed_before_verified_finish'; node: NodeRef;
+  receipt_ids: string[]; values_are: 'observed_ui_values'; package_persistence_verified: false;
+  mode: 'expression'; syntax_validation: 'accepted_by_loginom_next';
+  expressions: Array<{index: number; name: string; label: string; type: string; formula: string;
+    replace: boolean; intermediate: boolean; cached: boolean; description: string}>;
+  input_fields: Array<{name: string; label: string; type: string}>;
+  input_mapping: {port: 0; autosync: boolean;
+    fields: Array<{index: number; name: string; label: string; type: string; data_kind: string; source_name: string; excluded: boolean}>};
+  output_mapping: {port: 0; autosync: boolean;
+    fields: Array<{index: number; name: string; label: string; type: string; data_kind: string; source_name: string; excluded: boolean}>};
 }
 export interface NodeError {code: string; message: string; cause?: {code: string; message: string}}
 export interface NodeExecution {status: 'not_requested' | 'pending' | 'completed' | 'cancelled'; execution_id: string | null; stop_verified?: boolean}

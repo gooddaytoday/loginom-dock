@@ -6,8 +6,8 @@ export const uiActionSchema = {
   type: 'object', additionalProperties: false, required: ['verb'],
   properties: {
     verb: { type: 'string', enum: ['click', 'double_click', 'right_click', 'fill', 'press', 'drag', 'scroll', 'scroll_horizontal', 'set_checked', 'replace_expression', 'set_wizard_field', 'wizard_step', 'select_wizard_option', 'apply_expression_parameters', 'cancel_expression_parameters', 'open_wizard', 'begin_wizard', 'confirm_wizard_deactivation', 'finish_wizard', 'execute_wizard', 'execute_graph_node', 'confirm_wizard_close', 'show_process_node', 'cancel_process', 'open_node_views', 'enter_table', 'apply_output_column', 'cancel_output_column', 'apply_reform_column', 'cancel_reform_column'] },
-    expected_stage: { type: 'string', enum: ['text_import_file','text_import_format','input_mapping','output_mapping','calculator','grouping','field_parameters','done'],
-      description: 'Required only for wizard_step: destination after the observed next/previous control, not the current stage. For delimited Text Import, next follows text_import_file → text_import_format → output_mapping → done; previous reverses this order. input_mapping means a separate INPUT PORT mapping wizard, never Text Import output columns. Other wizard families may have different paths; inspect their current UI and sources instead of guessing. Do not pass this field to open_wizard or finish_wizard.' },
+    expected_stage: { oneOf:[{type:'string',enum:['text_import_file','text_import_format','input_mapping','output_mapping','calculator','grouping','field_parameters','done']},{const:['output_mapping','done']}],
+      description: 'Required only for wizard_step: destination after the observed next/previous control, not the current stage. For delimited Text Import, next follows text_import_file → text_import_format → output_mapping → done; previous reverses this order. input_mapping means a separate INPUT PORT mapping wizard, never Text Import output columns. Only Calculator validation may use [output_mapping, done] for its conditional output page. Other wizard families may have different paths; inspect their current UI and sources instead of guessing. Do not pass this field to open_wizard or finish_wizard.' },
     checked: { type: 'boolean' },
     delta_y: { type: 'integer', minimum: -1000, maximum: 1000 },
     delta_x: { type: 'integer', minimum: -1000, maximum: 1000 },
@@ -28,12 +28,13 @@ export function validateUiAction(action, snapshot) {
   if (['fill','replace_expression','set_wizard_field'].includes(action.verb) && (typeof action.text !== 'string' || action.text.length > 2048 || /\0/.test(action.text))) throw new Error('UI text must be at most 2048 characters without NUL');
   if(action.verb==='set_wizard_field' && (action.text.length>256 || /[\r\n]/.test(action.text)))throw new Error('Wizard field text requires at most 256 characters without line breaks');
   if(action.verb==='replace_expression' && (/\r/.test(action.text) || action.text.split('\n').length>128))throw new Error('Expression replacement requires LF lines, at most 128');
-  if(action.verb==='wizard_step' && !uiActionSchema.properties.expected_stage.enum.includes(action.expected_stage))throw new Error('wizard_step requires a recognized expected_stage');
+  if(action.verb==='wizard_step' && !uiActionSchema.properties.expected_stage.oneOf[0].enum.includes(action.expected_stage)&&JSON.stringify(action.expected_stage)!=='["output_mapping","done"]')throw new Error('wizard_step requires a recognized expected_stage');
   if (action.verb === 'press' && !uiActionSchema.properties.key.enum.includes(action.key)) throw new Error('Unsupported UI key; clipboard and navigation shortcuts are not allowed');
   if (action.verb === 'scroll' && (!Number.isInteger(action.delta_y) || !action.delta_y || Math.abs(action.delta_y)>1000)) throw new Error('Scroll requires a nonzero integer delta_y within -1000..1000');
   if (action.verb === 'scroll_horizontal' && (!Number.isInteger(action.delta_x) || !action.delta_x || Math.abs(action.delta_x)>1000)) throw new Error('Horizontal scroll requires a nonzero integer delta_x within -1000..1000');
   if (action.verb === 'set_checked' && typeof action.checked !== 'boolean') throw new Error('set_checked requires a boolean checked value');
   if (snapshot) {
+    if(action.verb==='wizard_step'&&Array.isArray(action.expected_stage)&&snapshot.wizard?.stage!=='calculator')throw new Error('Conditional destinations belong only to Calculator validation');
     if(action.verb==='wizard_step' && (snapshot.wizard?.status!=='observed' || snapshot.wizard.stage===action.expected_stage))throw new Error('wizard_step requires a different destination stage and an observed wizard');
     if (!Array.isArray(snapshot.ui?.elements)) throw new Error('UI action requires an observation snapshot');
     for (const ref of refs) {
@@ -84,7 +85,7 @@ export function workspaceUiCapability(page, task, readNodeContext) {
   // The state is document-bound; navigation invalidates every previous reference.
   const readUi = async (rediscover = false) => {
     const nodeContext=await boundNode();
-    const observed = await page.evaluate(({rootRef,discoverRoots,storageName,columnPage,mappingPage,tableFormatPage,cacheReadPredicates,definitionPrefix,preparedWorkflowPath,preparedNodeId,preparedOutputPort}) => {
+    const observed = await page.evaluate(({rootRef,discoverRoots,storageName,columnPage,mappingPage,tableFormatPage,cacheReadPredicates,definitionPrefix,preparedWorkflowPath,preparedNodeId,preparedOutputPort,preparedInputPort}) => {
     try {
     const scanStarted = Date.now(), maxElements = 6000, maxWork = 250000, maxMs = 500;
     let work = 0,scanStage='collect';
@@ -224,13 +225,13 @@ export function workspaceUiCapability(page, task, readNodeContext) {
         const owner='[data-tid$=";WizrdMCF;ImportTextFilePreviewWizard;'+name+'"]';return [owner,owner+' input',owner+' textarea'];}),
       '[data-tid$=";WizrdMCF;ImportTextFilePreviewWizard;edtFirstLineAsTitle;ValueControl"]',
       '[data-tid$=";WizrdMCF;ImportTextFilePreviewWizard;edtFirstLineAsTitle;ValueControl;DisplayEl"]',
-      ...['ColumnsMappingEngineOutputPortWizard','DerivedDataSourceOutputSocketWizard'].flatMap(form=>
+      ...['ColumnsMappingEngineOutputPortWizard','DerivedDataSourceOutputSocketWizard','TuneDataSourceMappingWizard'].flatMap(form=>
         ['grdTargetColumns;tbl','TargetFilter','rbTable','rbLinks','btnAutoSyncThroughColumns'].flatMap(name=>{
           const owner='[data-tid$=";WizrdMCF;'+form+';'+name+'"]';return [owner,owner+' input'];})),
       '[data-tid*=";WizrdMCF;ColumnsMappingEngineOutputPortWizard;grdTargetColumns;tbl;celleditor"]',
       ...['edtDisplayName','cbxNodeTitleMode'].flatMap(name=>{const owner='[data-tid$=";WizrdMCF;DoneWizard;'+name+'"]';return [owner,owner+' input'];}),
-      ...['ColumnsMappingEngineOutputPortWizard','DerivedDataSourceOutputSocketWizard','DerivedDataSourceMappingEngineOutputPortWizard','ReformColumnsWizard'].flatMap(form=>
-        ['colName_','colDisplayName_','colDataKind_','colDefaultUsageType_','colSourceDisplayName_','colCachingMethod_','colExcluded_'].map(key=>'[data-tid*=";WizrdMCF;'+form+';'+key+'"]')),
+      ...['ColumnsMappingEngineOutputPortWizard','DerivedDataSourceOutputSocketWizard','DerivedDataSourceMappingEngineOutputPortWizard','TuneDataSourceMappingWizard','ReformColumnsWizard'].flatMap(form=>
+        ['colName_','colDisplayName_','colDataKind_','colDefaultUsageType_','colUsageType_','colSourceDisplayName_','colCachingMethod_','colExcluded_'].map(key=>'[data-tid*=";WizrdMCF;'+form+';'+key+'"]')),
       '[data-tid$=";WizrdMCF;EditReformColumnDefForm"]','[data-tid="EditReformColumnDefForm"]',
       ...['edtName','edtDisplayName','cbxDataType','cbxDataKind','cbxUsageType','cntMain;cbxCachingMethod','cntMain;chbExcluded','cntMain;chbExcluded;DisplayEl'].flatMap(name=>{const owner='[data-tid="EditReformColumnDefForm;'+name+'"]';return [owner,owner+' input'];}),
       '[data-tid*=";WizrdMCF;ImportTextFileParamsWizard;ColumnDefsTuning;grdSettings;grd-1;normalHeaderCt;"]',
@@ -241,7 +242,8 @@ export function workspaceUiCapability(page, task, readNodeContext) {
       '[data-tid*=";WizrdMCF;ImportTextFileParamsWizard;ColumnDefsTuning;grdSettings;grd-1;tbl;celleditor"][data-tid$=";cbx;trg_picker"]',
       ...['edtName','edtDisplayName','cbxDataType','cbxDataKind','cbxUsageType','cntMain;cbxCachingMethod'].flatMap(name=>{const owner='[data-tid$=";WizrdMCF;EditReformColumnDefForm;'+name+'"]';return [owner,owner+' input'];}),
       '[data-tid$=";WizrdMCF;EditReformColumnDefForm;cntMain;chbExcluded"]','[data-tid$=";WizrdMCF;EditReformColumnDefForm;cntMain;chbExcluded;DisplayEl"]',
-      '[data-tid$=";WizrdMCF;EditColumnDefForm"]','[data-tid="EditColumnDefForm"]',
+      '[data-tid$=";WizrdMCF;EditColumnDefForm"]','[data-tid="EditColumnDefForm"]','[data-tid="EditTuneColumnDefForm"]',
+      ...['edtName','edtDisplayName','cbxDataType','cbxDataKind','cbxUsageType','btnApply','btnCancel'].flatMap(name=>{const owner='[data-tid="EditTuneColumnDefForm;'+name+'"]';return [owner,owner+' input'];}),
       ...['edtName','edtDisplayName','cbxDataType','cbxDataKind','cbxUsageType','btnApply','btnCancel'].flatMap(name=>{const owner='[data-tid="EditColumnDefForm;'+name+'"]';return [owner,owner+' input'];}),
       ...['edtName','edtDisplayName','cbxDataType','cbxDataKind','cbxUsageType'].flatMap(name=>{const owner='[data-tid$=";WizrdMCF;EditColumnDefForm;'+name+'"]';return [owner,owner+' input'];}),
       '[data-tid$=";WizrdMCF;ExprDataEditForm"]',
@@ -434,7 +436,9 @@ export function workspaceUiCapability(page, task, readNodeContext) {
       let portContext={status:panels.length>1?'ambiguous':'unobserved',opening_verified:false};
       if(panels.length===1) {
         const prefix=workflow.prefix+';cnrNaviMode;b.s_';
-        const crumbs=all.filter(e=>{charge();return (getTid(e)??'').startsWith(prefix) && panels[0].contains(e) && visible(e) && !sensitive(e);});
+        const crumbs=all.filter(e=>{charge();return (getTid(e)??'').startsWith(prefix) && panels[0].contains(e) && !sensitive(e)
+          && (visible(e)||preparedOutputPort?.direction==='output'&&(getTid(e)??'').endsWith('>Настройка')
+            &&e.querySelectorAll('.maptree-icon-wizard').length===1);});
         if(crumbs.length>32)ownerContext.status='bounded';
         else if(crumbs.length) {
           const items=crumbs.map(e=>({ref:refOf(e),tid:getTid(e),label:textOf(e,true),
@@ -528,8 +532,11 @@ export function workspaceUiCapability(page, task, readNodeContext) {
       else if(panels.length===1&&inside(panels[0],panels[0])) {
         const panel=panels[0],crumbs=all.filter(e=>{charge();return panel.contains(e)&&/;cnrNaviMode;b\.s_/.test(getTid(e)??'');});
         if(crumbs.length>32)context.status='bounded';
-        else if(crumbs.length===9&&crumbs.every(e=>inside(e,panel)&&(getTid(e)??'').startsWith(prefix))) {
-          const items=crumbs.map(e=>({ref:refOf(e),tid:getTid(e),label:textOf(e,true)}));
+        else if(crumbs.length===9&&crumbs.every((e,i)=>(inside(e,panel)||i===8&&preparedInputPort?.direction==='input'&&!sensitive(e))&&(getTid(e)??'').startsWith(prefix))) {
+          // Ext may hide the final wizard breadcrumb in the overflow menu.
+          // Admit only its fixed caption with an independently bound native port.
+          const items=crumbs.map((e,i)=>({ref:refOf(e),tid:getTid(e),label:i===8&&preparedInputPort?.direction==='input'
+            &&!visible(e)&&e.textContent.trim()==='Настройка'?'Настройка':textOf(e,true)}));
           const unique=new Set(items.map(i=>i.tid)).size===items.length;
           const bounded=items.every(i=>i.tid.length<=2048&&i.label.length<240)&&items.reduce((n,i)=>n+i.tid.length+i.label.length,0)<=4096;
           const chain=items.every((i,n)=>i.tid.slice(prefix.length).split('>').length===n+1&&(!n||i.tid.startsWith(items[n-1].tid+'>')));
@@ -539,7 +546,8 @@ export function workspaceUiCapability(page, task, readNodeContext) {
             &&node.label&&folder.label==='Входные порты'&&port.label&&last.label==='Настройка'
             &&folder.tid===node.tid+'>Входные_порты'&&port.tid===folder.tid+'>'+format(port.label)
             &&last.tid===port.tid+'>Настройка';
-          const iconCount=(e,selector)=>{const found=e.querySelectorAll(selector);charge();return found.length===1&&inside(found[0],e)?1:0;};
+          const iconCount=(e,selector)=>{const found=e.querySelectorAll(selector);charge();return found.length===1
+            &&(inside(found[0],e)||e===crumbs[8]&&preparedInputPort?.direction==='input')?1:0;};
           const icons=iconCount(crumbs[4],'.maptree-icon-workflow')===1
             &&iconCount(crumbs[5],'[class*="bg-vendor-icon-"]')===1
             &&iconCount(crumbs[8],'.maptree-icon-wizard')===1;
@@ -747,9 +755,9 @@ export function workspaceUiCapability(page, task, readNodeContext) {
       }
     }
     scanStage='output_definitions';
-    if(wizard.status==='observed' && ['output_mapping','field_parameters'].includes(wizard.stage)) {
+    if(wizard.status==='observed' && ['output_mapping','input_mapping','field_parameters'].includes(wizard.stage)) {
       const reform=wizard.stage==='field_parameters',columnsKey=reform?'reform_columns':'output_columns';
-      const mappingForms=['ColumnsMappingEngineOutputPortWizard','DerivedDataSourceOutputSocketWizard','DerivedDataSourceMappingEngineOutputPortWizard'].filter(name=>
+      const mappingForms=['ColumnsMappingEngineOutputPortWizard','DerivedDataSourceOutputSocketWizard','DerivedDataSourceMappingEngineOutputPortWizard','TuneDataSourceMappingWizard'].filter(name=>
         (tids.get(wizard.root_tid+';'+name+';btnAddMappingColumn')??[]).filter(visible).length===1);
       const base=wizard.root_tid+';'+(reform?'ReformColumnsWizard':mappingForms.length===1?mappingForms[0]:'__unobserved__')+';';
       const cells=all.filter(e=>{charge();return (getTid(e)??'').startsWith(base+'colName_') && wizardForms[0].contains(e)
@@ -768,7 +776,7 @@ export function workspaceUiCapability(page, task, readNodeContext) {
               .filter(([kind])=>icons.length===1 && icons[0].classList.contains('bg-TBGDataType-dt'+kind));
             if(keys.filter(k=>k===key).length!==1 || labels.length!==1 || types.length!==1 || !name || name.length>=240 || label.length>=240)
               return {status:'ambiguous',field_key:key.slice(0,240)};
-            const extras=Object.fromEntries(Object.entries({data_kind:'colDataKind_',usage:'colDefaultUsageType_',...(reform?{caching:'colCachingMethod_'}:{})}).map(([name,prefix])=>{
+            const extras=Object.fromEntries(Object.entries({data_kind:'colDataKind_',usage:wizard.stage==='input_mapping'?'colUsageType_':'colDefaultUsageType_',...(reform?{caching:'colCachingMethod_'}:{})}).map(([name,prefix])=>{
               const cells=(tids.get(base+prefix+key)??[]).filter(e=>e.closest('table')===row && !e.closest('.x-grid-row-summary') && visible(e) && !sensitive(e));
               const text=cells.length===1?textOf(cells[0],true):null;return [name,text && text.length<240?text:null];
             }));
@@ -795,7 +803,7 @@ export function workspaceUiCapability(page, task, readNodeContext) {
     }
     if(wizard.output_columns) {
       let coverage={status:'partial',source_identity_verified:false};
-      const forms=['ColumnsMappingEngineOutputPortWizard','DerivedDataSourceOutputSocketWizard','DerivedDataSourceMappingEngineOutputPortWizard'].filter(name=>
+      const forms=['ColumnsMappingEngineOutputPortWizard','DerivedDataSourceOutputSocketWizard','DerivedDataSourceMappingEngineOutputPortWizard','TuneDataSourceMappingWizard'].filter(name=>
         (tids.get(wizard.root_tid+';'+name+';btnAddMappingColumn')??[]).filter(e=>wizardForms[0].contains(e) && visible(e) && !sensitive(e)).length===1);
       const base=wizard.root_tid+';'+(forms.length===1?forms[0]:'__unobserved__')+';';
       const unique=key=>{const es=tids.get(base+key)??[];return es.length===1 && wizardForms[0].contains(es[0])
@@ -817,7 +825,7 @@ export function workspaceUiCapability(page, task, readNodeContext) {
         const dimensions=[body.clientWidth,body.clientHeight,body.scrollWidth,body.scrollHeight,body.scrollLeft,body.scrollTop];
         const fields=wizard.output_columns.fields;
         const noEditors=!all.some(e=>{charge();return ((getTid(e)??'').startsWith(base+'grdTargetColumns;tbl;celleditor')
-          || (getTid(e)===wizard.root_tid+';EditColumnDefForm'||getTid(e)==='EditColumnDefForm')) && visible(e);});
+          || (['EditColumnDefForm','EditTuneColumnDefForm'].some(form=>getTid(e)===wizard.root_tid+';'+form||getTid(e)===form))) && visible(e);});
         const noMasks=!select('.bg-mask-message,.x-mask-msg').some(visible);
         if(containers.length===1 && rows.length>0 && rows.length<=8 && rows.length===fields.length
           && dimensions.every(Number.isFinite) && body.clientWidth>0 && body.clientHeight>0
@@ -840,7 +848,7 @@ export function workspaceUiCapability(page, task, readNodeContext) {
                 || rb.y!==(previous?previous.y+previous.height:cb.y) || matches.length!==1 || matches[0].status!=='observed'
                 || nameCells.length!==1)return false;
               const key=getTid(nameCells[0]).slice((base+'colName_').length);
-              return ['colName_','colDisplayName_','colSourceDisplayName_','colDataKind_','colDefaultUsageType_'].every(prefix=>{
+              return ['colName_','colDisplayName_','colSourceDisplayName_','colDataKind_',wizard.stage==='input_mapping'?'colUsageType_':'colDefaultUsageType_'].every(prefix=>{
                 const es=tids.get(base+prefix+key)??[];
                 return es.length===1 && row.contains(es[0]) && inside(es[0],row);
               });
@@ -869,7 +877,7 @@ export function workspaceUiCapability(page, task, readNodeContext) {
         };
         const container=containers[0],boundId=body?.getAttribute('id');
         const noEditors=!all.some(e=>{charge();return ((getTid(e)??'').startsWith(base+'grdTargetColumns;tbl;celleditor')
-          || (getTid(e)===wizard.root_tid+';EditColumnDefForm'||getTid(e)==='EditColumnDefForm'))&&visible(e);});
+          || (['EditColumnDefForm','EditTuneColumnDefForm'].some(form=>getTid(e)===wizard.root_tid+';'+form||getTid(e)===form)))&&visible(e);});
         let complete=body && container && containers.length===1 && rows.length>0 && rows.length<=1000 && rows.length===fields.length
           && inputs.length===1 && String(inputs[0].value??'')==='' && tableMode?.classList.contains('x-form-cb-checked')
           && !linksMode?.classList.contains('x-form-cb-checked') && noEditors && !dialogs.length
@@ -891,7 +899,7 @@ export function workspaceUiCapability(page, task, readNodeContext) {
                 || row.getAttribute('data-boundview')!==boundId || !nativeInside(row,container)
                 || rb.y!==(previous?previous.y+previous.height:cb.y) || matches.length!==1 || matches[0].status!=='observed' || names.length!==1)return false;
               const key=getTid(names[0]).slice((base+'colName_').length);
-              return ['colName_','colDisplayName_','colSourceDisplayName_','colDataKind_','colDefaultUsageType_'].every(prefix=>{
+              return ['colName_','colDisplayName_','colSourceDisplayName_','colDataKind_',wizard.stage==='input_mapping'?'colUsageType_':'colDefaultUsageType_'].every(prefix=>{
                 const es=tids.get(base+prefix+key)??[];return es.length===1 && row.contains(es[0]) && nativeInside(es[0],row);
               });
             }) && boxOf(rows.at(-1)).y+boxOf(rows.at(-1)).height===cb.y+cb.height;
@@ -929,7 +937,7 @@ export function workspaceUiCapability(page, task, readNodeContext) {
               && rows.every((row,i)=>{
                 charge();const index=first+i,r=records[index],f=fields[i],b=boxOf(row),previous=i?boxOf(rows[i-1]):null;
                 const cells=[...row.querySelectorAll('[data-tid]')];
-                const completeCells=cells.length<=32 && ['colName_','colDisplayName_','colSourceDisplayName_','colDataKind_','colDefaultUsageType_'].every(prefix=>{
+                const completeCells=cells.length<=32 && ['colName_','colDisplayName_','colSourceDisplayName_','colDataKind_',wizard.stage==='input_mapping'?'colUsageType_':'colDefaultUsageType_'].every(prefix=>{
                   const matches=cells.filter(e=>getTid(e)===base+prefix+r.data.Name);
                   return matches.length===1 && nativeInside(matches[0],row);
                 });
@@ -1029,6 +1037,11 @@ export function workspaceUiCapability(page, task, readNodeContext) {
     }
     if(wizard.status==='observed' && wizard.stage==='calculator') {
       const base=wizard.root_tid+';CalcDataWizard;';
+      const errorButtons=tids.get(wizard.root_tid+';btnError')??[];
+      const errorText=errorButtons.length===1&&wizardForms[0].contains(errorButtons[0])
+        ?errorButtons[0].getAttribute('data-qtip'):null;
+      wizard.calculator_validation=typeof errorText==='string'&&errorText.length>0&&errorText.length<=4096
+        &&!sensitive(errorButtons[0])?{status:'observed',root_ref:wizard.root_ref,message:errorText,source:'loginom_wizard_error_tooltip'}:{status:'unobserved'};
       const selected=all.filter(e=>{charge();return (getTid(e)??'').startsWith(base+'colExpressionName_') && visible(e) && !sensitive(e) && e.closest('table')?.classList.contains('x-grid-item-selected');});
       wizard.expression_selection={status:selected.length>1?'ambiguous':'unobserved'};
       if(selected.length===1) {
@@ -1326,16 +1339,17 @@ function readRenderedInputMapping(observation) {
           selected_column:reformParams.selected_column,value:field.value});
     }
 
-    if(wizard.status==='observed' && wizard.stage==='output_mapping') {
-      const forms=[...(tids.get(wizard.root_tid+';EditColumnDefForm')??[]),...(tids.get('EditColumnDefForm')??[])].filter(e=>visible(e) && !sensitive(e));
-      const base=forms.length===1?getTid(forms[0]):wizard.root_tid+';EditColumnDefForm';
+    if(wizard.status==='observed' && ['output_mapping','input_mapping'].includes(wizard.stage)) {
+      const editorForm=wizard.stage==='input_mapping'?'EditTuneColumnDefForm':'EditColumnDefForm';
+      const forms=[...(tids.get(wizard.root_tid+';'+editorForm)??[]),...(tids.get(editorForm)??[])].filter(e=>visible(e) && !sensitive(e));
+      const base=forms.length===1?getTid(forms[0]):wizard.root_tid+';'+editorForm;
       // Loginom 7.4 also hosts this editor as a global modal. Its one native
       // record must be the selected record of the active mapping grid.
-      let portalBound=base!=='EditColumnDefForm';
+      let portalBound=base!==editorForm;
       if(!portalBound && forms.length===1) {
         const form=forms[0],native=globalThis.Ext?.getCmp?.(form.id)?.Controller;
         const active=globalThis.bg?.app?.Application?.FInstance?.FMainForm?.Items?.Workspace?.getActiveTab?.()?.Controller?.FController;
-        const grids=['ColumnsMappingEngineOutputPortWizard','DerivedDataSourceOutputSocketWizard']
+        const grids=['ColumnsMappingEngineOutputPortWizard','DerivedDataSourceOutputSocketWizard','TuneDataSourceMappingWizard']
           .flatMap(form=>tids.get(wizard.root_tid+';'+form+';grdTargetColumns;tbl')??[])
           .filter(grid=>wizardForms[0].contains(grid)&&visible(grid));
         const view=grids.length===1?globalThis.Ext?.getCmp?.(grids[0].id):null,store=view?.getStore?.();
@@ -1823,7 +1837,7 @@ function readRenderedInputMapping(observation) {
       return null;
     };
     const outputColumnCells=new Map();
-    if(wizard.stage==='output_mapping' && !wizard.column_parameters
+    if(['output_mapping','input_mapping'].includes(wizard.stage) && !wizard.column_parameters
       &&(wizard.output_columns?.page?.status==='complete_definition_page'
         ||wizard.output_columns?.definition_coverage?.status==='complete_configured_rows')) {
       for(const field of wizard.output_columns.fields??[])if(field.status==='observed') {
@@ -2129,12 +2143,16 @@ function readRenderedInputMapping(observation) {
       const openNodeViews=wizard.status==='absent' && graphNodeOf(element)?.part==='visualizers';
       const openWizard=wizard.status==='absent' && navigationContext.status==='observed' && graphNodeOf(element)?.part==='settings'
         ? {node:graphNodeOf(element),workflow_path:navigationContext.path}:null;
-      const inputPortFinishReady=wizard.stage==='input_mapping' && wizard.input_port_context?.status==='observed'
+      const inputPortFinishReady=wizard.stage==='input_mapping'&&wizard.input_port_context?.status==='observed'
+        &&wizard.input_port_context.node?.ref&&wizard.input_port_context.port_ref && (preparedInputPort?.direction==='input'&&wizard.output_columns?.auto_sync?.status==='observed'
+        &&(wizard.output_columns.page?.status==='complete_definition_page'&&wizard.output_columns.page.returned===wizard.output_columns.fields?.length
+          ||wizard.output_columns.definition_coverage?.status==='complete_configured_rows'&&wizard.output_columns.definition_coverage.count===wizard.output_columns.fields?.length)
+        || wizard.input_port_context?.status==='observed'
         && wizard.input_port_context.direction==='input' && wizard.input_mapping?.status==='rendered_mapping_links'
         && wizard.input_mapping.root_ref===wizard.root_ref && wizard.input_mapping.rendered_coverage?.status==='complete_visible_rows'
         && wizard.input_mapping.source_rows?.length===wizard.input_mapping.rendered_coverage.source_count
         && wizard.input_mapping.target_rows?.length===wizard.input_mapping.rendered_coverage.target_count
-        && wizard.input_mapping.links?.length===wizard.input_mapping.rendered_coverage.link_count;
+        && wizard.input_mapping.links?.length===wizard.input_mapping.rendered_coverage.link_count);
       const outputPortFinishReady=wizard.stage==='output_mapping' && wizard.port_context?.status==='observed'
         && wizard.port_context.kind==='output_data' && wizard.output_columns?.status==='rendered_rows'
         && (wizard.output_columns.definition_coverage?.status==='complete_configured_rows'
@@ -2638,7 +2656,7 @@ function readRenderedInputMapping(observation) {
     tableFormatPage:task.table_format_page??(task.snapshot?.table_settings?.format?.page?{offset:task.snapshot.table_settings.format.page.offset,limit:task.snapshot.table_settings.format.page.limit}:null),
     preparedWorkflowPath:task.prepared_node_context?.workflow_ref.navigation_path??null,
     preparedNodeId:task.prepared_node_context?.node.node_id??null,
-    preparedOutputPort:nodeContext?.output_port??null,
+    preparedOutputPort:nodeContext?.output_port??null,preparedInputPort:nodeContext?.input_port??null,
     cacheReadPredicates:!!task.prepared_node_context,definitionPrefix:task.prepared_node_context?.workflow_ref.prefix??null});
     if (observed?.ui_read_failure) {
       const code=observed.ui_read_failure.code;
@@ -3124,9 +3142,10 @@ function readRenderedInputMapping(observation) {
           const wanted=cancel?params.selected_column:{name:fields.name.value,label:fields.label.value,type:types[fields.type_label.value],data_kind:fields.data_kind.value,usage:fields.usage.value,...(reform?{caching:fields.caching.value,excluded:fields.excluded.value}:{})};
           const sameContext=fresh=>fresh.authenticated && fresh.origin===current.origin && fresh.loginom_build===current.loginom_build
             && same(fresh.workflow_ref,current.workflow_ref) && same(fresh.package_identity,current.package_identity)
-            && fresh.active_tab_ref===current.active_tab_ref && fresh.wizard.root_ref===current.wizard.root_ref && fresh.wizard.stage===(reform?'field_parameters':'output_mapping')
+            && fresh.active_tab_ref===current.active_tab_ref && fresh.wizard.root_ref===current.wizard.root_ref && fresh.wizard.stage===(reform?'field_parameters':current.wizard.stage)
             && same(fresh.wizard.owner_context,current.wizard.owner_context)
-            && same(fresh.wizard.port_context,current.wizard.port_context);
+            && same(fresh.wizard.port_context,current.wizard.port_context)
+            && same(fresh.wizard.input_port_context,current.wizard.input_port_context);
           const matches=fresh=>(fresh.wizard[rowsKey]?.fields??[]).filter(row=>row.status==='observed' && row.selected
             && ['name','label','type','data_kind','usage'].every(k=>wanted[k] && row[k]===wanted[k])
             && (!reform || row.caching===wanted.caching && row.excluded===wanted.excluded)
@@ -3214,6 +3233,7 @@ function readRenderedInputMapping(observation) {
           }
         }
         if(task.action.verb==='wizard_step') {
+          const destination=stage=>Array.isArray(task.action.expected_stage)?task.action.expected_stage.includes(stage):stage===task.action.expected_stage;
           const unchangedContext=fresh=>fresh.authenticated && fresh.origin===current.origin && fresh.loginom_build===current.loginom_build
             && same(fresh.workflow_ref,current.workflow_ref) && same(fresh.package_identity,current.package_identity)
             && same(fresh.active_identity,current.active_identity) && fresh.wizard.status==='observed'
@@ -3221,21 +3241,22 @@ function readRenderedInputMapping(observation) {
           // Wait only for this one click. No timeout or intermediate mask can
           // issue a second click or turn a closed wizard into an applied claim.
           for(let attempt=0;attempt<24 && unchangedContext(observed)
-            && (observed.wizard.stage!==task.action.expected_stage || observed.ui.masks.length);attempt++) {
-            const validation=observed.wizard.source_validation;
+            && (!destination(observed.wizard.stage) || observed.ui.masks.length);attempt++) {
+            const calculatorValidation=current.wizard.stage==='calculator';
+            const validation=calculatorValidation?observed.wizard.calculator_validation:observed.wizard.source_validation;
             if(!observed.ui.masks.length && observed.wizard.stage===current.wizard.stage
               && validation?.status==='observed' && validation.root_ref===current.wizard.root_ref) {
               // Confirm the owned error once more without issuing another gesture.
               timeout();await page.waitForTimeout(Math.min(200,timeout()));const fresh=await readUi();
               if(unchangedContext(fresh) && !fresh.ui.masks.length && fresh.wizard.stage===current.wizard.stage
-                && same(fresh.wizard.source_validation,validation)) {
-                observed=fresh;record('wizard_source_validation_failed',validation);
-                fail('WIZARD_SOURCE_VALIDATION_FAILED',validation.message);
+                && same(calculatorValidation?fresh.wizard.calculator_validation:fresh.wizard.source_validation,validation)) {
+                observed=fresh;record(calculatorValidation?'wizard_calculator_validation_failed':'wizard_source_validation_failed',validation);
+                fail(calculatorValidation?'WIZARD_CALCULATOR_VALIDATION_FAILED':'WIZARD_SOURCE_VALIDATION_FAILED',validation.message);
               }
               observed=fresh;
             } else { timeout();await page.waitForTimeout(Math.min(200,timeout()));observed=await readUi(); }
           }
-          if(!unchangedContext(observed) || observed.ui.masks.length || observed.wizard.stage!==task.action.expected_stage)
+          if(!unchangedContext(observed) || observed.ui.masks.length || !destination(observed.wizard.stage))
             fail('WIZARD_STEP_NOT_CONFIRMED','The requested destination stage was not confirmed after one click; inspect before retry');
           // A native stage can become visible before delayed tooltip/layout work
           // finishes. Keep the same single click, but capture a quiet epoch before
@@ -3244,7 +3265,7 @@ function readRenderedInputMapping(observation) {
           for(let attempt=0;attempt<12 && quietSamples<3;attempt++) {
             timeout();await page.waitForTimeout(Math.min(200,timeout()));
             const fresh=await readUi();
-            if(!unchangedContext(fresh) || fresh.ui.masks.length || fresh.wizard.stage!==task.action.expected_stage)
+            if(!unchangedContext(fresh) || fresh.ui.masks.length || !destination(fresh.wizard.stage))
               fail('WIZARD_STEP_NOT_CONFIRMED','The destination changed while settling after one click; inspect before retry');
             quietSamples=same(fresh.dom_epoch,observed.dom_epoch)?quietSamples+1:0;
             observed=fresh;

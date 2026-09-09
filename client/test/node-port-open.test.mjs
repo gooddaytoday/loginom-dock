@@ -3,14 +3,14 @@ import assert from 'node:assert/strict';
 import vm from 'node:vm';
 import {openPreparedOutputPort} from '../lib/node-port-open.mjs';
 
-function fixture() {
- class ModelForm{};class WizardTreeNode{};class ModelPortTreeNode{};class ModelOutputPortsTreeNode{};class ModelNodeTreeNode{};
+function fixture(direction='output') {
+ class ModelForm{};class WizardTreeNode{};class ModelPortTreeNode{};class ModelOutputPortsTreeNode{};class ModelInputPortsTreeNode{};class ModelNodeTreeNode{};
  const prefix='MF;TF',elements=[],box={x:0,y:0,width:20,height:20};
  const el=tid=>{const e={tid,id:'element-'+elements.length,textContent:'',visible:true,scrollLeft:0,scrollTop:0,getAttribute:()=>tid,getBoundingClientRect:()=>box,
   checkVisibility:o=>o?.checkVisibilityCSS===true&&e.visible,contains:x=>x===e||x?.parent===e,
   closest:()=>null,classList:{contains:()=>true}};elements.push(e);return e;};
  const tab=el('tab'),root=el(prefix+';ModelForm;cmpDiagram'),nodeDom=el(prefix+';Graph;Node');nodeDom.parent=root;
- const portDom=el(nodeDom.tid+';Output_Data-0');portDom.parent=root;
+ const portDom=el(nodeDom.tid+';'+(direction==='input'?'Input':'Output')+'_Data-0');portDom.parent=root;
  const menu=el('mn'),button=el('mn;mniConfigurePort');button.parent=menu;menu.visible=false;
  const wizardDom=el(prefix+';WizrdMCF');wizardDom.visible=false;
  const dialog=el(null);dialog.visible=false;dialog.innerText='Loginom 7.4.2 Настройка порта приведет к деактивации узла. Вы действительно хотите начать настраивать порт? Да Да, больше не спрашивать Нет';
@@ -21,9 +21,9 @@ function fixture() {
  const graph=Object.assign(new ModelForm(),{FDiagram:{FNodes:{FCollection:[node]},FmxGraph:{container:root,
   view:{getState:c=>({shape:{node:c===node.FCell?nodeDom:portDom}})},getCellAt:()=>port.FCell}},FPortContextMenu:{el:{dom:menu}}});
  const workflow={},packageNode={},nodeTree=Object.assign(new ModelNodeTreeNode(),{ParentNode:workflow,FGuid:'node',FModelNode:node.data});
- const group=Object.assign(new ModelOutputPortsTreeNode(),{ParentNode:nodeTree}),portTree=Object.assign(new ModelPortTreeNode(),{ParentNode:group,FIndex:0,FModelNodePort:port.data});
+ const group=Object.assign(new (direction==='input'?ModelInputPortsTreeNode:ModelOutputPortsTreeNode)(),{ParentNode:nodeTree}),portTree=Object.assign(new ModelPortTreeNode(),{ParentNode:group,FIndex:0,FModelNodePort:port.data});
  const wizardTree=Object.assign(new WizardTreeNode(),{ParentNode:portTree});
- class WizardModelComponentForm{};const wizard=Object.assign(new WizardModelComponentForm(),{FModelEnginePort:{},FView:{el:{dom:wizardDom}}});
+ class WizardModelComponentForm{};const wizard=Object.assign(new WizardModelComponentForm(),{[direction==='input'?'FModelSocket':'FModelEnginePort']:{},FView:{el:{dom:wizardDom}}});
  const card={Controller:{FController:graph,Node:{data:{node:workflow}}}},flags={foreignMenu:false,foreignWizard:false,loading:0,deactivation:false},gestures=[];
  const document={querySelectorAll:q=>{
   if(q.startsWith('[data-tid=')){const t=JSON.parse(q.slice(10,-1));return elements.filter(e=>e.tid===t);}
@@ -34,7 +34,7 @@ function fixture() {
   if(flags.loading>0){flags.loading--;return [{checkVisibility:()=>true}];}return [];
  }};
  const prep={document,id:'doc',receipts:new Map([['prepare',{phase:'verified',workflowId:'flow',tab,packageNode,nodeTargetWorkflowNode:workflow}]])};
- const app={Version:'7.4.2',ModelForm,WizardTreeNode,ModelPortTreeNode,ModelOutputPortsTreeNode,ModelNodeTreeNode,Application:{FInstance:{FMainForm:{Items:{Workspace:{getActiveTab:()=>card}}}}}};
+ const app={Version:'7.4.2',ModelForm,WizardTreeNode,ModelPortTreeNode,ModelOutputPortsTreeNode,ModelInputPortsTreeNode,ModelNodeTreeNode,Application:{FInstance:{FMainForm:{Items:{Workspace:{getActiveTab:()=>card}}}}}};
  menu.id='menu';const nativeControls=new Map([dialog,...Object.values(confirmation)].map(e=>[e.id,{el:{dom:e}}]));
  const context=vm.createContext({document,location:{origin:'http://example.test'},bg:{app},__loginomDockPreparationV1:prep,Ext:{getCmp:id=>nativeControls.get(id)??graph.FPortContextMenu}});
  const showWizard=()=>{menu.visible=false;dialog.visible=false;wizardDom.visible=true;card.Controller.FController=wizard;card.Controller.Node.data.node=wizardTree;if(flags.foreignWizard)portTree.FModelNodePort={};flags.loading=2;};
@@ -48,7 +48,7 @@ function fixture() {
   }};
  }};
  const task={binding:{document_id:'doc',workflow_ref:{workflow_id:'flow',prefix,tab_tid:'tab'},node:{document_id:'doc',workflow_id:'flow',node_id:'node'}},
-  port:0,operation_id:'open',origin:'http://example.test',build:'7.4.2',deadline:Date.now()+20000};
+  direction,port:0,operation_id:'open',origin:'http://example.test',build:'7.4.2',deadline:Date.now()+20000};
  const readNode=async()=>({verified:true,surface:'graph',locked:false,node_id:'node'});
  const run=()=>openPreparedOutputPort(page,task,readNode);
  return {run,task,prep,flags,gestures,port,portDom,graph,node,wizard,card,menu,readNode,page,dialog,confirmation,nativeControls,document};
@@ -118,4 +118,17 @@ test('lost Yes response retains issued receipt and reconciles without another co
  const first=await f.run();assert.equal(first.status,'AMBIGUOUS');assert.equal(f.gestures.length,3);
  assert.equal(f.prep.outputPortOpenReceipts.get('open').phase,'deactivation_issued');
  const second=await f.run();assert.equal(second.status,'SUCCEEDED',second.error);assert.equal(f.gestures.length,3);
+});
+
+test('input port binds its own group and socket without accepting the output engine port',async()=>{
+ const f=fixture('input'),r=await f.run();assert.equal(r.status,'SUCCEEDED',r.error);assert.equal(r.direction,'input');
+ assert.equal(f.prep.inputPortOpenReceipts.get('open').enginePort,f.wizard.FModelSocket);
+ const again=await f.run();assert.equal(again.replayed,true);assert.equal(f.gestures.length,2);
+ f.wizard.FModelEnginePort=f.wizard.FModelSocket;f.wizard.FModelSocket={};
+ assert.equal((await f.run()).verified,false);assert.equal(f.gestures.length,2);
+});
+test('unresolved opposite-direction port opening prevents a new gesture',async()=>{
+ const f=fixture('input');f.flags.foreignMenu=true;await f.run();
+ f.task.direction='output';f.task.operation_id='another';f.flags.foreignMenu=false;
+ const r=await f.run();assert.equal(r.status,'NOT_APPLIED');assert.equal(f.gestures.length,1);
 });
