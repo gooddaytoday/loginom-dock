@@ -58,7 +58,7 @@ async function fixture({ mutate } = {}) {
 test('pins and verifies the complete production release once', async () => {
   const data = await fixture();
   const pinned = await pinActionCatalog(data.remote);
-  assert.equal(pinned.actions.size, 4);
+  assert.equal(pinned.actions.size, 5);
   assert.equal(pinned.selectors.get('workflow.port.input.add').strategy, 'data_tid');
   assert.equal(pinned.pins.capabilityAbi, 1);
   assert.equal(pinned.pins.e2eCommit, '2cad5602158fd2e4836d821d644a2b8d92f571a2');
@@ -230,4 +230,15 @@ test('batch descriptions reuse the pinned catalog and distinguish planned type c
   assert.deepEqual(runtime.describe({}),runtime.describe());
   assert.throws(()=>runtime.describe({action_key:'node.add',node_types:['imports.text']}),/single action/);
   assert.throws(()=>runtime.describe({action_keys:['node.add','node.add']}),/distinct/);
+});
+
+test('array bounds are validated at catalog admission and before walking values',async()=>{
+ const {validateJsonSchema,validateActionParameters}=await import('../lib/action-catalog.mjs');
+ const schema={type:'array',minItems:1,maxItems:2,items:{type:'string'}};
+ assert.doesNotThrow(()=>validateJsonSchema(schema));
+ assert.deepEqual(validateActionParameters(schema,['a','b']),['a','b']);
+ assert.throws(()=>validateActionParameters(schema,[]),/array is too short/);
+ assert.throws(()=>validateActionParameters(schema,['a','b','c']),/array is too long/);
+ for(const bounds of [{minItems:-1},{maxItems:1.5},{maxItems:Infinity},{minItems:3,maxItems:2}])
+  assert.throws(()=>validateJsonSchema({...schema,...bounds}),/invalid|reversed/);
 });

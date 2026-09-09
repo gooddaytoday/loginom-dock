@@ -1,3 +1,993 @@
+# Подплан 03 завершён — 8 сентября 2026, 22:49 МСК
+
+Статус: **implemented / live_verified (source runtime)**. Общий node.apply,
+текстовый импорт, readback, сохранение и безопасное продолжение приняты.
+[Итоговая проверка всех требований](../plans/loginom-dock/03-completion-audit.md)
+содержит полную матрицу, исходники, ограничения и измерения.
+
+Самостоятельный Hermes `20260908-222819-2e3cc755`:30/30 independent checks PASS,
+openai-codex / gpt-5.6-sol / low, без fallback. Frozen audit SHA256:
+`bcddd145fd525cedd1bd74b9185eaec27aae44d8c9f2ee46809b489c975f5317`.
+Текущий полный runtime83 совпадает с его pin:
+`172d0c6bac5a0dc53685d4ef621a554d603facfef6ca7830d40ce4823bd11dd5`.
+Пакет `/user/dock-p3/packages/Dock-acceptance-20260908-222819-2e3cc755.lgp`,
+повторно проверенный выход6×5. Public15/model API16; токены и время — в итоговом аудите.
+
+Дополнительные current-pin проверки: cancel/resume после configure
+`execute-1788895997843`, после finish `execute-1788896235443`, отказ при изменённом
+черновике `execute-1788896364214` — independent PASS. Исправлен только verifier
+новой workflow-фазы; runtime после Hermes не менялся. Оригинальный harness138 файлов
+сохранён по SHA; текущие28 сценарных проверок совпали с frozen audit.
+Client1029 PASS/1 SKIP и shell46 PASS; Python387 PASS. Все собственные прогоны
+завершены, соответствующих процессов в проверенном live process list нет.
+Индекс27 проверенных свидетельств: `.dock/text-import-v3/subplan03-completion-evidence-index.json`.
+
+Работы по цели03 не осталось. Следующий подплан04 — отдельная задача.
+Подпланы04–10 и выпуск V5 не приняты; production и установленный клиент не менялись.
+Исторические записи ниже не отменяют этот итог и не являются текущими blockers.
+
+---
+
+# Подплан 03 — configuration readback принят через MCP, 8 сентября 2026, 22:29 МСК
+
+Реализован `configuration.readback` из проверенных UI-квитанций: source/format,
+полная схема полей и native output mapping, node/receipt refs и явный scope.
+Входные параметры не копируются. Close не выдаёт readback применённых настроек;
+package_persistence_verified остаётся false. Общая оболочка вызывает чистую
+функцию handler после принятого finish/read, результат сохраняется для replay.
+Schema/types и native Hermes skill обновлены; handler revision text-import-output-v2.
+Независимый node_configuration_evidence.py сверяет raw observations, страницы
+полей, native источники mapping и node identity. Он включён в полный scenario audit.
+
+Полный Codex MCP run `remote-readback-20260908-222113-70a0533e`: все components PASS,
+включая обе configuration projections, public calls, delivery/output, два save и
+reopen/reexecute. Пакет `/user/dock-p3/packages/Dock-acceptance-20260908-222113-70a0533e.lgp`.
+Execution `1788895298093-84gv4vtlhfl:594:1` → `:594:3`, два выхода6×5;
+settings={} / mappings=[] после reopen, optional target.label не повторялся.
+Полный pin83: `172d0c6bac5a0dc53685d4ef621a554d603facfef6ca7830d40ce4823bd11dd5`.
+7 negative readback mutations отвергнуты. Проекция66 полей на архивных live receipts
+также прошла independent audit; это pure regression, не новый live run широкой схемы.
+Client1029 PASS/1 SKIP, затем расширенный shell46 PASS; Python385 PASS.
+Bridge65566 закрыт exit0. Неудачный setup222027 имел stdin от here-doc и завершён
+до dock_prepare/действий; он не засчитывался как проверка. Runtime не менялся после
+начала принятого run222113; полный source audit PASS. Production не менялся.
+
+Новый Hermes `20260908-222819-2e3cc755`, process85921: model_started подтверждён,
+openai-codex / gpt-5.6-sol / low; preflight PASS, fallback=false. Опросить тот же
+handle до terminal и выполнить node_apply_acceptance.py для этого run. Не менять
+runtime/skill/acceptance harness во время прогона. После результата сопоставить
+полный подплан03 с acceptance matrix; source/live_verified и release V5 различать.
+Подплан ещё не завершён. Frozen FAIL четвёртого прогона сохранён ниже.
+
+---
+
+# Подплан 03 — четвёртый Hermes FAIL, начата диагностика результата, 8 сентября 2026, 22:12 МСК
+
+Run `20260908-220328-c2a6b6f2` завершён exit0, model completed=true:
+openai-codex / gpt-5.6-sol / low. Frozen `node-apply-audit.json` FAIL:
+`tool_scope`, `persistence`, `no_intervening_operation`; SHA256
+`65fb3e2b3add7d3c2eabefaeafafb81b573d34edea3c49250b74910095f5543b`.
+Этот исход не пересчитывать/не заменять новым PASS. Runtime82 pin8d8967ca…e9d5.
+Два node.apply SUCCEEDED, execution `1788894234375-aszvr20jozb:592:1` → `:592:3`;
+второй запрос settings={} / mappings=[]. После него Hermes дополнительно
+select/open_wizard через dock_ui_action, затем recovery. Полный сценарий не принят.
+24 model API calls,28 public calls; tokens input113802/output5331/total1253981,
+cache_read1134848/reasoning1600 (пересекающиеся счётчики не суммировать).
+Процесс7296 завершён, нового Hermes не запускать без исправления и Codex-проверки.
+
+Диагностика выявила независимую ошибку verifier: target.label необязателен для
+existing ref, а import_done_evidence сравнивал фактическое имя с None. Исправлен
+private путь проверки output: ожидаемое имя берётся из проверенного seed, если
+existing request его не задаёт; ссылки, тип и граф по-прежнему проверяются.
+Python import120 PASS. `optional-label-diagnostic-audit.json`: persistence PASS,
+3 negative mutations (чужие имя/тип/GUID) отвергнуты. Это новый диагностический
+отчёт, не изменение frozen Hermes FAIL; лишние UI-действия остаются нарушением.
+
+Следующая конкретная работа: вернуть агенту проверенные настройки из обработчика.
+В `node-apply.mjs` public configuration сейчас содержит только status;
+configure receipt хранит source/format/columns/preservation, output_mapping receipt
+содержит native_mapping/source_identity_verified. Skill просит оценить прочитанные
+настройки, но public result их не предоставляет. Нужен компактный наблюдённый
+readback с явной областью доказательства, привязанный к фазам/node и окончанию;
+не подменять его входными параметрами и не объявлять package persistence из него.
+Сверить реальные значения/схему, расширить общий result contract/schema и типы,
+добавить независимую проверку и негативные тесты, проверить Codex MCP цикл,
+затем новый автономный Hermes. Не ослаблять запрет штатного дополнительного reopen.
+
+Подплан03 остаётся in progress. Общий план §7.1 и README различают принятие
+подплана (implemented/live_verified) и поставку полного выпуска V5 (released).
+Поставка V5 не выполнена; автоматически расширять задачу03 до всего выпуска не нужно.
+Production и установленный клиент не менялись. Последний полный remote и его
+ограничение сохранены ниже; канонический общий план/README исправлены с planned
+на in progress, без объявления готовности.
+
+---
+
+# Подплан 03 — remote persistence принят; Hermes запущен, 8 сентября 2026, 22:04 МСК
+
+Remote `remote-final-20260908-215200-a64d819b` на полном pin
+`8d8967cac2c274b7988596b04534570da13a6528fddc3a3fea15d7099cc5e9d5`/82 files
+завершил delivery, import Execute, intermediate save, final save, reopen и
+Execute с `settings:{}` / `mappings:[]`. Независимые delivery/output, обе
+workflow activation, persistence и runtime-source audits PASS. Выход 6×5,
+execution `1788893554000-7mlic3q9dvi:590:1` → `:590:3`.
+Пакет: `/user/dock-p3/packages/Dock-acceptance-20260908-215200-a64d819b.lgp`.
+Общий operator-components-audit сохранён как FAIL: operator-15 использовал
+неверный target.node_id вместо target.ref; запрос был REQUEST_REJECTED,
+effect_possible=false, до UI. Исправленный operator-17 завершился SUCCEEDED.
+Этот отклонённый запрос не удалён из evidence и не объявлен straight-through PASS.
+Bridge23135 закрыт, exit0; продуктовые исходники не менялись.
+
+Preflight PASS: existing ChatGPT openai-codex / gpt-5.6-sol / low, fallback=false.
+Новый отдельный Hermes run `20260908-220328-c2a6b6f2`, process handle7296;
+подтверждена стадия model_started (Sol/low). Перед продолжением опросить тот же
+handle; не запускать новый run из-за отсутствия вывода. Результат модели и
+полный аудит пока не получены. Подплан03 и release gates остаются открытыми.
+Evidence: `.dock/text-import-v3/remote-final-20260908-215200-a64d819b/`
+и `.dock/text-import-v3/hermes-runs/20260908-220328-c2a6b6f2/`.
+
+---
+
+# Подплан 03 — смена схемы и неверные значения приняты, 8 сентября 2026, 21:50 МСК
+
+На полном pin8d8967ca…e9d5/82files приняты CSV→TSV с новой схемой и сохранностью
+незапрошенных настроек (12 negative checks), а также неверные integer/real
+литералы→Null (5 negatives). Исправлено чтение, попадающее на снятие блокировки
+графа после Done/Execute: максимум два перечитывания того же узла, без повтора
+жеста. Реальный execute_wizard прошёл эту ветвь один раз и завершился успешно.
+Client1015 PASS/1 SKIP; focused UI249 PASS. Все harness завершены.
+Следующий шаг: полный текущий Codex remote bridge import/save/reopen цикл,
+затем один autonomous Hermes Sol/low с независимым аудитом и release gates.
+Подплан03 ещё открыт. [Точные evidence и ограничения](text-import-node.md).
+
+---
+
+# Подплан 03 — общий stop с зависимостью принят, 8 сентября 2026, 21:39 МСК
+
+Общий graph launch→identify→stop→replay принят на полном новом pin
+d5d46052…ec2c4b/82files: независимый journal audit PASS/7 negatives,
+ровно один cancel, replay29→29. Отдельно missing-source отказ повторно принят
+на том же pin, PASS/9 negatives. Client1015 PASS/1 SKIP; Python import119 PASS.
+Обе сессии завершены exit0. Подплан03 открыт: оставшаяся матрица и её полные pins,
+итоговый Codex import/save/reopen цикл, Hermes Sol/low и release gates.
+[Точные evidence и ограничения](text-import-node.md).
+
+---
+
+# Подплан 03 — отмена процесса с зависимостью исследована, 8 сентября 2026, 21:33 МСК
+
+Live typed cancel принят: группа3 и собственный child3.2 cancelled, upstream3.1
+остался completed. Independent audit PASS/6 negatives. Общий stop driver теперь
+выбирает уникальный native-owned child среди зависимостей и сверяет owner после
+отмены; 42 focused PASS, полный client1015 PASS/1 SKIP (1016).
+Live принят на прежнем pin2843807e…448f9e; изменённый общий драйвер live ещё
+не принят. Следующий шаг — новый pinned harness на сохранённом fixture:
+`/user/dock-p3/packages/Multi-stop-1788891779759.lgp`, затем driver stop/replay audit.
+Пакет закрыт, harness8540 завершился exit0. Полный03 открыт, Hermes не запускался.
+[Точные evidence и продолжение](text-import-node.md).
+
+---
+
+# Подплан 03 — штатное сохранение и продолжение приняты, 8 сентября 2026, 21:21 МСК
+
+На неизменном pin2843807e…448f9e/82files проверены штатный Save As →
+тот же workflow → один node.apply с отдельным портом → final save → reopen →
+новое выполнение без настройки. Два независимых аудита PASS, по 5 negatives.
+Выход: Expr1/LifecycleId, строки (7,1), (7,2), (7,3). Пакет сохранён как
+`/user/dock-p3/packages/Canonical-final-1788891175743.lgp`.
+Диагностическая сессия64701 закрыта exit0; после reopen отброшены только новые
+настройки визуализатора. Прежний отказ после raw operator Save As не воспроизвёлся
+через canonical package.save_checkpoint: штатный refresh navigation уже реализован.
+Остались multi-process stop, полная сверка матрицы, Hermes и release gates.
+[Точные evidence и ограничения](text-import-node.md).
+
+---
+
+# Подплан 03 — единый separate node.apply принят, 8 сентября 2026, 21:10 МСК
+
+Один runtime node.apply прошёл configure7→node Done→standalone port mapping/Done→
+graph launch→owned completion→output3×2, Expr1/LifecycleId. Audit PASS/5 negatives,
+replay browser327→327. Полный pin2843807e…448f9e/82files, client1009 PASS/1 SKIP.
+Private fixture handler, не публичный Calculator release. Пакет закрыт без save,
+harness68515 exit0. Остались Save As navigation, multi-process stop, matrix и Hermes.
+[Точные evidence, исправления и продолжение](text-import-node.md).
+
+---
+
+# Подплан 03 — отдельный порт в общей оболочке, 8 сентября 2026, 20:58 МСК
+
+Добавлены handler.output_wizard=separate, journal phase node_finish и finishGraph;
+Close не сохраняет промежуточный черновик. Общие helpers связывают standalone
+port mapping/Done с graph launch/identify. Tests1000 PASS/1 SKIP, focused72 PASS.
+Единый live node.apply этого пути ещё не принят; imports.text остаётся embedded.
+Активных harness нет. Полный03 открыт.
+[Точное состояние, ограничения и следующий шаг](text-import-node.md).
+
+---
+
+# Подплан 03 — общий graph launch принят, 8 сентября 2026, 20:53 МСК
+
+launchGraph + typed execute_graph_node прошли real Loginom component audit:
+PASS/6 negatives, новая группа/Calculator+import, выход3×2. Pinb57a583d…f42e5,
+82files; client987 PASS/1 SKIP. Пакет закрыт без сохранения визуализатора,
+harness13793 exit0. Полная связка port Done→graph launch внутри одного
+node.apply ещё не подключена. Save As navigation, multi-process stop,
+остальная matrix и Hermes остаются. Подплан03 открыт.
+[Точные evidence и следующий шаг](text-import-node.md).
+
+---
+
+# Подплан 03 — процесс с зависимостями принят, 8 сентября 2026, 20:43 МСК
+
+Live component PASS/6 negatives: новая группа2, Calculator2.2 вместе с import2.1,
+Show Node и выход3×2 после reopen копии Process-owner-1788889089693.lgp.
+Полный pin6d6500f2…152d2/82files; client973 PASS/1 SKIP, source не менялся.
+Выявлен отдельный AMBIGUOUS navigation после Save As до reopen; не исправлен.
+Пакет закрыт без сохранения настроек визуализатора, harness50744 exit0.
+Остались общий graph launch в node.apply, Save As navigation, matrix и Hermes.
+[Точные evidence, ограничения и продолжение](text-import-node.md).
+
+---
+
+# Подплан 03 — выбор процесса с зависимостями, 8 сентября 2026, 20:38 МСК
+
+Выбор процесса по уникальному native ModelNode добавлен; Show Node остаётся
+независимой проверкой. Client973 PASS/1 SKIP, focused55 PASS.
+Live run done-1788888958800 остановился до запуска: пакет «только чтение».
+Harness закрыт exit0. Исправление live ещё не принято; причина блокировки
+не установлена. Нужны writable fixture, проверка нового процесса, общий
+graph Execute в node.apply, оставшаяся матрица и Hermes. Подплан03 открыт.
+[Точная точка продолжения и evidence](text-import-node.md).
+
+---
+
+# Подплан 03 — batch mapping принят, 8 сентября 2026, 20:26 МСК
+
+Общий batch: autosync=false, rename Id→MappedId/Код, exclusions и порядок обеих
+групп, replay no-op, typed Done — independent PASS/8 negatives на pin76d5…f444
+(82files). Save/reopen и выход3×2 — persistence component PASS/5 negatives.
+Active-port deactivation отдельно принят на pin4926…a9ed,7 negatives.
+Client960 PASS/1 SKIP. Все процессы участка закрыты. Полный03 открыт:
+new-process freshness/common graph Execute, оставшаяся matrix и Hermes.
+[Точные ограничения, evidence и продолжение](text-import-node.md).
+
+---
+
+# Подплан 03 — exclusion channel и сохранение, 8 сентября 2026, 20:02 МСК
+
+Полный pin0317f14a…898ae/82 files: общий private channel исключил Title/Amount,
+завершил typed Done; independent PASS/9 negatives. Save→close/open→unchanged
+operator Execute показал Expr1/Id,3×2; persistence component PASS/5 negatives.
+Client954 PASS/1 SKIP. Активные диагностические процессы закрыты.
+Подплан03 открыт: active-port deactivation, batch exclusion integration,
+оставшаяся matrix и новая Hermes приёмка. Public Calculator handler не объявлен.
+[Точный checkpoint и evidence](text-import-node.md).
+
+---
+
+# Подплан 03 — отдельный порт привязан к узлу, 8 сентября 2026, 19:22 МСК
+
+Private opener и prepared context подтвердили live связь graph → port menu →
+точный мастер; independent component PASS, replay без кликов, четыре поля.
+Client947 PASS/1 SKIP. Далее: runtime gate/journal integration и общий exclusion
+handler, затем persistence/матрица/новая Hermes приёмка. Подплан03 открыт.
+Процессы участка закрыты, production unchanged.
+[Точный checkpoint и evidence](text-import-node.md).
+
+---
+
+# Подплан 03 — чтение исключённых полей, 8 сентября 2026, 19:07 МСК
+
+Shared reader распознал live DerivedDataSourceOutputSocketWizard и группу
+«Исключенные»; independent component PASS, client940 PASS/1 SKIP.
+Общий prepared context выявил отдельную ownership-модель порта и остаётся
+закрытым до её доказательства. Далее: проверяемое открытие порта, ownership,
+общий exclusion driver, persistence и новая frozen Hermes приёмка.
+Процессы участка закрыты; подплан03 открыт.
+[Точный checkpoint и evidence](text-import-node.md).
+
+---
+
+# Подплан 03 — existing Close принят, 8 сентября 2026, 18:27 МСК
+
+Исправлено ожидание разблокировки того же узла после Close и перечитывание
+снимка при смене lock. Live seed/edit/Close/unchanged Execute3×3 принят на
+pin172a9d84…a590; source/component PASS,8 negatives. Client937 PASS/1 SKIP,
+Python181 PASS. Все процессы участка terminal. Подплан03 открыт: remaining matrix,
+итоговый Codex persistence и новая autonomous Hermes приёмка.
+[Точный checkpoint](text-import-node.md).
+
+# Подплан 03 — третий Hermes не принят, 8 сентября 2026, 18:17 МСК
+
+Frozen audit FAIL сохранён. Найдены повторная настройка mapping после reopen и
+последующая перезапись final без новой проверки. Уточнён native skill, исправлена
+ложная строгость conflict_policy; 19+116 tests и Sol/low preflight PASS.
+Mode matrix на pin7e943d44…5b66: все8 source/output PASS, handle60581 exit0.
+Existing Close diagnostic выполняется handle39432; подплан03 открыт.
+[Диагностика и точное продолжение](text-import-node.md).
+
+# Подплан 03 — ожидание MCP перед Hermes исправлено, 8 сентября 2026, 17:53 МСК
+
+Второй Hermes run завершился без tools, independent audit FAIL. Проверка без
+модели доказала гонку: default wait15s, Dock готов через16.5s. Runner теперь
+ждёт до180s, config recheck зарегистрировал tools через18.07s до agent build.
+Следующий шаг — новая autonomous попытка после исправления launcher. Подплан03
+открыт. [Точный checkpoint](text-import-node.md).
+
+# Подплан 03 — source-name binding принят live, 8 сентября 2026, 17:44 МСК
+
+Настройки связываются по source_name, сохраняя CSV order. Запрос Hermes прошёл
+полный remote MCP цикл до двух сохранений/reopen/fresh output6×5. Independent
+audits PASS/4 negatives, client935 PASS/1 SKIP. Bridge закрыт. Следующий шаг —
+новая autonomous Hermes Sol/low приёмка. Подплан03 открыт.
+[Точный checkpoint](text-import-node.md).
+
+# Подплан 03 — Hermes выявил привязку полей по позиции, 8 сентября 2026, 17:36 МСК
+
+Hermes run20260908-172751-b7e388d1 завершён для Codex diagnosis, frozen audit FAIL.
+JSON key-order navigation bug исправлен; client934 PASS/1 SKIP. Remote replay
+подтвердил fix, но выявил positional source-column binding: поля с точным
+source_name должны связываться по имени, а не позиции списка. Импорт не принят,
+bridge закрыт. [Точный следующий fix и evidence](text-import-node.md).
+Подплан03 открыт; новая Hermes попытка только после Codex debugging.
+
+# Подплан 03 — измерения и матрица приёмки, 8 сентября 2026, 17:25 МСК
+
+Runner сохраняет реальные usage counters; independent auditor перепроверяет
+измерения фаз/внешних вызовов/токенов. 26 focused tests PASS. 8 исторических
+output cases повторно прошли аудитор; их full runtime provenance проверяется
+отдельно. Hermes Sol/low preflight PASS, модель не запускалась. Подплан03 открыт.
+[Матрица оставшейся приёмки](../plans/loginom-dock/03-acceptance-matrix.md).
+[Точная точка продолжения](text-import-node.md).
+
+# Подплан 03 — позднее восстановление workflow принято live, 8 сентября 2026, 17:19 МСК
+
+Исходная workflow-квитанция восстанавливается без повторного клика; явный resume
+сверяет живой документ и источник, сохраняет deadlines. Real fault diagnostic
+продолжил тот же node.apply до свежего выхода 3×3. Independent recovery/output
+PASS, 10 подмен отвергнуты. Client933 PASS/1 SKIP; процесс закрыт. Подплан03
+открыт, Hermes не запускался, production unchanged.
+[Точный checkpoint и оставшиеся требования](text-import-node.md).
+
+# Подплан 03 — полный remote sales цикл принят Codex, 8 сентября 2026, 17:09 МСК
+
+Реальный MCP-прогон на pin23a…e84a подтвердил delivery → новый импорт 6×5 →
+промежуточное сохранение → final save/reopen → новый выход того же узла.
+Независимые component audits PASS, 9 повреждений evidence отвергнуты. Operator
+bridge закрыт, exit0. Hermes не запускался; подплан03 открыт, production unchanged.
+[Точный checkpoint и оставшиеся требования](text-import-node.md).
+
+# Подплан 03 — workflow live, transport fix, 8 сентября 2026, 16:58 МСК
+
+Возврат Files→original workflow принят live audit/6 negatives; узел Продажи создан.
+Open отказал из-за typed transport/plain reader mismatch. После закрытия run
+исправлены transport envelope и workflow output schema; client927 PASS/1 SKIP,
+Python113 PASS. Pin23a36052…ee84a требует нового live. [Checkpoint](text-import-node.md).
+Подплан03 открыт; handles26281/23472 terminal.
+
+---
+
+# Подплан 03 — no-effect target refusal, 8 сентября 2026, 16:48 МСК
+
+Отказ read-only target preflight теперь NOT_APPLIED/cleanup=true; потерянный
+mutation response остаётся AMBIGUOUS. 75 focused tests и source preflight PASS.
+Новый pindc7e0770…388aa без live. Возврат из Files в original workflow ещё нужен.
+[Точный checkpoint](text-import-node.md). Подплан03 открыт.
+
+---
+
+# Подплан 03 — real bridge отказ после delivery, 8 сентября 2026, 16:44 МСК
+
+Настоящая remote delivery CSV принята, но import-sales отказал на target:
+Files TF-2 остался активным вместо prepared graph TF-1. Узел не подтверждён,
+исходный runtime outcome AMBIGUOUS сохранён. Handle81373 terminal/exit0.
+Нужны context return и безопасная классификация no-effect preflight до нового
+rehearsal/Hermes. [Точный checkpoint](text-import-node.md). Подплан03 открыт.
+
+---
+
+# Подплан 03 — общий аудитор подключён, 8 сентября 2026, 16:36 МСК
+
+node_apply_acceptance.py объединён с audit.py и run.py; 50 focused tests PASS.
+Общие model/pin/goal/public/delivery/persistence gates добавлены, но полного
+положительного live evidence пока нет. Следующий шаг — Codex remote bridge rehearsal,
+затем полный negative audit и Hermes. [Checkpoint](text-import-node.md). Подплан03 открыт.
+
+---
+
+# Подплан 03 — public receipts и delivery core, 8 сентября 2026, 16:30 МСК
+
+Добавлены public node/save/delivery bindings; обычная delivery-проверка выделена
+без обязательного replay, прежний replay gate сохранён. 41 focused tests PASS,
+исторический delivery re-audit PASS. Полный outer auditor и live rehearsal впереди.
+[Точный checkpoint](text-import-node.md). Подплан03 открыт.
+
+---
+
+# Подплан 03 — экспорт и real reopen binding, 8 сентября 2026, 16:24 МСК
+
+Исправлен пропуск новых node/delivery replies в экспорте Hermes. Добавлены
+real prepare/no-op binding и композиция persistence/output proofs. 36 focused
+tests PASS; полного live evidence и outer acceptance auditor пока нет.
+[Точная точка продолжения](text-import-node.md). Подплан03 открыт.
+
+---
+
+# Подплан 03 — подготовка полного auditor, 8 сентября 2026, 16:19 МСК
+
+Добавлены независимые проверки соответствия sales goal и цепочки двух сохранений;
+19 focused tests и source preflight PASS. Полный auditor и live rehearsal цепочки
+ещё нужны до Hermes. Новый source pin841e54de…95e8f5 пока без live acceptance.
+[Точный checkpoint и оставшаяся работа](text-import-node.md). Подплан03 открыт.
+
+---
+
+# Подплан 03 — output contract и VPS candidate, 8 сентября 2026, 16:06 МСК
+
+Output schemas/types согласованы; node journal failure сохраняет partial result.
+Candidate upload допускает≤2 no-effect refresh; подтверждённый отказ не превращается
+в неизвестную отправку. Client919 PASS/1 SKIP, Python113+4+3 PASS. Новый live public
+save/reopen/output принят на полном pin5b48f9d8…c1a53 (80 files).
+На VPS staged/read-back node-apply.1-candidate, activated=false; настоящий bridge
+видит node tools и package.save_checkpoint revision2. Подплан03 открыт: следующий
+шаг — полный goal-only Hermes сценарий и соответствующий независимый auditor.
+[Точный checkpoint, manifest SHA и ограничения](text-import-node.md).
+
+---
+
+# Подплан 03 — public wire и persistence, 8 сентября 2026, 15:44 МСК
+
+На полном pin56996d5e…fc05 (79 files) приняты два live operator MCP прогона:
+финальный save/reopen/reexecute и delivery из другого каталога → intermediate
+save → отдельный QA reopen/reexecute. В обоих сохранены mapping и fresh3×3.
+Independent audits PASS; Python113 PASS. Это public dispatcher/wire, не remote
+bridge/Hermes acceptance. Полный03 остаётся в работе; следующий scope уточнён в
+[точной контрольной точке](text-import-node.md). Production не менялся.
+
+---
+
+# Подплан 03 — candidate MCP API, 8 сентября 2026, 15:33 МСК
+
+В executor-replay подключены public node.apply/resume/status/wait/cancel/stop и
+artifact delivery/status/resume. Добавлены входные схемы и блокировка внешних
+UI reads во время фонового node job. Client911 PASS/1 SKIP, MCP protocol PASS.
+Это source increment: live public path и автономная Hermes приёмка остаются;
+Подплан03 не завершён. Исторический live pin не относится к новым исходникам.
+[Точный checkpoint и следующий участок](text-import-node.md).
+
+---
+
+# Подплан 03 — delivery resume, 8 сентября 2026, 15:21 МСК
+
+Private resume после upload и после byte verification принят в живом импорте:
+тот же upload/download ID, без повторных эффектов, новое output3×3; independent
+PASS/12 negatives в каждом прогоне. Full pin f34ec440…6b24,78 files verified.
+Отдельный diagnostic подтвердил отказ после закрытия исходного документа
+(PASS/6 negatives), но его transfer остался неподтверждённым. Client907 PASS/1 SKIP.
+[Точный checkpoint, partial transfer и оставшийся scope](text-import-node.md).
+
+---
+
+# Подплан 03 — восстановление ответов и source pin, 8 сентября 2026, 15:10 МСК
+
+Controlled loss upload/download replies → original receipt inspect → import/output
+принят на полном pin c631c031…d2b0; independent PASS/12 negatives. Reject/replace
+повторно приняты на том же pin. Независимо проверены78 исходных файлов.
+Старый hash НЕ охватывал несколько новых модулей: прежние live evidence остаются,
+но полная fixed-pin привязка для них не подтверждена. Теперь lib inventory
+включается автоматически. Client900 PASS/1 SKIP, Python113 PASS.
+[Точный checkpoint, исправление pins и оставшийся scope](text-import-node.md).
+
+---
+
+# Подплан 03 — конфликты доставки, 8 сентября 2026, 15:01 МСК
+
+Private integrated reject/replace приняты fixed-pin live и independent audits,
+по10 negatives. Reject сохранил исходные64 bytes; replace записал новые35 bytes.
+Обычная delivery → mapped import/output также принята; client895 PASS/1 SKIP.
+Повтор ID не отправляет файл/не выбирает конфликт снова. Public upload остаётся
+legacy replace-only. Полный03, delivery recovery, public node contract и Hermes
+ещё не завершены. [Точная контрольная точка и evidence](text-import-node.md).
+
+---
+
+# Подплан 03 — переход к корню Files, 8 сентября 2026
+
+Source observer выдаёт принадлежащую текущей панели ссылку «Файлы» как click-only.
+Live diagnostic подтвердил один клик и каталог `/`; client877 PASS/1 SKIP,
+delivery suite10 PASS. Полный fixed-pin delivery из чужой ветви ещё впереди.
+Diagnostic50160 жив, теперь в корне Files; исходный debug5 upload resolved.
+[Контрольная точка и следующие обязательства](text-import-node.md).
+
+---
+
+# Подплан 03 — объединённая доставка и импорт, 8 сентября 2026
+
+Fixed-pin live `b35140e0…b960`: delivery → import/mapping → новое Execute/output3×3
+принят независимым аудитом; 8 негативных подмен отклонены. Client876 PASS/1 SKIP.
+Исходная debug5 отправка также resolved без повторной загрузки. Старый diagnostic
+с host reference mismatch остаётся отдельным unresolved transfer. Полный03,
+сохранение/reopen этого integrated прогона и Hermes ещё не приняты.
+[Точная контрольная точка, evidence и оставшиеся обязательства](text-import-node.md).
+
+---
+
+> **8 сентября: private integrated delivery coordinator, ещё не принят live.**
+> Source tests и full client868 PASS/1 SKIP. Submission в diagnostic подтверждён,
+> проверка bytes ожидает раскрытия строки в длинном Files listing. Исходный upload
+> сохраняется pending; не повторять отправку. [Контрольная точка](text-import-node.md).
+
+> **8 сентября: исправлено длительное ожидание execution в подплане03.**
+> Readiness timeout не подменяет общий deadline. Live ожидание25s с переходом
+> через15s window и адресной отменой принято independent audit/9 negatives.
+> Client859 PASS/1 SKIP; delivery/recovery/public/Hermes и полный03 остаются.
+> [Контрольная точка](text-import-node.md).
+
+> **8 сентября: runtime stop wiring подплана03.**
+> Source cancellation/unknown-stop/gate tests и полный client857 PASS/1 SKIP.
+> Live completed-before-stop race на импорте принят independent audit/7 negatives.
+> Cancelled running import, прочий recovery и полный03 остаются незавершёнными.
+> [Контрольная точка](text-import-node.md).
+
+> **8 сентября 2026: подплан03 — private execution stop driver.**
+> Fixed-pin live running→cancelled через общий node-procedure journal принят
+> independent audit/7 negatives; повторный stop без новых действий. Client854 PASS/1 SKIP.
+> Runtime/import stop integration и полный подплан ещё не завершены.
+> [Контрольная точка](text-import-node.md).
+
+# Подплан 03 — живой running → cancelled, 8 сентября 2026
+
+Отдельный конечный JS diagnostic реально наблюдал running child1.1, затем один
+адресный Cancel перевёл ту же запись в cancelled; финальный native reader
+подтвердил terminal/can_cancel=false. Это manual diagnostic, product stop ещё
+не реализован. Handle64929 ждёт ввода с несохранённым fixture.
+[Точное evidence, найденная native ownership связь и следующий шаг](text-import-node.md).
+
+---
+
+# Подплан 03 — cancel/resume и большой импорт, 8 сентября 2026
+
+Live background cancellation после configure и после Execute с последующим
+resume приняты independent audits, по7 negatives. Повторного создания/Execute нет.
+CSV2500000 rows/sample10 также принят independent audit,7 negatives; процесс
+уже completed при первом наблюдении, running/stop пока НЕ приняты.
+Добавлен native progress_state reader; client839 PASS/1 SKIP.
+[Checkpoint, evidence и следующие обязательства](text-import-node.md).
+
+---
+
+# Подплан 03 — фоновый node lifecycle, 8 сентября 2026
+
+Private start/status/wait/cancel добавлены. Live `f3857da3…f9b62`: один worker,
+один Execute, output3×3; independent PASS/7 negatives. Client837 PASS/1 SKIP.
+Cancel останавливает локальный handler, не подтверждает server stop. Long server
+execution, recovery, delivery/public/Hermes и полный03 остаются.
+[Checkpoint и evidence](text-import-node.md).
+
+---
+
+# Подплан 03 — продолжение после Execute, 8 сентября 2026
+
+Fixed-pin `124a02ff…1899c`: finish → pause/inspect → unchanged graph/process
+continuity → wait/ownership → output3×3 принят independent audit; 8 negatives.
+Один execution ID, без повторного Execute. Client834 PASS/1 SKIP.
+Guard требует неизменившийся UI document/revision; long/unknown reconciliation,
+прочие recovery границы и полный03 остаются. [Checkpoint](text-import-node.md).
+
+---
+
+# Подплан 03 — отказ изменённой метки Done, 8 сентября 2026
+
+Live independent audit на `936f2e07…ee3ba`: изменение completion label после
+output_mapping отклонено без Execute, partial state сохранён; 5 negatives.
+Wide mapped resume66/132 также принят на f1960cea…, 8 negatives.
+Исправлен клик по частично видимой строке файла; client833 PASS/1 SKIP.
+Полный03 остаётся; далее finish/execution recovery и remaining scope.
+[Checkpoint и evidence](text-import-node.md).
+
+---
+
+# Подплан 03 — live отказ изменённого черновика, 8 сентября 2026
+
+Изменение Null после configure отклонено без mapping/Execute; independent audit
+PASS на `1ee86f2b…16063`, 5 negatives. Сохранены partial phases/node в ответе отказа.
+Client831 PASS/1 SKIP. Diagnostic61074 открыт на Done после mapped output;
+продолжение этой границы ещё не реализовано. Полный подплан03 остаётся.
+[Checkpoint, evidence и следующий шаг](text-import-node.md).
+
+---
+
+# Подплан 03 — принят resume после configure, 8 сентября 2026
+
+Fixed-pin `execute-1788860882652` / `b5e01bec…e07a2`: pause → inspect →
+проверка source/format/full schema → resume → новый Execute/read3×3 прошли
+independent audit; 9 negatives отвергнуты. Client830 PASS/1 SKIP.
+Исправлена гонка наблюдения wizard→graph после Done/Execute без повторного клика.
+Остальные границы recovery, live negatives/long run, delivery/public/Hermes остаются.
+[Точный checkpoint, диагностические handles и следующий шаг](text-import-node.md).
+
+---
+
+# Возобновление подплана 03 — 8 сентября 2026
+
+Wide66 принят независимым аудитом на `19f59302…528a0`: 66 полей, 132 значения,
+переименование/метки, перестановка, autosync=false, новый Execute/read;
+6 негативных подмен отвергнуты. Client 827 PASS/1 SKIP, Python import120 и mapping6
+PASS. Браузер нового прогона закрыт; старые процессы отсутствуют.
+Подплан 03 не завершён: следом live continuation/recovery, integrated delivery,
+публичная регистрация и финальная независимая приёмка Hermes Sol/low.
+[Точный checkpoint и дальнейшие обязательства](text-import-node.md).
+
+---
+
+# Остановка по просьбе пользователя — 8 сентября 2026
+
+**Остановлено; автоматически не продолжать до нового указания. Подплан03 не завершён.**
+Existing mapped patch и save_checkpoint/QA reopen/reexecute прошли independent
+приёмку на `f32f9454…fb352` (10 и18 negative audits). Wide66 остановился до
+клика по частично видимой ячейке; точка клика исправлена, адресный live edit
+успешен, полный wide acceptance после правки ещё не выполнялся.
+Workspace-ui225 PASS; Python173 PASS; полный client826 PASS/1 SKIP — до последней
+правки. Процессы25375 и7127 ждут ввода с открытыми несохранёнными черновиками;
+0 редакторов/масок, активных действий нет. Ничего не коммитилось/не публиковалось.
+[Точная точка остановки, evidence и следующий шаг](text-import-node.md).
+
+---
+
+# Подплан 03 — mapping в полном node.apply, 8 сентября 2026
+
+**In progress, source only.** Имена/метки (включая обмен именами), порядок и
+автосинхронизация подключены к private imports.text. Полный upload → Execute →
+Table3×3 прошёл independent fixed-pin audit `execute-1788851403379`, runtime
+`f32f9454…fb352`; 15 negatives отвергнуты. Client826 PASS/1 SKIP, Python171 PASS.
+Исправлено распознавание активного выхода без автосинхронизации. Required поля
+нельзя исключать через port mapping; source `used:false` — отдельный режим.
+Mapping persistence/existing partial/wide и полный03/Hermes остаются.
+Diagnostic7127 TF-4 на графе, узел уже выполнен, последние изменения пакета
+не сохранены. [Точный checkpoint](text-import-node.md).
+
+---
+
+# Подплан 03 — driver output name/label, 8 сентября 2026
+
+**in progress, source only.** Prepared live driver поменял Amount→AmountMapped,
+label→`Сумма проверенная`; native source2199 сохранён. Independent draft audit
+PASS, 9 подмен отвергнуты, no-op 0 gestures. Client 805 PASS/1 SKIP, Python168 PASS.
+Diagnostic7127 TF-4 mapping draft; ctx.mappingBinding теперь актуален. Порядок,
+исключения и handler integration остаются. [Точный checkpoint](text-import-node.md).
+
+---
+
+# Подплан 03 — ссылки на поля и редактор mapping, 8 сентября 2026
+
+**in progress, source only.** Добавлены configured source refs/resolver и guarded
+native global EditColumnDefForm. Typed live label Apply подтверждён; черновик
+TF-4 теперь Amount label=`Сумма выхода`, autosync=false. Node procedure допускает
+только bound editor. Client 801 PASS/1 SKIP; последние native/resolver 9 PASS.
+Handler mappings ещё не активирован. [Точный checkpoint](text-import-node.md).
+
+---
+
+# Подплан 03 — чтение источников mapping, 8 сентября 2026
+
+**in progress, source only.** Нативный mapping reader различает источники по
+двусторонней связи records; lower-level live Id/Title/Amount PASS, 16 negative
+fixture mutations rejected, client 796 PASS/1 SKIP и 44 focused PASS.
+Подключён к `node-procedure.observe({readMappings:true})`, но пока не к handler.
+Полный mapping/node.apply audit остаётся. Diagnostic 7127 открыт; savedPrep
+navigation устарел после Save As. [Точный checkpoint](text-import-node.md).
+
+---
+
+# Подплан 03 — сохранение с заменой и прокрутка процессов, 8 сентября 2026
+
+**in progress, source only.** Полный save → patch → refuse → replace → отдельный
+QA reopen без resave → новый Execute/read 3×3 прошёл независимый audit
+`execute-1788847173172`, runtime `d6e7600d…3ee`. 20 подмен отвергнуты.
+В переполненной консоли выбираются только видимые строки, связанные с native
+TreeStore; частичное окно не считается полной историей. Client 789 PASS/1 SKIP,
+Python evidence 167 PASS. Полный подплан 03 и Hermes ещё не приняты.
+[Подробности и ограничения](text-import-node.md).
+
+---
+
+# Подплан 03 — конфликты сохранения и навигация, 8 сентября 2026
+
+**in progress, source only; полный cycle НЕ принят.** Усилены exact-path conflict
+и cleanup guards. Save checkpoint возвращает проверенную новую привязку после
+штатного обновления breadcrumb navigation. Live `execute-1788846213706` прошёл
+patch → fail → replace → QA reopen/settings, затем остановился при выборе уже
+завершённого process5.1 ниже viewport. Следом scoped process reveal и independent
+full-cycle replay; никаких повторных Execute/unknown saves. Production не менялся.
+[Точный checkpoint, проверки и ограничения](text-import-node.md).
+
+---
+
+# Подплан 03 — промежуточное сохранение, 8 сентября 2026
+
+**in progress, source only.** Отдельный `package.save_checkpoint` сохраняет пакет,
+оставляя сценарий открытым. Fixed-pin run `execute-1788845074909`, runtime
+`1624d537…b014cd`, прошёл independent save → QA close/open **без resave** → baseline
+настроек → новый Execute/read 3×3. 21 подмена отвергнута. Client 779 PASS/1 SKIP,
+Python evidence 164 PASS, builder roots 6 PASS. Живые конфликты/повторная запись,
+recovery и остальные требования 03 ещё не приняты; production не менялся.
+[Точный checkpoint и ограничения](text-import-node.md).
+
+---
+
+# Подплан 03 — сохранённый пакет, 8 сентября 2026
+
+**in progress, source only.** Save/close/reopen точного пакета → проверка прежних
+настроек → новое Execute/read 3×3 прошли independent fixed-pin audit
+`execute-1788843838259`, runtime `a9948e68…f31aa4c`. Тот же GUID, новый workflow,
+разные execution IDs; 16 подмен отвергнуты. Исправлено ожидание Packages menu.
+Client 774 PASS/1 SKIP, Python evidence 161 PASS. Промежуточное сохранение без
+закрытия, recovery, остальные пункты 03 и Hermes остаются. Production не менялся.
+[Точный checkpoint и ограничения](text-import-node.md).
+
+---
+
+# Подплан 03 — формат единственного столбца, 8 сентября 2026
+
+**in progress, source only.** Один datetime выход и source из одного real поля
+прошли independent fixed-pin audits `execute-1788842988302` / `execute-1788843218778`
+на runtime `9a99b6f1…aab3ed2`. Формат проверяется после Apply по связанной
+закрытой UI-модели, без reopen/RPC. По девять подмен отвергнуты.
+Client 773 PASS/1 SKIP, import evidence 111 PASS. Браузеры приёмки и single-field
+diagnostic закрыты; production не менялся. [Точный checkpoint и оставшийся scope](text-import-node.md).
+
+---
+
+# Подплан 03 — логические значения и даты, 8 сентября 2026
+
+**in progress, source only.** Boolean/date-time/string Execute/output 3×3
+прошёл independent fixed-pin audit `execute-1788842368001`, runtime
+`d29fef96…30c834`: true/false, Null, даты с .123/.001; десять подмен отвергнуты.
+Client 763 PASS/1 SKIP, import evidence 109 PASS. Production не менялся.
+Полный 03 остаётся, включая single-column format commit и весь persistence/
+recovery/Hermes scope. [Точный checkpoint и ограничения](text-import-node.md).
+
+---
+
+# Подплан 03 — полный отказ при исчезновении файла, 8 сентября 2026
+
+**in progress, source only.** Fixed-pin node.apply negative acceptance
+`execute-1788841429141` прошёл independent audit: verified upload → удаление
+своего fixture → один Next → source error, без Execute/Done; повтор ID без
+браузера. Девять подмен отвергнуты. 124 Python evidence checks PASS.
+Client остался 759 PASS/1 SKIP; production не менялся. Acceptance browser закрыт;
+diagnostic 7127 на FileStorage TF-3, исходный узел TF-1 с missing draft.
+[Точный checkpoint и оставшийся scope](text-import-node.md).
+
+---
+
+# Подплан 03 — адресная ошибка источника, 8 сентября 2026
+
+**in progress, source only.** Добавлена причина отсутствующего файла в
+wizard/node.apply; один Next и отказ с сохранением частичных эффектов проверены
+в реальном Loginom. Два затронутых suite: 252 PASS. Полный негативный node.apply
+acceptance и весь scope 03 остаются. Diagnostic 7127 на source с missing draft;
+production не менялся. [Точный checkpoint и ограничения](text-import-node.md).
+
+Общий client suite: **759 PASS, 1 SKIP**, `source-validation-client.txt`;
+`git diff --check` прошёл. Python evidence в этом изменении не запускался.
+
+---
+
+# Подплан 03 — смена файла/схемы, 8 сентября 2026
+
+**in progress, source only; полный подплан не принят.**
+Fixed-pin CSV → TSV со сменой порядка и добавлением Extra прошёл independent
+Execute/output audit `execute-1788840289954` на текущем runtime `a8199e55…a6fc140`.
+Сохранены настройки прежних полей и порядок выхода; все 8 значений проверены,
+включая integer > 2^53. 12 подмен отвергнуты. Другой CSV с прежней схемой также PASS.
+Client **753 PASS, 1 SKIP**, Python evidence **152 PASS**. Production не менялся.
+Следом ошибки, header/skip и остальные режимы; persistence/recovery/Hermes остаются.
+Все приёмочные браузеры закрыты; diagnostic `7127` на source page с draft.
+[Точный checkpoint и ограничения](text-import-node.md).
+
+---
+
+# Подплан 03 — partial source/format, 8 сентября 2026
+
+**in progress, source only; полный подплан не принят.**
+Baseline existing schema/format перенесён до изменений разбора. Живой fixed-pin
+seed Execute → encoding/Null-marker patch → новый Execute/read прошёл independent
+audit `execute-1788838656571` (runtime `6b538b16…00ea3`), девять подмен отвергнуты.
+Незаданные параметры сохранены; строка `NULL` в новом выходе подтверждена bytes.
+Client **750 PASS, 1 SKIP**, Python evidence **150 PASS**. Production не менялся.
+Следом другой verified файл, изменённая схема и ошибки; persistence/recovery/
+финальный Hermes остаются. Diagnostic `7127` на format с несохранённым draft.
+[Точный checkpoint и ограничения](text-import-node.md).
+
+---
+
+# Подплан 03 — Table → следующая операция, 8 сентября 2026
+
+**in progress, source only; полный подплан и выпуск не приняты.**
+После чтения выхода node.apply возвращается в исходный сценарий.
+Fixed-pin independent audit seed Execute/read → возврат → existing partial label →
+Execute/read → возврат прошёл для 3 × 3 (`execute-1788838091682`, runtime
+`6313491f…091e3`). Разные Table и execution IDs; 20 подмен отвергнуты.
+Поддержаны numbered native Table cards и ожидание готовности кнопки входа.
+Client **750 PASS, 1 SKIP**; Python evidence **146 PASS**. Production не менялся.
+Следом source/format patches и ошибки; mappings/delivery/persistence/recovery/
+финальный Hermes остаются. Приёмочный браузер закрыт; diagnostic `7127` на графе.
+[Точный checkpoint, evidence и границы](text-import-node.md).
+
+---
+
+# Подплан 03 — существующий импорт и новый выход, 8 сентября 2026
+
+**in progress, source only; полный подплан и выпуск не приняты.**
+Fixed-pin independent audit цепочки seed Execute → existing partial update →
+новый Execute → полный выход 3 × 3 — PASS, runtime `ab249748…7ee9e`.
+Сохранность незаданных настроек проверена; десять подмен журнала отвергнуты.
+Добавлены адресное чтение навигации/графа и возврат к сценарию после Show Node.
+Client **736 PASS, 1 SKIP**; Python evidence **141 PASS**. Production не менялся.
+Wide 66 × 2 на том же runtime также прошёл independent audit:
+`execute-1788836664324`; все 132 значения проверены, десять подмен отвергнуты.
+Оба приёмочных браузера закрыты, process 92107 завершён exit 0.
+Остаются возврат из Table, остальные режимы/ошибки/mappings, delivery,
+persistence/recovery и финальный Hermes.
+[Точный checkpoint и доказательства](text-import-node.md).
+
+---
+
+# Подплан 03 — связанный Execute и выход, 8 сентября 2026
+
+**in progress, source only.** Private node.apply читает выход 0 через новую Table
+после подтверждённого выполнения. Независимые fixed-pin audits source bytes →
+upload → configuration → execution → полный малый выход прошли для 3 и 66 полей
+на runtime `010f8ca8…35f00`. Повтор ID не обращался к браузеру.
+Client **707 PASS, 1 SKIP**; Python import evidence **79 PASS**, procedure **15 PASS**.
+Это не полный 03: persistence/reopen/reexecute, остальные режимы/ошибки/recovery
+и финальный автономный Hermes остаются. Production не менялся.
+[Точный checkpoint, evidence и границы](text-import-node.md).
+
+---
+
+# Подплан 03 — чтение Table, 8 сентября 2026
+
+**in progress, source only.** Добавлены адресное чтение Table, создание нового
+визуализатора нужного выхода, настройка точных числовых форматов и отключение
+фильтра. Живой mixed diagnostic подтвердил 3 строки, Null/empty и формат real.
+Client **653 PASS, 1 SKIP**, runtime `94a78e70…036da` (source preflight).
+В `text-import-node` чтение выходов ещё не допущено: нужны широкие таблицы,
+типы/точность и независимая связанная приёмка. Полный 03 и Hermes не приняты.
+Оба диагностических процесса `76234` и `2745` открыты на Table; узлы уже выполнены.
+[Точный checkpoint и следующий участок](text-import-node.md).
+
+---
+
+# Подплан 03 — новый Execute подтверждён, 8 сентября 2026
+
+**in progress, source only.** Приватный вызов verified upload → настройка →
+Execute → подтверждённый процесс узла прошёл независимый живой audit:
+`execute-1788824763884`, runtime `8eebe5c3…c01a4f`. Повтор ID не обращался к
+браузеру. Client **616 PASS, 1 SKIP**, import evidence **66 PASS**.
+Это Execute без чтения данных; полный подплан, сохранение и Hermes не приняты.
+Следующий участок — связанный Table reader, затем остальные требования 03.
+Диагностические процессы `76234` (Table) и `2745` (граф/консоль) открыты;
+в обоих Import03 уже выполнен. Не повторять Execute без новой цели запуска.
+[Подробный checkpoint, ограничения и evidence](text-import-node.md).
+Исторические записи ниже.
+
+---
+
+# Подплан 03 — принадлежность выхода и точный Table, 8 сентября 2026
+
+**in progress, source only.** Добавлена привязка выхода графа и Table к native
+GUID порта с повторной проверкой prepared node. Client **572 PASS, 1 SKIP**,
+последние focused guards **26 PASS**. Для тестового real подтверждены все цифры
+через явный Table format; готовность Execute и полного подплана не объявлена.
+UI diagnostic process `76234` ещё открыт, Import03 уже выполнен, активен Table.
+Перед продолжением проверить handle; следующий шаг — общий execution/read driver.
+[Подробный checkpoint, UI-факты и evidence](text-import-node.md).
+Исторические записи ниже.
+
+---
+
+# Подплан 03 — имена, метки и выбор полей, 8 сентября 2026
+
+**in progress, source only.** Добавлены исходное имя для переименования,
+метки и исключение полей. Независимые живые Done audits: 3 → 2 и 66 → 65 полей,
+оба PASS на runtime `13f4bf84…46c552`. Client: **562 PASS, 1 SKIP**;
+import evidence: **59 PASS**. Полный подплан ещё не принят.
+Следом Execute/Close, identity нового запуска и точный выход; затем остальные
+требования подплана, включая сохранение/восстановление и финальный Hermes Sol/low.
+[Точный checkpoint и evidence](text-import-node.md). Исторические записи ниже.
+
+---
+
+# Подплан 03 — широкая выходная схема, 8 сентября 2026
+
+**in progress, source only.** Приватный Done расширен на широкую схему;
+66 полей прошли независимую живую проверку `done-1788821223647`
+на неизменном runtime `aeb52b99…73f6`.
+Выходная схема читается страницами с identity локальных UI records и
+ограниченной прокруткой, без признания отрисованного префикса полным результатом.
+Подтверждены 228 внутренних шагов, две прокрутки и повтор ID без browser calls.
+Client: **559 PASS, 1 SKIP**; import evidence: **57 PASS**, node procedure: **15 PASS**.
+Полный подплан, выполнение, сохранение и Hermes ещё не приняты.
+[Точные pins, evidence, ограничения и следующий участок](text-import-node.md).
+Ниже сохранены исторические checkpoints с прежними ограничениями и pins.
+
+---
+
+# Подплан 03 — связанный Done, 8 сентября 2026
+
+**in progress, source only; полный цикл и выпуск не приняты.**
+Приватный `text-import-node.mjs` связал проверенный upload, принятый драйвер
+цели 02, первое открытие, настройку, identity output mapping и Done в один
+`runNodeApply`. Повтор завершённого ID не обращается к браузеру. Приёмочный
+кандидат явно ограничен UTF-8, Done, всеми используемыми полями и схемой до 8
+колонок: прочие режимы отклоняются до создания узла, а не считаются готовыми.
+Независимый форматный обработчик по-прежнему читает до 1000 полей страницами.
+
+Добавлена привязка DOM-снимков к подготовленному пакету/сценарию/GUID узла.
+Переход граф → мастер ожидает временную перерисовку навигации после одного
+клика. Строгий отказ до жеста допускает ограниченное обновление наблюдения.
+UTF-8 нормализуется в числовой код 65001: поле Loginom не принимает имя UTF-8.
+
+Живой `done-1788818542964`: **independent audit PASS**, 3 поля, 64 внутренних
+шага, 1 безопасное обновление, около 23,6 с на node.apply. Проверены исходные
+64 байта и SHA, upload/download verification, настройки, mapping, Done и
+повтор ID без браузерных вызовов. Это не доказательство execution, сохранения
+пакета или Hermes-приёмки. Runtime SHA:
+`46c85868939a4f5ce70f2a37c7249970e014b9171034cae26ac66486360328d5`.
+Клиент: **538 PASS, 1 SKIP**; Python: **28 tests PASS**. Предыдущие неуспешные
+диагностики сохранены; им не присвоен PASS. Production и клиент не менялись.
+
+Дальше — широкие output mappings, имена/метки/исключение, Execute/Close,
+точный Table, объединённая доставка, сохранение, восстановление и Hermes Sol/low.
+[Подробности](text-import-node.md). Изменения не закоммичены.
+
+---
+
+# Подплан 03 — продолжение 8 сентября 2026
+
+**in progress, source only; полный цикл не принят и не released.**
+Оболочка `node.apply` подключена к приватному executor lifecycle: общие ID,
+gate, журнал, inspect и продолжение подтверждённых фаз. Используется принятый
+драйвер цели из 02 без рекурсивного запуска executor. Неизвестная фаза блокирует
+повтор и generic UI repair; её предметная сверка пока не реализована.
+
+Новый `configureTextImportFields` настраивает источник/формат/типы/вид полей
+через адресные страницы, затем остаётся на странице формата без reopen.
+В реальном Loginom проверены все 12 полей и редактирование скрытого поля:
+`fields-1788816551910`, 67 внутренних шагов, независимый audit PASS.
+Runtime SHA `824a1436f2f137f903e35f13d5d9d18ee7eeb5f50e3ce23dceacf68860a10960`.
+Клиент: **509 PASS, 1 SKIP**; Python verifier: **21 tests PASS**.
+
+[Текущий код, ограничения и точка продолжения](text-import-node.md).
+Остались живое связывание полного вызова, mappings/переименование/исключение,
+доставка одним вызовом, выполнение и точный Table, сохранение/final reopen,
+сверка неизвестных фаз и самостоятельная приёмка Hermes Sol/low.
+Production и установленный клиент не менялись. Изменения не закоммичены.
+
+---
+
+# Подплан 03 начат — 7 сентября 2026
+
+**in progress, source only; не принят и не released.**
+Добавлена внутренняя фазовая основа `node.apply`, пока без подключения живых
+драйверов и публичного executor-входа. В старом обработчике импорта исправлено
+локальное восстановление picker после строгого отказа до жеста.
+
+Живой MCP-прогон `refresh-1788814398307`: независимый settings/roundtrip audit
+PASS, одно контролируемое обновление DOM, 61 шаг, неизменный runtime
+`0f2fcb17db35e0bfb6000da0232ccb854a3ea08e6146ae288e5c1ba063fd294f`.
+Это не подтверждение upload, исполнения, сохранения пакета или полной приёмки 03.
+Клиент: 490 PASS, 1 SKIP; независимый verifier: 15 tests PASS.
+
+[Код, свидетельства, ограничения и точка продолжения](text-import-node.md).
+Дальше — подключение общей оболочки к executor lifecycle, живые драйверы,
+широкая схема, файл/выход/сохранение. Hermes не запускался; диагностические
+браузеры закрыты. Production и установленный клиент не менялись.
+
+---
+
 # Подплан 02 принят — 7 сентября 2026
 
 **implemented / live_verified, source runtime; не released.** Общий драйвер

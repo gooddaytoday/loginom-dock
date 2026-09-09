@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import vm from 'node:vm';
 import { createObservationPages } from '../lib/observation-pages.mjs';
-import { makeWorkspaceUiCode, validateUiAction } from '../lib/workspace-ui.mjs';
+import { makeWorkspaceUiCode, validateUiAction, workspaceUiCapability } from '../lib/workspace-ui.mjs';
 import { assertActionOutcome } from '../lib/action-catalog.mjs';
 
 const build = '7.5.0-alpha+build.49202', origin = 'https://loginom.test';
@@ -15,7 +15,7 @@ function matches(element, selector) {
   selector = selector.trim();
   const breadcrumbLabel=/^(\[data-tid\*=";cnrNaviMode;b\.s"\]) (\.x-btn-inner-default-toolbar-small)$/.exec(selector);
   if(breadcrumbLabel)return matches(element,breadcrumbLabel[2]) && !!element.parentElement?.closest(breadcrumbLabel[1]);
-  const ownedInput=/^(\[data-tid\$="[^"]+"\]) (input|textarea)$/.exec(selector);
+  const ownedInput=/^(\[data-tid\$="[^"]+"\]) (input|textarea|\.x-form-error-msg)$/.exec(selector);
   if(ownedInput)return matches(element,ownedInput[2]) && !!element.parentElement?.closest(ownedInput[1]);
   const not = [...selector.matchAll(/:not\(([^)]+)\)/g)];
   if (not.some(([, inner]) => matches(element, inner))) return false;
@@ -1964,8 +1964,42 @@ test('typed wizard opening verifies node and workflow path after one settings cl
   }
 });
 
-test('wizard finish waits for the expected graph node and does not claim settings readback',async()=>{
-  for(const mode of ['success','wrapped_label','wrapped_filename','wrapped_grouping','different_key','comma_collision','duplicate_label','duplicate_body','actual_space','wrong_label','dialog','still_open','lost_reply','empty_label','stale_region','late_body','late_epoch','epoch_churn','late_mask','late_tab','late_duplicate']) {
+test('wizard cancellation confirms the original graph after one exact affirmative click',async()=>{
+ for(const mode of ['success','wrong_question','wrong_node','still_open']) {
+  const page=new Page(),base='MF;TF-1;',panel=page.add('div',base+'NavigationBar;NavigationPanel');
+  let path='';const crumbs=[];
+  for(const label of ['Сервер','Пакеты','Package1','Модуль1','Сценарий','Old','Настройка']) {
+   path+=(path?'>':'')+label;const crumb=page.add('a',base+'cnrNaviMode;b.s_'+path,label,undefined,panel);crumbs.push(crumb);
+   if(label==='Сценарий')page.add('span',null,'',undefined,crumb).attrs.class='maptree-icon-workflow';
+   if(label==='Old')page.add('span',null,'',undefined,crumb).attrs.class='bg-vendor-icon-calcdata';
+   if(label==='Настройка')page.add('span',null,'',undefined,crumb).attrs.class='maptree-icon-wizard';
+  }
+  const wizard=page.add('div',base+'WizrdMCF');
+  page.add('input',base+'WizrdMCF;DoneWizard;edtDisplayName','',undefined,wizard).value='Draft rename';
+  page.add('button',base+'WizrdMCF;btnDone','Done',undefined,wizard);
+  const dialog=page.add('div',null,'',{x:400,y:200,width:400,height:150});dialog.attrs.class='x-window';
+  page.add('h1',null,'Подтвердить',undefined,dialog).attrs.role='heading';
+  page.add('span',null,mode==='wrong_question'?'Удалить пакет?':'Вы действительно хотите закрыть мастер настройки?',undefined,dialog);
+  page.add('button','msgbox;tlb;yes','Да',{x:600,y:300,width:50,height:30},dialog);
+  page.add('button','msgbox;tlb;no','Нет',{x:670,y:300,width:50,height:30},dialog);
+  const snapshot=await page.observe(),button=snapshot.ui.elements.find(e=>e.allowed_actions.includes('confirm_wizard_close'));
+  if(mode==='wrong_question'){assert.equal(button,undefined);continue;}
+  assert.ok(button);
+  const click=page.mouse.click;page.mouse.click=async(...args)=>{
+   await click(...args);dialog.remove();if(mode==='still_open')return;
+   wizard.remove();crumbs.at(-1).remove();crumbs.at(-2).remove();
+   const graph=page.add('div',base+'ModelForm;cmpDiagram'),name=mode==='wrong_node'?'Other':'Old';
+   const node=page.add('g',base+'Graph;'+name,'',undefined,graph);page.add('span',base+'Graph;'+name+';Label;Label',name,undefined,node);
+  };
+  const result=await page.act({verb:'confirm_wizard_close',ref:button.ref},snapshot);
+  assert.equal(result.status,mode==='success'?'SUCCEEDED':'AMBIGUOUS',mode+JSON.stringify(result.error));
+  assert.equal(page.events.filter(e=>e==='click').length,1);
+  assert.equal(result.trace.some(e=>e.event==='wizard_cancel_graph_verified'),mode==='success');
+ }
+});
+
+for(const completion of ['done','execute'])test('wizard '+completion+' waits for the expected graph node without claiming execution completion',async()=>{
+  for(const mode of ['success','bound_surface','bound_foreign','bound_graph_unlock','bound_graph_lock_churn','wrapped_label','wrapped_filename','wrapped_grouping','different_key','comma_collision','duplicate_label','duplicate_body','actual_space','wrong_label','dialog','still_open','lost_reply','empty_label','stale_region','late_body','late_epoch','epoch_churn','late_mask','late_tab','late_duplicate']) {
     const expected=mode==='wrapped_filename'?'sales 2026.csv':mode==='wrapped_grouping'?'Quantity, Revenue, Id по Region':mode==='comma_collision'?'A, B':mode==='empty_label'?'':'Сумма';
     const page=new Page(),base='MF;TF-1;',panel=page.add('div',base+'NavigationBar;NavigationPanel');
     let path='';const breadcrumbs=[];
@@ -1981,7 +2015,16 @@ test('wizard finish waits for the expected graph node and does not claim setting
       const owner=page.add('div',base+'WizrdMCF;DoneWizard;'+key,'',undefined,wizard);
       page.add('input',null,'',undefined,owner).value=value;
     }
-    page.add('button',base+'WizrdMCF;btnDone','Готово',{x:500,y:300,width:100,height:30},wizard);
+    page.add('button',base+'WizrdMCF;'+(completion==='done'?'btnDone':'btnExecute'),'Finish',{x:500,y:300,width:100,height:30},wizard);
+    if(mode.startsWith('bound_')) {
+      let postClickReads=0;
+      const readNode=async()=>{const graph=page.events.includes('click')&&++postClickReads>1;
+        return {verified:true,document_id:'doc',workflow_id:'workflow',node_id:graph&&mode==='bound_foreign'?'foreign':'node',
+          surface:graph?'graph':'wizard',tid:base+(graph?'Graph;Сумма':'WizrdMCF'),
+          ...(graph&&['bound_graph_unlock','bound_graph_lock_churn'].includes(mode)?{locked:mode==='bound_graph_unlock'?postClickReads<4:postClickReads%2===1}:{})};};
+      page.execute=async options=>clone(await vm.runInContext('('+workspaceUiCapability.toString()+')',page.context)(page,
+        {expected_build:build,expected_origin:origin,kind:'workspace-ui',prepared_node_context:{node:{node_id:'node'},workflow_ref:{prefix:'MF;TF-1',navigation_path:[]}},...options},readNode));
+    }
     const snapshot=await page.observe(),button=snapshot.ui.elements.find(e=>e.wizard_finish);
     if(mode==='empty_label'){assert.equal(button,undefined);continue;}
     assert.ok(button);
@@ -2027,20 +2070,27 @@ test('wizard finish waits for the expected graph node and does not claim setting
       if(mode==='late_tab' && waits===2)page.tab.attrs['data-tid']='MF;cntMain;cntWorkspace;Workspace;t.br;tb-2';
       if(mode==='late_duplicate' && waits===2)page.add('span',base+'Graph;Сумма;Label;Label','Сумма',undefined,finishedNode);
     };
-    const result=await page.act({verb:'finish_wizard',ref:button.ref},snapshot);
-    const success=['success','wrapped_label','wrapped_filename','wrapped_grouping','stale_region','late_body','late_epoch'].includes(mode);
+    const result=await page.act({verb:completion==='done'?'finish_wizard':'execute_wizard',ref:button.ref},snapshot);
+    const success=['success','bound_surface','bound_graph_unlock','wrapped_label','wrapped_filename','wrapped_grouping','stale_region','late_body','late_epoch'].includes(mode);
     assert.equal(result.status,success?'SUCCEEDED':'AMBIGUOUS',mode+JSON.stringify(result.error));
     assert.equal(page.events.filter(e=>e==='click').length,1);
-    assert.equal(result.trace.some(e=>e.event==='wizard_finish_graph_verified' && e.reopen_required && !e.settings_readback_verified),success);
-    assert.equal(result.trace.some(e=>e.event==='wizard_finish_settled' && e.quiet_samples===3),success);
+    if(completion==='execute' && success) {
+      const proof=result.trace.find(e=>e.event==='wizard_execute_graph_verified');
+      assert.equal(proof.launch_gesture_verified,true);assert.equal(proof.execution_completed,false);
+      assert.equal(result.trace.some(e=>e.event==='wizard_finish_graph_verified'),false);
+    }
+    assert.equal(result.trace.some(e=>e.event===(completion==='done'?'wizard_finish_graph_verified':'wizard_execute_graph_verified') && e.reopen_required && !e.settings_readback_verified),success);
+    assert.equal(result.trace.some(e=>e.event===(completion==='done'?'wizard_finish_settled':'wizard_execute_settled') && e.quiet_samples===3),success);
     if(['late_body','late_epoch'].includes(mode))assert.equal(waits,5,mode);
     if(mode==='late_body') {
-      const settled=result.trace.find(e=>e.event==='wizard_finish_settled');
+      const settled=result.trace.find(e=>e.event===(completion==='done'?'wizard_finish_settled':'wizard_execute_settled'));
       const finalNode=result.output.ui.elements.find(e=>e.graph_node?.part==='body');
       assert.equal(settled.node_ref,finalNode.ref);
       assert.equal(result.output.ui.elements.find(e=>e.ref===finalNode.ref).tid,finishedNode.attrs['data-tid']);
     }
     if(mode==='epoch_churn'){assert.equal(waits,12);assert.equal(result.error.code,'WIZARD_FINISH_NOT_SETTLED');}
+    if(mode==='bound_graph_unlock')assert.equal(result.trace.filter(e=>e.event==='node_graph_lock_rediscovery').length,1);
+    if(mode==='bound_graph_lock_churn'){assert.equal(result.error.code,'PREPARED_NODE_CONTEXT_CHANGED');assert.equal(result.trace.filter(e=>e.event==='node_graph_lock_rediscovery').length,2);}
     if(mode==='stale_region')assert.equal(result.trace.filter(e=>e.event==='wizard_region_rediscovery').length,1);
   }
 });
@@ -2171,7 +2221,7 @@ test('output columns bind names labels and types to real rows, excluding summary
 });
 
 test('output column typed editing preserves the selected row and all other parameters',async()=>{
-  for(const mode of ['name','label','type_changed','selection_changed','missing_type','combo','combo_kind_changed','combo_busy']) {
+  for(const mode of ['name','label','linked_name','linked_wrong','unlinked_changed','type_changed','selection_changed','missing_type','combo','combo_kind_changed','combo_busy']) {
     const page=new Page(),base='MF;TF-1;WizrdMCF;',form=page.add('div',base.slice(0,-1));
     page.add('button',base+'DerivedDataSourceOutputSocketWizard;btnAddMappingColumn','',undefined,form);
     const table=page.add('table',null,'',undefined,form);table.attrs.class='x-grid-item-selected';
@@ -2200,15 +2250,16 @@ test('output column typed editing preserves the selected row and all other param
       assert.equal(page.events.filter(e=>e==='click').length,mode==='combo_busy'?0:1);
       continue;
     }
+    if(mode.startsWith('linked_'))inputs.edtDisplayName.value='Quantity';
     if(mode==='missing_type')inputs.cbxDataType.remove();
     const full=await page.observe(),read=await page.execute({mode:'observe',root_ref:full.wizard.column_parameters.root_ref});
     const target=read.output.ui.elements.find(e=>e.wizard_field?.scope==='output_column' && e.wizard_field.name===(mode==='label'?'label':'name'));
     if(mode==='missing_type'){assert.equal(target,undefined);continue;}
     assert.ok(target);
-    page.onPress=key=>{if(key==='Tab'){if(mode==='type_changed')inputs.cbxDataType.value='Вещественный';if(mode==='selection_changed')table.attrs.class='';}};
+    page.onPress=key=>{if(key==='Tab'){if(mode==='type_changed')inputs.cbxDataType.value='Вещественный';if(mode==='selection_changed')table.attrs.class='';if(mode==='linked_name'||mode==='unlinked_changed')inputs.edtDisplayName.value='QuantitySum';if(mode==='linked_wrong')inputs.edtDisplayName.value='Wrong';}};
     const result=await page.act({verb:'set_wizard_field',ref:target.ref,text:'QuantitySum'},read.output);
-    assert.equal(result.status,['name','label'].includes(mode)?'SUCCEEDED':'AMBIGUOUS',mode+JSON.stringify(result.error));
-    if(['name','label'].includes(mode))assert.ok(result.trace.some(e=>e.event==='wizard_draft_value_verified' && e.scope==='output_column' && e.settings_applied===false));
+    assert.equal(result.status,['name','label','linked_name'].includes(mode)?'SUCCEEDED':'AMBIGUOUS',mode+JSON.stringify(result.error));
+    if(['name','label','linked_name'].includes(mode))assert.ok(result.trace.some(e=>e.event==='wizard_draft_value_verified' && e.scope==='output_column' && e.settings_applied===false));
   }
 });
 
@@ -2647,6 +2698,33 @@ function importSourceFixture(page) {
   return {base,form,inputs,owners,header,native,display};
 }
 
+test('source code page selection verifies the original field after one native choice',async()=>{
+  for(const mode of ['applied','delayed','unchanged','replaced']) {
+    const page=new Page(),c=importSourceFixture(page),owner=c.owners.encoding;
+    const tid=owner.attrs['data-tid'],label='Кириллическая (1251)';
+    page.add('div',tid+';trg_picker','',{x:500,y:200,width:20,height:20},owner);
+    const list=page.add('div',tid+';boundlist','',{x:700,y:400,width:180,height:90});
+    page.add('div',tid+';boundlist;Кириллическая_(1251)',label,{x:705,y:405,width:170,height:25},list);
+    const snapshot=await page.observe();
+    const option=snapshot.ui.elements.find(e=>e.wizard_combo?.kind==='option');
+    assert.equal(option?.wizard_combo.field.scope,'import_source');
+    const click=page.mouse.click;let waits=0;
+    page.mouse.click=async(...args)=>{
+      await click(...args);list.remove();
+      if(mode==='applied')c.inputs.encoding.value=label;
+      if(mode==='replaced'){
+        c.inputs.encoding.remove();owner.append(new Element('input')).value=label;
+      }
+    };
+    page.waitForTimeout=async()=>{if(++waits===3 && mode==='delayed')c.inputs.encoding.value=label;};
+    const result=await page.act({verb:'select_wizard_option',ref:option.ref},snapshot);
+    const success=['applied','delayed'].includes(mode);
+    assert.equal(result.status,success?'SUCCEEDED':'AMBIGUOUS',mode+JSON.stringify(result.error));
+    assert.equal(page.events.filter(e=>e==='click').length,1,mode);
+    assert.equal(result.trace.some(e=>e.event==='wizard_option_verified'),success,mode);
+  }
+});
+
 test('import source reads exact controls and Ext checkbox equally in full roots and narrow views',async()=>{
   const page=new Page(),c=importSourceFixture(page);
   const snapshot=await page.observe(),source=snapshot.wizard.import_source;
@@ -2733,17 +2811,17 @@ test('import picker leads compact page and is issued only through its delivered 
   assert.throws(()=>pager.assertIssued(rootPage.output.observation_id,{verb:'click',ref}),/not been delivered/);
 });
 
-function importCoverageFixture(page) {
+function importCoverageFixture(page, count=3) {
   const c=importFormatField(page),base='MF;TF-1;WizrdMCF;ImportTextFileParamsWizard;ColumnDefsTuning;grdSettings;grd-1';
   const grid=page.add('div',base,'',{x:100,y:200,width:600,height:180},c.form);
   const header=page.add('div',base+';normalHeaderCt','',{x:100,y:200,width:600,height:25},grid);
   const body=page.add('div',base+';tbl','',{x:100,y:225,width:600,height:155},grid);
   grid.clientWidth=grid.scrollWidth=header.clientWidth=header.scrollWidth=body.clientWidth=body.scrollWidth=600;
   const cols=[];
-  for(let index=0;index<3;index++) {
+  for(let index=0;index<count;index++) {
     const col=importColumnFixture(page,c.form,index,'Field'+index),h=c.form.querySelector('[data-tid="'+col.prefix+'"]');
     h.remove();header.append(h);h.box={x:100+index*135,y:200,width:135,height:25};
-    h.attrs.class='x-column-header'+(index===0?' x-column-header-first':'')+(index===2?' x-column-header-last':'');
+    h.attrs.class='x-column-header'+(index===0?' x-column-header-first':'')+(index===count-1?' x-column-header-last':'');
     col.cells.forEach((cell,row)=>{cell.remove();body.append(cell);cell.box={x:100+index*135,y:225+row*25,width:135,height:25};col.check.box=cell.box;});
     cols.push({...col,header:h});
   }
@@ -2783,19 +2861,20 @@ test('configured import definition coverage requires the entire owned bounded gr
   }
 });
 
-function mappingCoverageFixture(page) {
+function mappingCoverageFixture(page,count=2) {
   page.context.innerWidth=1000;page.context.innerHeight=800;
   const form=page.add('div','MF;TF-1;WizrdMCF'),base='MF;TF-1;WizrdMCF;ColumnsMappingEngineOutputPortWizard;';
   page.add('button',base+'btnAddMappingColumn','',undefined,form);
   const body=page.add('div',base+'grdTargetColumns;tbl','',{x:100,y:200,width:600,height:400},form);body.attrs.id='bound-grid';
   body.clientWidth=body.scrollWidth=600;body.clientHeight=body.scrollHeight=400;body.scrollLeft=body.scrollTop=0;
-  const container=page.add('div',null,'',{x:100,y:200,width:500,height:50},body);container.attrs.class='x-grid-item-container';
+  body.scrollHeight=Math.max(body.clientHeight,count*25);
+  const container=page.add('div',null,'',{x:100,y:200,width:500,height:count*25},body);container.attrs.class='x-grid-item-container';
   const filter=page.add('div',base+'TargetFilter','',undefined,form),input=filter.append(new Element('input'));input.value='';
   const tableMode=page.add('div',base+'rbTable','',undefined,form);tableMode.attrs.class='x-form-cb-checked';
   const linksMode=page.add('div',base+'rbLinks','',undefined,form);
   const auto=page.add('button',base+'btnAutoSyncThroughColumns','',undefined,form);auto.attrs.class='x-btn-pressed';
   const rows=[];
-  for(let index=0;index<2;index++) {
+  for(let index=0;index<count;index++) {
     const row=page.add('table',null,'',{x:100,y:200+index*25,width:500,height:25},container);
     Object.assign(row.attrs,{class:'x-grid-item','data-recordindex':String(index),'data-boundview':'bound-grid'});
     for(const [j,prefix] of ['colName_','colDisplayName_','colSourceDisplayName_','colDataKind_','colDefaultUsageType_'].entries()) {
@@ -3358,7 +3437,7 @@ test('native process console joins bounded grids and keeps ownership and executi
     if(mode==='complete') {
       const control=native.ui.elements.find(e=>e.process_row?.record_id===r.rows.at(-1).record_id);assert.ok(control);assert.deepEqual(control.allowed_actions,['click','right_click','press']);assert.equal(control.signature.process_row.path,r.rows.at(-1).path);
       const roots=await page.execute({mode:'observe',discover_roots:true});const menuRoot=roots.output.ui.elements.find(e=>e.tid==='mnContextMenu');assert.ok(menuRoot);
-      const read=await page.execute({mode:'observe',root_ref:menuRoot.ref});const item=read.output.ui.elements.find(e=>e.tid==='mnContextMenu;mniShowNodeToProcess');assert.ok(item?.process_menu);assert.equal(item.process_menu.process.record_id,r.rows.at(-1).record_id);assert.equal(item.process_menu.opening_verified,false);assert.deepEqual(item.allowed_actions,['click','press']);
+      const read=await page.execute({mode:'observe',root_ref:menuRoot.ref});const item=read.output.ui.elements.find(e=>e.tid==='mnContextMenu;mniShowNodeToProcess');assert.ok(item?.process_menu);assert.equal(item.process_menu.process.record_id,r.rows.at(-1).record_id);assert.equal(item.process_menu.opening_verified,false);assert.deepEqual(item.allowed_actions,['click','press','show_process_node']);
     }
   }
 });
@@ -3757,4 +3836,563 @@ test('action deadline expires before the gesture with a controlled clock', async
   assert.equal(outcome.error.code, 'UI_DEADLINE_EXCEEDED');
   assert.equal(outcome.effect_possible, false);
   assert.deepEqual(page.events, []);
+});
+
+test('wide import definitions have addressed pages with one schema identity and explicit completeness',async()=>{
+ const page=new Page(),c=importCoverageFixture(page,12);c.body.scrollWidth=c.header.scrollWidth=1620;
+ const read=async offset=>(await page.execute({mode:'observe',import_column_page:{offset,limit:8}})).output.wizard.import_columns;
+ const first=await read(0),last=await read(8);
+ assert.equal(first.page.status,'complete_definition_page');assert.equal(first.page.total_columns,12);
+ assert.equal(first.page.returned,8);assert.equal(first.page.next_offset,8);assert.equal(last.page.next_offset,null);
+ assert.equal(first.page.schema_id,last.page.schema_id);assert.deepEqual(last.fields.map(f=>f.index),[8,9,10,11]);
+ assert.equal(first.complete,false);assert.equal(first.page.source_schema_verified,false);assert.equal(first.definition_coverage.status,'partial');
+ const legacy=(await page.observe()).wizard.import_columns;assert.equal(legacy.fields.length,8);assert.equal(legacy.page,undefined);
+ c.cols[11].cells[1].ownText='changed label';
+ assert.notEqual((await read(0)).page.schema_id,first.page.schema_id,'changing a field outside the page invalidates its definition identity');
+});
+
+test('a malformed field outside the selected page prevents complete schema pagination',async()=>{
+ for(const fault of ['missing_cell','hidden_cell','missing_last','duplicate_header','gap','editor','foreign_header']) {
+  const page=new Page(),c=importCoverageFixture(page,12);
+  if(fault==='missing_cell')c.cols[11].cells[1].remove();
+  if(fault==='hidden_cell')c.cols[11].cells[1].style.display='none';
+  if(fault==='missing_last')c.cols[11].header.attrs.class='x-column-header';
+  if(fault==='duplicate_header')page.add('div',c.cols[11].prefix,'Field11',c.cols[11].header.box,c.header).attrs.class='x-column-header';
+  if(fault==='gap')c.cols[11].header.attrs['data-tid']=c.base+';normalHeaderCt;12';
+  if(fault==='editor')page.add('div',c.base+';tbl;celleditor;cbx','',c.cols[0].header.box,c.form);
+  if(fault==='foreign_header'){c.cols[11].header.remove();c.form.append(c.cols[11].header);}
+  const result=await page.execute({mode:'observe',import_column_page:{offset:0,limit:8}});
+  assert.equal(result.output.wizard.import_columns.page.status,'unverified',fault);
+ }
+});
+
+test('import definition page rejects unbounded addresses before the browser',()=>{
+ for(const p of [{offset:-1,limit:8},{offset:1000,limit:8},{offset:0,limit:9},{offset:0,limit:0},{offset:0.5,limit:1},{offset:0,limit:8,extra:1}])
+  assert.throws(()=>makeWorkspaceUiCode({mode:'observe',import_column_page:p}),/bounded offset/);
+});
+
+test('horizontal scroll changes only its exact observed owner and refuses stale state and boundaries',async()=>{
+ const page=new Page();page.context.innerWidth=1000;page.context.innerHeight=800;
+ const outer=page.add('div','Outer','',{x:10,y:60,width:500,height:500}),inner=page.add('div','Inner','',{x:20,y:80,width:300,height:300},outer);
+ for(const [el,width]of [[outer,2000],[inner,1000]])Object.assign(el,{scrollLeft:0,scrollWidth:width,clientWidth:300,style:{overflowX:'auto'}});
+ page.add('button','Inner;btnRow','Row',undefined,inner);
+ const initial=await page.observe(),target=initial.ui.elements.find(e=>e.tid==='Inner;btnRow');
+ assert.ok(target.allowed_actions.includes('scroll_horizontal'));
+ const result=await page.act({verb:'scroll_horizontal',ref:target.ref,delta_x:1000},initial);
+ assert.equal(result.status,'SUCCEEDED');assert.equal(inner.scrollLeft,700);assert.equal(outer.scrollLeft,0);
+ assert.ok(result.trace.some(e=>e.event==='ui_scroll_applied'&&e.axis==='horizontal'&&e.to===700));
+ const stale=await page.act({verb:'scroll_horizontal',ref:target.ref,delta_x:-100},initial);
+ assert.equal(stale.status,'NOT_APPLIED');assert.equal(stale.effect_possible,false);assert.equal(inner.scrollLeft,700);
+ const boundary=await page.act({verb:'scroll_horizontal',ref:target.ref,delta_x:100},result.output);
+ assert.equal(boundary.status,'NOT_APPLIED');assert.equal(boundary.effect_possible,false);assert.equal(outer.scrollLeft,0);
+ for(const delta of [0,1001,-1001,1.5,'100'])assert.throws(()=>validateUiAction({verb:'scroll_horizontal',ref:target.ref,delta_x:delta}),/delta_x/);
+ assert.throws(()=>validateUiAction({verb:'scroll_horizontal',ref:target.ref,delta_y:1}),/fields/);
+});
+
+test('addressed output definitions cover clipped rows while legacy coverage stays partial',async()=>{
+ const page=new Page(),c=mappingCoverageFixture(page,66);
+ const first=await page.execute({mode:'observe',output_column_page:{offset:0,limit:8}});
+ assert.equal(first.output.wizard.output_columns.definition_coverage.status,'partial');
+ const defs=first.output.wizard.output_columns;assert.equal(defs.page.status,'complete_definition_page');assert.equal(defs.page.total_columns,66);
+ const last=await page.execute({mode:'observe',output_column_page:{offset:64,limit:8}});
+ assert.equal(last.output.wizard.output_columns.page.schema_id,defs.page.schema_id);
+ assert.deepEqual(last.output.wizard.output_columns.fields.map(f=>f.index),[64,65]);
+ assert.equal(last.output.wizard.output_columns.page.next_offset,null);
+ c.rows[65].children[0].ownText='Changed';
+ const changed=await page.execute({mode:'observe',output_column_page:{offset:0,limit:8}});
+ assert.notEqual(changed.output.wizard.output_columns.page.schema_id,defs.page.schema_id);
+ assert.equal(changed.output.wizard.output_columns.complete,false);
+});
+for(const kind of ['missing_tail','virtual_scroll_extent','gap','missing_source','filter','foreign_boundview'])test('output page refuses '+kind,async()=>{
+ const page=new Page(),c=mappingCoverageFixture(page,12);
+ if(kind==='missing_tail')c.container.box.height+=25;
+ if(kind==='virtual_scroll_extent')c.body.scrollHeight=1000;
+ if(kind==='gap')c.rows[11].attrs['data-recordindex']='12';
+ if(kind==='missing_source')c.rows[11].children[2].remove();
+ if(kind==='filter')c.input.value='Field0';
+ if(kind==='foreign_boundview')c.rows[11].attrs['data-boundview']='other';
+ const result=await page.execute({mode:'observe',output_column_page:{offset:0,limit:8}});
+ assert.equal(result.output.wizard.output_columns.page.status,'unverified_definition_page');
+});
+
+test('initial wrong-delimiter layout can be ready without accepting an overlong field name',async()=>{
+ const page=new Page(),c=importCoverageFixture(page,1);
+ c.cols[0].cells[0].ownText='Header_'.repeat(30);c.cols[0].cells[1].ownText='Header_'.repeat(30);
+ const r=await page.execute({mode:'observe',import_column_page:{offset:0,limit:8}}),cols=r.output.wizard.import_columns;
+ assert.equal(cols.initial_layout.status,'rendered_definition_layout');assert.equal(cols.page.status,'unverified');assert.equal(cols.complete,false);
+ c.cols[0].cells[2].ownText='';
+ const pending=await page.execute({mode:'observe',import_column_page:{offset:0,limit:8}});
+ assert.equal(pending.output.wizard.import_columns.initial_layout.status,'unverified');
+});
+
+function bufferedMappingFixture(fault) {
+ const page=new Page(),c=mappingCoverageFixture(page,20);
+ const records=c.rows.map((row,i)=>{row.attrs['data-recordid']=String(100+i);return {isModel:true,internalId:100+i,
+  data:{Index:i,Name:'Field'+i,DisplayName:'Field'+i,DataType:4,DataKind:1,DefaultUsageType:0}};});
+ for(const row of c.rows.slice(12))row.remove();c.container.box.height=12*25;
+ const source={items:records},collection={items:records,getSource:()=>source};
+ const store={$className:'Ext.data.Store',isLoading:()=>false,getData:()=>collection,getCount:()=>20,getTotalCount:()=>20};
+ page.context.Ext={getCmp:()=>({el:{dom:c.body},getStore:()=>store})};
+ const evaluate=page.evaluate.bind(page);page.evaluate=(fn,arg)=>evaluate(fn,arg&&Object.hasOwn(arg,'mappingPage')?{...arg,definitionPrefix:'MF;TF-1;WizrdMCF'}:arg);
+ if(fault==='missing_source')c.rows[2].children[2].remove();
+ if(fault==='foreign_record')c.rows[2].attrs['data-recordid']='999';
+ if(fault==='name_mismatch')records[2].data.Name='Different';
+ if(fault==='filtered_store')source.items=[...records,{isModel:true}];
+ if(fault==='incomplete_store')collection.items=records.slice(0,12);
+ if(fault==='loading')store.isLoading=()=>true;
+ if(fault==='foreign_view')page.context.Ext.getCmp=()=>({el:{dom:c.form},getStore:()=>store});
+ return {page,c,records};
+}
+test('buffered output page binds rendered records without declaring the prefix complete',async()=>{
+ const {page}=bufferedMappingFixture();
+ const first=await page.execute({mode:'observe',output_column_page:{offset:0,limit:8}});
+ assert.equal(first.status,'SUCCEEDED');assert.equal(first.output.wizard.output_columns.page.status,'complete_definition_page');
+ assert.equal(first.output.wizard.output_columns.page.total_columns,20);
+ const tail=await page.execute({mode:'observe',output_column_page:{offset:8,limit:8}});
+ assert.equal(tail.output.wizard.output_columns.page.status,'rendered_definition_window');
+ assert.equal(tail.output.wizard.output_columns.fields.length,0);
+ assert.equal(tail.output.wizard.output_columns.page.schema_id,first.output.wizard.output_columns.page.schema_id);
+});
+for(const fault of ['foreign_record','name_mismatch','filtered_store','incomplete_store','loading','foreign_view','missing_source'])
+ test('buffered output page refuses '+fault,async()=>{
+  const {page}=bufferedMappingFixture(fault),r=await page.execute({mode:'observe',output_column_page:{offset:0,limit:8}});
+  assert.equal(r.output.wizard.output_columns.page.status,'unverified_definition_page');
+ });
+
+for(const property of ['name','label'])test('import text editor separates the hidden original from the uncommitted draft: '+property,async()=>{
+ const page=new Page(),c=importCoverageFixture(page,3),row=property==='name'?0:1,cell=c.cols[0].cells[row];
+ const original=cell.ownText;cell.ownText='';cell.attrs.class='x-grid-cell-selected';
+ const old=page.add('div',null,original,cell.box,cell);old.attrs.class='x-grid-cell-inner';old.style.visibility='hidden';
+ const base='MF;TF-1;WizrdMCF;ImportTextFileParamsWizard;ColumnDefsTuning;grdSettings;grd-1;tbl;celleditor;txt';
+ const editor=page.add('div',base,'',cell.box,c.form),input=page.add('input',null,'',cell.box,editor);input.value='DraftValue';
+ const first=await page.execute({mode:'observe',import_column_page:{offset:0,limit:8}});
+ assert.equal(first.output.wizard.import_columns.page.status,'unverified');
+ const e=first.output.wizard.import_column_editor;assert.equal(e.status,'observed');assert.equal(e.property,property);
+ assert.equal(e.original_value,original);assert.equal(e.value,'DraftValue');assert.equal(e.settings_applied,false);
+ old.remove();const second=await page.execute({mode:'observe',import_column_page:{offset:0,limit:8}});
+ assert.equal(second.output.wizard.import_column_editor.status,'unobserved_or_ambiguous');
+});
+
+test('an empty native process console exposes only its bound context gesture and completed filter',async()=>{
+ for(const mode of ['valid','foreign_store','foreign_dom','loading','hidden']) {
+  const page=new Page();page.context.innerWidth=1000;page.context.innerHeight=800;const panel=page.add('div','ConsoleForm','',{x:0,y:400,width:900,height:300});
+  const store={$className:'Ext.data.TreeStore',isLoading:()=>mode==='loading'},views={};
+  const grids=['treepanel;tree','grd;tbl'].map((suffix,i)=>{
+    const e=page.add('div','ConsoleForm;ProgressForm;trpProgress;'+suffix,'',{x:i*400,y:420,width:400,height:250},panel);
+    e.attrs.id='grid'+i;e.id=e.attrs.id;
+    views[e.id]={el:{dom:mode==='foreign_dom'?{}:e},getStore:()=>mode==='foreign_store'&&i?{}:store};return e;
+  });
+  page.context.Ext={getCmp:id=>views[id]};
+  if(mode==='hidden')panel.style.display='none';
+  const portal=page.add('div','mnContextMenu','',{x:40,y:430,width:200,height:80});
+  const filter=page.add('div','mnContextMenu;mniShowCompletedProcesses','Completed',{x:45,y:435,width:150,height:25},portal);filter.attrs.class='x-menu-item-unchecked';
+  page.add('div','mnContextMenu;mniShowNodeToProcess','Show Node',{x:45,y:465,width:150,height:25},portal);
+  const s=await page.observe(),gs=s.ui.elements.filter(e=>e.process_grid),menus=s.ui.elements.filter(e=>e.process_menu);
+  assert.equal(gs.length,mode==='valid'?2:0,mode);assert.equal(menus.length,mode==='valid'?1:0,mode);
+  if(mode==='valid') {
+    assert.deepEqual(gs[1].allowed_actions,['right_click','press'],JSON.stringify(gs[1]));assert.equal(menus[0].process_menu.checked,false);
+    assert.equal(s.process_console.execution_verified,false);
+    const r=await page.act({verb:'right_click',ref:gs[1].ref},s);assert.equal(r.status,'SUCCEEDED');
+    assert.equal(r.output.verification_required,true);
+  }
+ }
+});
+
+test('Table add/enter controls are bound to native output panels, not repeated card labels',async()=>{
+ for(const mode of ['valid','numbered','foreign_panel','foreign_card','wrong_vendor','duplicate_add']) {
+  const page=new Page();page.context.innerWidth=1000;page.context.innerHeight=800;
+  class ViewsForm{};class BrowseViewVendor{};
+  const root=page.add('div','MF;TF-1;ViewsForm','',{x:0,y:50,width:900,height:700});
+  const panel=page.add('div','MF;TF-1;ViewsForm;cntPorts;11111111-1111-1111-1111-111111111111','',{x:50,y:100,width:600,height:400},root);
+  const add=page.add('div','MF;TF-1;ViewsForm;ViewerAddCard','Add',{x:70,y:120,width:150,height:120},panel);
+  const cardTid='MF;TF-1;ViewsForm;ViewerCard'+(mode==='numbered'?'-1':'');
+  const card=page.add('div',cardTid,'Table',{x:240,y:120,width:150,height:120},panel);
+  page.add('button',cardTid+';btnEnter','Table',{x:250,y:130,width:100,height:30},card);
+  const nativePanel={el:{dom:panel}},nativeCard={FView:{el:{dom:card}}};
+  const model=Object.assign(new ViewsForm(),{FView:{el:{dom:root}},FPortList:{'11111111-1111-1111-1111-111111111111':{Type:0,Panel:nativePanel}},
+    FViewDescList:{'22222222-2222-2222-2222-222222222222':{PortPanel:nativePanel,ViewerCard:nativeCard,Vendor:new BrowseViewVendor()}}});
+  page.app.Application={FInstance:{FMainForm:{Items:{Workspace:{getActiveTab:()=>({Controller:{FController:model}})}}}}};
+  if(mode==='foreign_panel')nativePanel.el.dom=page.add('div','foreign');
+  if(mode==='foreign_card')nativeCard.FView.el.dom=page.add('div','foreign');
+  if(mode==='wrong_vendor')model.FViewDescList['22222222-2222-2222-2222-222222222222'].Vendor={};
+  if(mode==='duplicate_add')page.add('div',add.attrs['data-tid'],'Other add',{x:450,y:120,width:100,height:100},panel);
+  const s=await page.observe(),adds=s.ui.elements.filter(e=>e.viewer_card?.kind==='add'),enters=s.ui.elements.filter(e=>e.viewer_card?.kind==='enter');
+  assert.equal(adds.length,['foreign_panel','duplicate_add'].includes(mode)?0:1,mode);
+  assert.equal(enters.length,['foreign_panel','foreign_card','wrong_vendor'].includes(mode)?0:1,mode);
+  if(enters.length){assert.deepEqual(enters[0].allowed_actions,['enter_table']);assert.equal(enters[0].viewer_card.view_guid,'22222222-2222-2222-2222-222222222222');}
+ }
+});
+
+function pagedTableFixture() {
+ const f=candidateTableFixture();f.grid.id=f.grid.attrs.id;
+ const records=Array.from({length:66},(_,i)=>({isModel:true,internalId:String(100+i),data:{Index:i,Name:i===0?'Region':i===1?'Amount':'Field'+i,
+  DisplayName:i===0?'Region':i===1?'Amount':'Field'+i,SourceColumnIndex:i,DataType:i===0?5:3,InGrid:true,DisplayFormat:'0.00'}}));
+ for(const [i,row] of f.rows.entries())row.attrs['data-recordid']=records[i].internalId;
+ const store={$className:'Ext.data.Store',isLoading:()=>false,getCount:()=>records.length,getData:()=>({items:records})};
+ f.page.context.Ext={getCmp:id=>id==='view-table'?{el:{dom:f.grid},getStore:()=>store}:undefined};
+ return {...f,records,store};
+}
+test('Table format page separates full cached metadata from painted editable rows',async()=>{
+ const f=pagedTableFixture();
+ const first=(await f.page.execute({mode:'observe',table_format_page:{offset:0,limit:8}})).output;
+ assert.equal(first.table_settings.format.page.total_columns,66);assert.equal(first.table_settings.format.metadata_fields.length,8);
+ assert.equal(first.table_settings.format.page.status,'rendered_definition_window');assert.equal(first.table_settings.format.fields.length,2);
+ assert.equal(first.table_settings.format.fieldlist_complete,false);
+ const last=(await f.page.execute({mode:'observe',table_format_page:{offset:64,limit:8}})).output;
+ assert.equal(last.table_settings.format.page.schema_id,first.table_settings.format.page.schema_id);
+ assert.equal(last.table_settings.format.metadata_fields[1].name_key,'Field65');assert.equal(last.table_settings.format.fields.length,0);
+ assert.equal(last.ui.elements.filter(e=>e.table_field).length,0);
+ f.records[0].data.DisplayFormat='0';
+ const formatChange=(await f.page.execute({mode:'observe',table_format_page:{offset:0,limit:8}})).output;
+ assert.equal(formatChange.table_settings.format.page.schema_id,first.table_settings.format.page.schema_id);
+ f.records[65].data.Name='Renamed';
+ const schemaChange=(await f.page.execute({mode:'observe',table_format_page:{offset:0,limit:8}})).output;
+ assert.notEqual(schemaChange.table_settings.format.page.schema_id,first.table_settings.format.page.schema_id);
+});
+for(const mode of ['foreign_record','type_mismatch','label_mismatch','loading','duplicate_source','duplicate_name','accessor'])
+ test('Table format cached page refuses '+mode,async()=>{
+  const f=pagedTableFixture();
+  if(mode==='foreign_record')f.rows[0].attrs['data-recordid']='other';
+  if(mode==='type_mismatch')f.records[0].data.DataType=3;
+  if(mode==='label_mismatch')f.records[0].data.DisplayName='other';
+  if(mode==='loading')f.store.isLoading=()=>true;
+  if(mode==='duplicate_source')f.records[2].data.SourceColumnIndex=0;
+  if(mode==='duplicate_name')f.records[2].data.Name='Region';
+  if(mode==='accessor')Object.defineProperty(f.records[0].data,'Name',{get(){throw Error('Getter must not execute');}});
+  const result=await f.page.execute({mode:'observe',table_format_page:{offset:0,limit:8}});
+  assert.equal(result.status,'SUCCEEDED');assert.equal(result.output.table_settings.format.page.schema_id,undefined);
+  assert.equal(result.output.ui.elements.filter(e=>e.table_field).length,0);
+ });
+
+for(const mode of ['valid','foreign_store','foreign_grid','foreign_port','wrong_vendor','hidden'])
+ test('Table horizontal control binds native owner: '+mode,async()=>{
+  const page=new Page();page.context.innerWidth=1000;page.context.innerHeight=800;
+  const evaluate=page.evaluate.bind(page);page.evaluate=(fn,arg)=>evaluate(fn,arg&&Object.hasOwn(arg,'mappingPage')?{...arg,definitionPrefix:'MF;TF-1'}:arg);
+  class ViewsForm{};class BrowseViewVendor{};
+  const owner=page.add('div','MF;TF-1;ViewsForm','',{x:0,y:50,width:900,height:700});
+  const key='MF;TF-1;ViewsForm;BrowseView',root=page.add('div',key,'',{x:0,y:50,width:900,height:700},owner);
+  const grid=page.add('div',key+';grdData;grd-1;tbl','',{x:50,y:100,width:800,height:600},root);grid.id='native-grid';grid.attrs.id=grid.id;
+  Object.assign(grid,{scrollLeft:0,scrollWidth:3000,clientWidth:800});grid.style.overflowX='auto';
+  const store={$className:'Ext.data.BufferedStore'},panel={},base={FView:{el:{dom:root}},FBrowseViewDataSourceController:{FDataStore:store}};
+  const view={BaseView:base,PortPanel:panel,Vendor:new BrowseViewVendor()};
+  const model=Object.assign(new ViewsForm(),{FView:{el:{dom:owner}},FPortList:{port:{Type:0,Panel:panel}},FViewDescList:{view}});
+  page.app.Application={FInstance:{FMainForm:{Items:{Workspace:{getActiveTab:()=>({Controller:{FController:model}})}}}}};
+  page.context.Ext={getCmp:id=>id===grid.id?{el:{dom:mode==='foreign_grid'?{}:grid},getStore:()=>mode==='foreign_store'?{}:store}:undefined};
+  if(mode==='foreign_port')view.PortPanel={};if(mode==='wrong_vendor')view.Vendor={};if(mode==='hidden')root.style.display='none';
+  const s=await page.observe(),controls=s.ui.elements.filter(e=>e.table_scroller);
+  assert.equal(controls.length,mode==='valid'?1:0,mode);
+  if(mode==='valid') {assert.deepEqual(controls[0].allowed_actions,['scroll_horizontal']);assert.deepEqual(controls[0].table_scroller,{view_guid:'view',port_guid:'port',table_tid:key});
+   assert.deepEqual(controls[0].signature.table_scroller,controls[0].table_scroller);assert.equal(controls[0].label,'');}
+ });
+
+for(const mode of ['owned','hidden','foreign','duplicate','transient']) {
+ test('source validation after one Next gesture: '+mode,async()=>{
+  const page=new Page(),c=wizardStepFixture(page);
+  c.marker.attrs['data-tid']=c.base+';ImportTextFilePreviewWizard;edtFileName';
+  page.add('button',c.base+';btnError','Подробнее',{x:100,y:100,width:10,height:10},c.form);
+  const snapshot=await page.observe(),button=snapshot.ui.elements.find(e=>e.wizard_step);
+  let error,waits=0;
+  const click=page.mouse.click;page.mouse.click=async(...args)=>{await click(...args);
+   const owner=mode==='foreign'?page.add('div','MF;TF-2;WizrdMCF;ImportTextFilePreviewWizard;edtFileName'):c.marker;
+   error=page.add('div',null,'Файл "/missing.csv" не найден',undefined,owner);error.attrs.class='x-form-error-msg';
+   if(mode==='hidden')error.style.display='none';
+   if(mode==='duplicate'){const second=page.add('div',null,'Other',undefined,owner);second.attrs.class='x-form-error-msg';}
+  };
+  page.waitForTimeout=async()=>{waits++;if(mode==='transient' && waits===1){error.remove();c.advance();}};
+  const result=await page.act({verb:'wizard_step',ref:button.ref,expected_stage:'input_mapping'},snapshot);
+  assert.equal(page.events.filter(e=>e==='click').length,1);
+  if(mode==='owned'){
+   assert.equal(result.status,'AMBIGUOUS');assert.equal(result.effect_possible,true);
+   assert.equal(result.error.code,'WIZARD_SOURCE_VALIDATION_FAILED');assert.match(result.error.message,/missing.csv/);
+   assert.equal(waits,1);assert.ok(result.trace.some(e=>e.event==='wizard_source_validation_failed'));
+  }else if(mode==='transient')assert.equal(result.status,'SUCCEEDED');
+  else {assert.equal(result.error.code,'WIZARD_STEP_NOT_CONFIRMED');assert.ok(!result.trace.some(e=>e.event==='wizard_source_validation_failed'));}
+ });
+}
+
+test('Table datetime selection exposes only its bound date formatting controls',async()=>{
+ const f=candidateTableFixture();f.rows[1].querySelectorAll('.bg-TBGDataType-dtFloat')[0].attrs.class='bg-TBGDataType-dtDateTime';
+ const state=(await f.page.execute({mode:'observe'})).output.table_settings.format;
+ assert.equal(state.selected_numeric,undefined);assert.equal(state.selected_datetime.name_key,'Amount');
+ assert.equal(state.selected_datetime.source_index,1);assert.equal(state.selected_datetime.format_string.value,'0.00');
+ assert.equal(state.selected_datetime.losslessness_verified,false);
+ f.rows[0].attrs.class+=' x-grid-item-selected';
+ assert.equal((await f.page.execute({mode:'observe'})).output.table_settings.format.selected_datetime,undefined);
+});
+
+test('native process scroll uses only the observed console grid owner',async()=>{
+ const page=new Page();page.waitForTimeout=async()=>{};page.context.innerWidth=1000;page.context.innerHeight=800;
+ const panel=page.add('div','ConsoleForm','',{x:0,y:400,width:900,height:300});
+ const store={$className:'Ext.data.TreeStore',isLoading:()=>false},views={};
+ const grids=['treepanel;tree','grd;tbl'].map((suffix,i)=>{
+  const e=page.add('div','ConsoleForm;ProgressForm;trpProgress;'+suffix,'',{x:i*400,y:420,width:400,height:154},panel);
+  Object.assign(e,{scrollTop:0,scrollHeight:241,clientHeight:154});e.style.overflowY='auto';e.attrs.id='process-grid'+i;e.id=e.attrs.id;
+  views[e.id]={el:{dom:e},getStore:()=>store};return e;
+ });
+ page.context.Ext={getCmp:id=>views[id]};
+ const s=await page.observe(),owner=s.ui.elements.find(e=>e.process_grid?.grid_id===grids[0].id);
+ assert.ok(owner.allowed_actions.includes('scroll'));
+ const result=await page.act({verb:'scroll',ref:owner.ref,delta_y:87},s);
+ assert.equal(result.status,'SUCCEEDED',JSON.stringify(result));assert.equal(grids[0].scrollTop,87);assert.equal(grids[1].scrollTop,0);
+ assert.ok(result.trace.some(t=>t.event==='ui_scroll_applied'&&t.owner_ref===owner.ref&&t.from===0&&t.to===87));
+ const stale=await page.act({verb:'scroll',ref:owner.ref,delta_y:87},s);
+ assert.notEqual(stale.status,'SUCCEEDED');assert.equal(grids[0].scrollTop,87);
+});
+
+function scrolledProcessWindowFixture() {
+ const page=new Page();page.context.innerWidth=1000;page.context.innerHeight=800;
+ const panel=page.add('div','ConsoleForm','',{x:0,y:400,width:900,height:300});
+ const model={isModel:true,internalId:'record-5',data:{id:'5',loaded:true},childNodes:[]};
+ const root={isModel:true,data:{loaded:true},childNodes:[model]};
+ const store={$className:'Ext.data.TreeStore',isLoading:()=>false,getRoot:()=>root,getAt:i=>i===4?model:null},views={};
+ const grids=['treepanel;tree','grd;tbl'].map((suffix,i)=>{
+  const e=page.add('div','ConsoleForm;ProgressForm;trpProgress;'+suffix,'',{x:i*400,y:420,width:400,height:154},panel);
+  Object.assign(e,{scrollTop:87,scrollHeight:241,clientHeight:154});e.style.overflowY='auto';e.attrs.id='process-window'+i;e.id=e.attrs.id;
+  views[e.id]={el:{dom:e},getStore:()=>store};return e;
+ });
+ const rows=grids.map((g,i)=>{
+  const row=page.add('table',null,'',{x:i*400,y:440,width:400,height:24},g);
+  Object.assign(row.attrs,{class:'x-grid-item','data-recordid':'record-5','data-recordindex':'4','data-boundview':g.id});return row;
+ });
+ const id=page.add('td','ConsoleForm;ProgressForm;colId_Root>Task','5',{x:0,y:440,width:40,height:24},rows[0]);
+ const cell=page.add('td','ConsoleForm;ProgressForm;colProcess_Root>Task','Task',{x:40,y:440,width:300,height:24},rows[0]);
+ const progress=page.add('td','ConsoleForm;ProgressForm;colProgress_Root>Task','',{x:400,y:440,width:300,height:24},rows[1]);
+ page.context.Ext={getCmp:id=>views[id]};return {page,store,root,model,grids,rows,id,cell,progress};
+}
+
+test('scrolled process window offers native-bound rows without claiming complete history',async()=>{
+ const f=scrolledProcessWindowFixture(),s=await f.page.observe();
+ assert.equal(s.process_console.status,'rendered_process_window');
+ assert.equal(s.process_console.top_level_complete,false);assert.equal(s.process_console.details_complete,false);
+ assert.equal(s.process_console.top_level_rendered_coverage,false);
+ const row=s.ui.elements.find(e=>e.process_row?.record_id==='record-5');
+ assert.ok(row?.allowed_actions.includes('right_click'));assert.equal(row.process_row.record_index,4);
+});
+
+test('scrolled process window refuses detached, foreign and clipped row bindings',async()=>{
+ const changes=[f=>{f.store.getAt=()=>({...f.model});},f=>{f.rows[1].attrs['data-recordid']='foreign';},
+  f=>{f.rows[1].attrs['data-boundview']='foreign';},f=>{f.rows[1].attrs['data-recordindex']='3';},
+  f=>{f.id.ownText='6';},f=>{f.progress.attrs['data-tid']='ConsoleForm;ProgressForm;colProgress_Root>Other';},
+  f=>{f.cell.box.y=560;},f=>{f.root.data.loaded=false;},f=>{f.model.data.loading=true;},
+  f=>{f.root.childNodes.push(f.model);}];
+ for(const change of changes){const f=scrolledProcessWindowFixture();change(f);const s=await f.page.observe();
+  assert.equal(s.ui.elements.some(e=>e.process_row),false);assert.notEqual(s.process_console.status,'rendered_process_window');}
+});
+
+test('global output editor is typed only when its native record belongs to the active mapping',async()=>{
+ for(const mappingForm of ['ColumnsMappingEngineOutputPortWizard','DerivedDataSourceOutputSocketWizard']) for(const mode of ['bound','foreign_record','foreign_wizard','wrong_index']) {
+  const page=new Page(),base='MF;TF-1;WizrdMCF;',wizard=page.add('div',base.slice(0,-1));
+  const stem=base+mappingForm+';';page.add('button',stem+'btnAddMappingColumn','',undefined,wizard);
+  const grid=page.add('div',stem+'grdTargetColumns;tbl','',undefined,wizard);grid.id='mapping-view';grid.attrs.id=grid.id;
+  const row=page.add('table',null,'',undefined,grid);row.attrs={class:'x-grid-item-selected','data-recordindex':mode==='wrong_index'?'1':'0','data-recordid':'r1','data-boundview':grid.id};
+  page.add('td',stem+'colName_A','A',undefined,row);
+  const label=page.add('td',stem+'colDisplayName_A','A',undefined,row);page.add('span',null,'',undefined,label).attrs.class='bg-TBGDataType-dtInteger';
+  page.add('td',stem+'colDataKind_A','Дискретный',undefined,row);page.add('td',stem+'colDefaultUsageType_A','Не задано',undefined,row);
+  const form=page.add('div','EditColumnDefForm');form.id='output-editor';form.attrs.class='x-window';
+  for(const [key,value] of [['edtName','A'],['edtDisplayName','A'],['cbxDataType','Целый'],['cbxDataKind','Дискретный'],['cbxUsageType','Не задано']]) {
+   const owner=page.add('div','EditColumnDefForm;'+key,'',undefined,form),input=page.add('input',null,'',undefined,owner);input.value=value;
+  }
+  const record={isModel:true,internalId:'r1'},store={$className:'Ext.data.Store',isLoading:()=>false,getAt:i=>i===0?record:null};
+  const native={FView:{el:{dom:form}},FAddMode:false,Records:[mode==='foreign_record'?{...record}:record]};
+  page.context.Ext={getCmp:id=>id===form.id?{Controller:native}:id===grid.id?{el:{dom:grid},getStore:()=>store}:null};
+  page.app.Application={FInstance:{FMainForm:{Items:{Workspace:{getActiveTab:()=>({Controller:{FController:{FView:{el:{dom:mode==='foreign_wizard'?form:wizard}}}}})}}}}};
+  for(const discover_roots of [false,true]) {
+   const reply=await page.execute({mode:'observe',discover_roots});assert.equal(reply.status,'SUCCEEDED');const s=reply.output;
+   assert.equal(s.wizard.column_parameters.status,mode==='bound'?'observed':'ambiguous',mappingForm+':'+mode+':'+discover_roots);
+   if(!discover_roots)assert.equal(s.ui.elements.some(e=>e.wizard_field?.scope==='output_column'),mode==='bound',mode);
+  }
+ }
+});
+
+test('output field cells are actionable only in a complete observed definition',async()=>{
+ for(const fault of ['none','filter','wrong_view']) {
+  const page=new Page(),f=mappingCoverageFixture(page);
+  if(fault==='filter')f.input.value='Field';if(fault==='wrong_view')f.rows[0].attrs['data-boundview']='foreign';
+  const s=await page.observe(),controls=s.ui.elements.filter(e=>e.output_column);
+  if(fault==='none'){assert.equal(controls.length,4);assert.ok(controls.every(e=>e.allowed_actions.includes('double_click')));assert.ok(controls.every(e=>e.signature.output_column.name===e.output_column.name));}
+  else assert.equal(controls.length,0);
+ }
+});
+
+test('output cell gestures recheck the visible point when the center is covered',async()=>{
+ for(const mode of ['partial','covered_after_read']) {
+  const page=new Page(),f=mappingCoverageFixture(page),cell=f.rows[0].children[0];
+  const original=page.document.elementFromPoint.bind(page.document);let covered=false;
+  page.document.elementFromPoint=(x,y)=>x>=cell.box.x&&x<=cell.box.x+cell.box.width&&y>=cell.box.y&&y<=cell.box.y+cell.box.height
+   ?!covered&&y<cell.box.y+8?cell:page.document.body:original(x,y);
+  const s=await page.observe(),target=s.ui.elements.find(e=>e.tid===f.base+'colName_Field0');
+  assert.ok(target.allowed_actions.includes('double_click'));assert.ok(target.interaction.point.y<cell.box.y+8);
+  if(mode==='covered_after_read')covered=true;
+  const result=await page.act({verb:'double_click',ref:target.ref},s);
+  assert.equal(result.status==='SUCCEEDED',mode==='partial');
+  assert.equal(page.events.filter(e=>e==='double_click').length,mode==='partial'?1:0);
+  if(mode==='partial')assert.deepEqual(page.clickedPoints.at(-1),{...target.interaction.point,clickCount:2});
+ }
+});
+
+test('file row gestures recheck the visible point when the center is covered',async()=>{
+ for(const mode of ['partial','covered_after_read']) {
+  const page=new Page(),table=page.add('div','MF;TF-1;FileStorageForm;pnlFileStorage;tbl');
+  page.context.innerWidth=1000;page.context.innerHeight=800;
+  const row=page.add('table',null,'',undefined,table);row.attrs.class='x-grid-item';
+  const cell=page.add('td','MF;TF-1;FileStorageForm;colName_sample_csv','sample.csv',undefined,row);
+  const original=page.document.elementFromPoint.bind(page.document);let covered=false;
+  page.document.elementFromPoint=(x,y)=>x>=cell.box.x&&x<=cell.box.x+cell.box.width&&y>=cell.box.y&&y<=cell.box.y+cell.box.height
+   ?!covered&&y<cell.box.y+8?cell:page.document.body:original(x,y);
+  const s=await page.observe(),target=s.ui.elements.find(e=>e.tid===cell.getAttribute('data-tid'));
+  assert.ok(target.allowed_actions.includes('double_click'));assert.ok(target.interaction.point,JSON.stringify({mode,target}));assert.ok(target.interaction.point.y<cell.box.y+8);
+  if(mode==='covered_after_read')covered=true;
+  const result=await page.act({verb:'double_click',ref:target.ref},s);
+  assert.equal(result.status==='SUCCEEDED',mode==='partial');
+  assert.equal(page.events.filter(e=>e==='double_click').length,mode==='partial'?1:0);
+  if(mode==='partial')assert.deepEqual(page.clickedPoints.at(-1),{...target.interaction.point,clickCount:2});
+ }
+});
+
+async function cancelProcessFixture() {
+  const {readFileSync}=await import('node:fs');
+  const source=JSON.parse(readFileSync(new URL('./fixtures/process-console-run15.json',import.meta.url),'utf8'));
+    const page=new Page();page.context.innerWidth=1440;page.context.innerHeight=1000;
+    const panel=page.add('div','ConsoleForm','',{x:48,y:397,width:1392,height:603});
+    const grids=[];
+    for(const g of source.grids) {
+      const grid=page.add('div',g.attributes['data-tid'],'',g.rect,panel);grid.attrs.id=g.attributes.id;grid.id=grid.attrs.id;
+      Object.assign(grid,{scrollTop:g.scroll.top,scrollLeft:g.scroll.left,clientWidth:g.scroll.clientWidth,clientHeight:g.scroll.clientHeight,scrollWidth:g.scroll.scrollWidth,scrollHeight:g.scroll.scrollHeight});
+      const container=page.add('div',null,'',g.containers[0].rect,grid);container.attrs.class='x-grid-item-container';container.style.transform='none';
+      for(const r of g.rows) {
+        const row=page.add('table',null,'',r.rect,container);Object.assign(row.attrs,r.attributes,{class:'x-grid-item'});
+        for(const c of r.cells){const cell=page.add('td',c.attributes['data-tid'],c.text,c.rect,row);cell.attrs.class=c.classes;}
+      }
+      grids.push({grid,container});
+    }
+    const portal=page.add('div','mnContextMenu','',{x:180,y:480,width:330,height:90});
+    const showNode=page.add('div','mnContextMenu;mniShowNodeToProcess','Показать узел',{x:200,y:540,width:300,height:24},portal);
+    grids[0].container.children.at(-1).attrs.class+=' x-grid-item-selected';
+    const menu=page.add('div','mnContextMenu;mniShowCompletedProcesses','Отображать завершенные процессы',{x:200,y:500,width:300,height:24},portal);menu.attrs.class='x-menu-item-checked';
+
+  const cancel=page.add('div','mnContextMenu;mniCancel','Отменить',{x:200,y:570,width:300,height:24},portal);
+  portal.box.height=120;
+  const owner={FGuid:'node-a',data:{}},record={isModel:true,internalId:'2854',data:{id:'15.4',ModelNode:owner.data,
+    CanCancelProcess:true,Status:1,ProgressBarCls:'bg-progress-ptpsProcessing'},childNodes:[]};
+  const root={isModel:true,internalId:'root-a',data:{loaded:true},childNodes:[record]};
+  const store={$className:'Ext.data.TreeStore',getRoot:()=>root,isLoading:()=>false};
+  const views=grids.map(({grid})=>({el:{dom:grid},getStore:()=>store}));
+  page.context.Ext={getCmp:id=>views.find(v=>v.el.dom.id===id)};
+  page.app.Application={FInstance:{FMainForm:{Items:{Workspace:{getActiveTab:()=>({Controller:{FController:{FDiagram:{FNodes:{FCollection:[owner]}}}}})}}}}};
+  const binding={node:{node_id:'node-a'},workflow_ref:{navigation_path:[],prefix:'MF;TF-1'}};
+  // The native node-context reader has its own suite; keep it fixed here to
+  // isolate the process-menu guards and their pre-gesture revalidation.
+  const execute=options=>vm.runInContext('('+workspaceUiCapability.toString()+')',page.context)(page,
+    {expected_build:build,expected_origin:origin,prepared_node_context:binding,...options},async()=>({verified:true,surface:'graph'}));
+  return {page,cancel,owner,record,root,grids,execute};
+}
+test('cancel process is typed and binds exact native record root and owner',async()=>{
+ const f=await cancelProcessFixture(),r=await f.execute({mode:'observe'});
+ assert.equal(r.status,'SUCCEEDED');const item=r.output.ui.elements.find(e=>e.tid==='mnContextMenu;mniCancel');
+ assert.deepEqual(Array.from(item.allowed_actions),['cancel_process']);
+ assert.deepEqual(clone(item.process_menu.cancellation),{root_id:'root-a',record_id:'2854',process_id:'15.4',node_id:'node-a',
+   owner_verified:true,can_cancel:true,source:'native_process_model_identity'});
+ assert.throws(()=>validateUiAction({verb:'click',ref:item.ref},r.output));
+ const applied=await f.execute({mode:'act',action:{verb:'cancel_process',ref:item.ref},snapshot:r.output});
+ assert.equal(applied.status,'SUCCEEDED');assert.equal(f.page.events.filter(e=>e==='click').length,1);
+});
+for(const fault of ['owner','record','root','completed','not_cancellable','unknown_status','duplicate','selected','unbound'])
+ test('cancel process refuses '+fault+' before any gesture',async()=>{
+  const f=await cancelProcessFixture(),r=await f.execute({mode:'observe'});
+  const item=r.output.ui.elements.find(e=>e.tid==='mnContextMenu;mniCancel');assert.ok(item);
+  if(fault==='owner')f.record.data.ModelNode={};
+  if(fault==='record')f.record.internalId='new-record';
+  if(fault==='root')f.root.internalId='new-root';
+  if(fault==='completed'){f.record.data.Status=3;f.record.data.ProgressBarCls='bg-progress-ptpsCompleted';}
+  if(fault==='not_cancellable')f.record.data.CanCancelProcess=false;
+  if(fault==='unknown_status')f.record.data.ProgressBarCls='bg-progress-ptpsUnknown';
+  if(fault==='duplicate')f.root.childNodes.push(f.record);
+  if(fault==='selected')f.grids[0].container.children[0].attrs.class+=' x-grid-item-selected';
+  const a=await f.execute({mode:'act',action:{verb:'cancel_process',ref:item.ref},snapshot:r.output,
+    ...(fault==='unbound'?{prepared_node_context:undefined}:{})});
+  assert.equal(a.status,'NOT_APPLIED');assert.equal(a.effect_possible,false);assert.deepEqual(f.page.events,[]);
+ });
+
+
+test('Files root breadcrumb exposes only a click owned by the unique current navigation panel',async()=>{
+ for(const mode of ['owned','foreign','outside','duplicate','hidden','wrong_label']) {
+  const page=new Page(),prefix='MF;TF-1;',panel=page.add('div',prefix+'NavigationBar;NavigationPanel');
+  page.context.innerWidth=1000;page.context.innerHeight=800;
+  const tid=prefix+'cnrNaviMode;b.s_Сервер>Файлы';
+  const crumb=page.add('a',tid,mode==='wrong_label'?'Пакеты':'Файлы',undefined,mode==='outside'?undefined:panel);
+  if(mode==='foreign')panel.attrs['data-tid']='MF;TF-2;NavigationBar;NavigationPanel';
+  if(mode==='duplicate')page.add('a',tid,'Файлы',undefined,panel);
+  if(mode==='hidden')crumb.style.display='none';
+  const observed=await page.observe(),found=observed.ui.elements.filter(e=>e.tid===tid);
+  if(mode==='owned') {assert.equal(found.length,1);assert.deepEqual(found[0].allowed_actions,['click']);}
+  else assert.equal(found.length,0,mode);
+ }
+});
+
+test('read-only graph unlock discards a mixed snapshot and preserves identity guards',async()=>{
+ for(const mode of ['unlock','foreign','unstable']) {
+  const page=new Page();page.add('div','MF;TF-1;ModelForm;cmpDiagram');
+  let reads=0;
+  const reader=async()=>{reads++;return {verified:true,document_id:mode==='foreign'&&reads>1?'foreign':'doc',
+    workflow_id:'workflow',node_id:'node',surface:'graph',tid:'MF;TF-1;Graph;Node',
+    locked:mode==='unstable'?reads%2===1:reads===1};};
+  const result=await vm.runInContext('('+workspaceUiCapability.toString()+')',page.context)(page,
+    {mode:'observe',discover_roots:true,expected_build:build,expected_origin:origin,
+     prepared_node_context:{node:{node_id:'node'},workflow_ref:{prefix:'MF;TF-1',navigation_path:[]}}},reader);
+  assert.deepEqual(page.events,[]);
+  if(mode==='unlock') {
+   assert.equal(result.status,'SUCCEEDED');assert.equal(result.output.prepared_node_context.locked,false);
+   assert.equal(result.trace.filter(e=>e.event==='node_graph_lock_rediscovery').length,1);
+  } else {
+   assert.equal(result.status,'NOT_APPLIED');assert.equal(result.error.code,'PREPARED_NODE_CONTEXT_CHANGED');
+   assert.equal(result.trace.filter(e=>e.event==='node_graph_lock_rediscovery').length,mode==='unstable'?2:0);
+  }
+ }
+});
+
+test('grouped mapping pages bind group-local indexes and permit only subpixel table rounding',async()=>{
+ for(const fault of ['none','clipped','group','index']) {
+  const {page,c,records}=bufferedMappingFixture();
+  const rename=e=>{if(e.attrs['data-tid'])e.attrs['data-tid']=e.attrs['data-tid'].replace('ColumnsMappingEngineOutputPortWizard','DerivedDataSourceOutputSocketWizard');for(const child of e.children)rename(child);};rename(c.form);
+  records.forEach((r,i)=>{r.data.GroupField=i<10?'':'Исключенные';r.data.Index=i<10?i:i-10;});
+  c.rows[11].box.width+=fault==='clipped'?0.5:1/128;
+  if(fault==='group')records[19].data.GroupField='Unknown';
+  if(fault==='index')records[19].data.Index=19;
+  const r=await page.execute({mode:'observe',output_column_page:{offset:0,limit:8}});
+  assert.equal(r.output.wizard.output_columns.page.status,fault==='none'?'complete_definition_page':'unverified_definition_page',fault);
+  if(fault==='none')assert.equal(r.output.wizard.output_columns.page.total_columns,20);
+ }
+});
+
+function graphLaunchFixture(){
+ const page=new Page();page.context.innerWidth=1440;page.context.innerHeight=1000;const nodeDom=page.add('div','MF;TF-1;Graph;Calculator','',{x:100,y:100,width:100,height:50});
+ const button=page.add('button','MF;TF-1;ModelForm;btnToggleActivateCurrent','',{x:400,y:50,width:30,height:25});
+ button.id='run-button';button.attrs['data-qtip']='Выполнить узел (F9)';
+ page.add('span',null,'',{x:405,y:55,width:10,height:10},button).attrs.class='bg-icon-run_current';
+ const owner={FGuid:'node-a',FCell:{},FLocked:false};let selection=[owner.FCell];
+ class ModelForm{};const model=new ModelForm();model.FDiagram={FNodes:{FCollection:[owner]},FmxGraph:{container:nodeDom.parentElement,getSelectionCells:()=>selection,view:{getState:()=>({shape:{node:nodeDom}})}}};
+ const native={el:{dom:button},disabled:false,tooltip:'Выполнить узел'};
+ page.context.Ext={getCmp:id=>id===button.id?native:null};page.app.ModelForm=ModelForm;
+ page.app.Application={FInstance:{FMainForm:{Items:{Workspace:{getActiveTab:()=>({Controller:{FController:model}})}}}}};
+ const binding={node:{node_id:'node-a'},workflow_ref:{navigation_path:[],prefix:'MF;TF-1'}};
+ const execute=options=>vm.runInContext('('+workspaceUiCapability.toString()+')',page.context)(page,{expected_build:build,expected_origin:origin,prepared_node_context:binding,...options},async()=>({verified:true,surface:'graph'}));
+ return {page,button,owner,native,model,select:s=>selection=s,execute};
+}
+test('graph launch only exposes typed execution for the exact native selected node',async()=>{
+ const f=graphLaunchFixture(),r=await f.execute({mode:'observe'});assert.equal(r.status,'SUCCEEDED');
+ const e=r.output.ui.elements.find(e=>e.tid===f.button.attrs['data-tid']);assert.deepEqual(clone(e.allowed_actions),['execute_graph_node'],JSON.stringify(e));
+ assert.equal(e.graph_execution.node_id,'node-a');assert.throws(()=>validateUiAction({verb:'click',ref:e.ref},r.output));
+ const done=await f.execute({mode:'act',action:{verb:'execute_graph_node',ref:e.ref},snapshot:r.output});assert.equal(done.status,'SUCCEEDED');assert.equal(f.page.events.filter(e=>e==='click').length,1);
+});
+for(const [name,mutate] of Object.entries({unselected:f=>f.select([]),foreign:f=>f.select([{}]),multiple:f=>f.select([f.owner.FCell,{}]),locked:f=>f.owner.FLocked=true,disabled:f=>f.native.disabled=true,deactivate:f=>f.native.tooltip='Деактивировать узел',duplicate:f=>f.model.FDiagram.FNodes.FCollection.push({...f.owner}),foreign_button:f=>f.native.el.dom={}}))test('graph launch refuses native '+name+' drift without a gesture',async()=>{
+ const f=graphLaunchFixture(),r=await f.execute({mode:'observe'}),e=r.output.ui.elements.find(e=>e.tid===f.button.attrs['data-tid']);
+ assert.ok(e.graph_execution);mutate(f);
+ const done=await f.execute({mode:'act',action:{verb:'execute_graph_node',ref:e.ref},snapshot:r.output});assert.notEqual(done.status,'SUCCEEDED');assert.equal(f.page.events.filter(e=>e==='click').length,0);
+});
+
+test('graph launch remains observable when inspection is scoped to the graph container',async()=>{
+ const f=graphLaunchFixture(),roots=await f.execute({mode:'observe',discover_roots:true});
+ const root=roots.output.ui.elements.find(e=>e.tid==='MF;TF-1;ModelForm;cmpDiagram');assert.ok(root);
+ const r=await f.execute({mode:'observe',root_ref:root.ref});assert.equal(r.status,'SUCCEEDED');
+ const e=r.output.ui.elements.find(e=>e.tid===f.button.attrs['data-tid']);assert.ok(e);assert.deepEqual(clone(e.allowed_actions),['execute_graph_node']);
 });

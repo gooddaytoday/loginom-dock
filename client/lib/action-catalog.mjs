@@ -15,7 +15,7 @@ export const ACCEPTANCE_CHECKS = ['node_add', 'link_create_standard', 'link_crea
 
 export const actionDescribeTool = {
   name: 'dock_action_describe',
-  description: 'List the pinned available actions with {} or describe one exact action. Batch action_keys and node_types return selected pinned actions and graph-phase cards; planned configuration handlers are explicitly marked and are not callable node.apply. Supported local handlers include node.add, link.create, package.save_as and node.configure_text_import. Only actions present in this session catalog are callable. Does not change Loginom.',
+  description: 'List the pinned available actions with {} or describe one exact action. Batch action_keys and node_types return selected pinned actions and graph-phase cards; planned configuration handlers are explicitly marked and are not callable node.apply. Supported local handlers include node.add, link.create, package.save_as, package.save_checkpoint and node.configure_text_import. Only actions present in this session catalog are callable. Does not change Loginom.',
   inputSchema: {
     type: 'object',
     properties: { action_key: { type: 'string', enum: [...ACTION_KEYS] },
@@ -28,7 +28,7 @@ export const actionDescribeTool = {
 
 export const actionRunTool = {
   name: 'dock_action_run',
-  description: 'Run a pinned action (node.add, link.create, package.save_as or node.configure_text_import); call dock_action_describe first for its exact parameters. node.configure_text_import configures one already-open text-import wizard from a verified session upload, saves with Done and checks settings after reopening; it does not execute the node or save the package. Other UI tasks use dock_ui_action after observation. Invalid arguments are task feedback, not a connection failure.',
+  description: 'Run a pinned action (node.add, link.create, package.save_as, package.save_checkpoint or node.configure_text_import); call dock_action_describe first for its exact parameters. node.configure_text_import configures one already-open text-import wizard from a verified session upload, saves with Done and checks settings after reopening; it does not execute the node or save the package. package.save_checkpoint uses the awaited Save As flow with explicit conflict policy and preserves the open workflow; persisted content is checked separately during final reopen acceptance. Other UI tasks use dock_ui_action after observation. Invalid arguments are task feedback, not a connection failure.',
   inputSchema: {
     type: 'object',
     properties: {
@@ -99,10 +99,10 @@ function scanForbiddenDefinition(value, where = 'action') {
 
 export function validateJsonSchema(schema, where = 'schema') {
   if (!isObject(schema)) fail(`${where} must be an object schema`);
-  const allowed = new Set(['type', 'properties', 'required', 'additionalProperties', 'enum', 'minimum', 'maximum', 'minLength', 'maxLength', 'pattern', 'items', 'description']);
+  const allowed = new Set(['type', 'properties', 'required', 'additionalProperties', 'enum', 'minimum', 'maximum', 'minLength', 'maxLength', 'pattern', 'items', 'minItems', 'maxItems', 'description']);
   exactKeys(schema, allowed, where);
   if (!['object', 'array', 'string', 'integer', 'number', 'boolean'].includes(schema.type)) fail(`${where}.type is unsupported`);
-  const keywords = { object: ['properties', 'required', 'additionalProperties'], array: ['items'],
+  const keywords = { object: ['properties', 'required', 'additionalProperties'], array: ['items', 'minItems', 'maxItems'],
     string: ['minLength', 'maxLength', 'pattern'], integer: ['minimum', 'maximum'], number: ['minimum', 'maximum'], boolean: [] };
   exactKeys(schema, new Set(['type', 'enum', 'description', ...keywords[schema.type]]), where);
   if (schema.description !== undefined && typeof schema.description !== 'string') fail(`${where}.description must be a string`);
@@ -113,12 +113,12 @@ export function validateJsonSchema(schema, where = 'schema') {
     }
     if (new Set(schema.enum).size !== schema.enum.length) fail(`${where}.enum contains duplicates`);
   }
-  for (const key of ['minimum', 'maximum', 'minLength', 'maxLength']) {
+  for (const key of ['minimum', 'maximum', 'minLength', 'maxLength', 'minItems', 'maxItems']) {
     if (schema[key] === undefined) continue;
     if (typeof schema[key] !== 'number' || !Number.isFinite(schema[key])
-        || (key.endsWith('Length') && (!Number.isSafeInteger(schema[key]) || schema[key] < 0))) fail(`${where}.${key} is invalid`);
+        || ((key.endsWith('Length') || key.endsWith('Items')) && (!Number.isSafeInteger(schema[key]) || schema[key] < 0))) fail(`${where}.${key} is invalid`);
   }
-  if (schema.minimum > schema.maximum || schema.minLength > schema.maxLength) fail(`${where} bounds are reversed`);
+  if (schema.minimum > schema.maximum || schema.minLength > schema.maxLength || schema.minItems > schema.maxItems) fail(`${where} bounds are reversed`);
   if (schema.pattern !== undefined) {
     nonEmpty(schema.pattern, `${where}.pattern`);
     try { new RegExp(schema.pattern); } catch { fail(`${where}.pattern is invalid`); }
@@ -423,6 +423,8 @@ export function validateActionParameters(schema, value, where = 'parameters') {
     }
   } else if (schema.type === 'array') {
     if (!Array.isArray(value)) error('expected array');
+    if (schema.minItems !== undefined && value.length < schema.minItems) error('array is too short');
+    if (schema.maxItems !== undefined && value.length > schema.maxItems) error('array is too long');
     value.forEach((item, index) => validateActionParameters(schema.items, item, `${where}[${index}]`));
   } else if (schema.type === 'integer') {
     if (!Number.isInteger(value)) error('expected integer');

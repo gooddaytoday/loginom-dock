@@ -203,6 +203,7 @@ let capacity=request.target.kind==='new'?NODE_TYPES[request.target.type].tabular
   } catch (error) {
     return { status: state.effect_possible ? 'AMBIGUOUS' : 'NOT_APPLIED', phase: 'target_incomplete',
       error: String(error?.message ?? error), node_id: state.targetId, partial_effect: state.effect_possible,
+      cleanup_complete: !state.pending,
       pending: state.pending?.id ?? null, effects: state.receipts.map(({ id, kind, verified }) => ({ id, kind, verified })),
       configured: false, executed: false, package_saved: false };
   }

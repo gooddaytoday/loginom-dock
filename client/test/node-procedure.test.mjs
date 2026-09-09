@@ -3,12 +3,12 @@ import assert from 'node:assert/strict';
 import { createNodeProcedure } from '../lib/node-procedure.mjs';
 import { validateTextImportRequest } from '../lib/text-import-procedure.mjs';
 
-function fixture({ recordFailure, executeFailure, changedDocument, foreignReceipt, movingEpoch, dialogsAtRead, loadingSamples = 0, maxSteps = 8 } = {}) {
+function fixture({ recordFailure, executeFailure, changedDocument, foreignReceipt, movingEpoch, dialogsAtRead, staleReads = 0, staleEffect = false, loadingSamples = 0, maxSteps = 8 } = {}) {
   const events = [], records = []; let reads = 0;
   const operation = { id: 'parent', action: { action_key: 'node.import.configure', revision: '1' },
     deadline: 10000, checkpoint: { workflow_ref: { prefix: 'MF;TF-1', tab_tid: 'tab' }, document_id: 'doc' } };
   const state = { origin: 'http://example.test', loginom_build: '7.4.2', workflow_ref: operation.checkpoint.workflow_ref,
-    dom_epoch: { document: changedDocument ? 'foreign' : 'doc', revision: 1 }, scan: { complete: true }, wizard: { status: 'absent' },
+    dom_epoch: { document: changedDocument ? 'foreign' : 'doc', revision: 1 }, scan: { complete: true }, wizard: staleReads ? {status:'observed',root_ref:'ui-root',root_tid:'Wizard'} : { status: 'absent' },
     ui: { masks: [], dialogs: [], truncated: { elements: false, masks: false, dialogs: false },
       elements: [{ ref: 'ui-button', allowed_actions: ['click'] }] } };
   const channel = createNodeProcedure({ operation, maxSteps, now: () => 1, wait: async () => {},
@@ -16,12 +16,29 @@ function fixture({ recordFailure, executeFailure, changedDocument, foreignReceip
     record: async entry => { events.push(entry.phase); if (recordFailure && entry.phase === recordFailure) throw new Error('disk failure'); records.push(entry); return structuredClone(entry); },
     wrapMutation: (code, options) => { events.push('wrapped'); return { code, options }; },
     execute: async code => {
-      if (typeof code === 'string') { reads++; const output = structuredClone(state); if (movingEpoch) output.dom_epoch.revision = reads; if (dialogsAtRead) output.ui.dialogs = dialogsAtRead(reads); if (reads <= loadingSamples) output.ui.masks = [{ kind: 'busy' }]; return { status: 'SUCCEEDED', output }; }
+      if (typeof code === 'string') { reads++;
+        if(reads%2===0 && reads<=staleReads*2)return {status:'NOT_APPLIED',action_key:'workspace.observe',phase:'observing',effect_possible:staleEffect,cleanup_complete:true,error:{code:'UI_ROOT_STALE'}};
+        const output = structuredClone(state);
+        if(staleReads && reads%2===1){output.observation_kind='roots';output.ui.truncated.dialogs=true;output.ui.truncated.masks=true;}
+        if (movingEpoch) output.dom_epoch.revision = reads; if (dialogsAtRead) output.ui.dialogs = dialogsAtRead(reads); if (reads <= loadingSamples) output.ui.masks = [{ kind: 'busy' }]; return { status: 'SUCCEEDED', output }; }
       events.push('mutated'); if (executeFailure) throw new Error('transport');
       return { status: 'SUCCEEDED', operation_id: foreignReceipt ? 'foreign' : code.options.id, action_key: 'ui.act', cleanup_complete: true, effect_possible: true, output: state };
     } });
   return { channel, operation, events, records };
 }
+test('a disappearing read root permits at most two rediscoveries without gestures',async()=>{
+  for(const staleReads of [1,2,3]) {
+    const f=fixture({staleReads});
+    const read=()=>f.channel.observe({condition:'dialog closed',ready:()=>true});
+    if(staleReads<3)await read();else await assert.rejects(read(),/observation is incomplete/);
+    assert.equal(f.records.filter(r=>r.phase==='node_observation_root_refreshed').length,Math.min(2,staleReads));
+    assert.ok(!f.events.includes('mutated'));
+  }
+  for(const config of [{staleReads:1,staleEffect:true},{staleReads:1,changedDocument:true}]) {
+    const f=fixture(config);await assert.rejects(f.channel.observe({condition:'dialog closed',ready:()=>true}));
+    assert.ok(!f.events.includes('node_observation_root_refreshed'));
+  }
+});
 test('durable internal preparation precedes mutation; next action requires fresh observation', async () => {
   const f = fixture(); await f.channel.observe({ condition: 'button usable', ready: s => s.ui.elements.some(e => e.ref === 'ui-button') }); await f.channel.act({ verb: 'click', ref: 'ui-button' });
   assert.deepEqual(f.events.filter(x => x !== 'node_observation_sample'), ['node_observation_completed', 'node_step_prepared', 'wrapped', 'mutated', 'node_step_completed']);
@@ -131,4 +148,194 @@ test('target incarnation confirmation waits for the same identity twice', async 
     confirmIdentity: () => ++reads < 3 ? 'old-' + reads : 'new-node' });
   assert.equal(f.records.filter(r => r.phase === 'node_observation_sample').length, 4);
   assert.equal(f.records.at(-1).readiness.required_samples, 2);
+});
+
+function recoveryFixture({ refusals = 1, receipt = {}, changedIdentity = false, changedIntent = false, recordFailure = false } = {}) {
+  let reads = 0, mutations = 0; const records = [];
+  const operation = {id:'recovery',action:{action_key:'node.apply',revision:'1'},deadline:10000,
+    checkpoint:{document_id:'doc',workflow_ref:{prefix:'MF;TF-1',tab_tid:'tab'}}};
+  const channel = createNodeProcedure({operation,now:()=>1,wait:async()=>{},maxSteps:20,targetOrigin:'http://example.test',targetBuild:'7.4.2',
+    record:async e=>{records.push(e);if(recordFailure && e.phase==='node_step_refresh_authorized')throw Error('disk failure');return structuredClone(e)},
+    wrapMutation:(code,reference)=>({reference}),execute:async code=>{
+      if(typeof code==='string') {reads++;return {status:'SUCCEEDED',output:{origin:'http://example.test',loginom_build:'7.4.2',
+        workflow_ref:{tab_tid:'tab',prefix:'MF;TF-1'},dom_epoch:{document:'doc',revision:reads},scan:{complete:true},wizard:{status:'absent'},
+        binding:{node:'node-guid',field:changedIdentity&&mutations?'other':'UnitPrice'},desired:changedIntent&&mutations?'2':'1',
+        ui:{masks:[],dialogs:[],truncated:{masks:false,dialogs:false},elements:[{ref:'ui-'+reads,allowed_actions:['click','fill'],kind:'input',editable:true}]}}};}
+      mutations++;
+      return {operation_id:code.reference.id,action_key:'ui.act',cleanup_complete:true,effect_possible:mutations>refusals,
+        status:mutations>refusals?'SUCCEEDED':'NOT_APPLIED',phase:mutations>refusals?'completed':'preconditions',
+        error:{code:'UI_EPOCH_CHANGED'},trace:[],...receipt};
+    }});
+  const perform=()=>channel.perform({condition:'same field editor',ready:()=>true,identity:s=>s.binding,
+    resolve:s=>({verb:'fill',ref:s.ui.elements[0].ref,text:s.desired})});
+  return {perform,records,get mutations(){return mutations}};
+}
+test('strict pre-gesture epoch refusal refreshes and rebinds one unchanged field',async()=>{
+  const f=recoveryFixture();await f.perform();assert.equal(f.mutations,2);
+  const auth=f.records.find(e=>e.phase==='node_step_refresh_authorized');assert.equal(auth.effect_possible,false);
+  assert.equal(f.records.filter(e=>e.phase==='node_step_prepared').length,2);
+  assert.equal(new Set(f.records.filter(e=>e.phase==='node_step_prepared').map(e=>e.internal_operation_id)).size,2);
+});
+test('local epoch recovery stops after two refreshes',async()=>{
+  const f=recoveryFixture({refusals:10});await assert.rejects(f.perform(),/did not confirm/);assert.equal(f.mutations,3);
+});
+for(const [name,receipt] of Object.entries({effect:{effect_possible:true},unknown:{status:'AMBIGUOUS'},cleanup:{cleanup_complete:false},phase:{phase:'applying'},trace:{trace:[{event:'ui_preconditions_verified'}]},missingTrace:{trace:undefined},foreignCode:{error:{code:'UI_CONTEXT_CHANGED'}}})){
+  test('epoch recovery refuses '+name,async()=>{const f=recoveryFixture({receipt});await assert.rejects(f.perform());assert.equal(f.mutations,1)});
+}
+for(const changed of ['changedIdentity','changedIntent'])test('refresh refuses '+changed,async()=>{
+  const f=recoveryFixture({[changed]:true});await assert.rejects(f.perform(),/target or intent changed/);assert.equal(f.mutations,1);
+});
+test('recovery journal failure prevents a second gesture',async()=>{
+  const f=recoveryFixture({recordFailure:true});await assert.rejects(f.perform(),/disk failure/);assert.equal(f.mutations,1);
+});
+
+test('bound action consumes an already journalled observation without another read',async()=>{
+ const f=fixture();const observed=await f.channel.observe({condition:'button ready',ready:()=>true});
+ await f.channel.perform({condition:'same button ready',ready:()=>true,initialObservation:observed,
+   identity:()=>({node:'node1',control:'button'}),resolve:s=>({verb:'click',ref:s.ui.elements[0].ref})});
+ assert.equal(f.records.filter(e=>e.phase==='node_observation_completed').length,1);
+});
+test('bound action rejects a stale initial observation before any gesture',async()=>{
+ const f=fixture();const observed=await f.channel.observe({condition:'button ready',ready:()=>true});observed.dom_epoch.revision++;
+ await assert.rejects(f.channel.perform({condition:'same button',ready:()=>true,initialObservation:observed,
+   identity:()=>({node:'node1'}),resolve:s=>({verb:'click',ref:s.ui.elements[0].ref})}),/no longer current/);
+ assert.ok(!f.events.includes('mutated'));
+});
+
+test('native process, port and mapping reads share the prepared node and durable observation',async()=>{
+ const binding={document_id:'doc',workflow_ref:{workflow_id:'flow',prefix:'MF;TF-1',tab_tid:'MF;cntMain;cntWorkspace;Workspace;t.br;tb-1',navigation_path:[{tid:'MF;TF-1;cnrNaviMode;b.s_Scenario',label:'Scenario'}]},node:{document_id:'doc',workflow_id:'flow',node_id:'node'}};
+ const node={verified:true,document_id:'doc',workflow_id:'flow',node_id:'node',surface:'graph',tid:'MF;TF-1;Graph;Import'};
+ const state={origin:'http://example.test',loginom_build:'7.4.2',workflow_ref:binding.workflow_ref,dom_epoch:{document:'dom',revision:1},
+   prepared_node_context:node,scan:{complete:true},wizard:{status:'absent'},ui:{elements:[{tid:'ConsoleForm',ref:'ui-console'}],masks:[],dialogs:[],truncated:{dialogs:false,masks:false}}};
+ const calls=[],records=[];
+ const make=(changed=false)=>createNodeProcedure({operation:{id:'native',deadline:10000,action:{action_key:'node.apply',revision:'1'}},
+   preparedNodeContext:binding,targetOrigin:state.origin,targetBuild:state.loginom_build,now:()=>1,
+   record:async r=>{records.push(r);return structuredClone(r)},wrapMutation:()=>{throw Error('unexpected mutation')},
+   execute:async code=>{
+     calls.push(code);
+     if(code.includes('function workspaceUiCapability'))return {status:'SUCCEEDED',output:structuredClone(state)};
+     return {verified:true,node_context:{...node,node_id:changed?'foreign':'node'},processes:[],ports:[]};
+   }});
+ const s=await make().observe({condition:'native state',readProcesses:true,readOutputs:true,readMappings:true,ready:s=>s.node_processes?.verified&&s.node_outputs?.verified&&s.node_mapping?.verified});
+ assert.equal(s.node_processes.verified,true);assert.equal(calls.length,5);
+ assert.ok(calls[1].includes('"root_ref":"ui-console"'));
+ assert.equal(records.at(-1).outcome.output.node_outputs.node_context.node_id,'node');
+ assert.equal(records.at(-1).outcome.output.node_mapping.node_context.node_id,'node');
+ await assert.rejects(make(true).observe({condition:'native mapping',readMappings:true,ready:()=>true}),/context changed/);
+ await assert.rejects(make(true).observe({condition:'native state',readProcesses:true,ready:()=>true}),/context changed/);
+ calls.length=0;
+ state.ui.elements=[{tid:'MF;cntMain;tlbMainToolbar',ref:'ui-toolbar'}];
+ await make().observe({condition:'closed console is opened from its toolbar',readProcesses:true,ready:()=>true});
+ assert.ok(calls[1].includes('"root_ref":"ui-toolbar"'));
+});
+
+test('Table dialogs require an explicit active port binding and never waive unrelated dialogs',async()=>{
+ const table={view_guid:'11111111-1111-1111-1111-111111111111',port_guid:'22222222-2222-2222-2222-222222222222',table_tid:'MF;TF-1;ViewsForm;BrowseView'};
+ for(const mode of ['valid','closing','undeclared','foreign_dialog','foreign_port']) {
+  const binding={document_id:'doc',workflow_ref:{workflow_id:'flow',prefix:'MF;TF-1',tab_tid:'MF;cntMain;cntWorkspace;Workspace;t.br;tb-1',navigation_path:[{tid:'MF;TF-1;cnrNaviMode;b.s_Scenario',label:'Scenario'}]},node:{document_id:'doc',workflow_id:'flow',node_id:'node'}};
+  const node={verified:true,document_id:'doc',workflow_id:'flow',node_id:'node',surface:'views',tid:'MF;TF-1;ViewsForm'};
+  const modal=table.table_tid+';ModalWindow_BrowseFormat';
+  const state={origin:'http://example.test',loginom_build:'7.4.2',workflow_ref:binding.workflow_ref,dom_epoch:{document:'dom',revision:1},prepared_node_context:node,
+   scan:{complete:true},wizard:{status:'absent'},ui:{elements:[{tid:modal,ref:'ui-modal'},{ref:'ui-input',allowed_actions:['press']}],masks:[],dialogs:[{identity:{anchor_tid:mode==='foreign_dialog'?'msgbox':modal}}],truncated:{dialogs:false,masks:false}}};
+  let mutations=0,reads=0;
+  const channel=createNodeProcedure({operation:{id:'table',deadline:10000,action:{action_key:'node.apply',revision:'1'}},preparedNodeContext:binding,
+   targetOrigin:state.origin,targetBuild:state.loginom_build,now:()=>1,wait:async()=>{},record:async r=>structuredClone(r),
+   wrapMutation:(code,r)=>({code,r}),execute:async code=>{
+    if(typeof code!=='string'){mutations++;return {operation_id:code.r.id,action_key:'ui.act',status:'SUCCEEDED',cleanup_complete:true,effect_possible:true};}
+    if(code.includes('function workspaceUiCapability')){
+     const output=structuredClone(state);
+     if(mode==='closing'){reads++;if(reads<=2)output.ui.masks=[{kind:'busy'}];else output.ui.dialogs=[];}
+     return {status:'SUCCEEDED',output};
+    }
+    return {verified:true,node_context:node,tables:[{...table,port_guid:mode==='foreign_port'?'foreign':table.port_guid,active:true}]};
+   }});
+  const observe=()=>channel.observe({condition:'bound Table format',tableDialog:mode==='undeclared'?undefined:{table,kind:'format'},ready:s=>mode==='closing'?s.ui.dialogs.length===0:true});
+  if(mode==='closing'){const s=await observe();assert.equal(s.ui.dialogs.length,0);assert.equal(reads,4);assert.equal(mutations,0);}
+  else if(mode!=='valid') {await assert.rejects(observe);assert.equal(mutations,0);}
+  else {await observe();await channel.act({verb:'press',ref:'ui-input',key:'Tab'});assert.equal(mutations,1);}
+ }
+});
+
+test('strict pre-gesture refresh preserves the requested Table page even for an offscreen result',async()=>{
+ const table={view_guid:'11111111-1111-1111-1111-111111111111',port_guid:'22222222-2222-2222-2222-222222222222',table_tid:'MF;TF-1;ViewsForm;BrowseView'};
+ const binding={document_id:'doc',workflow_ref:{workflow_id:'flow',prefix:'MF;TF-1',tab_tid:'MF;cntMain;cntWorkspace;Workspace;t.br;tb-1',navigation_path:[{tid:'MF;TF-1;cnrNaviMode;b.s_Scenario',label:'Scenario'}]},node:{document_id:'doc',workflow_id:'flow',node_id:'node'}};
+ const node={verified:true,document_id:'doc',workflow_id:'flow',node_id:'node',surface:'views'};
+ const request={table,page:{row_offset:0,row_limit:10,column_offset:64,column_limit:2}};
+ const state={origin:'http://example.test',loginom_build:'7.4.2',workflow_ref:binding.workflow_ref,dom_epoch:{document:'dom',revision:1},prepared_node_context:node,
+  scan:{complete:true},wizard:{status:'absent'},ui:{elements:[{ref:'ui-scroll',allowed_actions:['scroll_horizontal']}],masks:[],dialogs:[],truncated:{dialogs:false,masks:false}}};
+ let attempts=0,tableReads=0;
+ const channel=createNodeProcedure({operation:{id:'table-page-refresh',deadline:10000,action:{action_key:'node.apply',revision:'1'}},preparedNodeContext:binding,
+  targetOrigin:state.origin,targetBuild:state.loginom_build,now:()=>1,record:async r=>structuredClone(r),wrapMutation:(code,r)=>({r}),
+  execute:async code=>{
+   if(typeof code!=='string')return {operation_id:code.r.id,action_key:'ui.act',status:++attempts===1?'NOT_APPLIED':'SUCCEEDED',
+    phase:attempts===1?'preconditions':'completed',cleanup_complete:true,effect_possible:attempts>1,error:{code:'UI_EPOCH_CHANGED'},trace:[]};
+   if(code.includes('function workspaceUiCapability'))return {status:'SUCCEEDED',output:structuredClone(state)};
+   if(code.includes('function readNodeTable')){tableReads++;assert.ok(code.includes('"column_offset":64'));return {verified:false,reason:'cell_not_visible',horizontal_window:{left:0}};}
+   return {verified:true,node_context:node,tables:[{...table,active:true}]};
+  }});
+ const ready=s=>s.node_table?.reason==='cell_not_visible';
+ const observed=await channel.observe({condition:'offscreen Table page',tablePage:request,ready});
+ assert.deepEqual(observed.node_table_request,request);
+ await channel.perform({condition:'reveal same Table page',initialObservation:observed,ready,
+  resolve:()=>({verb:'scroll_horizontal',ref:'ui-scroll',delta_x:1000}),identity:()=>({table,page:request.page})});
+ assert.equal(attempts,2);assert.equal(tableReads,2);
+});
+
+test('prepared graph and navigation observations select separate bounded roots',async()=>{
+ const workflow_ref={workflow_id:'flow',prefix:'MF;TF-1',tab_tid:'MF;cntMain;cntWorkspace;Workspace;t.br;tb-1',navigation_path:[{tid:'flow',label:'Scenario'}]};
+ const binding={document_id:'doc',workflow_ref,node:{document_id:'doc',workflow_id:'flow',node_id:'node'}};
+ const state={origin:'http://example.test',loginom_build:'7.4.2',workflow_ref,dom_epoch:{document:'dom',revision:1},
+  prepared_node_context:{...binding.node,verified:true,surface:'graph',tid:'MF;TF-1;Graph;Import'},scan:{complete:true},wizard:{status:'absent'},
+  ui:{elements:[{tid:'MF;TF-1;ModelForm;cmpDiagram',ref:'ui-graph'},{tid:'MF;TF-1;NavigationBar;NavigationPanel',ref:'ui-navigation'}],
+   masks:[],dialogs:[],truncated:{dialogs:false,masks:false}}};
+ const roots=[];
+ const channel=createNodeProcedure({operation:{id:'roots',deadline:10000,action:{action_key:'node.apply',revision:'1'}},preparedNodeContext:binding,
+  targetOrigin:state.origin,targetBuild:state.loginom_build,now:()=>1,wait:async()=>{},record:async e=>structuredClone(e),wrapMutation:()=>{throw Error('Unexpected mutation');},
+  execute:async code=>{if(!code.includes('"discover_roots":true'))roots.push(/"root_ref":"([^"]+)"/.exec(code)?.[1]);return {status:'SUCCEEDED',output:structuredClone(state)};}});
+ await channel.observe({condition:'graph',ready:()=>true});
+ const navigation=await channel.observe({condition:'navigation',readNavigation:true,ready:()=>true});
+ assert.deepEqual(roots,['ui-graph','ui-navigation']);assert.equal(navigation.node_navigation_read,true);
+ state.ui.elements.pop();await assert.rejects(channel.observe({condition:'missing navigation',readNavigation:true,ready:()=>true}),/navigation region unavailable/);
+});
+
+test('only the bound native output editor can pass the node procedure dialog guard',async()=>{
+ for(const mode of ['bound','unbound','foreign','extra']) {
+  const state={origin:'http://example.test',loginom_build:'7.4.2',workflow_ref:{prefix:'MF;TF-1',tab_tid:'tab'},dom_epoch:{document:'doc'},scan:{complete:true},
+   wizard:{status:'observed',stage:'output_mapping',column_parameters:{status:'observed',portal_bound:mode!=='unbound',root_tid:'EditColumnDefForm',root_ref:'editor',selected_column:{status:'observed'}}},
+   ui:{elements:[],masks:[],dialogs:[{ref:mode==='foreign'?'other':'editor',identity:{anchor_tid:'EditColumnDefForm'}}],truncated:{dialogs:false,masks:false}}};
+  if(mode==='extra')state.ui.dialogs.push({ref:'question',identity:{anchor_tid:'msgbox'}});
+  const channel=createNodeProcedure({operation:{id:'editor',action:{action_key:'node.apply',revision:'1'},deadline:10000,checkpoint:{document_id:'doc',workflow_ref:state.workflow_ref}},
+   targetOrigin:state.origin,targetBuild:state.loginom_build,now:()=>1,wait:async()=>{},record:async e=>structuredClone(e),execute:async()=>({status:'SUCCEEDED',output:structuredClone(state)})});
+  const read=()=>channel.observe({condition:'bound column editor',ready:()=>true});
+  if(mode==='bound')assert.equal((await read()).wizard.column_parameters.root_ref,'editor');else await assert.rejects(read(),/mask or dialog/);
+ }
+});
+
+test('output port opening uses the parent journal and receipt wrapper before any effect',async()=>{
+ for(const mode of ['success','journal','transport','foreign','owner','completion','budget']) {
+  const workflow_ref={workflow_id:'flow',prefix:'MF;TF-1',tab_tid:'MF;cntMain;cntWorkspace;Workspace;t.br;tb-1',navigation_path:[{tid:'flow',label:'Scenario'}]};
+  const binding={document_id:'doc',workflow_ref,node:{document_id:'doc',workflow_id:'flow',node_id:'node'}};
+  const state={origin:'http://example.test',loginom_build:'7.4.2',workflow_ref,dom_epoch:{document:'dom',revision:1},
+   prepared_node_context:{...binding.node,verified:true,surface:'graph',locked:false,tid:'MF;TF-1;Graph;Import'},scan:{complete:true},wizard:{status:'absent'},
+   ui:{elements:[{tid:'MF;TF-1;ModelForm;cmpDiagram',ref:'graph'}],masks:[],dialogs:[],truncated:{dialogs:false,masks:false}}};
+  const entries=[],order=[],op={id:'parent',deadline:10000,action:{action_key:'node.apply',revision:'1'}};
+  const channel=createNodeProcedure({operation:op,preparedNodeContext:binding,targetOrigin:state.origin,targetBuild:state.loginom_build,
+   now:()=>1,wait:async()=>{},maxSteps:mode==='budget'?1:5,
+   record:async e=>{order.push(e.phase);entries.push(e);if(mode==='journal'&&e.phase==='node_step_prepared')throw Error('disk');if(mode==='completion'&&e.phase==='node_step_completed')return {};return structuredClone(e);},
+   wrapMutation:(code,r)=>{order.push('wrapped');return {code,r};},execute:async code=>{
+    if(typeof code==='string')return {status:'SUCCEEDED',output:structuredClone(state)};
+    order.push('effect');if(mode==='transport')throw Error('transport');
+    return {status:'SUCCEEDED',operation_id:mode==='foreign'?'other':code.r.id,action_key:code.r.action_key,effect_possible:true,cleanup_complete:true,
+     output:{verified:true,port:0,opening_operation_id:code.r.id,...binding.node,node_id:mode==='owner'?'other':'node'}};
+   }});
+  if(mode==='success'){
+   assert.equal((await channel.openOutputPort(0)).status,'SUCCEEDED');
+   assert.ok(order.indexOf('node_step_prepared')<order.indexOf('wrapped'));assert.ok(order.indexOf('wrapped')<order.indexOf('effect'));
+   assert.equal(entries.find(e=>e.phase==='node_step_prepared').action.verb,'open_output_port');assert.equal(op.nodeEffectPossible,true);
+   await assert.rejects(channel.act({verb:'click',ref:'graph'}),/fresh internal observation/);
+  }else {await assert.rejects(channel.openOutputPort(0));
+   if(['journal','budget'].includes(mode))assert.ok(!order.includes('effect'));
+   if(['foreign','transport'].includes(mode)){assert.equal(op.transportUncertain,true);assert.equal(op.cleanupConfirmed,false);}
+  }
+ }
 });

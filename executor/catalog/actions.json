@@ -877,6 +877,285 @@
       "cleanup": [
         "release held input; do not discard a partial wizard as automatic rollback"
       ]
+    },
+    {
+      "action_key": "package.save_checkpoint",
+      "revision": "1",
+      "status": "candidate",
+      "capability": "package.save_checkpoint.v1",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "path": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 1000,
+            "pattern": "^[^\\u0000\\r\\n]+$"
+          },
+          "conflict_policy": {
+            "type": "string",
+            "enum": [
+              "fail",
+              "replace"
+            ]
+          }
+        },
+        "required": [
+          "path",
+          "conflict_policy"
+        ],
+        "additionalProperties": false
+      },
+      "output_schema": {
+        "type": "object",
+        "properties": {
+          "package_ref": {
+            "type": "object",
+            "properties": {
+              "kind": {
+                "type": "string",
+                "enum": [
+                  "package"
+                ]
+              },
+              "path": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 1000
+              },
+              "active_identity": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 1000,
+                "description": "Exact normalized package storage path read from the active package cache of the pinned Loginom UI build"
+              }
+            },
+            "required": [
+              "kind",
+              "path",
+              "active_identity"
+            ],
+            "additionalProperties": false
+          },
+          "reopened": {
+            "type": "boolean",
+            "enum": [
+              false
+            ]
+          },
+          "workflow_preserved": {
+            "type": "boolean",
+            "enum": [
+              true
+            ]
+          },
+          "save_completed": {
+            "type": "boolean",
+            "enum": [
+              true
+            ]
+          },
+          "persisted_content_verified": {
+            "type": "boolean",
+            "enum": [
+              false
+            ]
+          },
+          "workflow_continuations": {
+            "type": "array",
+            "maxItems": 32,
+            "items": {
+              "type": "object",
+              "properties": {
+                "document_id": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 160
+                },
+                "workflow_ref": {
+                  "type": "object",
+                  "properties": {
+                    "tab_tid": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 2048
+                    },
+                    "prefix": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 256
+                    },
+                    "workflow_id": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 160
+                    },
+                    "navigation_path": {
+                      "type": "array",
+                      "minItems": 3,
+                      "maxItems": 32,
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "tid": {
+                            "type": "string",
+                            "minLength": 1,
+                            "maxLength": 2048
+                          },
+                          "label": {
+                            "type": "string",
+                            "maxLength": 240
+                          }
+                        },
+                        "required": [
+                          "tid",
+                          "label"
+                        ],
+                        "additionalProperties": false
+                      }
+                    }
+                  },
+                  "required": [
+                    "tab_tid",
+                    "prefix",
+                    "workflow_id",
+                    "navigation_path"
+                  ],
+                  "additionalProperties": false
+                },
+                "previous_workflow_ref": {
+                  "type": "object",
+                  "properties": {
+                    "tab_tid": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 2048
+                    },
+                    "prefix": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 256
+                    },
+                    "workflow_id": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 160
+                    },
+                    "navigation_path": {
+                      "type": "array",
+                      "minItems": 3,
+                      "maxItems": 32,
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "tid": {
+                            "type": "string",
+                            "minLength": 1,
+                            "maxLength": 2048
+                          },
+                          "label": {
+                            "type": "string",
+                            "maxLength": 240
+                          }
+                        },
+                        "required": [
+                          "tid",
+                          "label"
+                        ],
+                        "additionalProperties": false
+                      }
+                    }
+                  },
+                  "required": [
+                    "tab_tid",
+                    "prefix",
+                    "workflow_id",
+                    "navigation_path"
+                  ],
+                  "additionalProperties": false
+                }
+              },
+              "required": [
+                "document_id",
+                "workflow_ref",
+                "previous_workflow_ref"
+              ],
+              "additionalProperties": false
+            }
+          }
+        },
+        "required": [
+          "package_ref",
+          "reopened",
+          "workflow_preserved",
+          "save_completed",
+          "persisted_content_verified"
+        ],
+        "additionalProperties": false
+      },
+      "selector_symbols": [
+        "loginom.ready_avatar",
+        "workspace.active_tab",
+        "workflow.graph",
+        "packages.menu",
+        "packages.save_as",
+        "file_dialog.file_name",
+        "file_dialog.confirm",
+        "message.text",
+        "message.error",
+        "message.yes",
+        "message.no"
+      ],
+      "evidence": [
+        {
+          "path": "bg/helpers/packages.ts",
+          "line_start": 215,
+          "line_end": 342,
+          "commit": "2cad5602158fd2e4836d821d644a2b8d92f571a2",
+          "sha256": "203d7002abdfc8c88bb59bc500a21ff3003f5dc537b500c2f9802afba21d4a8f",
+          "role": "helper"
+        },
+        {
+          "path": "bg/helpers/filedialog.ts",
+          "line_start": 42,
+          "line_end": 58,
+          "commit": "2cad5602158fd2e4836d821d644a2b8d92f571a2",
+          "sha256": "a6f7aa54eb48a3d1e330820c5322e03d7d139a172f82f344253b534e48897696",
+          "role": "helper"
+        }
+      ],
+      "preconditions": [
+        "active package and Packages menu resolve",
+        "path is normalized below an allowed Loginom storage root",
+        "conflict policy is explicit"
+      ],
+      "postconditions": [
+        "the awaited native Save As flow completed without an error",
+        "exact normalized destination path is observed in the same active workflow",
+        "the same graph remains open; no package close or reopen",
+        "persisted content requires separate final reopen acceptance"
+      ],
+      "effect": {
+        "kind": "persist",
+        "resource": "package",
+        "allowed_roots": [
+          "/user/data/packages"
+        ]
+      },
+      "idempotency": {
+        "policy": "reconcile_before_retry",
+        "reconcile": "completed browser receipt only; never repeat an unknown save"
+      },
+      "timeout_ms": 180000,
+      "retry_budget": 0,
+      "required_capabilities": [
+        "package.save_checkpoint.v1"
+      ],
+      "min_executor_revision": "1.0.0",
+      "cleanup": [
+        "close transient menu and dialog on a conclusive conflict",
+        "preserve the active workflow after success"
+      ]
     }
   ]
 }

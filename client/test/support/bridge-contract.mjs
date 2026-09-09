@@ -69,6 +69,9 @@ test('MCP application refusals remain typed normal content and the same connecti
     assert.ok(listed.tools.some(tool => tool.name === 'dock_operation_recover'));
     assert.ok(listed.tools.some(tool => tool.name === 'dock_artifact_upload'));
     assert.ok(listed.tools.some(tool => tool.name === 'dock_artifact_verify'));
+    for(const name of ['dock_node_apply','dock_node_resume','dock_node_status','dock_node_wait','dock_node_cancel','dock_node_stop',
+      'dock_artifact_deliver','dock_artifact_delivery_status','dock_artifact_delivery_resume'])
+      assert.ok(listed.tools.some(tool=>tool.name===name),name);
     const rejectedVerify=await client.callTool({name:'dock_artifact_verify',arguments:{operation_id:'u',verification_id:'v',
       observation_id:'o',file_ref:'r',download_path:'/private/replaced'}});
     assert.equal(JSON.parse(rejectedVerify.content[0].text).error.code,'REQUEST_REJECTED');
@@ -79,7 +82,7 @@ test('MCP application refusals remain typed normal content and the same connecti
     assert.equal(browserCalls,0);
     const available = await client.callTool({ name: 'dock_action_describe', arguments: {} });
     assert.notEqual(available.isError, true);
-    assert.deepEqual(JSON.parse(available.content[0].text).available_actions, ['node.add', 'link.create', 'package.save_as', 'node.configure_text_import']);
+    assert.deepEqual(JSON.parse(available.content[0].text).available_actions, ['node.add', 'link.create', 'package.save_as', 'node.configure_text_import', 'package.save_checkpoint']);
     assert.equal(browserCalls, 0);
 
     const bootstrap = await client.callTool({ name: 'dock_workspace_observe', arguments: { scope: 'bootstrap' } });
@@ -105,9 +108,22 @@ test('MCP application refusals remain typed normal content and the same connecti
     assert.equal(metadata.prepared, true);
     assert.deepEqual(metadata.input_artifacts,[admitted]);
     assert.equal(JSON.stringify(metadata.input_artifacts).includes(sourcePath),false);
-    assert.deepEqual(metadata.executor.available_actions, ['node.add', 'link.create', 'package.save_as', 'node.configure_text_import']);
+    assert.deepEqual(metadata.executor.available_actions, ['node.add', 'link.create', 'package.save_as', 'node.configure_text_import', 'package.save_checkpoint']);
     assert.ok(prepared.content.some(block => block.type === 'text' && block.text.includes('dock_ui_action') && block.text.includes('supersede')));
     const beforeInvalid = browserCalls;
+    assert.ok(metadata.executor.candidate_operation_tools.includes('dock_node_apply'));
+    assert.ok(metadata.executor.candidate_operation_tools.includes('dock_artifact_deliver'));
+    const cards=await client.callTool({name:'dock_action_describe',arguments:{node_types:['imports.text','transform.calculator']}});
+    const nodeCards=JSON.parse(cards.content[0].text).node_types;
+    assert.equal(nodeCards[0].candidate_node_apply_available,true);
+    assert.equal(nodeCards[0].full_node_apply_available,false);
+    assert.equal(nodeCards[1].candidate_node_apply_available,false);
+    for(const [name,args] of [['dock_node_apply',{}],['dock_node_wait',{operation_id:'missing',timeout_ms:0}],
+      ['dock_artifact_deliver',{operation_id:'test',artifact_id:admitted.artifact_id,upload_grant_id:'missing',budget_ms:1000}]]) {
+      const response=await client.callTool({name,arguments:args});
+      assert.equal(JSON.parse(response.content[0].text).request_rejected,true);
+    }
+    assert.equal(browserCalls,beforeInvalid);
     for (const key of ['canvas.add_node', 'node.rename', 'workflow.create']) {
       const response = await client.callTool({ name: 'dock_action_run', arguments: { action_key: key, parameters: {} } });
       assert.notEqual(response.isError, true);
@@ -119,7 +135,7 @@ test('MCP application refusals remain typed normal content and the same connecti
       assert.equal(response.content.length, 2);
       assert.equal(response.content[1].type, 'text');
       assert.equal(Object.hasOwn(outcome, 'knowledge_context'), false);
-      assert.deepEqual(outcome.output.available_actions, ['node.add', 'link.create', 'package.save_as', 'node.configure_text_import']);
+      assert.deepEqual(outcome.output.available_actions, ['node.add', 'link.create', 'package.save_as', 'node.configure_text_import', 'package.save_checkpoint']);
     }
     assert.equal(browserCalls, beforeInvalid);
     const succeeded = await client.callTool({ name: 'dock_action_run', arguments: { action_key: 'node.add', parameters: nodeParameters, operation_id: 'after-three-refusals' } });

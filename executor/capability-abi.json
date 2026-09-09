@@ -47,6 +47,16 @@
       "action_key": "node.configure_text_import",
       "effect_kind": "configure",
       "effect_resource": "workflow.node"
+    },
+    "package.save_checkpoint.v1": {
+      "mutates": [
+        "package.storage",
+        "workspace.active_package"
+      ],
+      "reconciliation": "completed browser receipt; no automatic retry or close/reopen",
+      "action_key": "package.save_checkpoint",
+      "effect_kind": "persist",
+      "effect_resource": "package"
     }
   },
   "effect_contract_version": 1,
@@ -92,6 +102,12 @@
       "postcondition": "destination_bytes_digest_and_size",
       "reconciliation": "partial_destination_and_transfer_receipt",
       "ownership": "exact_artifact_destination"
+    },
+    "persist": {
+      "precondition": "owned_package_path_and_conflict_policy",
+      "postcondition": "awaited_save_flow_same_path_and_open_workflow",
+      "reconciliation": "completed_save_receipt_without_retry",
+      "ownership": "exact_package_destination"
     }
   }
 }

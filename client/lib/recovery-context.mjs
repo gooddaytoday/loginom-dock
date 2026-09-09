@@ -8,6 +8,7 @@ const roots = {
 const topics = {
   'node.add': 'Loginom узел сценария переименование имя узла',
   'link.create': 'Loginom связь порт добавление входного порта узла',
+  'package.save_checkpoint': 'Loginom промежуточное сохранение пакета без закрытия файловый диалог',
   'package.save_as': 'Loginom сохранение пакета файловый диалог',
   'ui.act': 'Loginom сценарий узел свойства переименование',
 };

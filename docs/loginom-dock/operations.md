@@ -1,3 +1,23 @@
+## 8 сентября 2026 — staged-каталог полного node.apply
+
+На VPS собран и staged/read-back `2026.09.08-node-apply.1-candidate`; activated=false.
+Release: `/opt/loginom-dock/releases/20260908-catalog-node-apply1-5b48f9d8/`.
+Manifest URI:
+`viking://resources/loginom-dock/catalogs/executor-preview/releases/2026.09.08-node-apply.1-candidate/manifest.json`,
+SHA256 `936ef73d933e85bfd8429b8b0f2b515c543ca415a2b22ba57e108232c54ddf44`.
+`package.save_as` и `package.save_checkpoint` revision2, allowed_roots `/user/dock-p3`;
+compatibility loginom-7.4.2-macos-chromium-ru; stale_actions=[].
+
+Сборка выполнена в существующем node:24.19.0-bookworm-slim без сети.
+Source archive SHA `1704b9de16b923c31070aa283847825313852c330caee47873f583f714aec532`;
+252 отобранных файла, base commit b203ad1bfd9abed9352278c520ac2373ff056588,
+**build_inputs_match_commit=false**: это зафиксированный dirty-worktree snapshot,
+а не объявление коммита с этими изменениями. source.tar.gz.manifest.json сохранён
+рядом с архивом на VPS. Stage report: stage-report.json в том же release.
+Настоящий bridge подтвердил новый каталог и обе persistence actions; браузерные
+действия/модель в precheck не выполнялись. Production current.json и контейнеры
+не переключались. Приёмка Hermes полного Подплана03 пока не выполнена.
+
 ## 7 сентября 2026 — staged-каталог пилота импорта
 
 На VPS собран кандидат `2026.09.07-node-import.1-candidate` из явно отобранных

@@ -92,6 +92,26 @@
         "bg/sels/import/sImportTxt.ts",
         "bg/selectors.ts"
       ]
+    },
+    "package.save_checkpoint": {
+      "selectors": [
+        "loginom.ready_avatar",
+        "workspace.active_tab",
+        "workflow.graph",
+        "packages.menu",
+        "packages.save_as",
+        "file_dialog.file_name",
+        "file_dialog.confirm",
+        "message.text",
+        "message.error",
+        "message.yes",
+        "message.no"
+      ],
+      "files": [
+        "bg/helpers/packages.ts",
+        "bg/helpers/filedialog.ts",
+        "bg/selectors.ts"
+      ]
     }
   }
 }

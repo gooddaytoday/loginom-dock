@@ -325,3 +325,121 @@ test('native graph accepts decorative duplicate vertices but stops bounded scan 
     if(mode==='oversized'){assert.match(result.error.message,/scan element budget/);assert.ok(visits<=6001);}
   }
 });
+
+test('save waits for the closing menu and delayed Open command without repeating save or menu clicks',async()=>{
+ const page=linkPage(),click=page.click.bind(page),elements=page.elements.bind(page);let closingUntil=null,openAfter=null;const clicked=[];
+ page.click=async item=>{clicked.push(item.symbol);await click(item);
+  if(item.symbol==='packages.close'){page.menu=true;closingUntil=page.clock+250;}
+  if(item.symbol==='packages.menu'&&page.events.includes('package_closed'))openAfter=page.clock+250;
+ };
+ page.elements=()=>{
+  if(closingUntil!==null&&page.clock>=closingUntil){page.menu=false;closingUntil=null;}
+  const result=elements();return openAfter!==null&&page.clock<openAfter?result.filter(e=>e.symbol!=='packages.open'):result;
+ };
+ const result=await run(page,'package.save_as',{path:'/user/data/packages/slow-menu.lgp',conflict_policy:'fail'});
+ assert.equal(result.status,'SUCCEEDED',JSON.stringify(result.error));
+ assert.equal(clicked.filter(s=>s==='packages.menu').length,3);assert.equal(clicked.filter(s=>s==='packages.save_as').length,1);
+ assert.equal(clicked.filter(s=>s==='packages.open').length,1);assert.equal(clicked.filter(s=>s==='packages.close').length,1);
+ assert.ok(result.trace.some(e=>e.event==='package_open_command_ready'));
+});
+
+test('intermediate save preserves the exact open workflow and graph without close or reopen', async () => {
+  const page=linkPage(),before={prefix:page.prefix,tabTid:page.tabTid,nodes:structuredClone(page.nodes),edges:[...page.edges]};
+  const outcome=await run(page,'package.save_checkpoint',{path:'/user/data/packages/checkpoint.lgp',conflict_policy:'fail'});
+  assert.equal(outcome.status,'SUCCEEDED',JSON.stringify(outcome));
+  assert.deepEqual({prefix:page.prefix,tabTid:page.tabTid,nodes:page.nodes,edges:page.edges},before);
+  assert.equal(page.events.includes('package_closed'),false);assert.equal(page.events.includes('package_reopened'),false);
+  assert.equal(outcome.output.reopened,false);assert.equal(outcome.output.save_completed,true);
+  assert.equal(outcome.output.persisted_content_verified,false);
+  validateActionParameters(actions.get('package.save_checkpoint').output_schema,outcome.output);
+});
+
+test('intermediate save waits for completion of the native awaited Save As menu',async()=>{
+  const page=linkPage(),click=page.click.bind(page),wait=page.waitForTimeout.bind(page);let hiddenAt=null,saveClicks=0;
+  page.click=async item=>{await click(item);if(item.symbol==='packages.save_as'){page.menu=true;saveClicks++;}
+    if(item.symbol==='file_dialog.confirm')hiddenAt=page.clock+400;};
+  page.waitForTimeout=async ms=>{await wait(ms);if(hiddenAt!==null&&page.clock>=hiddenAt)page.menu=false;};
+  const outcome=await run(page,'package.save_checkpoint',{path:'/user/data/packages/delayed.lgp',conflict_policy:'fail'});
+  assert.equal(outcome.status,'SUCCEEDED',JSON.stringify(outcome));assert.equal(saveClicks,1);
+  assert.ok(page.clock>=hiddenAt);assert.equal(page.events.includes('package_closed'),false);
+});
+
+test('intermediate save refuses path or graph drift after a possible write',async()=>{
+  for(const drift of ['path','graph']){
+    const page=linkPage(),save=page.save.bind(page);page.save=()=>{save();if(drift==='path')page.packagePath='/other.lgp';else page.nodes.pop();};
+    const result=await run(page,'package.save_checkpoint',{path:'/user/data/packages/drift.lgp',conflict_policy:'fail'});
+    assert.equal(result.status,'AMBIGUOUS');assert.equal(result.effect_possible,true);
+    assert.equal(page.events.includes('package_closed'),false);
+  }
+});
+
+test('intermediate save handles an explicit conflict without closing the package',async()=>{
+  for(const policy of ['fail','replace']){
+    const page=linkPage(),path='/user/data/packages/existing.lgp';page.storage.set(path,{nodes:[],edges:[]});
+    const outcome=await run(page,'package.save_checkpoint',{path,conflict_policy:policy});
+    assert.equal(outcome.status,policy==='fail'?'NOT_APPLIED':'SUCCEEDED',JSON.stringify(outcome));
+    assert.equal(page.storage.get(path).nodes.length,policy==='fail'?0:page.nodes.length);
+    assert.equal(page.active,true);assert.equal(page.events.includes('package_closed'),false);
+  }
+});
+
+test('save never confirms replacement for a different path or another question',async()=>{
+ for(const text of ['"/other.lgp" уже существует. Вы хотите заменить его?','Файл существует. Удалить пакет?']){
+  const page=linkPage(),path='/user/data/packages/conflict.lgp';page.storage.set(path,{nodes:[],edges:[]});page.conflictText=text;
+  let confirmations=0;const click=page.click.bind(page);page.click=async item=>{if(item.symbol==='message.yes')confirmations++;return click(item);};
+  const outcome=await run(page,'package.save_checkpoint',{path,conflict_policy:'replace'});
+  assert.equal(outcome.status,'AMBIGUOUS');assert.equal(confirmations,0);assert.deepEqual(page.storage.get(path),{nodes:[],edges:[]});
+ }
+});
+
+test('save conflict cleanup is not complete while its native dialog remains open',async()=>{
+ const page=linkPage(),path='/user/data/packages/conflict.lgp';page.storage.set(path,{nodes:[],edges:[]});
+ page.keyboard.press=async()=>{};
+ const outcome=await run(page,'package.save_checkpoint',{path,conflict_policy:'fail'});
+ assert.equal(outcome.status,'AMBIGUOUS');assert.equal(outcome.cleanup_complete,false);assert.equal(outcome.error.code,'CLEANUP_FAILED');
+ assert.deepEqual(page.storage.get(path),{nodes:[],edges:[]});
+});
+
+async function continuationPage() {
+ const page=linkPage();await page.execute('async page=>true');
+ class WorkFlowTreeNode{};page.app.WorkFlowTreeNode=WorkFlowTreeNode;
+ const pkg=new page.app.PackageTreeNode(),flow=new WorkFlowTreeNode();flow.ParentNode=pkg;
+ const tab={classList:{contains:name=>name==='x-tab-active'}};
+ const card={Controller:{FController:page.model,Node:{data:{node:flow}}}};
+ page.app.Application.FInstance.FMainForm.Items.Workspace.getActiveTab=()=>card;
+ let parentActive=false;
+ const crumbs=()=>{
+  const labels=['Server','Packages',page.packagePath?'Saved':'Draft','Module','Workflow'];
+  return labels.slice(0,parentActive?4:5).map((label,i)=>page.element(page.prefix+';cnrNaviMode;b.s_'+labels.slice(0,i+1).join('>'),{text:label,textContent:label,kind:i===3?'save_nav_parent':'save_crumb'}));
+ };
+ const elements=page.elements.bind(page),click=page.click.bind(page);
+ page.elements=()=>[...elements(),...crumbs(),...(parentActive?[page.element(page.prefix+';ListViewForm;MapTreeForm;colNavigation_Server>Packages>Saved>Module>Workflow;TreeText',{text:'Workflow',textContent:'Workflow',kind:'save_tree'})]:[])];
+ page.click=async item=>{if(item.kind==='save_nav_parent'){parentActive=true;return;}return click(item);};
+ page.afterDoubleClick=async()=>{parentActive=false;page.editor=null;};
+ const document={querySelectorAll:selector=>{
+   if(selector.includes('cnrNaviMode'))return crumbs();
+   if(selector.includes('cmpDiagram'))return [page.model.FDiagram.FmxGraph.container];
+   if(selector.includes('tb-1'))return [tab];return [];
+ }};
+ page.context.document=document;
+ page.context.__loginomDockPreparationV1={document,id:'doc',receipts:new Map([['prepared',{phase:'verified',workflowId:'workflow',tab,packageNode:pkg,nodeTargetWorkflowNode:flow}]])};
+ return {page,flow,card};
+}
+
+test('saved continuation returns current navigation with the same native workflow and original binding',async()=>{
+ const {page}=await continuationPage();
+ const result=await run(page,'package.save_checkpoint',{path:'/user/data/packages/continued.lgp',conflict_policy:'fail'});
+ assert.equal(result.status,'SUCCEEDED',JSON.stringify(result));
+ validateActionParameters(actions.get('package.save_checkpoint').output_schema,result.output);
+ const [continuation]=result.output.workflow_continuations;assert.equal(continuation.document_id,'doc');
+ assert.equal(continuation.workflow_ref.workflow_id,'workflow');assert.equal(continuation.previous_workflow_ref.workflow_id,'workflow');
+ assert.equal(continuation.previous_workflow_ref.navigation_path[2].label,'Draft');assert.equal(continuation.workflow_ref.navigation_path[2].label,'Saved');
+ assert.equal(continuation.workflow_ref.tab_tid,continuation.previous_workflow_ref.tab_tid);
+});
+
+test('saved continuation refuses a different native package even at the same path',async()=>{
+ const {page,flow}=await continuationPage(),save=page.save.bind(page);
+ page.save=()=>{save();flow.ParentNode=new page.app.PackageTreeNode();};
+ const result=await run(page,'package.save_checkpoint',{path:'/user/data/packages/continued.lgp',conflict_policy:'fail'});
+ assert.equal(result.status,'AMBIGUOUS');assert.match(result.error.message,/native identity changed/);
+});

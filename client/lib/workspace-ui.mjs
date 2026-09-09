@@ -1,13 +1,16 @@
+import {readPreparedNodeContext, validatePreparedNodeContext} from './node-context.mjs';
+
 // The model receives opaque observed references, never executable selectors or
 // browser code. All browser-side inspection and gestures below are client-pinned.
 export const uiActionSchema = {
   type: 'object', additionalProperties: false, required: ['verb'],
   properties: {
-    verb: { type: 'string', enum: ['click', 'double_click', 'right_click', 'fill', 'press', 'drag', 'scroll', 'set_checked', 'replace_expression', 'set_wizard_field', 'wizard_step', 'select_wizard_option', 'apply_expression_parameters', 'cancel_expression_parameters', 'open_wizard', 'finish_wizard', 'apply_output_column', 'cancel_output_column', 'apply_reform_column', 'cancel_reform_column'] },
+    verb: { type: 'string', enum: ['click', 'double_click', 'right_click', 'fill', 'press', 'drag', 'scroll', 'scroll_horizontal', 'set_checked', 'replace_expression', 'set_wizard_field', 'wizard_step', 'select_wizard_option', 'apply_expression_parameters', 'cancel_expression_parameters', 'open_wizard', 'begin_wizard', 'confirm_wizard_deactivation', 'finish_wizard', 'execute_wizard', 'execute_graph_node', 'confirm_wizard_close', 'show_process_node', 'cancel_process', 'open_node_views', 'enter_table', 'apply_output_column', 'cancel_output_column', 'apply_reform_column', 'cancel_reform_column'] },
     expected_stage: { type: 'string', enum: ['text_import_file','text_import_format','input_mapping','output_mapping','calculator','grouping','field_parameters','done'],
       description: 'Required only for wizard_step: destination after the observed next/previous control, not the current stage. For delimited Text Import, next follows text_import_file → text_import_format → output_mapping → done; previous reverses this order. input_mapping means a separate INPUT PORT mapping wizard, never Text Import output columns. Other wizard families may have different paths; inspect their current UI and sources instead of guessing. Do not pass this field to open_wizard or finish_wizard.' },
     checked: { type: 'boolean' },
     delta_y: { type: 'integer', minimum: -1000, maximum: 1000 },
+    delta_x: { type: 'integer', minimum: -1000, maximum: 1000 },
     ref: { type: 'string', maxLength: 128 }, text: { type: 'string', maxLength: 2048 },
     key: { type: 'string', enum: ['Enter', 'Escape', 'Tab', 'Shift+Tab', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Home', 'End', 'PageUp', 'PageDown', 'Backspace', 'Delete', 'Space', 'F2'] },
     source_ref: { type: 'string', maxLength: 128 }, target_ref: { type: 'string', maxLength: 128 },
@@ -17,7 +20,7 @@ export const uiActionSchema = {
 export function validateUiAction(action, snapshot) {
   if (!action || typeof action !== 'object' || Array.isArray(action) || !uiActionSchema.properties.verb.enum.includes(action.verb)) throw new Error('Unsupported observed UI action');
   const fields = action.verb === 'wizard_step' ? ['verb','ref','expected_stage'] : action.verb === 'drag' ? ['verb', 'source_ref', 'target_ref']
-    : ['fill','replace_expression','set_wizard_field'].includes(action.verb) ? ['verb', 'ref', 'text'] : action.verb === 'press' ? ['verb', 'ref', 'key'] : action.verb === 'scroll' ? ['verb', 'ref', 'delta_y'] : action.verb === 'set_checked' ? ['verb','ref','checked'] : ['verb', 'ref'];
+    : ['fill','replace_expression','set_wizard_field'].includes(action.verb) ? ['verb', 'ref', 'text'] : action.verb === 'press' ? ['verb', 'ref', 'key'] : action.verb === 'scroll' ? ['verb', 'ref', 'delta_y'] : action.verb === 'scroll_horizontal' ? ['verb','ref','delta_x'] : action.verb === 'set_checked' ? ['verb','ref','checked'] : ['verb', 'ref'];
   if (Object.keys(action).some(key => !fields.includes(key)) || fields.some(key => !(key in action))) throw new Error('UI action fields do not match its verb');
   const refs = action.verb === 'drag' ? [action.source_ref, action.target_ref] : [action.ref];
   if (refs.some(ref => typeof ref !== 'string' || !/^ui-[a-zA-Z0-9-]{1,124}$/.test(ref))) throw new Error('UI action requires opaque observed references: copy the element.ref value beginning with ui- from the delivered observation; tid and identity.anchor_tid are not action refs');
@@ -28,6 +31,7 @@ export function validateUiAction(action, snapshot) {
   if(action.verb==='wizard_step' && !uiActionSchema.properties.expected_stage.enum.includes(action.expected_stage))throw new Error('wizard_step requires a recognized expected_stage');
   if (action.verb === 'press' && !uiActionSchema.properties.key.enum.includes(action.key)) throw new Error('Unsupported UI key; clipboard and navigation shortcuts are not allowed');
   if (action.verb === 'scroll' && (!Number.isInteger(action.delta_y) || !action.delta_y || Math.abs(action.delta_y)>1000)) throw new Error('Scroll requires a nonzero integer delta_y within -1000..1000');
+  if (action.verb === 'scroll_horizontal' && (!Number.isInteger(action.delta_x) || !action.delta_x || Math.abs(action.delta_x)>1000)) throw new Error('Horizontal scroll requires a nonzero integer delta_x within -1000..1000');
   if (action.verb === 'set_checked' && typeof action.checked !== 'boolean') throw new Error('set_checked requires a boolean checked value');
   if (snapshot) {
     if(action.verb==='wizard_step' && (snapshot.wizard?.status!=='observed' || snapshot.wizard.stage===action.expected_stage))throw new Error('wizard_step requires a different destination stage and an observed wizard');
@@ -42,10 +46,15 @@ export function validateUiAction(action, snapshot) {
   return action;
 }
 
-function workspaceUiCapability(page, task) {
+export function workspaceUiCapability(page, task, readNodeContext) {
   const started = Date.now(), deadline = started + 15000;
   const trace = [], handles = [];
   let postActionRoot;
+  let cancellationSurfaceReads=0;
+  let finishSurfaceReads=0;
+  let openingSurfaceReads=0;
+  let navigationSurfaceReads=0;
+  let graphLockReads=0;
   let phase = 'observing', effectPossible = false, mouseHeld = false, mouseButton = 'left';
   const record = (event, details = {}) => trace.push({ at_ms: Date.now() - started, event, ...details });
   const result = (status, output = {}, error = null) => ({ status, action_key: task.mode === 'observe' ? 'workspace.observe' : 'ui.act',
@@ -53,19 +62,36 @@ function workspaceUiCapability(page, task) {
   const fail = (code, message) => { const error = new Error(message); error.code = code; throw error; };
   const timeout = () => { const left = deadline - Date.now(); if (left <= 0) fail('UI_DEADLINE_EXCEEDED', 'Observed UI action deadline exceeded'); return left; };
   const same = (left, right) => JSON.stringify(left) === JSON.stringify(right);
+  const boundNode = async () => {
+    if (!task.prepared_node_context) return null;
+    let binding=await readNodeContext(page,task.prepared_node_context);
+    // Opening/finishing replaces the graph and wizard asynchronously. Observe
+    // that one completed gesture; never reissue it. Foreign package/workflow
+    // or GUID failures do not enter this wait.
+    for(let sample=0;binding?.surface_pending===true && effectPossible
+      && (['open_wizard','begin_wizard','confirm_wizard_deactivation','finish_wizard','execute_wizard','confirm_wizard_close','show_process_node','cancel_process','open_node_views','enter_table'].includes(task.action?.verb)
+        ||task.action?.verb==='click'&&task.snapshot?.node_navigation_read===true) && sample<80;sample++) {
+      record('node_surface_wait',{condition:'prepared_node_surface_ready',sample});
+      await page.waitForTimeout(Math.min(50,timeout()));
+      binding=await readNodeContext(page,task.prepared_node_context);
+    }
+    if(binding?.verified!==true)fail('PREPARED_NODE_CONTEXT_CHANGED','The prepared package, workflow or node changed: '+(binding?.reason??'surface_unavailable'));
+    return binding;
+  };
 
   // A WeakMap records DOM incarnations, without adding attributes or mutating
   // Loginom. Re-rendering an identical-looking control invalidates its old ref.
   // The state is document-bound; navigation invalidates every previous reference.
   const readUi = async (rediscover = false) => {
-    const observed = await page.evaluate(({rootRef,discoverRoots,storageName}) => {
+    const nodeContext=await boundNode();
+    const observed = await page.evaluate(({rootRef,discoverRoots,storageName,columnPage,mappingPage,tableFormatPage,cacheReadPredicates,definitionPrefix,preparedWorkflowPath,preparedNodeId,preparedOutputPort}) => {
     try {
     const scanStarted = Date.now(), maxElements = 6000, maxWork = 250000, maxMs = 500;
-    let work = 0;
+    let work = 0,scanStage='collect';
     const charge = () => {
       if (++work > maxWork || Date.now() - scanStarted > maxMs) {
         const error = new Error('Workspace scan budget exceeded; no complete observation or action references were issued');
-        error.code = 'UI_SCAN_LIMIT'; throw error;
+        error.code = 'UI_SCAN_LIMIT'; error.limit_kind=work>maxWork?'work':'time'; error.scan_stage=scanStage; throw error;
       }
     };
     const stateKey = Symbol.for('loginom-dock.workspace-ui.identity.v1');
@@ -133,10 +159,10 @@ function workspaceUiCapability(page, task) {
     const dom = [], seenElements = new Set();
     const include = element => {
       charge(); if (seenElements.has(element)) return;
-      if (dom.length >= maxElements) { const error=new Error('Selected region or global guards exceed the scan budget');error.code='UI_SCAN_LIMIT';throw error; }
+      if (dom.length >= maxElements) { const error=new Error('Selected region or global guards exceed the scan budget');error.code='UI_SCAN_LIMIT';error.limit_kind='elements';throw error; }
       seenElements.add(element);dom.push(element);
     };
-    const regionSelector='[data-tid="mnContextData"],[data-tid="ConsoleForm"],[data-tid$=";FileStorageForm;pnlFileStorage;tbl"],[data-tid$=";PreviewForm;DataSetForm"],[data-tid$=";ViewsForm;BrowseView"],[data-tid="MF;cntMain;tlbMainToolbar"],[data-tid="MF;cntMain;cntWorkspace;Workspace;t.br"],[role="dialog"],.x-window,.bg-dialog,[role="grid"],table,[role="form"],[data-tid$=";WizrdMCF"],[data-tid$=";boundlist"],[data-tid$=";MapTreeForm;tree"],[data-tid$=";cmpDiagram"],[data-tid$=";pnlWorkarea"],[data-tid$="NavigationBar;NavigationPanel"]';
+    const regionSelector='[data-tid="mnContextData"],[data-tid="ConsoleForm"],[data-tid$=";FileStorageForm;pnlFileStorage;tbl"],[data-tid$=";PreviewForm;DataSetForm"],[data-tid$=";ViewsForm;BrowseView"],[data-tid$=";ViewsForm"],[data-tid="MF;cntMain;tlbMainToolbar"],[data-tid="MF;cntMain;cntWorkspace;Workspace;t.br"],[role="dialog"],.x-window,.bg-dialog,[role="grid"],table,[role="form"],[data-tid$=";WizrdMCF"],[data-tid$=";boundlist"],[data-tid$=";MapTreeForm;tree"],[data-tid$=";cmpDiagram"],[data-tid$=";pnlWorkarea"],[data-tid$="NavigationBar;NavigationPanel"]';
     // E2E utils/selectors.Format: whitespace -> underscore, comma removed.
     // This finds candidates, not filesystem identity or absence. CSS hex escapes
     // keep arbitrary filename characters data rather than selector syntax.
@@ -157,10 +183,25 @@ function workspaceUiCapability(page, task) {
     const regionElements=discoverRoots ? [...new Set([...document.querySelectorAll(storageSelector ?? regionSelector),...indexedViews,...(storageSelector===null?processMenuRegions:[])])] : [];
     charge();
     if (discoverRoots) for (const element of regionElements) include(element);
-    const walker=discoverRoots ? null : document.createTreeWalker(requestedRoot ?? document.documentElement,1);
+    const omittedRegions=new Set();
+    const definitionFilter=definitionPrefix?{acceptNode:element=>{
+      charge();const tid=element.getAttribute('data-tid')??'',base=definitionPrefix+';WizrdMCF;';
+      if(new RegExp('^'+definitionPrefix+';ViewsForm;BrowseView(?:-[0-9]+)?;grdData$').test(tid)) {
+        omittedRegions.add('table_data_cells');return 2;
+      }
+      if(tid===base+'ImportTextFileParamsWizard;ColumnDefsTuning;grdData') {
+        omittedRegions.add('import_data_preview');return 2; // FILTER_REJECT: subtree is not configuration.
+      }
+      if(['ImportTextFilePreviewWizard','ImportTextFileParamsWizard','ColumnsMappingEngineOutputPortWizard','DoneWizard']
+        .some(name=>tid===base+name) && element.classList.contains('x-hidden-offsets')) {
+        omittedRegions.add('inactive_import_cards');return 2;
+      }
+      return 1;
+    }}:undefined;
+    const walker=discoverRoots ? null : document.createTreeWalker(requestedRoot ?? document.documentElement,1,definitionFilter);
     if (requestedRoot) include(requestedRoot);
     let next, traversed=0;while (walker && (next=walker.nextNode())) {
-      if (++traversed>maxElements) { const error=new Error('DOM traversal exceeds the scan budget');error.code='UI_SCAN_LIMIT';throw error; }
+      if (++traversed>maxElements) { const error=new Error('DOM traversal exceeds the scan budget');error.code='UI_SCAN_LIMIT';error.limit_kind='traversal';throw error; }
       include(next);
     }
     const detailElements=dom.length;
@@ -175,7 +216,7 @@ function workspaceUiCapability(page, task) {
     const wizardButtons=['btnPrev','btnNext','btnDone','btnExecute','btnClose','btnError'];
     // Breadcrumb labels are fixed global context even for a narrow file row;
     // including buttons without their labels loses the observed directory.
-    const wizardSelectors=['[data-tid$=";ModelForm;cmpDiagram"]','[data-tid$=";NavigationBar;NavigationPanel"]','[data-tid*=";cnrNaviMode;b.s_"]','[data-tid*=";cnrNaviMode;b.s"] .x-btn-inner-default-toolbar-small','[data-tid$=";WizrdMCF"]','[data-tid$=";WizrdMCF;cardWizardPanel;p.h;p.t"]',
+    const wizardSelectors=[...(definitionPrefix?['[data-tid='+JSON.stringify(definitionPrefix+';ModelForm;btnToggleActivateCurrent')+']']:[]),'[data-tid$=";WizrdMCF;ImportTextFilePreviewWizard;edtFileName"] .x-form-error-msg', '[data-tid$=";ModelForm;cmpDiagram"]','[data-tid$=";NavigationBar;NavigationPanel"]','[data-tid*=";cnrNaviMode;b.s_"]','[data-tid*=";cnrNaviMode;b.s"] .x-btn-inner-default-toolbar-small','[data-tid$=";WizrdMCF"]','[data-tid$=";WizrdMCF;cardWizardPanel;p.h;p.t"]',
       ...Object.values(wizardMarkers).flat().map(suffix=>'[data-tid$=";WizrdMCF'+suffix+'"]'),
       '[data-tid*=";WizrdMCF;CalcDataWizard;colExpressionName_"]','[data-tid*=";WizrdMCF;CalcDataWizard;colExpressionDisplayName_"]','[data-tid$=";WizrdMCF;CalcDataWizard;cmpExpression"]','[data-tid$=";WizrdMCF;CalcDataWizard;btnCalcMode"]','[data-tid$=";WizrdMCF;CalcDataWizard;btnReplaceField"]','span.bg-TBGCalcMode-cmExpression,span.bg-TBGCalcMode-cmJavaScript',
       ...['edtDelimiterChar','edtTextQualifier','edtValueNull','edtDecimalSeparator'].flatMap(name=>{const owner='[data-tid$=";WizrdMCF;ImportTextFileParamsWizard;'+name+';ValueControl"]';return [owner,owner+' input',owner+' textarea'];}),
@@ -183,8 +224,9 @@ function workspaceUiCapability(page, task) {
         const owner='[data-tid$=";WizrdMCF;ImportTextFilePreviewWizard;'+name+'"]';return [owner,owner+' input',owner+' textarea'];}),
       '[data-tid$=";WizrdMCF;ImportTextFilePreviewWizard;edtFirstLineAsTitle;ValueControl"]',
       '[data-tid$=";WizrdMCF;ImportTextFilePreviewWizard;edtFirstLineAsTitle;ValueControl;DisplayEl"]',
-      ...['grdTargetColumns;tbl','TargetFilter','rbTable','rbLinks','btnAutoSyncThroughColumns'].flatMap(name=>{
-        const owner='[data-tid$=";WizrdMCF;ColumnsMappingEngineOutputPortWizard;'+name+'"]';return [owner,owner+' input'];}),
+      ...['ColumnsMappingEngineOutputPortWizard','DerivedDataSourceOutputSocketWizard'].flatMap(form=>
+        ['grdTargetColumns;tbl','TargetFilter','rbTable','rbLinks','btnAutoSyncThroughColumns'].flatMap(name=>{
+          const owner='[data-tid$=";WizrdMCF;'+form+';'+name+'"]';return [owner,owner+' input'];})),
       '[data-tid*=";WizrdMCF;ColumnsMappingEngineOutputPortWizard;grdTargetColumns;tbl;celleditor"]',
       ...['edtDisplayName','cbxNodeTitleMode'].flatMap(name=>{const owner='[data-tid$=";WizrdMCF;DoneWizard;'+name+'"]';return [owner,owner+' input'];}),
       ...['ColumnsMappingEngineOutputPortWizard','DerivedDataSourceOutputSocketWizard','DerivedDataSourceMappingEngineOutputPortWizard','ReformColumnsWizard'].flatMap(form=>
@@ -192,12 +234,15 @@ function workspaceUiCapability(page, task) {
       '[data-tid$=";WizrdMCF;EditReformColumnDefForm"]','[data-tid="EditReformColumnDefForm"]',
       ...['edtName','edtDisplayName','cbxDataType','cbxDataKind','cbxUsageType','cntMain;cbxCachingMethod','cntMain;chbExcluded','cntMain;chbExcluded;DisplayEl'].flatMap(name=>{const owner='[data-tid="EditReformColumnDefForm;'+name+'"]';return [owner,owner+' input'];}),
       '[data-tid*=";WizrdMCF;ImportTextFileParamsWizard;ColumnDefsTuning;grdSettings;grd-1;normalHeaderCt;"]',
+      ...(definitionPrefix?['[data-tid='+JSON.stringify(definitionPrefix+';WizrdMCF;ImportTextFileParamsWizard;ColumnDefsTuning;grdData;grd-1;tbl')+']']:[]),
+      ...(definitionPrefix?['[data-tid^='+JSON.stringify(definitionPrefix+';ViewsForm;BrowseView')+'][data-tid$=";grdData;grd-1;tbl"]']:[]),
       ...['',';normalHeaderCt',';tbl'].map(suffix=>'[data-tid$=";WizrdMCF;ImportTextFileParamsWizard;ColumnDefsTuning;grdSettings;grd-1'+suffix+'"]'),
       '[data-tid*=";WizrdMCF;ImportTextFileParamsWizard;ColumnDefsTuning;grdSettings;grd-1;tbl;celleditor"][data-tid$=";cbx"]',
       '[data-tid*=";WizrdMCF;ImportTextFileParamsWizard;ColumnDefsTuning;grdSettings;grd-1;tbl;celleditor"][data-tid$=";cbx;trg_picker"]',
       ...['edtName','edtDisplayName','cbxDataType','cbxDataKind','cbxUsageType','cntMain;cbxCachingMethod'].flatMap(name=>{const owner='[data-tid$=";WizrdMCF;EditReformColumnDefForm;'+name+'"]';return [owner,owner+' input'];}),
       '[data-tid$=";WizrdMCF;EditReformColumnDefForm;cntMain;chbExcluded"]','[data-tid$=";WizrdMCF;EditReformColumnDefForm;cntMain;chbExcluded;DisplayEl"]',
-      '[data-tid$=";WizrdMCF;EditColumnDefForm"]',
+      '[data-tid$=";WizrdMCF;EditColumnDefForm"]','[data-tid="EditColumnDefForm"]',
+      ...['edtName','edtDisplayName','cbxDataType','cbxDataKind','cbxUsageType','btnApply','btnCancel'].flatMap(name=>{const owner='[data-tid="EditColumnDefForm;'+name+'"]';return [owner,owner+' input'];}),
       ...['edtName','edtDisplayName','cbxDataType','cbxDataKind','cbxUsageType'].flatMap(name=>{const owner='[data-tid$=";WizrdMCF;EditColumnDefForm;'+name+'"]';return [owner,owner+' input'];}),
       '[data-tid$=";WizrdMCF;ExprDataEditForm"]',
       ...['edtName','edtDisplayName','cbxDataType'].flatMap(name=>{const owner='[data-tid$=";WizrdMCF;ExprDataEditForm;'+name+'"]';return [owner,owner+' input'];}),
@@ -211,7 +256,7 @@ function workspaceUiCapability(page, task) {
       charge();for (const element of guards) include(element);
       // Ext renders Table modals in a portal outside the owning BrowseView.
       // Include exact view roots as global identity guards, never their trees.
-      const tableOwners=document.querySelectorAll('[data-tid$=";ViewsForm;BrowseView"],[data-tid*=";ViewsForm;BrowseView-"]');
+      const tableOwners=document.querySelectorAll('[data-tid$=";ViewsForm;BrowseView"],[data-tid$=";ViewsForm"],[data-tid*=";ViewsForm;BrowseView-"]');
       charge();for (const element of tableOwners) {
         charge();if(/^MF;TF(?:-\d+)?;ViewsForm;BrowseView(?:-[1-9][0-9]*)?$/.test(element.getAttribute('data-tid')??''))include(element);
       }
@@ -225,12 +270,26 @@ function workspaceUiCapability(page, task) {
       if(panels.length===1) {include(panels[0]);const descendants=panels[0].querySelectorAll('*');charge();
         for(const element of descendants)include(element);}
     }
+    scanStage='metadata';
     const select = selector => dom.filter(element => { charge(); return element.matches(selector); });
     const all = select('[data-tid]'), tids = new Map();
     for (const element of all) { const tid = element.getAttribute('data-tid'); const list = tids.get(tid) ?? []; list.push(element); tids.set(tid, list); }
     const getTid = element => element?.getAttribute?.('data-tid') ?? null;
     const boxOf = element => { const b = element.getBoundingClientRect(); return { x: b.x, y: b.y, width: b.width, height: b.height }; };
-    const visible = element => {
+    // One evaluate is synchronous: no gesture or event-loop yield occurs in
+    // this scan. Reusing native visibility/sensitivity checks within this read
+    // avoids repeatedly walking the same ancestors for every definition cell.
+    // Nothing is retained across observations or the pre-gesture epoch check.
+    const memoRead=fn=>{
+      const values=new WeakMap();
+      return element=>{
+        if(!cacheReadPredicates || !element || typeof element!=='object')return fn(element);
+        charge();
+        if(!values.has(element))values.set(element,fn(element));
+        return values.get(element);
+      };
+    };
+    const visible = memoRead(element => {
       if (!element?.isConnected) return false;
       const box = boxOf(element);
       const graphLink = /^MF;TF(?:-\d+)?;Graph;[^;|]+\|[^;|]+\|[^;|]+\|[^;|]+$/.test(getTid(element) ?? '');
@@ -241,16 +300,16 @@ function workspaceUiCapability(page, task) {
         if (style.display === 'none' || style.visibility === 'hidden' || style.visibility === 'collapse' || style.opacity === '0' || parent.hasAttribute('hidden')) return false;
       }
       return true;
-    };
+    });
     const sensitivePattern = /password|passwd|\bpwd\b|secret|token|credential|authorization|api[_ -]?key|private[_ -]?key|one[_ -]?time|\botp\b|парол|секрет|токен/i;
-    const sensitive = element => {
+    const sensitive = memoRead(element => {
       for (let parent = element; parent && parent !== document.body; parent = parent.parentElement) {
         charge();
         if (parent.matches('input[type="password"],input[type="hidden"],input[type="file"]')) return true;
         if (sensitivePattern.test(['name', 'id', 'data-tid', 'autocomplete', 'aria-label'].map(name => parent.getAttribute(name) ?? '').join(' ')) || (getTid(parent) ?? '').startsWith('LoginForm;')) return true;
       }
       return false;
-    };
+    });
     const short = (value, limit = 240) => String(value ?? '').replace(/\s+/g, ' ').trim().slice(0, limit);
     const textOf = (element, fixedContext=false, separator=' ') => {
       if (sensitive(element)) return '[REDACTED]';
@@ -348,7 +407,23 @@ function workspaceUiCapability(page, task) {
         controls:Object.fromEntries(wizardButtons.map(name=>{const found=matching(';'+name);return [name,
           {status:found.length===1?'observed':found.length?'ambiguous':'unobserved',enabled:found.length===1?enabled(found[0]):null}];}))};
     }
+    // Source validation is data from this exact visible wizard field. Do not
+    // infer it from global alerts, tooltip HTML or a hidden wizard card.
+    if(wizard.status==='observed' && wizard.stage==='text_import_file') {
+      const form=wizardForms[0];
+      const owners=(tids.get(wizard.root_tid+';ImportTextFilePreviewWizard;edtFileName')??[])
+        .filter(e=>form.contains(e) && visible(e) && !sensitive(e));
+      const errors=owners.length===1?select('.x-form-error-msg').filter(e=>owners[0].contains(e) && visible(e) && !sensitive(e)):[];
+      // Ext stores the icon message in a non-layout ul/li subtree. Read text
+      // only from the verified visible error icon, never interpret its HTML.
+      const text=errors.length===1?short((errors[0].textContent??'').slice(0,2000)):'';
+      wizard.source_validation=errors.length===1 && text && wizard.controls.btnError?.enabled===true
+        ?{status:'observed',root_ref:wizard.root_ref,field:'file_name',field_ref:refOf(owners[0]),message:text}
+        :{status:errors.length>1?'ambiguous':'unobserved'};
+    }
     let navigationContext={status:'unobserved'};
+    let workflowNavigation={status:'unobserved'};
+    let pendingWizardOwner={status:'unobserved'};
     let nodeContext={status:'unobserved',opening_verified:false};
     if(workflow) {
       // E2E navigation.GetCurrentTabPath: inspect the current tab's visible
@@ -371,6 +446,15 @@ function workspaceUiCapability(page, task) {
           const unique=new Set(items.map(i=>i.tid)).size===items.length;
           const chain=items.every((item,index)=>item.tid.length<=2048 && item.label.length<240
             && (!index || item.tid.startsWith(items[index-1].tid+'>')));
+          if(unique&&chain&&Array.isArray(preparedWorkflowPath)&&preparedWorkflowPath.length>0
+            &&items.length>=preparedWorkflowPath.length&&items.reduce((n,i)=>n+i.tid.length+i.label.length,0)<=4096
+            &&preparedWorkflowPath.every((c,i)=>c.tid===items[i].tid&&c.label===items[i].label)
+            &&items[preparedWorkflowPath.length-1].workflow_icon) {
+            const target=items[preparedWorkflowPath.length-1];
+            workflowNavigation={status:'observed',control_ref:target.ref,control_tid:target.tid,
+              path:items.slice(0,preparedWorkflowPath.length).map(({tid,label})=>({tid,label})),
+              current_path:items.map(({tid,label})=>({tid,label}))};
+          }
           const last=items.at(-1),node=items.at(-2);
           if(items.reduce((size,item)=>size+item.tid.length+item.label.length,0)>4096)ownerContext.status='bounded';
           else if(!unique || !chain)ownerContext.status='ambiguous';
@@ -392,6 +476,7 @@ function workspaceUiCapability(page, task) {
         }
       }
       if(wizard.status==='observed')wizard.owner_context=ownerContext;
+      else if(wizard.status==='absent'&&ownerContext.status==='observed')pendingWizardOwner=ownerContext;
       if(wizard.status==='observed' && wizard.stage==='output_mapping')wizard.port_context=portContext;
     }
     // Node overview is distinct from workflow and port/wizard navigation.
@@ -661,6 +746,7 @@ function workspaceUiCapability(page, task) {
           definition_coverage:{status:'complete_rendered_options',count:14},count_includes_null_records:true});
       }
     }
+    scanStage='output_definitions';
     if(wizard.status==='observed' && ['output_mapping','field_parameters'].includes(wizard.stage)) {
       const reform=wizard.stage==='field_parameters',columnsKey=reform?'reform_columns':'output_columns';
       const mappingForms=['ColumnsMappingEngineOutputPortWizard','DerivedDataSourceOutputSocketWizard','DerivedDataSourceMappingEngineOutputPortWizard'].filter(name=>
@@ -669,8 +755,9 @@ function workspaceUiCapability(page, task) {
       const cells=all.filter(e=>{charge();return (getTid(e)??'').startsWith(base+'colName_') && wizardForms[0].contains(e)
         && visible(e) && !sensitive(e) && !e.closest('.x-grid-row-summary');});
       if(cells.length) {
-        wizard[columnsKey]={status:cells.length>64?'bounded':'rendered_rows',complete:false,settings_applied:false,fields:[]};
-        if(cells.length<=64) {
+        const rowLimit=mappingPage && !reform?1000:64;
+        wizard[columnsKey]={status:cells.length>rowLimit?'bounded':'rendered_rows',complete:false,settings_applied:false,fields:[]};
+        if(cells.length<=rowLimit) {
           const keys=cells.map(e=>getTid(e).slice((base+'colName_').length));
           wizard[columnsKey].fields=cells.map((cell,index)=>{
             const key=keys[index],row=cell.closest('table');
@@ -730,7 +817,7 @@ function workspaceUiCapability(page, task) {
         const dimensions=[body.clientWidth,body.clientHeight,body.scrollWidth,body.scrollHeight,body.scrollLeft,body.scrollTop];
         const fields=wizard.output_columns.fields;
         const noEditors=!all.some(e=>{charge();return ((getTid(e)??'').startsWith(base+'grdTargetColumns;tbl;celleditor')
-          || getTid(e)===wizard.root_tid+';EditColumnDefForm') && visible(e);});
+          || (getTid(e)===wizard.root_tid+';EditColumnDefForm'||getTid(e)==='EditColumnDefForm')) && visible(e);});
         const noMasks=!select('.bg-mask-message,.x-mask-msg').some(visible);
         if(containers.length===1 && rows.length>0 && rows.length<=8 && rows.length===fields.length
           && dimensions.every(Number.isFinite) && body.clientWidth>0 && body.clientHeight>0
@@ -763,6 +850,117 @@ function workspaceUiCapability(page, task) {
         }
       }
       wizard.output_columns.definition_coverage=coverage;
+      // A private addressed definition read may include clipped native rows.
+      // Geometry must still prove that the entire unfiltered grid is rendered;
+      // a virtualized prefix cannot masquerade as the complete schema.
+      if(mappingPage) {
+        const fields=wizard.output_columns.fields,containers=body?[...body.querySelectorAll('.x-grid-item-container')]:[];
+        const rows=body?[...body.querySelectorAll('table.x-grid-item')]:[];
+        const inputs=filter?[...filter.querySelectorAll('input')].filter(e=>visible(e)&&!sensitive(e)):[];
+        const nativeInside=(e,parent)=>{
+          if(!visible(e)||sensitive(e))return false;
+          const b=boxOf(e),p=boxOf(parent);
+          // A grouped Ext table can exceed its container by half a layout
+          // unit (observed 1/128 CSS px). Never allow a whole clipped pixel.
+          const epsilon=forms[0]==='DerivedDataSourceOutputSocketWizard'?1/64:0;
+          return [b.x,b.y,b.width,b.height,p.x,p.y,p.width,p.height].every(Number.isFinite)
+            && b.width>0 && b.height>0 && b.x>=p.x-epsilon && b.y>=p.y-epsilon
+            && b.x+b.width<=p.x+p.width+epsilon && b.y+b.height<=p.y+p.height+epsilon;
+        };
+        const container=containers[0],boundId=body?.getAttribute('id');
+        const noEditors=!all.some(e=>{charge();return ((getTid(e)??'').startsWith(base+'grdTargetColumns;tbl;celleditor')
+          || (getTid(e)===wizard.root_tid+';EditColumnDefForm'||getTid(e)==='EditColumnDefForm'))&&visible(e);});
+        let complete=body && container && containers.length===1 && rows.length>0 && rows.length<=1000 && rows.length===fields.length
+          && inputs.length===1 && String(inputs[0].value??'')==='' && tableMode?.classList.contains('x-form-cb-checked')
+          && !linksMode?.classList.contains('x-form-cb-checked') && noEditors && !dialogs.length
+          && !select('.bg-mask-message,.x-mask-msg').some(visible) && boundId
+          && container.children.length===rows.length && [...container.children].every(e=>rows.includes(e))
+          && [...body.children].every(e=>e===container||!visible(e))
+          && [body.clientWidth,body.clientHeight,body.scrollWidth,body.scrollHeight,body.scrollLeft,body.scrollTop].every(Number.isFinite)
+          && body.clientWidth>0 && body.clientHeight>0;
+        if(complete) {
+          const cb=boxOf(container),bb=boxOf(body);
+          complete=Math.abs(cb.x-(bb.x-body.scrollLeft))<=1 && Math.abs(cb.y-(bb.y-body.scrollTop))<=1
+            && Math.abs(body.scrollHeight-Math.max(body.clientHeight,cb.height))<=1
+            && Math.abs(body.scrollWidth-Math.max(body.clientWidth,cb.width))<=1
+            && rows.every((row,index)=>{
+              charge();const rb=boxOf(row),previous=index?boxOf(rows[index-1]):null;
+              const matches=fields.filter(f=>f.row_ref===refOf(row));
+              const names=all.filter(e=>{charge();return row.contains(e)&&(getTid(e)??'').startsWith(base+'colName_');});
+              if(row.parentElement!==container || row.getAttribute('data-recordindex')!==String(index)
+                || row.getAttribute('data-boundview')!==boundId || !nativeInside(row,container)
+                || rb.y!==(previous?previous.y+previous.height:cb.y) || matches.length!==1 || matches[0].status!=='observed' || names.length!==1)return false;
+              const key=getTid(names[0]).slice((base+'colName_').length);
+              return ['colName_','colDisplayName_','colSourceDisplayName_','colDataKind_','colDefaultUsageType_'].every(prefix=>{
+                const es=tids.get(base+prefix+key)??[];return es.length===1 && row.contains(es[0]) && nativeInside(es[0],row);
+              });
+            }) && boxOf(rows.at(-1)).y+boxOf(rows.at(-1)).height===cb.y+cb.height;
+        }
+        // Ext buffers rendered rows even though this definition store is local
+        // and complete. Bind each rendered row to its cached UI record; never
+        // load store ranges or read dataset/backend objects here.
+        let window=null;
+        if(definitionPrefix && body && container && containers.length===1 && rows.length===fields.length && rows.length>0
+          && rows.length<=1000 && inputs.length===1 && String(inputs[0].value??'')===''
+          && tableMode?.classList.contains('x-form-cb-checked') && !linksMode?.classList.contains('x-form-cb-checked')
+          && noEditors && !dialogs.length && !select('.bg-mask-message,.x-mask-msg').some(visible)) {
+          const view=globalThis.Ext?.getCmp?.(boundId),store=view?.el?.dom===body?view.getStore?.():null;
+          const records=store?.$className==='Ext.data.Store' && !store.isBufferedStore && !store.isLoading?.()
+            ?store.getData?.()?.items:null;
+          const grouped=forms[0]==='DerivedDataSourceOutputSocketWizard',groupIndices=new Map();
+          const recordIndex=(r,i)=>{
+            if(!grouped)return r.data?.Index===i;
+            const group=r.data?.GroupField;
+            if(group!==''&&group!=='Исключенные')return false;
+            const next=groupIndices.get(group)??0;groupIndices.set(group,next+1);
+            return r.data.Index===next;
+          };
+          if(Array.isArray(records) && records.length>0 && records.length<=1000
+            && store.getCount()===records.length && store.getTotalCount()===records.length
+            && (!store.getData().getSource?.() || store.getData().getSource().items?.length===records.length
+              && new Set(store.getData().getSource().items).size===records.length && store.getData().getSource().items.every(r=>records.includes(r)))
+            && new Set(records.map(r=>String(r.internalId))).size===records.length
+            && records.every((r,i)=>r.isModel && recordIndex(r,i) && typeof r.data.Name==='string'
+              && r.data.Name.length>0 && r.data.Name.length<240 && typeof r.data.DisplayName==='string'
+              && r.data.DisplayName.length<240 && Number.isInteger(r.data.DataType) && Number.isInteger(r.data.DataKind))) {
+            const first=Number(rows[0].getAttribute('data-recordindex'));
+            const valid=Number.isInteger(first) && first>=0 && first+rows.length<=records.length
+              && container.children.length===rows.length && [...container.children].every(e=>rows.includes(e))
+              && rows.every((row,i)=>{
+                charge();const index=first+i,r=records[index],f=fields[i],b=boxOf(row),previous=i?boxOf(rows[i-1]):null;
+                const cells=[...row.querySelectorAll('[data-tid]')];
+                const completeCells=cells.length<=32 && ['colName_','colDisplayName_','colSourceDisplayName_','colDataKind_','colDefaultUsageType_'].every(prefix=>{
+                  const matches=cells.filter(e=>getTid(e)===base+prefix+r.data.Name);
+                  return matches.length===1 && nativeInside(matches[0],row);
+                });
+                return completeCells && row.parentElement===container && row.getAttribute('data-boundview')===boundId
+                  && row.getAttribute('data-recordindex')===String(index) && row.getAttribute('data-recordid')===String(r.internalId)
+                  && nativeInside(row,container) && (!previous || b.y===previous.y+previous.height)
+                  && f.status==='observed' && f.row_ref===refOf(row) && f.name===r.data.Name && f.label===r.data.DisplayName;
+              });
+            if(valid)window={first,total:records.length,signature:JSON.stringify({root:wizard.root_ref,
+              records:records.map(r=>({id:String(r.internalId),index:r.data.Index,...(grouped?{group:r.data.GroupField}:{}),name:r.data.Name,label:r.data.DisplayName,
+                type:r.data.DataType,kind:r.data.DataKind,broken:r.data.Broken,usage:r.data.DefaultUsageType,
+                source:r.data.SourceDisplayName,source_type:r.data.SourceDataType,connected:r.data.ConnectedRecord?.internalId??null})),
+              auto_sync:wizard.output_columns.auto_sync})};
+          }
+        }
+        wizard.output_columns.page={status:'unverified_definition_page',offset:mappingPage.offset,limit:mappingPage.limit};
+        const total=window?.total??fields.length,first=window?.first??0;
+        if((complete || window) && mappingPage.offset<total) {
+          const signature=window?.signature??JSON.stringify({root:wizard.root_ref,fields,auto_sync:wizard.output_columns.auto_sync});
+          if(state.outputDefinition?.signature!==signature)state.outputDefinition={signature,schema_id:'mapping-'+state.epoch+'-'+(++state.sequence)};
+          const end=Math.min(mappingPage.offset+mappingPage.limit,total);
+          const rendered=mappingPage.offset>=first && end<=first+fields.length;
+          wizard.output_columns.page={status:rendered?'complete_definition_page':'rendered_definition_window',
+            schema_id:state.outputDefinition.schema_id,offset:mappingPage.offset,limit:mappingPage.limit,
+            returned:rendered?end-mappingPage.offset:0,total_columns:total,next_offset:end<total?end:null,
+            rendered_start:first,rendered_end:first+fields.length,source_schema_verified:false};
+          wizard.output_columns.definition_scroll_ref=refOf(body);
+          wizard.output_columns.fields=rendered?fields.slice(mappingPage.offset-first,end-first)
+            .map((f,i)=>({...f,index:mappingPage.offset+i})):[];
+        } else wizard.output_columns.fields=[];
+      }
     }
     if(wizard.reform_columns) {
       let coverage={status:'partial',source_identity_verified:false};
@@ -1113,6 +1311,11 @@ function readRenderedInputMapping(observation) {
       wizard.import_source={status:'draft_ui_values',settings_applied:false,file_bytes_verified:false,schema_complete:false,fields};
     }
     const wizardFields=new Map(),wizardCombos=new Map();
+    if(wizard.status==='observed'&&wizard.stage==='text_import_file') {
+      const f=wizard.import_source?.fields?.encoding;
+      if(f?.status==='observed'&&f.enabled&&!f.truncated)wizardCombos.set(wizard.root_tid+';ImportTextFilePreviewWizard;edtCodePage;ValueControl',
+        {name:'encoding',scope:'import_source',owner_ref:f.owner_ref,input_ref:f.input_ref,root_ref:wizard.root_ref,value:f.value});
+    }
     const reformParams=wizard.reform_parameters;
     if(reformParams?.status==='observed' && reformParams.selected_column && Object.keys(reformParams.fields??{}).length===7
       && Object.values(reformParams.fields).every(f=>f.status==='observed' && !f.truncated)) {
@@ -1124,14 +1327,33 @@ function readRenderedInputMapping(observation) {
     }
 
     if(wizard.status==='observed' && wizard.stage==='output_mapping') {
-      const base=wizard.root_tid+';EditColumnDefForm';
-      const forms=(tids.get(base)??[]).filter(e=>visible(e) && !sensitive(e));
+      const forms=[...(tids.get(wizard.root_tid+';EditColumnDefForm')??[]),...(tids.get('EditColumnDefForm')??[])].filter(e=>visible(e) && !sensitive(e));
+      const base=forms.length===1?getTid(forms[0]):wizard.root_tid+';EditColumnDefForm';
+      // Loginom 7.4 also hosts this editor as a global modal. Its one native
+      // record must be the selected record of the active mapping grid.
+      let portalBound=base!=='EditColumnDefForm';
+      if(!portalBound && forms.length===1) {
+        const form=forms[0],native=globalThis.Ext?.getCmp?.(form.id)?.Controller;
+        const active=globalThis.bg?.app?.Application?.FInstance?.FMainForm?.Items?.Workspace?.getActiveTab?.()?.Controller?.FController;
+        const grids=['ColumnsMappingEngineOutputPortWizard','DerivedDataSourceOutputSocketWizard']
+          .flatMap(form=>tids.get(wizard.root_tid+';'+form+';grdTargetColumns;tbl')??[])
+          .filter(grid=>wizardForms[0].contains(grid)&&visible(grid));
+        const view=grids.length===1?globalThis.Ext?.getCmp?.(grids[0].id):null,store=view?.getStore?.();
+        const selected=grids.length===1?[...grids[0].querySelectorAll('table.x-grid-item-selected')]:[];
+        const record=native?.Records?.[0],index=selected.length===1?Number(selected[0].getAttribute('data-recordindex')):-1;
+        portalBound=form.matches('.x-window') && native?.FView?.el?.dom===form && native.FAddMode===false
+          && native.Records.length===1 && record?.isModel===true && active?.FView?.el?.dom===wizardForms[0]
+          && view?.el?.dom===grids[0] && store?.$className==='Ext.data.Store' && !store.isLoading?.()
+          && Number.isSafeInteger(index) && index>=0 && store.getAt?.(index)===record
+          && selected[0].getAttribute('data-recordid')===String(record.internalId)
+          && selected[0].getAttribute('data-boundview')===grids[0].id;
+      }
       if(forms.length) {
-        wizard.column_parameters={status:forms.length===1?'observed':'ambiguous',applied_verified:false};
-        if(forms.length===1) {
+        wizard.column_parameters={status:forms.length===1&&portalBound?'observed':'ambiguous',applied_verified:false};
+        if(forms.length===1&&portalBound) {
           const selected=(wizard.output_columns?.fields??[]).filter(field=>field.status==='observed' && dom.some(e=>{charge();return state.ids.get(e)===field.name_ref && e.closest('table')?.classList.contains('x-grid-item-selected');}));
           const selection=selected.length===1?selected[0]:null;
-          wizard.column_parameters.root_ref=refOf(forms[0]);wizard.column_parameters.selected_column=selection;
+          wizard.column_parameters.root_tid=base;wizard.column_parameters.portal_bound=portalBound;wizard.column_parameters.root_ref=refOf(forms[0]);wizard.column_parameters.selected_column=selection;
           wizard.column_parameters.fields=Object.fromEntries(Object.entries({name:'edtName',label:'edtDisplayName',type_label:'cbxDataType',data_kind:'cbxDataKind',usage:'cbxUsageType'}).map(([name,key])=>{
             const owners=(tids.get(base+';'+key)??[]).filter(e=>forms[0].contains(e) && visible(e) && !sensitive(e));
             const inputs=owners.length===1?dom.filter(e=>{charge();return owners[0].contains(e) && e.matches('input') && visible(e) && !sensitive(e);}):[];
@@ -1214,12 +1436,13 @@ function readRenderedInputMapping(observation) {
       }))};
       // E2E sColumnDefsTuning: properties are rows; field identity is a column
       // index. These are rendered draft settings, never complete output schema.
+      scanStage='import_definitions';
       const columnBase=base+'ColumnDefsTuning;grdSettings;grd-1;normalHeaderCt;';
       const headers=all.filter(e=>{charge();const tid=getTid(e);return tid?.startsWith(columnBase)
         && /^\d{1,4}$/.test(tid.slice(columnBase.length)) && visible(e) && !sensitive(e);});
       const indexes=[...new Set(headers.map(e=>getTid(e).slice(columnBase.length)))];
       const types={'Целый':'integer','Вещественный':'real','Строковый':'string','Логический':'boolean','Дата/Время':'datetime','Переменный':'variant'};
-      const columns=indexes.slice(0,8).map(index=>{
+      const readColumn=index=>{
         const cells=[0,1,2,3,4].map(row=>(tids.get(columnBase+index+'_'+row)??[])
           .filter(e=>visible(e) && !sensitive(e) && wizardForms[0].contains(e)));
         const unique=headers.filter(e=>getTid(e)===columnBase+index).length===1 && cells.every(es=>es.length===1);
@@ -1229,15 +1452,17 @@ function readRenderedInputMapping(observation) {
         const used=checks.length===1 && visible(checks[0]) && !sensitive(checks[0]) ? checks[0].classList.contains('x-grid-checkcolumn-checked'):null;
         if(values.some(v=>!v || v.length>120) || !types[values[2]] || used===null)
           return {index:Number(index),status:'unobserved_or_ambiguous'};
-        return {index:Number(index),status:'observed',header_ref:refOf(headers.find(e=>getTid(e)===columnBase+index)),name:values[0],label:values[1],type:types[values[2]],data_kind:values[3],used,
+        return {index:Number(index),status:'observed',header_ref:refOf(headers.find(e=>getTid(e)===columnBase+index)),name:values[0],label:values[1],label_associated:cells[1][0].classList.contains('bg-associated-value'),type:types[values[2]],data_kind:values[3],used,
           cell_refs:Object.fromEntries(['name','label','type','data_kind','used'].map((key,i)=>[key,refOf(cells[i][0])]))};
-      });
+      };
+      const offset=columnPage?.offset??0,limit=columnPage?.limit??8;
+      const columns=indexes.slice(offset,offset+limit).map(readColumn);
       // The cell's old text is hidden while the floating editor is open.
       // Bind the draft input to one selected property; never promote it to an
       // applied column value. Choice actions require the whole column binding.
       const editorBase=base+'ColumnDefsTuning;grdSettings;grd-1;tbl;';
       const editors=all.filter(e=>{charge();const tid=getTid(e);return tid?.startsWith(editorBase)
-        && /^celleditor(?:-\d+)?;cbx$/.test(tid.slice(editorBase.length)) && visible(e) && !sensitive(e) && wizardForms[0].contains(e);});
+        && /^celleditor(?:-\d+)?;(?:cbx|txt)$/.test(tid.slice(editorBase.length)) && visible(e) && !sensitive(e) && wizardForms[0].contains(e);});
       if(editors.length) {
         wizard.import_column_editor={status:'unobserved_or_ambiguous',settings_applied:false};
         const selected=all.filter(e=>{charge();const tid=getTid(e);return tid?.startsWith(columnBase)
@@ -1272,6 +1497,26 @@ function readRenderedInputMapping(observation) {
               root_ref:wizard.root_ref,owner_ref:refOf(editors[0]),input_ref:refOf(inputs[0]),value});
           }
 
+          if(['0','1'].includes(row) && getTid(editors[0]).endsWith(';txt') && boundCells.every(es=>es.length===1)
+            && inputs.length===1 && headers.filter(e=>getTid(e)===columnBase+index).length===1) {
+            // Ext temporarily hides the old cell text underneath the editor.
+            // Retain it solely as the original-value binding, never as an
+            // applied value or evidence of a complete configured page.
+            const oldNodes=[...selected[0].querySelectorAll('.x-grid-cell-inner')];
+            const original=oldNodes.length===1?String(oldNodes[0].textContent??''):null;
+            const originalName=row==='0'?original:name,originalLabel=row==='1'?original:label;
+            const type=types[textOf(boundCells[2][0],true)],kind=textOf(boundCells[3][0],true);
+            if(original!==null && original.length<=120 && originalName && originalName.length<=120
+              && originalLabel && originalLabel.length<=120 && value.length<=120 && !/[\x00-\x1f]/.test(value)
+              && used!==null && type && ['Неопределенное','Непрерывный','Дискретный'].includes(kind)) {
+              wizard.import_column_editor={status:'observed',index:Number(index),name:originalName,label:originalLabel,
+                property:row==='0'?'name':'label',value,original_value:original,type,data_kind:kind,used,
+                label_associated:boundCells[1][0].classList.contains('bg-associated-value'),
+                input_ref:refOf(inputs[0]),owner_ref:refOf(editors[0]),cell_ref:refOf(selected[0]),
+                header_ref:refOf(headers.find(e=>getTid(e)===columnBase+index)),enabled:enabled(inputs[0]),
+                settings_applied:false,picker_status:'not_applicable'};
+            }
+          }
         }
       }
       // Configured definitions are complete only when the whole bounded native
@@ -1305,7 +1550,7 @@ function readRenderedInputMapping(observation) {
           && wizardForms[0].contains(grid) && grid.contains(container) && grid.contains(body)
           && contained(grid,grid) && contained(container,grid) && contained(body,grid)
           && noOverflow(grid) && noOverflow(container) && noOverflow(body) && !all.some(e=>{charge();const tid=getTid(e);return tid?.startsWith(editorBase)
-            && /^celleditor(?:-\d+)?;cbx$/.test(tid.slice(editorBase.length)) && visible(e);})
+            && /^celleditor(?:-\d+)?;(?:cbx|txt)$/.test(tid.slice(editorBase.length)) && visible(e);})
           && ordered.every((header,index)=>getTid(header)===columnBase+index && nativeHeaders.includes(header)
             && contained(header,container) && columns[index]?.index===index && columns[index].status==='observed'
             && ['Неопределенное','Непрерывный','Дискретный'].includes(columns[index].data_kind))
@@ -1315,6 +1560,50 @@ function readRenderedInputMapping(observation) {
       }
       wizard.import_columns={status:columns.length?'rendered_draft_columns':'unobserved',fields:columns,
         truncated:indexes.length>8,complete:false,settings_applied:false,definition_coverage:coverage};
+      if(columnPage) {
+        wizard.import_columns.initial_layout={status:'unverified',source_schema_verified:false};
+        // Horizontal clipping does not remove native definition cells from
+        // this grid. Read bounded pages, but attest their common definition
+        // identity from ALL native headers/cells. This is draft metadata only;
+        // it proves neither source bytes nor output data, and offscreen cells
+        // still cannot be acted on without the normal interaction guards.
+        let page={status:'unverified',offset,limit,source_schema_verified:false};
+        if(grids.length===1 && headerContainers.length===1 && bodies.length===1 && !editors.length) {
+          const grid=grids[0],container=headerContainers[0],body=bodies[0];
+          const native=[...container.querySelectorAll('.x-column-header')];charge();
+          const count=indexes.length;
+          if(count>0 && count<=1000 && offset<count && native.length===count
+            && wizardForms[0].contains(grid) && grid.contains(container) && grid.contains(body)
+            && contained(grid,grid) && visible(container) && visible(body)
+            && indexes.every((index,i)=>index===String(i) && headers.filter(h=>getTid(h)===columnBase+index).length===1
+              && native.includes(headers.find(h=>getTid(h)===columnBase+index))
+              && [0,1,2,3,4].every(row=>{const cells=tids.get(columnBase+index+'_'+row)??[];return cells.length===1&&body.contains(cells[0]);}))
+            && native.filter(h=>h.classList.contains('x-column-header-first')).length===1
+            && native[0].classList.contains('x-column-header-first')
+            && native.filter(h=>h.classList.contains('x-column-header-last')).length===1
+            && native[count-1].classList.contains('x-column-header-last')) {
+            // Before the requested delimiter is set, the entire header can be
+            // one overlong field name. Its rendered parse is ready to configure,
+            // but it is not a valid configured schema or an actionable field.
+            if(indexes.every(index=>{
+              const values=[0,1,2,3].map(row=>textOf(tids.get(columnBase+index+'_'+row)[0],true));
+              const checks=tids.get(columnBase+index+'_4')[0].querySelectorAll('.x-grid-checkcolumn');charge();
+              return values.every(Boolean) && types[values[2]] && ['Неопределенное','Непрерывный','Дискретный'].includes(values[3]) && checks.length===1;
+            }))wizard.import_columns.initial_layout={status:'rendered_definition_layout',count,source_schema_verified:false};
+            const definitions=indexes.map(readColumn);
+            if(definitions.every(c=>c.status==='observed' && ['Неопределенное','Непрерывный','Дискретный'].includes(c.data_kind))) {
+              const signature=JSON.stringify({root:wizard.root_ref,definitions});
+              if(state.importDefinition?.signature!==signature)state.importDefinition={signature,
+                schema_id:'import-schema-'+state.epoch+'-'+(state.importDefinitionSequence=(state.importDefinitionSequence??0)+1)};
+              page={status:'complete_definition_page',schema_id:state.importDefinition.schema_id,offset,limit,
+                returned:columns.length,total_columns:count,next_offset:offset+columns.length<count?offset+columns.length:null,
+                source_schema_verified:false};
+            }
+          }
+        }
+        wizard.import_columns.page=page;
+        wizard.import_columns.truncated=offset>0||offset+columns.length<indexes.length;
+      }
     }
     if (discoverRoots) {
       const regions=regionElements.filter(element=>visible(element) && !sensitive(element) && scopeOf(element)!=='inactive_workflow')
@@ -1328,7 +1617,8 @@ function readRenderedInputMapping(observation) {
         loginom_build:globalThis.bg?.app?.Version ?? null,workflow_ref:workflow,graph_identity:graphIdentity,active_identity:active ? textOf(active) : null,
         dom_epoch:{document:state.epoch,revision:state.revision},observation_kind:'roots',wizard,
         ...(storageName===null?{}:{observation_filter:{storage_name:storageName}}),
-        scan:{complete:true,mutation_counts:{...state.mutations},visited_elements:dom.length,detail_elements:0,max_elements:maxElements,max_work:maxWork,max_ms:maxMs},
+        scan:{complete:true,mutation_counts:{...state.mutations},visited_elements:dom.length,detail_elements:0,max_elements:maxElements,max_work:maxWork,max_ms:maxMs,
+          ...(definitionPrefix?{scope:omittedRegions.has('table_data_cells')?'node_output_controls':'node_definition_controls',omitted_regions:[...omittedRegions]}:{})},
         nodes:[],links:[],ui:{elements,dialogs:[],messages:[],masks:[],table_cells:[],
           truncated:{elements:regions.length>240,nodes:true,links:true,ports:true,dialogs:true,messages:true,masks:true,table_cells:true}}};
     }
@@ -1398,16 +1688,115 @@ function readRenderedInputMapping(observation) {
     const processCells=new Map(processConsole.status==='rendered_process_inventory'
       ? processConsole.rows.map((row,index)=>[row.process_cell_ref,{record_id:row.record_id,path:row.path,
         record_index:index,panel_ref:processConsole.panel_ref,grid_ids:processConsole.grid_ids}]) : []);
+    // An empty console still needs its native context menu to show completed
+    // processes. Bind the two actual grid views to one cached TreeStore; the
+    // blank body authorizes only a context click, not an execution claim.
+    const processGridControls=new Map();
+    if(consoles.length===1 && visible(consoles[0])) {
+      const grids=['treepanel;tree','grd;tbl'].map(suffix=>(tids.get('ConsoleForm;ProgressForm;trpProgress;'+suffix)??[]));
+      if(grids.every(xs=>xs.length===1&&consoles[0].contains(xs[0])&&visible(xs[0]))) {
+        const views=grids.map(xs=>globalThis.Ext?.getCmp?.(xs[0].id));
+        const store=views[0]?.getStore?.();
+        if(store?.$className==='Ext.data.TreeStore' && !store.isLoading?.()
+          && views.every((v,i)=>v?.el?.dom===grids[i][0]&&v.getStore?.()===store))
+          grids.forEach(xs=>processGridControls.set(refOf(xs[0]),{panel_ref:refOf(consoles[0]),grid_id:xs[0].id}));
+      }
+    }
+    // A scrolled console is a visible window, never a complete DOM inventory.
+    // Admit each row only through both native views and their shared cached model.
+    if(processCells.size===0 && processGridControls.size===2) {
+      const grids=['treepanel;tree','grd;tbl'].map(suffix=>tids.get('ConsoleForm;ProgressForm;trpProgress;'+suffix)[0]);
+      const store=globalThis.Ext.getCmp(grids[0].id).getStore();
+      const root=store.getRoot?.()??store.getRootNode?.(),records=new Map();let valid=true,visited=0;
+      const walk=nodes=>{for(const model of nodes??[]){
+        if(++visited>2000||!model?.isModel||!String(model.internalId??'')||records.has(String(model.internalId))
+            ||model.data?.loading||! /^[1-9][0-9]*(?:\.[1-9][0-9]*)*$/.test(String(model.data?.id??''))){valid=false;return;}
+        records.set(String(model.internalId),model);walk(model.childNodes);
+      }};
+      if(root?.isModel&&root.data?.loaded===true&&!root.data?.loading&&Array.isArray(root.childNodes))walk(root.childNodes);else valid=false;
+      const rowSets=grids.map(grid=>[...grid.querySelectorAll('table.x-grid-item')]);charge();
+      if(rowSets.some(rows=>rows.length>200||new Set(rows.map(r=>r.getAttribute('data-recordid'))).size!==rows.length))valid=false;
+      const visibleCell=(cell,grid)=>{const c=boxOf(cell),g=boxOf(grid);return visible(cell)&&!sensitive(cell)
+        &&c.x>=g.x&&c.y>=g.y&&c.x+c.width<=g.x+g.width&&c.y+c.height<=g.y+g.height;};
+      const rows=[];
+      if(valid)for(const leftRow of rowSets[0]) {
+        charge();const id=leftRow.getAttribute('data-recordid'),model=records.get(id);
+        const index=Number(leftRow.getAttribute('data-recordindex'));
+        const rightRows=rowSets[1].filter(r=>r.getAttribute('data-recordid')===id);
+        if(!model||!Number.isSafeInteger(index)||index<0||store.getAt?.(index)!==model||rightRows.length!==1)continue;
+        const rightRow=rightRows[0];
+        if(leftRow.getAttribute('data-boundview')!==grids[0].id||rightRow.getAttribute('data-boundview')!==grids[1].id
+          ||rightRow.getAttribute('data-recordindex')!==String(index))continue;
+        const ids=[...leftRow.querySelectorAll('td[data-tid]')].filter(e=>getTid(e)?.startsWith('ConsoleForm;ProgressForm;colId_'));
+        const cells=[...leftRow.querySelectorAll('td[data-tid]')].filter(e=>getTid(e)?.startsWith('ConsoleForm;ProgressForm;colProcess_'));
+        const progress=[...rightRow.querySelectorAll('td[data-tid]')].filter(e=>getTid(e)?.startsWith('ConsoleForm;ProgressForm;colProgress_'));
+        if(ids.length!==1||cells.length!==1||progress.length!==1||!visibleCell(cells[0],grids[0])
+          ||textOf(ids[0],true)!==String(model.data.id))continue;
+        const cell=cells[0],path=getTid(cell).slice('ConsoleForm;ProgressForm;colProcess_'.length);
+        if(!path.startsWith('Root>')||(tids.get(getTid(cell))??[]).length!==1
+          ||getTid(progress[0])!=='ConsoleForm;ProgressForm;colProgress_'+path)continue;
+        const row={record_id:id,path,ordinal:String(model.data.id),process_cell_ref:refOf(cell),
+          selected:leftRow.classList.contains('x-grid-item-selected'),record_index:index};
+        rows.push(row);processCells.set(row.process_cell_ref,{record_id:id,path,record_index:index,
+          panel_ref:refOf(consoles[0]),grid_ids:grids.map(g=>g.id),state_source:'cached_process_row_window'});
+      }
+      if(rows.length)Object.assign(processConsole,{status:'rendered_process_window',rows,panel_ref:refOf(consoles[0]),
+        grid_refs:grids.map(refOf),grid_ids:grids.map(g=>g.id),state_source:'cached_process_row_window',
+        top_level_complete:false,details_complete:false,top_level_rendered_coverage:false});
+    }
+    const processExpanders=new Map();
+    for(const [ref,row] of processCells) {
+      const cell=dom.find(e=>state.ids.get(e)===ref);
+      const expanders=cell?.querySelectorAll('.x-tree-expander')??[];charge();
+      if(expanders.length===1 && visible(expanders[0]) && getTid(expanders[0])===getTid(cell)+';TreeExpander')
+        processExpanders.set(refOf(expanders[0]),row);
+    }
     const processMenuControls=new Map();
     const menus=tids.get('mnContextMenu')??[];
     const selectedProcesses=processConsole.rows.filter(row=>row.selected);
-    if(menus.length===1 && visible(menus[0]) && processConsole.status==='rendered_process_inventory' && selectedProcesses.length===1
+    if(menus.length===1 && visible(menus[0]) && ['rendered_process_inventory','rendered_process_window'].includes(processConsole.status) && selectedProcesses.length===1
       && ['mniShowNodeToProcess','mniShowCompletedProcesses'].every(name=>(tids.get('mnContextMenu;'+name)??[]).length===1)) {
-      for(const action of ['mniShowNodeToProcess','mniShowCompletedProcesses']) {
+      // Cancel is only offered for one selected native child belonging to the
+      // prepared graph node. ModelNode is compared by identity, never dereferenced.
+      let cancellation=null;
+      if(preparedNodeId && processGridControls.size===2) {
+        const grid=tids.get('ConsoleForm;ProgressForm;trpProgress;treepanel;tree')[0];
+        const store=globalThis.Ext.getCmp(grid.id).getStore(),root=store.getRoot?.()??store.getRootNode?.();
+        const nodes=globalThis.bg?.app?.Application?.FInstance?.FMainForm?.Items?.Workspace?.getActiveTab?.()
+          ?.Controller?.FController?.FDiagram?.FNodes?.FCollection;
+        const owners=Array.isArray(nodes)&&nodes.length<=200?nodes.filter(n=>n.FGuid===preparedNodeId):[];
+        const records=new Map(),ids=new Set();let valid=true,visited=0;
+        const walk=children=>{for(const r of children??[]) {
+          charge();const rid=String(r?.internalId??''),id=String(r?.data?.id??'');
+          if(++visited>2000||!r?.isModel||!rid||records.has(rid)||ids.has(id)||r.data?.loading
+            ||!/^[1-9][0-9]*(?:\.[1-9][0-9]*)*$/.test(id)){valid=false;return;}
+          records.set(rid,r);ids.add(id);walk(r.childNodes);
+        }};
+        if(root?.isModel&&String(root.internalId??'')&&root.data?.loaded===true&&!root.data?.loading&&Array.isArray(root.childNodes))walk(root.childNodes);
+        else valid=false;
+        const row=selectedProcesses[0],record=records.get(row.record_id),d=record?.data;
+        const selected=[...grid.querySelectorAll('table.x-grid-item')].filter(e=>e.classList.contains('x-grid-item-selected'));
+        const states=typeof d?.ProgressBarCls==='string'?d.ProgressBarCls.split(/\s+/).filter(t=>t.startsWith('bg-progress-ptps')):[];
+        if(valid&&owners.length===1&&owners[0].data&&d?.ModelNode===owners[0].data
+          &&selected.length===1&&selected[0].getAttribute('data-recordid')===row.record_id
+          &&String(d.id).includes('.')&&d.CanCancelProcess===true&&d.Status!==3
+          &&states.length===1&&['bg-progress-ptpsProcessing','bg-progress-ptpsNotResponding'].includes(states[0]))
+          cancellation={root_id:String(root.internalId),record_id:row.record_id,process_id:String(d.id),node_id:preparedNodeId,
+            owner_verified:true,can_cancel:true,source:'native_process_model_identity'};
+      }
+      for(const action of ['mniShowNodeToProcess','mniShowCompletedProcesses',...(cancellation?['mniCancel']:[])]) {
         const tid='mnContextMenu;'+action,items=tids.get(tid)??[];
         if(items.length===1 && menus[0].contains(items[0]) && visible(items[0]))processMenuControls.set(refOf(items[0]),{
-          action,menu_ref:refOf(menus[0]),process:processCells.get(selectedProcesses[0].process_cell_ref),opening_verified:false});
+          action,menu_ref:refOf(menus[0]),process:processCells.get(selectedProcesses[0].process_cell_ref),opening_verified:false,
+          ...(action==='mniCancel'?{cancellation}: {})});
       }
+    }
+    if(menus.length===1 && visible(menus[0]) && processGridControls.size===2) {
+      const filters=tids.get('mnContextMenu;mniShowCompletedProcesses')??[];
+      if(filters.length===1 && menus[0].contains(filters[0]) && visible(filters[0])
+        && filters[0].classList.contains('x-menu-item-checked')!==filters[0].classList.contains('x-menu-item-unchecked'))
+        processMenuControls.set(refOf(filters[0]),{action:'mniShowCompletedProcesses',menu_ref:refOf(menus[0]),
+          panel_ref:refOf(consoles[0]),checked:filters[0].classList.contains('x-menu-item-checked'),opening_verified:false});
     }
     const candidates = select('button,input,textarea,select,[contenteditable="true"],[role="button"],[role="checkbox"],[role="radio"],[role="combobox"],[role="menuitem"],[role="tab"],[role="treeitem"],[role="option"],[role="spinbutton"],[data-tid]')
       .filter(element => visible(element) && !sensitive(element) && scopeOf(element) !== 'inactive_workflow');
@@ -1433,8 +1822,18 @@ function readRenderedInputMapping(observation) {
       }
       return null;
     };
+    const outputColumnCells=new Map();
+    if(wizard.stage==='output_mapping' && !wizard.column_parameters
+      &&(wizard.output_columns?.page?.status==='complete_definition_page'
+        ||wizard.output_columns?.definition_coverage?.status==='complete_configured_rows')) {
+      for(const field of wizard.output_columns.fields??[])if(field.status==='observed') {
+        const metadata={name:field.name,label:field.label,type:field.type,row_ref:field.row_ref,index:field.index??null,
+          wizard_root_ref:wizard.root_ref};
+        for(const ref of [field.name_ref,field.label_ref])if(ref)outputColumnCells.set(ref,metadata);
+      }
+    }
     const importColumnCellRefs=new Set((wizard.import_columns?.fields??[]).filter(column=>column.status==='observed')
-      .flatMap(column=>[column.cell_refs.type,column.cell_refs.data_kind]));
+      .flatMap(column=>Object.values(column.cell_refs)));
     // The rendered grouping parser has already bound each actual cell to a
     // unique wizard-owned grid, data row and closed section. Metadata refs
     // alone never create actionable records; candidates below must include
@@ -1446,7 +1845,56 @@ function readRenderedInputMapping(observation) {
         grid_ref:wizard.grouping.grid_ref,wizard_root_ref:wizard.root_ref}]) : []);
     for(const field of wizard.grouping?.available_fields??[])groupingCells.set(field.cell_ref,{
       field_key:field.field_key,row_ref:field.row_ref,grid_ref:field.grid_ref,role:'available',wizard_root_ref:wizard.root_ref});
-    const interesting = element => processCells.has(state.ids.get(element)) || processMenuControls.has(state.ids.get(element)) || groupingCells.has(state.ids.get(element)) || !!comboPart(element) || importColumnCellRefs.has(state.ids.get(element)) || element.matches('button,input,textarea,select,[contenteditable="true"],[role="button"],[role="checkbox"],[role="radio"],[role="combobox"],[role="menuitem"],[role="tab"],[role="treeitem"],[role="option"],[role="spinbutton"]')
+    // The real delimited-import UI synchronizes the definitions with the
+    // native horizontal scroller of its DATA preview. The settings grid itself
+    // has overflow:hidden and must not be scrolled by guessing its internals.
+    const importScroller=element=>wizard.import_columns?.page?.status==='complete_definition_page'
+      && getTid(element)===wizard.root_tid+';ImportTextFileParamsWizard;ColumnDefsTuning;grdData;grd-1;tbl';
+    const outputScroller=element=>!!wizard.output_columns?.definition_scroll_ref && wizard.output_columns.definition_scroll_ref===state.ids.get(element);
+    // Bind visualizer cards to native port panels and view descriptors; card
+    // titles and repeated ViewerCard tids are not identities.
+    const viewerControls=new Map(),tableScrollers=new Map();
+    const nativeViews=globalThis.bg?.app?.Application?.FInstance?.FMainForm?.Items?.Workspace?.getActiveTab?.()?.Controller?.FController;
+    const viewsRoot=tids.get(workflow?.prefix+';ViewsForm')??[];
+    if(nativeViews?.constructor?.name==='ViewsForm' && viewsRoot.length===1 && nativeViews.FView?.el?.dom===viewsRoot[0]
+      && nativeViews.FPortList && Object.keys(nativeViews.FPortList).length<=100
+      && nativeViews.FViewDescList && Object.keys(nativeViews.FViewDescList).length<=100) {
+      for(const [portGuid,p] of Object.entries(nativeViews.FPortList)) {
+        if(p.Type!==0)continue;
+        const panel=p.Panel?.el?.dom,tid=workflow.prefix+';ViewsForm;cntPorts;'+portGuid;
+        if(!panel || getTid(panel)!==tid || (tids.get(tid)??[]).length!==1)continue;
+        const add=(tids.get(workflow.prefix+';ViewsForm;ViewerAddCard')??[]).filter(e=>panel.contains(e));
+        if(add.length===1 && visible(add[0]))viewerControls.set(refOf(add[0]),{kind:'add',port_guid:portGuid,port_panel_ref:refOf(panel)});
+        for(const [guid,v] of Object.entries(nativeViews.FViewDescList)) {
+          if(v.PortPanel!==p.Panel||v.Vendor?.constructor?.name!=='BrowseViewVendor')continue;
+          const card=v.ViewerCard?.FView?.el?.dom,cardTid=card?getTid(card):null,cardBase=workflow.prefix+';ViewsForm;ViewerCard';
+          if(!card||!panel.contains(card)||!cardTid?.startsWith(cardBase)||!/^(-[0-9]+)?$/.test(cardTid.slice(cardBase.length)))continue;
+          const enter=(tids.get(cardTid+';btnEnter')??[]).filter(e=>card.contains(e));
+          if(enter.length===1 && visible(enter[0]))viewerControls.set(refOf(enter[0]),{kind:'enter',port_guid:portGuid,view_guid:guid,port_panel_ref:refOf(panel),card_ref:refOf(card)});
+        }
+      }
+    }
+    if(definitionPrefix && nativeViews?.constructor?.name==='ViewsForm' && nativeViews.FViewDescList && Object.keys(nativeViews.FViewDescList).length<=100) {
+      for(const [guid,v] of Object.entries(nativeViews.FViewDescList)) {
+        const root=v.BaseView?.FView?.el?.dom,key=root?getTid(root):null,panels=Object.entries(nativeViews.FPortList??{}).filter(([,p])=>p.Type===0&&p.Panel===v.PortPanel);
+        if(v.Vendor?.constructor?.name!=='BrowseViewVendor'||!root||!visible(root)||panels.length!==1
+          ||!new RegExp('^'+definitionPrefix+';ViewsForm;BrowseView(?:-[0-9]+)?$').test(key??''))continue;
+        const grids=tids.get(key+';grdData;grd-1;tbl')??[];
+        if(grids.length!==1||!root.contains(grids[0]))continue;
+        const view=globalThis.Ext?.getCmp?.(grids[0].id),store=v.BaseView.FBrowseViewDataSourceController?.FDataStore;
+        if(store?.$className!=='Ext.data.BufferedStore'||view?.el?.dom!==grids[0]||view.getStore?.()!==store)continue;
+        tableScrollers.set(refOf(grids[0]),{view_guid:guid,port_guid:panels[0][0],table_tid:key});
+      }
+    }
+    // E2E filestorage.ts:261 and observed Loginom: Files root is an anchor
+    // without ARIA role. Only the unique current-tab navigation owner qualifies.
+    const storageRootPanels=tids.get(workflow?.prefix+';NavigationBar;NavigationPanel')??[];
+    const storageRootCandidates=tids.get(workflow?.prefix+';cnrNaviMode;b.s_Сервер>Файлы')??[];
+    const storageRoot=storageRootPanels.length===1&&storageRootCandidates.length===1
+      &&visible(storageRootPanels[0])&&storageRootPanels[0].contains(storageRootCandidates[0])
+      &&visible(storageRootCandidates[0])&&!sensitive(storageRootCandidates[0])
+      &&textOf(storageRootCandidates[0],true)==='Файлы'?storageRootCandidates[0]:null;
+    const interesting = element => element===storageRoot || outputColumnCells.has(state.ids.get(element)) || tableScrollers.has(state.ids.get(element)) || viewerControls.has(state.ids.get(element)) || /;ViewsForm;colVendors_Визуализаторы>[^;]+;TreeText$/.test(getTid(element)??'') || processGridControls.has(state.ids.get(element)) || processExpanders.has(state.ids.get(element)) || outputScroller(element) || importScroller(element) || processCells.has(state.ids.get(element)) || processMenuControls.has(state.ids.get(element)) || groupingCells.has(state.ids.get(element)) || !!comboPart(element) || importColumnCellRefs.has(state.ids.get(element)) || element.matches('button,input,textarea,select,[contenteditable="true"],[role="button"],[role="checkbox"],[role="radio"],[role="combobox"],[role="menuitem"],[role="tab"],[role="treeitem"],[role="option"],[role="spinbutton"]')
       || /;(?:Input|Output)_[^;]+$|;Label;Label$|;Graph;[^;]+$|;btn[^;]+$|;edt[^;]+$|;mi[^;]+$|;tb(?:-\d+)?$/.test(getTid(element) ?? '')
       // Pinned E2E bg/selectors.ts:272,279,286: palette tree labels and
       // expanders are spans without button/treeitem roles in some UI builds.
@@ -1454,9 +1902,14 @@ function readRenderedInputMapping(observation) {
       // E2E helpers/navigation.ts ByPanel and live MapTreeForm: navigation
       // labels/expanders have no ARIA role. Only exact navigation tree parts.
       || /^MF;(?:TF(?:-\d+)?;)?MapTreeForm;colNavigation_Сервер>[^;]+;(?:TreeText|TreeExpander)$/.test(getTid(element) ?? '')
+      // Show Node leaves a node breadcrumb above the same graph. Expose only
+      // its observed parent scenario for a prepared-node return operation.
+      || !!definitionPrefix && workflowNavigation.status==='observed'&&workflowNavigation.control_ref===refOf(element)
+      || !!definitionPrefix && nodeContext.status==='observed' && nodeContext.kind==='node'
+        && nodeContext.path?.at(-2)?.ref===refOf(element)
       // E2E bg/selectors.ts:1068 and bg/helpers/wizard.ts:29: the node
       // settings affordance can be SVG without a button role.
-      || /;Graph;[^;]+;Setting$/.test(getTid(element) ?? '')
+      || /;Graph;[^;]+;(?:Setting|Visualizers)$/.test(getTid(element) ?? '')
       || (getTid(element) ?? '')===workflow?.prefix+';WizrdMCF;CalcDataWizard;cmpExpression'
       || (getTid(element) ?? '').startsWith(workflow?.prefix+';WizrdMCF;CalcDataWizard;colExpressionName_')
       // E2E bg/selectors.ts:970: context-menu item wrappers carry stable
@@ -1478,7 +1931,7 @@ function readRenderedInputMapping(observation) {
       if(!ownedGraph(element))return null;
       const body=tid.slice(graphPrefix.length),parts=body.split(';'),label=parts[0];
       if(!graphLabels.has(label) || graphElements.filter(e=>getTid(e)===graphPrefix+label).length!==1)return null;
-      const part=parts.length===1?'body':parts.slice(1).join(';')==='Label;Label'?'label':parts.length===2 && parts[1]==='Setting'?'settings':null;
+      const part=parts.length===1?'body':parts.slice(1).join(';')==='Label;Label'?'label':parts.length===2 && parts[1]==='Setting'?'settings':parts.length===2 && parts[1]==='Visualizers'?'visualizers':null;
       return part?{node_label:label,part,...(part==='label'?{label_text:textOf(element,false,'')}: {})}:null;
     };
     const priority = { graph_editor: 0, dialog: 1, graph: 2, workflow: 3, global: 4 };
@@ -1493,6 +1946,7 @@ function readRenderedInputMapping(observation) {
       // Import types are needed before advancing: metadata cell_refs are not
       // issued controls. Deliver type cells first instead of burying them behind
       // all format inputs and preview controls on later compact pages.
+      if(importScroller(element))return -13;
       if(importColumnCellRefs.has(state.ids.get(element)))return /_2$/.test(tid)?-12:-11;
       if(wizardButtons.some(name=>tid===base+name))return -10;
       if(['btnCalcMode','btnAddExpr','btnExprEdit'].some(name=>tid===base+'CalcDataWizard;'+name))return -9;
@@ -1504,12 +1958,14 @@ function readRenderedInputMapping(observation) {
       if(graphNode)return graphNode.part==='settings'?1.5:graphNode.part==='body'?1.6:1.7;
       return priority[scopeOf(element)];
     };
+    scanStage='controls';
     const controls = candidates.filter(interesting)
       // Loginom draws anonymous canvas geometry with repeated Graph;Vertex
       // tids even in an empty draft. It is not a node or an actionable target.
       // Preserve a real uniquely labelled node whose actual name is Vertex.
       .filter(element=>!ownedGraph(element) || getTid(element)!==graphPrefix+'Vertex' || graphNodeOf(element))
-      .filter(element=>!element.closest('[data-tid="mnContextMenu"]') || processMenuControls.has(state.ids.get(element))).filter(element=>!selectedRoot || selectedRoot===element || selectedRoot.contains(element))
+      .filter(element=>!element.closest('[data-tid="mnContextMenu"]') || processMenuControls.has(state.ids.get(element))).filter(element=>!selectedRoot || selectedRoot===element || selectedRoot.contains(element)
+        ||preparedNodeId&&getTid(selectedRoot)===definitionPrefix+';ModelForm;cmpDiagram'&&getTid(element)===definitionPrefix+';ModelForm;btnToggleActivateCurrent')
       .sort((left, right) => controlPriority(left) - controlPriority(right));
     const checkStateOf = element => {
       const type=element.getAttribute('type'),role=element.getAttribute('role');
@@ -1534,6 +1990,14 @@ function readRenderedInputMapping(observation) {
         if (parent.scrollHeight>parent.clientHeight && ['auto','scroll'].includes(getComputedStyle(parent).overflowY)) {
           return { ref: refOf(parent), top: parent.scrollTop, max_top: parent.scrollHeight-parent.clientHeight };
         }
+      }
+      return null;
+    };
+    const horizontalScrollOf = element => {
+      for(let parent=element;parent && parent!==document.body;parent=parent.parentElement) {
+        charge();
+        if(parent.scrollWidth>parent.clientWidth && ['auto','scroll'].includes(getComputedStyle(parent).overflowX))
+          return {ref:refOf(parent),left:parent.scrollLeft,max_left:parent.scrollWidth-parent.clientWidth};
       }
       return null;
     };
@@ -1622,22 +2086,47 @@ function readRenderedInputMapping(observation) {
         rendered_lines:documentRead.full_text_verified || redacted?[]:lines,rendering_truncated:truncated,redacted,
         full_text_verified:documentRead.full_text_verified,syntax_validity:'unverified'};
     };
+    const graphExecutionOf=element=>{
+      if(!preparedNodeId||wizard.status!=='absent'||getTid(element)!==workflow?.prefix+';ModelForm;btnToggleActivateCurrent')return null;
+      const app=globalThis.bg?.app,model=app?.Application?.FInstance?.FMainForm?.Items?.Workspace?.getActiveTab?.()?.Controller?.FController;
+      const d=model?.FDiagram,nodes=d?.FNodes?.FCollection;
+      if(!app?.ModelForm||!(model instanceof app.ModelForm)||!Array.isArray(nodes)||nodes.length>200)return null;
+      const matches=nodes.filter(n=>n.FGuid===preparedNodeId),selection=d.FmxGraph?.getSelectionCells?.();
+      const native=globalThis.Ext?.getCmp?.(element.id);
+      if(matches.length!==1||matches[0].FLocked===true||!Array.isArray(selection)||selection.length!==1||selection[0]!==matches[0].FCell
+        ||native?.el?.dom!==element||native.disabled===true||native.tooltip!=='Выполнить узел'
+        ||!['Выполнить узел','Выполнить узел (F9)'].includes(element.getAttribute('data-qtip'))
+        ||element.querySelectorAll('.bg-icon-run_current').length!==1)return null;
+      const dom=d.FmxGraph.view?.getState?.(matches[0].FCell)?.shape?.node;
+      if(!dom||!d.FmxGraph.container.contains(dom)||getTid(dom)!==workflow.prefix+';Graph;'+getTid(dom)?.split(';Graph;')[1])return null;
+      return {node_id:preparedNodeId,node_ref:refOf(dom),mode:'execute',source:'native_selected_graph_node'};
+    };
     const elements = controls.slice(0, 240).map(element => {
       const identity = identityOf(element), tag = element.tagName.toLowerCase(), tid = getTid(element);
       const editable = element.matches('textarea,input:not([type="button"]):not([type="submit"]):not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="color"]),[contenteditable="true"]') && !element.readOnly;
-      const label = short(element.getAttribute('aria-label') || element.getAttribute('placeholder') || element.getAttribute('title') || textOf(element));
+      const label = tableScrollers.has(state.ids.get(element))?'':short(element.getAttribute('aria-label') || element.getAttribute('placeholder') || element.getAttribute('title') || textOf(element));
       const role = element.getAttribute('role'), kind = /;(?:Input|Output)_/.test(tid ?? '') ? 'port' : editable ? 'field' : /;Graph;/.test(tid ?? '') ? 'graph' : 'control';
       const isEnabled = enabled(element), allowed = identity && isEnabled && !dangerous(element);
       const scroll = scrollOf(element);
+      const horizontalScroll=horizontalScrollOf(element);
       const interaction = interactionOf(element);
       const checkState=checkStateOf(element);
       const calculatorEditor=calculatorEditorOf(element);
       const combo=comboPart(element);
+      const outputColumn=outputColumnCells.get(state.ids.get(element));
       const groupingField=groupingCells.get(state.ids.get(element));
+      const viewToggle=new RegExp('^'+workflow?.prefix+';ViewsForm;BrowseView(?:-[0-9]+)?;btnDataGrid(?:ShowNulls|DataTypeIcon)$').test(tid??'')
+        ? {kind:tid.endsWith(';btnDataGridShowNulls')?'nulls':'data_types',pressed:element.classList.contains('x-btn-pressed')}:null;
+      const viewerVendor=tid===workflow?.prefix+';ViewsForm;colVendors_Визуализаторы>Табличное_представление>Таблица;TreeText'
+        ? {kind:'table',selected:element.closest('table.x-grid-item')?.classList.contains('x-grid-item-selected')===true}:null;
+      const viewerControl=viewerControls.get(state.ids.get(element)),tableScroller=tableScrollers.get(state.ids.get(element));
+      const processGrid=processGridControls.get(state.ids.get(element)),processExpander=processExpanders.get(state.ids.get(element));
       const processRow=processCells.get(state.ids.get(element)),processMenu=processMenuControls.get(state.ids.get(element));
       const wizardStep=wizard.status==='observed' && wizard.stage && ['btnNext','btnPrev'].some(name=>tid===wizard.root_tid+';'+name)
         && wizard.controls[tid.split(';').at(-1)]?.status==='observed'
         ? {direction:tid.endsWith(';btnNext')?'next':'previous',root_ref:wizard.root_ref,stage:wizard.stage}:null;
+      const graphExecution=graphExecutionOf(element);
+      const openNodeViews=wizard.status==='absent' && graphNodeOf(element)?.part==='visualizers';
       const openWizard=wizard.status==='absent' && navigationContext.status==='observed' && graphNodeOf(element)?.part==='settings'
         ? {node:graphNodeOf(element),workflow_path:navigationContext.path}:null;
       const inputPortFinishReady=wizard.stage==='input_mapping' && wizard.input_port_context?.status==='observed'
@@ -1648,11 +2137,22 @@ function readRenderedInputMapping(observation) {
         && wizard.input_mapping.links?.length===wizard.input_mapping.rendered_coverage.link_count;
       const outputPortFinishReady=wizard.stage==='output_mapping' && wizard.port_context?.status==='observed'
         && wizard.port_context.kind==='output_data' && wizard.output_columns?.status==='rendered_rows'
-        && wizard.output_columns.definition_coverage?.status==='complete_configured_rows'
-        && wizard.output_columns.fields?.length===wizard.output_columns.definition_coverage.count
+        && (wizard.output_columns.definition_coverage?.status==='complete_configured_rows'
+          && wizard.output_columns.fields?.length===wizard.output_columns.definition_coverage.count
+          ||preparedOutputPort?.direction==='output'&&wizard.output_columns.page?.status==='complete_definition_page'
+            &&wizard.output_columns.page.returned===wizard.output_columns.fields?.length)
         && wizard.output_columns.auto_sync?.status==='observed';
-      const finishWizard=tid===wizard.root_tid+';btnDone' && wizard.stage==='done' && wizard.completion?.ready && wizard.owner_context?.status==='observed'
-        ? {root_ref:wizard.root_ref,owner:wizard.owner_context,completion:wizard.completion}
+      const closeConfirmation=tid==='msgbox;tlb;yes' && wizard.status==='observed' && wizard.owner_context?.status==='observed'
+        && dialogs.length===1 && dialogs[0].ref===dialogRef(element) && dialogs[0].title==='Подтвердить'
+        && dialogs[0].text==='Подтвердить Вы действительно хотите закрыть мастер настройки? Да Нет'
+        ? {root_ref:wizard.root_ref,root_tid:wizard.root_tid,stage:wizard.stage,owner:wizard.owner_context,dialog_ref:dialogs[0].ref}:null;
+      const deactivationConfirmation=tid==='msgbox;tlb;yes' && wizard.status==='absent' && pendingWizardOwner.status==='observed'
+        && dialogs.length===1 && dialogs[0].ref===dialogRef(element)
+        && dialogs[0].title==='Loginom '+(globalThis.bg?.app?.Version??'')
+        && dialogs[0].text==='Loginom '+(globalThis.bg?.app?.Version??'')+' Настройка узла приведет к его деактивации. Вы действительно хотите начать настраивать узел? Да Да, больше не спрашивать Нет'
+        ? {dialog_ref:dialogs[0].ref,pending_owner:pendingWizardOwner}:null;
+      const finishWizard=[wizard.root_tid+';btnDone',wizard.root_tid+';btnExecute'].includes(tid) && wizard.stage==='done' && wizard.completion?.ready && wizard.owner_context?.status==='observed'
+        ? {...(tid.endsWith(';btnExecute')?{mode:'execute'}:{}),root_ref:wizard.root_ref,owner:wizard.owner_context,completion:wizard.completion}
         : tid===wizard.root_tid+';btnDone' && wizard.controls.btnDone?.status==='observed' && inputPortFinishReady
           ? {mode:'input_port',root_ref:wizard.root_ref,node_ref:wizard.input_port_context.node.ref,port_ref:wizard.input_port_context.port_ref}
           : tid===wizard.root_tid+';btnDone' && wizard.controls.btnDone?.status==='observed' && outputPortFinishReady
@@ -1662,7 +2162,7 @@ function readRenderedInputMapping(observation) {
         && (!reformColumn || column.selected_column.caching && typeof column.selected_column.excluded==='boolean')
         && Object.values(column.fields??{}).length===(reformColumn?7:5) && Object.values(column.fields).every(f=>f.status==='observed' && !f.truncated);
       const columnForm=reformColumn?'EditReformColumnDefForm':'EditColumnDefForm';
-      const columnBase=reformColumn?column?.root_tid:wizard.root_tid+';'+columnForm;
+      const columnBase=reformColumn?column?.root_tid:(column?.root_tid??wizard.root_tid+';'+columnForm);
       const columnClose=columnReady && [columnBase+';btnApply',columnBase+';btnCancel'].includes(tid)
         ? {scope:reformColumn?'reform':'output',mode:tid.endsWith(';btnApply')?'apply':'cancel',root_ref:column.root_ref,wizard_root_ref:wizard.root_ref,original_row:column.selected_column}:null;
       const params=wizard.expression_parameters;
@@ -1688,7 +2188,8 @@ function readRenderedInputMapping(observation) {
         kind:storageTypes.length===1 && textOf(storageTypes[0],true)==='Папка' ? 'folder':'unknown'} : null;
       return { ref: refOf(element), tid, identity, kind, role, label:label || (combo?.kind==='picker' && combo.field.scope==='import_column'
         ? 'Открыть список: '+(combo.field.name==='type'?'Тип данных':'Вид данных'):''), scope: scopeOf(element), ...fieldValue,
-        ...(processRow?{process_row:processRow}:{}),...(processMenu?{process_menu:processMenu}:{}),
+        ...(viewToggle?{view_toggle:viewToggle}:{}),...(viewerVendor?{viewer_vendor:viewerVendor}:{}),...(viewerControl?{viewer_card:viewerControl}:{}),...(tableScroller?{table_scroller:tableScroller}:{}),...(processGrid?{process_grid:processGrid}:{}),...(processExpander?{process_expander:processExpander}:{}),...(processRow?{process_row:processRow}:{}),...(processMenu?{process_menu:processMenu}:{}),
+        ...(outputColumn?{output_column:outputColumn}:{}),
         ...(groupingField ? {grouping_field:groupingField} : {}),
         ...(storageEntry ? {storage_entry:storageEntry} : {}),
         ...(graphNodeOf(element) ? {graph_node:graphNodeOf(element)} : {}),
@@ -1699,16 +2200,21 @@ function readRenderedInputMapping(observation) {
         ...(wizardStep ? {wizard_step:wizardStep} : {}),
         ...(openWizard ? {wizard_open:openWizard} : {}),
         ...(finishWizard ? {wizard_finish:finishWizard} : {}),
+        ...(graphExecution?{graph_execution:graphExecution}:{}),
+        ...(closeConfirmation?{wizard_close_confirmation:closeConfirmation}:{}),
+        ...(deactivationConfirmation?{wizard_deactivation_confirmation:deactivationConfirmation}:{}),
         ...(columnClose ? {column_close:columnClose} : {}),
         ...(expressionApply ? {expression_apply:expressionApply} : {}),
         ...(expressionCancel ? {expression_cancel:expressionCancel} : {}),
         ...(wizardFields.has(element) ? {wizard_field:wizardFields.get(element)} : {}),
-        signature: { tag, tid, role, type: element.getAttribute('type'), name: element.getAttribute('name'), label, ...fieldValue, dialog_ref: dialogRef(element), scroll, check_state:checkState, ...(groupingField?{grouping_field:groupingField}:{}),...(processRow?{process_row:processRow}:{}),...(processMenu?{process_menu:processMenu}:{}) },
+        ...(horizontalScroll?{horizontal_scroll:horizontalScroll}:{}),
+        signature: { tag, tid, role, type: element.getAttribute('type'), name: element.getAttribute('name'), label, ...fieldValue, dialog_ref: dialogRef(element), scroll, check_state:checkState, ...(horizontalScroll?{horizontal_scroll:horizontalScroll}:{}),...(groupingField?{grouping_field:groupingField}:{}),...(viewToggle?{view_toggle:viewToggle}:{}),...(viewerVendor?{viewer_vendor:viewerVendor}:{}),...(viewerControl?{viewer_card:viewerControl}:{}),...(tableScroller?{table_scroller:tableScroller}:{}),...(processGrid?{process_grid:processGrid}:{}),...(processExpander?{process_expander:processExpander}:{}),...(processRow?{process_row:processRow}:{}),...(processMenu?{process_menu:processMenu}:{}),...(outputColumn?{output_column:outputColumn}:{}) },
         enabled: isEnabled, visible: true, interaction, bounding_box: boxOf(element),
         // A bounded prefix is not a sufficient value precondition. A dedicated
         // large-field driver must establish its own complete read/write contract.
-        allowed_actions: processRow || processMenu ? (allowed && interaction.state==='point_observed' ? (processRow?['click','right_click','press']:['click','press']) : []) : groupingField ? (allowed && interaction.state==='point_observed' ? ['click','double_click','press'] : []) : expressionWritable ? ['replace_expression'] : allowed && !valueTruncated ? ['click', 'double_click', 'right_click', 'press', 'drag', ...(editable ? ['fill',...(wizardFields.has(element)?['set_wizard_field']:[])] : []), ...(checkState ? ['set_checked'] : []), ...(wizardStep?['wizard_step']:[]), ...(openWizard?['open_wizard']:[]), ...(finishWizard?['finish_wizard']:[]), ...(columnClose?[columnClose.mode+'_'+columnClose.scope+'_column']:[]), ...(expressionApply?['apply_expression_parameters']:[]), ...(expressionCancel?['cancel_expression_parameters']:[]), ...(combo?.kind==='option'?['select_wizard_option']:[]), ...(scroll && interaction.state === 'point_observed' ? ['scroll'] : [])] : [] };
+        allowed_actions: tid===workflow?.prefix+';ModelForm;btnToggleActivateCurrent' ? (allowed&&graphExecution&&interaction.state==='point_observed'?['execute_graph_node']:[]) : element===storageRoot ? (allowed && interaction.state==='point_observed'?['click']:[]) : outputColumn ? (allowed && interaction.state==='point_observed'?['click','double_click','press']:[]) : tableScroller ? (allowed && horizontalScroll?.ref===refOf(element) && interaction.state==='point_observed'?['scroll_horizontal']:[]) : viewerControl ? (allowed && interaction.state==='point_observed' ? [viewerControl.kind==='enter'?'enter_table':'click'] : []) : processGrid || processExpander ? (allowed && interaction.state==='point_observed' ? (processGrid?['right_click','press',...(scroll?.ref===refOf(element)?['scroll']:[])]:['click']) : []) : outputScroller(element) ? (allowed && scroll && scroll.ref===refOf(element) && interaction.state==='point_observed'?['scroll']:[]) : importScroller(element) ? (allowed && horizontalScroll && interaction.state==='point_observed'?['scroll_horizontal']:[]) : processRow || processMenu ? (allowed && interaction.state==='point_observed' ? (processRow?['click','right_click','press']:processMenu.action==='mniCancel'?['cancel_process']:['click','press',...(processMenu.action==='mniShowNodeToProcess'?['show_process_node']:[])]) : []) : groupingField ? (allowed && interaction.state==='point_observed' ? ['click','double_click','press'] : []) : expressionWritable ? ['replace_expression'] : allowed && !valueTruncated ? ['click', 'double_click', 'right_click', 'press', 'drag', ...(editable ? ['fill',...(wizardFields.has(element)?['set_wizard_field']:[])] : []), ...(checkState ? ['set_checked'] : []), ...(wizardStep?['wizard_step']:[]), ...(closeConfirmation?['confirm_wizard_close']:[]), ...(deactivationConfirmation?['confirm_wizard_deactivation']:[]), ...(openWizard?['open_wizard','begin_wizard']:[]),...(openNodeViews?['open_node_views']:[]),...(graphExecution?['execute_graph_node']:[]), ...(finishWizard?[finishWizard.mode==='execute'?'execute_wizard':'finish_wizard']:[]), ...(columnClose?[columnClose.mode+'_'+columnClose.scope+'_column']:[]), ...(expressionApply?['apply_expression_parameters']:[]), ...(expressionCancel?['cancel_expression_parameters']:[]), ...(combo?.kind==='option'?['select_wizard_option']:[]), ...(scroll && interaction.state === 'point_observed' ? ['scroll'] : []), ...(horizontalScroll && interaction.state==='point_observed'?['scroll_horizontal']:[])] : [] };
     });
+    scanStage='data_views';
     const nodes = labels.slice(0, 200).map(label => {
       const nodeTid = graphPrefix + label, matches=graphElements.filter(e=>getTid(e)===nodeTid),node=matches.length===1?matches[0]:null;
       return { node_ref: { kind: 'node', node_label: label, workflow_ref: workflow }, bounding_box: node ? boxOf(node) : null,
@@ -1742,10 +2248,12 @@ function readRenderedInputMapping(observation) {
       // its controls must still pass exact painted hit ownership before acting.
       const owner = dialogRef(element), ownText = element.getAttribute('bg-mask-text');
       const kind = foregroundElement && !foregroundElement.contains(element) && !element.contains(foregroundElement) ? 'modal_background' : 'busy';
-      return { ref: refOf(element), kind, dialog_ref: owner, text: ownText === null ? textOf(element) : short(ownText), bounding_box: boxOf(element) };
+      return { ref: refOf(element), kind, target_tid:getTid(element), dialog_ref: owner, text: ownText === null ? textOf(element) : short(ownText), bounding_box: boxOf(element) };
     });
     const messages = readTexts('[role="alert"],[role="status"],.bg-message,.x-message-box,.x-form-invalid-under');
-    const allCells = select('td,th,[role="gridcell"],[role="columnheader"],.x-column-header[data-tid],.x-grid-cell-inner');
+    const definitionOnly=!!definitionPrefix && wizard.status==='observed';
+    if(definitionOnly)omittedRegions.add('generic_table_cells');
+    const allCells = definitionOnly?[]:select('td,th,[role="gridcell"],[role="columnheader"],.x-column-header[data-tid],.x-grid-cell-inner');
     const cells = allCells.filter(visible).filter(element=>!selectedRoot || selectedRoot===element || selectedRoot.contains(element))
       .filter(element => !allCells.some(other => { charge(); return other !== element && element.contains(other); }));
     // E2E previewTable.ts and sBrowseView.ts: header key + zero-based row
@@ -1927,7 +2435,7 @@ function readRenderedInputMapping(observation) {
             const rows=[...new Set(labelCells.map(e=>e.closest('table')).filter(Boolean))];
             const grid=unique(base+'grdFields;tbl');
             const coverage=bounds(grid),filter=input('txtColumnsFilterField');
-            const fields=labelCells.slice(0,16).map(cell=>{
+            let fields=labelCells.slice(0,16).map(cell=>{
               const key=getTid(cell).slice((base+'colDisplayName_').length),row=cell.closest('table');
               const index=unique(base+'colSourceColumnIndex_'+key),visibility=unique(base+'colInAll_'+key);
               const icons=dom.filter(e=>{charge();return cell.contains(e) && /bg-TBGDataType-dt/.test(e.getAttribute('class')??'');});
@@ -1946,13 +2454,69 @@ function readRenderedInputMapping(observation) {
                 visibility_status:visibilityObserved?'observed':'unobserved',visibility_cell_ref:refOf(visibility),
                 ...(visibilityObserved?{visibility_icon_ref:refOf(eye[0])}:{}),selected:row.classList.contains('x-grid-item-selected'),row_ref:refOf(row),label_ref:refOf(cell)};
             });
-            const valid=coverage && coverage.rows.length>0 && fields.length===coverage.rows.length && labelCells.length===fields.length
+            let valid=coverage && coverage.rows.length>0 && fields.length===coverage.rows.length && labelCells.length===fields.length
               && fields.every(f=>f.status==='observed') && new Set(fields.map(f=>f.name_key)).size===fields.length
               && new Set(fields.map(f=>f.source_index)).size===fields.length && fields.every(f=>f.source_index<fields.length)
               && filter.status==='observed' && filter.value===''
               && !dom.some(e=>{charge();return modal.contains(e) && /celleditor|EditColumnDefForm/.test(getTid(e)??'') && visible(e);});
-            tableSettings.format={fields,fieldlist_complete:!!valid,visibility_complete:!!valid && fields.every(f=>f.visibility_status==='observed'),filter,source_identity_verified:false};
+            let formatPage=null,metadataFields=[],formatScroll=null;
+            if(tableFormatPage && grid) {
+              const nativeView=globalThis.Ext?.getCmp?.(grid.id),store=nativeView?.getStore?.(),records=store?.getData?.()?.items;
+              const own=(o,k)=>Object.getOwnPropertyDescriptor(o??{},k)?.value;
+              const typeMap={1:'boolean',2:'datetime',3:'real',4:'integer',5:'string',6:'variant'};
+              const nativeRows=[...grid.querySelectorAll('table.x-grid-item')];charge();
+              let cacheValid=nativeView?.el?.dom===grid&&store?.$className==='Ext.data.Store'&&!store.isLoading?.()
+                &&Array.isArray(records)&&records.length>0&&records.length<=1000&&store.getCount?.()===records.length
+                &&filter.status==='observed'&&filter.value===''&&nativeRows.length<=200;
+              const metadata=[];
+              if(cacheValid)for(const [i,r] of records.entries()) {
+                charge();const d=own(r,'data'),name=own(d,'Name'),label=own(d,'DisplayName'),source=own(d,'SourceColumnIndex'),type=typeMap[own(d,'DataType')];
+                if(r.isModel!==true||!String(r.internalId??'')||own(d,'Index')!==i||typeof name!=='string'||!name||name.length>256
+                  ||typeof label!=='string'||label.length>2048||!Number.isInteger(source)||source<0||source>=records.length||!type
+                  ||typeof own(d,'InGrid')!=='boolean'||typeof own(d,'DisplayFormat')!=='string'){cacheValid=false;break;}
+                metadata.push({index:i,source_index:source,name_key:name,label,type,record_id:String(r.internalId),visible:own(d,'InGrid'),format_string:own(d,'DisplayFormat')});
+              }
+              cacheValid&&=new Set(metadata.map(f=>f.name_key)).size===metadata.length&&new Set(metadata.map(f=>f.source_index)).size===metadata.length
+                &&new Set(metadata.map(f=>f.record_id)).size===metadata.length&&new Set(nativeRows.map(r=>r.getAttribute('data-recordid'))).size===nativeRows.length;
+              fields=[];valid=false;
+              formatPage={status:'unverified_definition_page',offset:tableFormatPage.offset,limit:tableFormatPage.limit};
+              if(cacheValid && tableFormatPage.offset<metadata.length) {
+                const signature=JSON.stringify({root:refOf(modal),records:metadata.map(({format_string,visible,...f})=>f)});
+                if(state.tableFormatDefinition?.signature!==signature)state.tableFormatDefinition={signature,schema_id:'table-format-'+state.epoch+'-'+(++state.sequence)};
+                const end=Math.min(metadata.length,tableFormatPage.offset+tableFormatPage.limit),visibleIndices=[];
+                metadataFields=metadata.slice(tableFormatPage.offset,end);
+                const gb=boxOf(grid),insideGrid=e=>{const b=boxOf(e);return onScreen(e)&&b.x>=gb.x-1&&b.y>=gb.y-1&&b.x+b.width<=gb.x+gb.width+1&&b.y+b.height<=gb.y+gb.height+1;};
+                for(const row of nativeRows) {
+                  charge();const index=Number(row.getAttribute('data-recordindex')),f=metadata[index];
+                  if(!f||row.getAttribute('data-boundview')!==grid.id||row.getAttribute('data-recordid')!==f.record_id){cacheValid=false;break;}
+                  if(!insideGrid(row))continue;
+                  const cells=[...row.querySelectorAll('td[data-tid]')],labels=cells.filter(e=>(getTid(e)??'').startsWith(base+'colDisplayName_'));
+                  const sources=cells.filter(e=>(getTid(e)??'').startsWith(base+'colSourceColumnIndex_'));
+                  if(labels.length!==1||sources.length!==1||!insideGrid(labels[0])||!insideGrid(sources[0])
+                    ||textOf(labels[0],true)!==short(f.label)||textOf(sources[0],true)!==String(f.source_index)){cacheValid=false;break;}
+                  const icons=[...labels[0].querySelectorAll('[class*="bg-TBGDataType-dt"]')];charge();
+                  const nativeTypes={boolean:'Boolean',datetime:'DateTime',real:'Float',integer:'Integer',string:'String',variant:'Variant'};
+                  if(icons.length!==1||!icons[0].classList.contains('bg-TBGDataType-dt'+nativeTypes[f.type])){cacheValid=false;break;}
+                  visibleIndices.push(index);
+                  if(index>=tableFormatPage.offset&&index<end)fields.push({...f,status:'observed',selected:row.classList.contains('x-grid-item-selected'),
+                    row_ref:refOf(row),label_ref:refOf(labels[0]),visibility_status:'cached_native'});
+                }
+                if(cacheValid) {
+                  valid=true;formatScroll=refOf(grid);
+                  formatPage={status:fields.length===metadataFields.length?'complete_definition_page':'rendered_definition_window',
+                    schema_id:state.tableFormatDefinition.schema_id,offset:tableFormatPage.offset,limit:tableFormatPage.limit,
+                    total_columns:metadata.length,returned:fields.length,next_offset:end<metadata.length?end:null,
+                    rendered_start:visibleIndices.length?Math.min(...visibleIndices):null,rendered_end:visibleIndices.length?Math.max(...visibleIndices)+1:null};
+                } else {fields=[];metadataFields=[];}
+              }
+            }
+            tableSettings.format={fields,fieldlist_complete:!!valid&&!tableFormatPage,...(formatPage?{page:formatPage,metadata_fields:metadataFields,definition_scroll_ref:formatScroll}:{}),visibility_complete:!!valid && fields.every(f=>f.visibility_status==='observed'),filter,source_identity_verified:false};
             const selected=fields.filter(f=>f.status==='observed' && f.selected);
+            if(valid && selected.length===1 && selected[0].type==='datetime') {
+              tableSettings.format.selected_datetime={name_key:selected[0].name_key,source_index:selected[0].source_index,
+                formatting:checked('BrowseFormatPanel;cntFormat;cnt-1;chb'),custom:checked('BrowseFormatPanel;cbFormatStr'),
+                format_string:input('BrowseFormatPanel;edtFormatStr'),losslessness_verified:false};
+            }
             if(valid && selected.length===1 && ['integer','real'].includes(selected[0].type)) {
               tableSettings.format.selected_numeric={name_key:selected[0].name_key,source_index:selected[0].source_index,
                 formatting:checked('BrowseFormatPanel;cntFormat;cnt-1;chb'),custom:checked('BrowseFormatPanel;cbFormatStr'),
@@ -2018,7 +2582,17 @@ function readRenderedInputMapping(observation) {
 
     // Metadata refs are not issued controls. Admit only the same bounded live
     // Table label cell, with its typed owner/schema identity frozen in signature.
-    if(tableSettings.format?.fieldlist_complete) {
+    if(tableSettings.format?.fieldlist_complete || tableSettings.format?.page?.schema_id) {
+      const scrollRef=tableSettings.format.definition_scroll_ref;
+      const scrollElement=scrollRef?candidates.find(e=>state.ids.get(e)===scrollRef):null;
+      if(scrollElement && (!selectedRoot||selectedRoot===scrollElement||selectedRoot.contains(scrollElement))) {
+        const scroll=scrollOf(scrollElement),interaction=interactionOf(scrollElement),identity=identityOf(scrollElement),tid=getTid(scrollElement);
+        if(scroll?.ref===scrollRef && identity && interaction.state==='point_observed' && elements.length<240) {
+          const control={ref:scrollRef,tid,identity,kind:'control',label:'',scope:scopeOf(scrollElement),enabled:enabled(scrollElement),visible:true,
+            scroll,interaction,bounding_box:boxOf(scrollElement),signature:{tag:scrollElement.tagName.toLowerCase(),tid,scroll,table_format_scroll:true},allowed_actions:['scroll']};
+          const index=elements.findIndex(e=>e.ref===scrollRef);if(index>=0)elements[index]=control;else elements.push(control);
+        }
+      }
       for(const field of tableSettings.format.fields) {
         const matches=candidates.filter(e=>{charge();return state.ids.get(e)===field.label_ref;});
         if(matches.length!==1)continue;
@@ -2041,28 +2615,85 @@ function readRenderedInputMapping(observation) {
     }
     return { origin: location.origin, authenticated: !!tids.get('MF;cntMain;tlbMainToolbar;btnAvatar')?.some(visible), loginom_build: globalThis.bg?.app?.Version ?? null,
       workflow_ref: workflow, graph_identity:graphIdentity, active_tab_ref:active?refOf(active):null, active_identity: active ? textOf(active) : null, package_identity: packageIdentity,
-      file_storage:fileStorage,wizard,navigation_context:navigationContext,node_context:nodeContext,table_settings:tableSettings,table_coverage:tableCoverage,process_console:processConsole,
+      file_storage:fileStorage,wizard,wizard_pending_owner:pendingWizardOwner,workflow_navigation:workflowNavigation,navigation_context:navigationContext,node_context:nodeContext,table_settings:tableSettings,table_coverage:tableCoverage,process_console:processConsole,
       dom_epoch: {document:state.epoch,revision:state.revision},
       ...(selectedRoot ? {observation_root:{ref:rootRef,identity:identityOf(selectedRoot),detail_scope:'elements_and_cells',global_scan:false,global_guards:'fixed_native_queries'}} : {}),
-      scan: { complete: true, mutation_counts:{...state.mutations}, visited_elements: dom.length, detail_elements:detailElements, max_elements: maxElements, max_work: maxWork, max_ms: maxMs },
+      scan: { complete: true, mutation_counts:{...state.mutations}, visited_elements: dom.length, detail_elements:detailElements, max_elements: maxElements, max_work: maxWork, max_ms: maxMs,
+        ...(definitionPrefix?{scope:omittedRegions.has('table_data_cells')?'node_output_controls':'node_definition_controls',omitted_regions:[...omittedRegions]}:{}) },
       nodes, links: links.slice(0, 500), workarea: workarea ? boxOf(workarea) : null,
       ui: { elements, dialogs: dialogs.slice(0, 12), messages: messages.slice(0, 30), masks: masks.slice(0, 12), table_cells: tableCells,
-        truncated: { elements: !!selectedRoot || controls.length > 240, nodes: !!selectedRoot || labels.length > 200, links: !!selectedRoot || links.length > 500, ports: !!selectedRoot || nodes.some(node => node.ports.length === 100), dialogs: dialogs.length > 12, messages: !!selectedRoot || messages.length > 30, masks: masks.length > 12, table_cells: !!selectedRoot || cells.length > 120 } } };
+        truncated: { elements: !!selectedRoot || controls.length > 240, nodes: !!selectedRoot || labels.length > 200, links: !!selectedRoot || links.length > 500, ports: !!selectedRoot || nodes.some(node => node.ports.length === 100), dialogs: dialogs.length > 12, messages: !!selectedRoot || messages.length > 30, masks: masks.length > 12, table_cells: definitionOnly || !!selectedRoot || cells.length > 120 } } };
     } catch (error) {
       // Playwright serializes thrown Errors without arbitrary properties such
       // as our code. Return a small data envelope across the realm boundary;
       // never export exception messages that may contain page/private values.
       const code=['UI_SCAN_LIMIT','UI_ROOT_STALE','UI_EPOCH_UNAVAILABLE'].includes(error?.code)
         ? error.code : 'UI_OBSERVATION_FAILED';
-      return {ui_read_failure:{code}};
+      return {ui_read_failure:{code,...(code==='UI_SCAN_LIMIT' && ['work','time','elements','traversal'].includes(error?.limit_kind)?{limit_kind:error.limit_kind}:{})
+        ,...(['collect','metadata','output_definitions','import_definitions','controls','data_views'].includes(error?.scan_stage)?{scan_stage:error.scan_stage}:{})}};
     }
-  },{rootRef:rediscover ? null : postActionRoot ?? task.root_ref ?? task.snapshot?.observation_root?.ref ?? null,discoverRoots:rediscover || task.discover_roots===true,storageName:task.storage_name ?? null});
+  },{rootRef:rediscover ? null : postActionRoot ?? task.root_ref ?? task.snapshot?.observation_root?.ref ?? null,discoverRoots:rediscover || task.discover_roots===true,storageName:task.storage_name ?? null,
+    columnPage:task.import_column_page??(task.snapshot?.wizard?.import_columns?.page?{offset:task.snapshot.wizard.import_columns.page.offset,limit:task.snapshot.wizard.import_columns.page.limit}:null),
+    mappingPage:task.output_column_page??(task.snapshot?.wizard?.output_columns?.page?{offset:task.snapshot.wizard.output_columns.page.offset,limit:task.snapshot.wizard.output_columns.page.limit}:null),
+    tableFormatPage:task.table_format_page??(task.snapshot?.table_settings?.format?.page?{offset:task.snapshot.table_settings.format.page.offset,limit:task.snapshot.table_settings.format.page.limit}:null),
+    preparedWorkflowPath:task.prepared_node_context?.workflow_ref.navigation_path??null,
+    preparedNodeId:task.prepared_node_context?.node.node_id??null,
+    preparedOutputPort:nodeContext?.output_port??null,
+    cacheReadPredicates:!!task.prepared_node_context,definitionPrefix:task.prepared_node_context?.workflow_ref.prefix??null});
     if (observed?.ui_read_failure) {
       const code=observed.ui_read_failure.code;
+      if(code==='UI_SCAN_LIMIT')record('ui_scan_limit',{limit_kind:observed.ui_read_failure.limit_kind??'unknown',scan_stage:observed.ui_read_failure.scan_stage??'unknown'});
       const messages={UI_SCAN_LIMIT:'Workspace scan budget exceeded; use root discovery and a narrower observation',
         UI_ROOT_STALE:'Observed root is detached, hidden, inactive or expired',
         UI_EPOCH_UNAVAILABLE:'DOM mutation tracking is unavailable',UI_OBSERVATION_FAILED:'Browser observation failed'};
       fail(Object.hasOwn(messages,code)?code:'UI_OBSERVATION_FAILED',messages[code]??messages.UI_OBSERVATION_FAILED);
+    }
+    if(nodeContext) {
+      const after=await boundNode();
+      if(!same(nodeContext,after)) {
+        // A read can straddle native unlock after Close or a completed wizard
+        // gesture. Discard the mixed snapshot; pre-gesture guards stay strict.
+        if((task.mode==='observe'||effectPossible&&['finish_wizard','execute_wizard'].includes(task.action?.verb))
+          && nodeContext.surface==='graph' && after.surface==='graph'
+          && typeof nodeContext.locked==='boolean' && typeof after.locked==='boolean'
+          && nodeContext.locked!==after.locked && same({...nodeContext,locked:false},{...after,locked:false})
+          && graphLockReads<2) {
+          record('node_graph_lock_rediscovery',{attempt:++graphLockReads,node_id:after.node_id});
+          return readUi(rediscover);
+        }
+        if(task.action?.verb==='click'&&task.snapshot?.node_navigation_read===true&&effectPossible
+          &&nodeContext.surface==='views'&&after.surface==='graph'
+          &&['document_id','workflow_id','node_id'].every(k=>nodeContext[k]===after[k])&&navigationSurfaceReads<2) {
+          record('node_navigation_surface_rediscovery',{attempt:++navigationSurfaceReads,node_id:after.node_id});
+          await page.waitForTimeout(Math.min(50,timeout()));
+          return readUi(rediscover);
+        }
+
+        if(['begin_wizard','confirm_wizard_deactivation'].includes(task.action?.verb) && effectPossible
+          &&nodeContext.surface==='graph'&&after.surface==='wizard'
+          &&['document_id','workflow_id','node_id'].every(k=>nodeContext[k]===after[k])&&openingSurfaceReads<2) {
+          record('wizard_open_surface_rediscovery',{attempt:++openingSurfaceReads,node_id:after.node_id});
+          await page.waitForTimeout(Math.min(50,timeout()));
+          return readUi(rediscover);
+        }
+        if(['finish_wizard','execute_wizard'].includes(task.action?.verb)&&effectPossible
+          &&nodeContext.surface==='wizard'&&after.surface==='graph'
+          &&['document_id','workflow_id','node_id'].every(k=>nodeContext[k]===after[k])&&finishSurfaceReads<2) {
+          record('wizard_finish_surface_rediscovery',{attempt:++finishSurfaceReads,node_id:after.node_id});
+          await page.waitForTimeout(Math.min(50,timeout()));
+          return readUi(rediscover);
+        }
+        if(task.action?.verb==='confirm_wizard_close' && effectPossible && nodeContext.surface==='wizard'
+          && after.surface==='graph' && ['document_id','workflow_id','node_id'].every(k=>nodeContext[k]===after[k])
+          && cancellationSurfaceReads<2) {
+          record('wizard_cancel_surface_rediscovery',{attempt:++cancellationSurfaceReads,node_id:after.node_id});
+          await page.waitForTimeout(Math.min(50,timeout()));
+          return readUi(rediscover);
+        }
+        record('prepared_node_surface_mismatch',{before:nodeContext,after});
+        fail('PREPARED_NODE_CONTEXT_CHANGED','The node surface changed during observation');
+      }
+      observed.prepared_node_context=after;
     }
     return observed;
   };
@@ -2081,8 +2712,11 @@ function readRenderedInputMapping(observation) {
       || task.action.verb==='cancel_expression_parameters' && !same(before.expression_cancel,current.expression_cancel)
       || task.action.verb==='apply_expression_parameters' && !same(before.expression_apply,current.expression_apply)
       || ['apply_output_column','cancel_output_column','apply_reform_column','cancel_reform_column'].includes(task.action.verb) && !same(before.column_close,current.column_close)
-      || task.action.verb==='finish_wizard' && !same(before.wizard_finish,current.wizard_finish)
-      || task.action.verb==='open_wizard' && !same(before.wizard_open,current.wizard_open)
+      || task.action.verb==='execute_graph_node' && !same(before.graph_execution,current.graph_execution)
+      || ['finish_wizard','execute_wizard'].includes(task.action.verb) && !same(before.wizard_finish,current.wizard_finish)
+      || task.action.verb==='confirm_wizard_close' && !same(before.wizard_close_confirmation,current.wizard_close_confirmation)
+      || ['open_wizard','begin_wizard'].includes(task.action.verb) && !same(before.wizard_open,current.wizard_open)
+      || task.action.verb==='confirm_wizard_deactivation' && !same(before.wizard_deactivation_confirmation,current.wizard_deactivation_confirmation)
       || task.action.verb==='wizard_step' && !same(before.wizard_step,current.wizard_step)
       || task.action.verb==='select_wizard_option' && !same(before.wizard_combo,current.wizard_combo)) fail('UI_REFERENCE_STALE', 'The observed control changed; observe the workspace again');
     const locator = locatorFor(current.identity);
@@ -2113,7 +2747,10 @@ function readRenderedInputMapping(observation) {
     const validExtents = box && (isGraphLink ? box.width >= 0 && box.height >= 0 && (box.width > 0 || box.height > 0) : box.width > 0 && box.height > 0);
     if (!box?.styles_visible || !validExtents || ['x', 'y', 'width', 'height'].some(key => !Number.isFinite(box[key])
       || Math.abs(box[key] - current.bounding_box[key]) > 0.75)) fail('UI_REFERENCE_STALE', 'Observed control geometry changed');
-    const point = { x: box.x + box.width / 2, y: box.y + box.height / 2 };
+    // Buffered mapping and file rows can be partly clipped by their scrolling view.
+    // Use the freshly observed cell point, then hit-test that exact point again.
+    const point = (current.output_column || current.storage_entry) && current.interaction?.state==='point_observed'
+      ? current.interaction.point : { x: box.x + box.width / 2, y: box.y + box.height / 2 };
     if (!isGraphLink && viewport && (point.x < 0 || point.y < 0 || point.x >= viewport.width || point.y >= viewport.height)) fail('UI_REFERENCE_OFFSCREEN', 'Observed control is outside the viewport');
     const hit = await handle.evaluate((element, { point, viewport, isGraphLink }) => {
       let checked = 0;
@@ -2167,7 +2804,19 @@ function readRenderedInputMapping(observation) {
         if (!current.authenticated) fail('LOGIN_REQUIRED', 'Loginom authentication is required before changing the workspace');
         if (!same(task.snapshot.dom_epoch, current.dom_epoch)) fail('UI_EPOCH_CHANGED', 'The document changed since this observation; observe again even if its visible state looks unchanged');
         if (!same(current.ui.dialogs.map(item => item.ref), task.snapshot.ui.dialogs.map(item => item.ref))) fail('UI_CONTEXT_CHANGED', 'The visible dialog changed; observe the workspace again');
-        if(['set_wizard_field','wizard_step','select_wizard_option','apply_expression_parameters','cancel_expression_parameters','open_wizard','finish_wizard','apply_output_column','cancel_output_column','apply_reform_column','cancel_reform_column'].includes(task.action.verb) && (!same(task.snapshot.wizard,current.wizard)
+        if(task.action.verb==='confirm_wizard_deactivation') {
+          const binding=task.snapshot.node_wizard_confirmation,n=current.prepared_node_context;
+          if(binding?.kind!=='deactivation'||n?.verified!==true||n.surface!=='graph'||n.tid!==binding.graph_tid
+            ||!['document_id','workflow_id','node_id'].every(k=>n[k]===binding.node?.[k])
+            ||current.wizard_pending_owner?.status!=='observed'
+            ||current.wizard_pending_owner.node?.tid!==binding.opening.workflow_path.at(-1)?.tid+'>'+binding.opening.node.node_label
+            ||!same(current.wizard_pending_owner.path.slice(0,-2).map(({tid,label})=>({tid,label})),binding.opening.workflow_path)
+            ||current.ui.dialogs.length!==1||!Object.entries({yes:'Да',no:'Да, больше не спрашивать',cancel:'Нет'}).every(([name,label])=>
+              current.ui.elements.filter(e=>e.tid==='msgbox;tlb;'+name&&e.label===label
+                &&e.signature?.dialog_ref===current.ui.dialogs[0].ref&&e.allowed_actions.includes('click')).length===1))
+            fail('WIZARD_DEACTIVATION_CONTEXT_CHANGED','The exact prepared node deactivation confirmation is unavailable');
+        }
+        if(['set_wizard_field','wizard_step','select_wizard_option','apply_expression_parameters','cancel_expression_parameters','open_wizard','begin_wizard','confirm_wizard_deactivation','finish_wizard','execute_wizard','confirm_wizard_close','apply_output_column','cancel_output_column','apply_reform_column','cancel_reform_column'].includes(task.action.verb) && (!same(task.snapshot.wizard,current.wizard)
           || !same(task.snapshot.active_identity,current.active_identity) || !same(task.snapshot.package_identity,current.package_identity)))
           fail('WIZARD_CONTEXT_CHANGED','Wizard settings or package changed; observe again');
         const refs = task.action.verb === 'drag' ? [task.action.source_ref, task.action.target_ref] : [task.action.ref];
@@ -2194,6 +2843,14 @@ function readRenderedInputMapping(observation) {
           if (!before) fail('UI_REFERENCE_INVALID', 'Action reference is absent from the supplied observation');
           targets.push(await checkedHandle(before, item));
         }
+        const nodeBeforeGesture=await boundNode();
+        if(nodeBeforeGesture && !same(current.prepared_node_context,nodeBeforeGesture))
+          fail('PREPARED_NODE_CONTEXT_CHANGED','The node surface changed before the gesture');
+        if(task.action.verb==='execute_graph_node') {
+          const launch=await readUi(),before=current.ui.elements.find(e=>e.ref===task.action.ref),after=launch.ui.elements.find(e=>e.ref===task.action.ref);
+          if(!before?.graph_execution||!after?.allowed_actions.includes('execute_graph_node')||!same(before.graph_execution,after.graph_execution))
+            fail('GRAPH_EXECUTION_CONTEXT_CHANGED','The selected node or launch button changed before execution');
+        }
         const epochBeforeGesture = await page.evaluate(() => {
           const state=globalThis[Symbol.for('loginom-dock.workspace-ui.identity.v1')];
           if (!state?.observer) return null;
@@ -2209,7 +2866,7 @@ function readRenderedInputMapping(observation) {
           await page.mouse.click(targets[0].point.x, targets[0].point.y, { clickCount, button });
           mouseHeld = false;
         };
-        if (task.action.verb === 'click' || ['wizard_step','select_wizard_option','apply_expression_parameters','cancel_expression_parameters','open_wizard','finish_wizard','apply_output_column','cancel_output_column','apply_reform_column','cancel_reform_column'].includes(task.action.verb)) await clickTarget(1);
+        if (task.action.verb === 'click' || ['execute_graph_node','wizard_step','select_wizard_option','apply_expression_parameters','cancel_expression_parameters','open_wizard','begin_wizard','confirm_wizard_deactivation','finish_wizard','execute_wizard','confirm_wizard_close','show_process_node','cancel_process','open_node_views','enter_table','apply_output_column','cancel_output_column','apply_reform_column','cancel_reform_column'].includes(task.action.verb)) await clickTarget(1);
         else if (task.action.verb === 'double_click') await clickTarget(2);
         else if (task.action.verb === 'right_click') await clickTarget(1, 'right');
         else if (task.action.verb === 'press') await first.press(task.action.key, { timeout: timeout() });
@@ -2218,6 +2875,23 @@ function readRenderedInputMapping(observation) {
           if (before.checked===task.action.checked && !before.indeterminate) {
             effectPossible=false;record('ui_state_already_satisfied',{verb:task.action.verb,checked:task.action.checked});
           } else { await clickTarget(1); await page.waitForTimeout(50); }
+        }
+        else if(task.action.verb==='scroll_horizontal') {
+          const expected=current.ui.elements.find(item=>item.ref===task.action.ref).horizontal_scroll;
+          const moved=await first.evaluate((element,{expected,delta})=>{
+            const state=globalThis[Symbol.for('loginom-dock.workspace-ui.identity.v1')];
+            for(let parent=element,depth=0;parent && parent!==document.body && depth<64;parent=parent.parentElement,depth++) {
+              if(!(parent.scrollWidth>parent.clientWidth)||!['auto','scroll'].includes(getComputedStyle(parent).overflowX))continue;
+              if(state?.ids.get(parent)!==expected.ref||parent.scrollLeft!==expected.left
+                ||parent.scrollWidth-parent.clientWidth!==expected.max_left)return null;
+              const to=Math.max(0,Math.min(expected.max_left,expected.left+delta));if(to===expected.left)return null;
+              parent.scrollLeft=to;
+              return {from:expected.left,to:parent.scrollLeft,owner_ref:expected.ref,axis:'horizontal'};
+            }
+            return null;
+          },{expected,delta:task.action.delta_x});
+          if(!moved){effectPossible=false;fail('UI_SCROLL_UNAVAILABLE','Horizontal scroll owner changed or its boundary was reached; observe again');}
+          record('ui_scroll_applied',moved);
         }
         else if (task.action.verb === 'scroll') {
           const expected=current.ui.elements.find(item=>item.ref===task.action.ref).scroll;
@@ -2311,10 +2985,15 @@ function readRenderedInputMapping(observation) {
         if (effectPossible) record('ui_gesture_applied', { verb: task.action.verb });
         phase = 'observing'; timeout();
         if(['apply_expression_parameters','cancel_expression_parameters','select_wizard_option','apply_output_column','cancel_output_column','apply_reform_column','cancel_reform_column'].includes(task.action.verb))postActionRoot=current.wizard.root_ref;
+        const exactDeactivation=fresh=>fresh.prepared_node_context?.verified===true
+          &&fresh.prepared_node_context.surface==='graph'&&fresh.wizard?.status==='absent'
+          &&fresh.ui.dialogs.length===1&&fresh.ui.elements.filter(e=>e.wizard_deactivation_confirmation
+            &&e.tid==='msgbox;tlb;yes'&&e.allowed_actions.includes('confirm_wizard_deactivation')).length===1;
         const lifecycleContextMatches=fresh=>fresh.authenticated && fresh.origin===current.origin && fresh.loginom_build===current.loginom_build
           && same(fresh.workflow_ref,current.workflow_ref) && same(fresh.package_identity,current.package_identity)
           && fresh.active_tab_ref===current.active_tab_ref && !!current.active_tab_ref
-          && !!current.dom_epoch?.document && fresh.dom_epoch?.document===current.dom_epoch.document && fresh.ui.dialogs.length===0;
+          && !!current.dom_epoch?.document && fresh.dom_epoch?.document===current.dom_epoch.document
+          && (fresh.ui.dialogs.length===0 || task.action.verb==='begin_wizard' && exactDeactivation(fresh));
         let staleOpeningRoots=0;
         const readOpeningUi=async()=>{
           for(;;) {
@@ -2326,7 +3005,7 @@ function readRenderedInputMapping(observation) {
               || !same(roots.workflow_ref,current.workflow_ref) || !current.dom_epoch?.document
               || roots.dom_epoch?.document!==current.dom_epoch.document)
               fail('WIZARD_CONTEXT_CHANGED','The original document and workspace were not preserved after the wizard gesture');
-            postActionRoot=roots.wizard?.root_ref ?? roots.ui.elements.find(e=>e.tid===current.workflow_ref.prefix+';ModelForm;cmpDiagram')?.ref ?? roots.ui.elements.find(e=>e.scope==='dialog')?.ref ?? roots.ui.elements[0]?.ref;
+            postActionRoot=(task.action.verb==='begin_wizard'?roots.ui.elements.find(e=>e.scope==='dialog')?.ref:undefined) ?? roots.wizard?.root_ref ?? (['open_node_views','enter_table'].includes(task.action.verb)?roots.ui.elements.find(e=>e.tid===current.workflow_ref.prefix+';ViewsForm;BrowseView')?.ref ?? roots.ui.elements.find(e=>e.tid===current.workflow_ref.prefix+';ViewsForm')?.ref:undefined) ?? roots.ui.elements.find(e=>e.tid===current.workflow_ref.prefix+';ModelForm;cmpDiagram')?.ref ?? roots.ui.elements.find(e=>e.scope==='dialog')?.ref ?? roots.ui.elements[0]?.ref;
             if(!postActionRoot)fail('WIZARD_OPEN_NOT_CONFIRMED','No current region was available after opening settings');
             try {
               const fresh=await readUi();
@@ -2344,7 +3023,7 @@ function readRenderedInputMapping(observation) {
           }
         };
         let observed;
-        try { observed = await (['open_wizard','finish_wizard'].includes(task.action.verb)?readOpeningUi():readUi()); }
+        try { observed = await (['open_wizard','begin_wizard','confirm_wizard_deactivation','finish_wizard','execute_wizard','confirm_wizard_close','show_process_node','cancel_process','open_node_views','enter_table'].includes(task.action.verb)?readOpeningUi():readUi()); }
         catch(error) {
           // A generic click can legitimately close its popup/tree. Rediscover
           // regions only after the completed gesture, never for preconditions
@@ -2353,7 +3032,20 @@ function readRenderedInputMapping(observation) {
           observed=await readUi(true);
           record('ui_root_closed_after_gesture',{verification_required:true});
         }
-        if(task.action.verb==='finish_wizard') {
+        if(task.action.verb==='confirm_wizard_close') {
+          const confirmation=current.ui.elements.find(e=>e.ref===task.action.ref).wizard_close_confirmation;
+          const path=confirmation.owner.path.slice(0,-2).map(({tid,label})=>({tid,label}));
+          const key=confirmation.owner.node.label.replace(/\s/g,'_').replace(/,/g,'');
+          const ready=s=>lifecycleContextMatches(s)&&s.wizard.status==='absent'&&!s.ui.dialogs.length&&!s.ui.masks.length
+            &&s.navigation_context?.status==='observed'&&same(s.navigation_context.path,path)
+            &&s.ui.elements.filter(e=>e.graph_node?.part==='body'&&e.graph_node.node_label===key).length===1;
+          for(let attempt=0;attempt<24&&!ready(observed)&&lifecycleContextMatches(observed);attempt++) {
+            await page.waitForTimeout(Math.min(100,timeout()));observed=await readOpeningUi();
+          }
+          if(!ready(observed))fail('WIZARD_CANCEL_NOT_CONFIRMED','The cancelled wizard did not return to its original node; inspect before retry');
+          record('wizard_cancel_graph_verified',{previous_owner:confirmation.owner.node,settings_applied:false,execution_started:false});
+        }
+        if(['finish_wizard','execute_wizard'].includes(task.action.verb)) {
           const finish=current.ui.elements.find(e=>e.ref===task.action.ref).wizard_finish;
           const contextMatches=lifecycleContextMatches;
           const inputPort=finish.mode==='input_port',outputPort=finish.mode==='output_port',port=inputPort||outputPort;
@@ -2380,7 +3072,7 @@ function readRenderedInputMapping(observation) {
             && fresh.navigation_context?.status==='observed'
             && same(fresh.navigation_context.path,workflowPath);
           if(!ready(observed))
-            fail('WIZARD_FINISH_NOT_CONFIRMED','The expected node and workflow were not confirmed after one Done click; inspect before retry');
+            fail('WIZARD_FINISH_NOT_CONFIRMED','The expected node and workflow were not confirmed after one wizard completion click; inspect before retry');
           // Live finish can replace the newly painted graph body after the
           // first success. Issue only the final quiet snapshot, not its stale
           // predecessor; a replacement restarts settling without another click.
@@ -2391,33 +3083,37 @@ function readRenderedInputMapping(observation) {
           for(let attempt=0;attempt<12 && quietSamples<3;attempt++) {
             timeout();await page.waitForTimeout(Math.min(200,timeout()));
             const fresh=await readOpeningUi();
-            if(!ready(fresh))fail('WIZARD_FINISH_NOT_CONFIRMED','The destination changed while settling after one Done click; inspect before retry');
+            if(!ready(fresh))fail('WIZARD_FINISH_NOT_CONFIRMED','The destination changed while settling after one wizard completion click; inspect before retry');
             quietSamples=same(stamp(fresh),stamp(observed))?quietSamples+1:0;
             observed=fresh;
           }
-          if(quietSamples<3)fail('WIZARD_FINISH_NOT_SETTLED','The graph kept changing after one Done click; observe before continuing');
+          if(quietSamples<3)fail('WIZARD_FINISH_NOT_SETTLED','The graph kept changing after one wizard completion click; observe before continuing');
           const node=targetNode(observed);
-          record(port?(inputPort?'input_port_finish_settled':'output_port_finish_settled'):'wizard_finish_settled',{quiet_samples:quietSamples,interval_ms:200,dom_epoch:observed.dom_epoch,node_ref:node.ref});
+          record(port?(inputPort?'input_port_finish_settled':'output_port_finish_settled'):finish.mode==='execute'?'wizard_execute_settled':'wizard_finish_settled',{quiet_samples:quietSamples,interval_ms:200,dom_epoch:observed.dom_epoch,node_ref:node.ref});
           if(port)record(inputPort?'input_port_finish_verified':'output_port_finish_verified',{wizard_root_ref:finish.root_ref,control_ref:task.action.ref,
             port_path:inputPort?finishOwner.port_path:finishOwner.path.slice(0,-1).map(({tid,label})=>({tid,label})),node:node.graph_node,node_ref:node.ref,workflow_path:workflowPath,
             reopen_required:true,settings_readback_verified:false,settings_applied:false,source_identity_verified:false,package_saved:false});
-          else record('wizard_finish_graph_verified',{previous_owner:finish.owner.node,node:node.graph_node,node_ref:node.ref,
+          else record(finish.mode==='execute'?'wizard_execute_graph_verified':'wizard_finish_graph_verified',{...(finish.mode==='execute'?{launch_gesture_verified:true,execution_completed:false}:{}),previous_owner:finish.owner.node,node:node.graph_node,node_ref:node.ref,
             label:finish.completion.fields.label.value,reopen_required:true,settings_readback_verified:false,package_saved:false});
         }
-        if(task.action.verb==='open_wizard') {
-          const opening=current.ui.elements.find(e=>e.ref===task.action.ref).wizard_open;
+        if(['open_wizard','begin_wizard','confirm_wizard_deactivation'].includes(task.action.verb)) {
+          const opening=task.action.verb==='confirm_wizard_deactivation'?task.snapshot.node_wizard_confirmation.opening
+            :current.ui.elements.find(e=>e.ref===task.action.ref).wizard_open;
           const contextMatches=lifecycleContextMatches;
-          for(let attempt=0;attempt<24 && contextMatches(observed) && (observed.wizard?.owner_context?.status!=='observed' || observed.ui.masks.length);attempt++) {
+          for(let attempt=0;attempt<24 && contextMatches(observed) && !(task.action.verb==='begin_wizard'&&exactDeactivation(observed))
+            && (observed.wizard?.owner_context?.status!=='observed' || observed.ui.masks.length);attempt++) {
             timeout();await page.waitForTimeout(Math.min(200,timeout()));observed=await readOpeningUi();
           }
+          const deactivationPending=task.action.verb==='begin_wizard'&&exactDeactivation(observed);
+          if(deactivationPending)record('wizard_deactivation_question_observed',{node:opening.node,workflow_path:opening.workflow_path});
           const owner=observed.wizard?.owner_context;
           // Graph and breadcrumb tids share the native formatted key; display
           // labels retain commas/spaces and may wrap differently on the canvas.
-          if(!contextMatches(observed) || observed.ui.masks.length || observed.wizard?.status!=='observed'
+          if(!deactivationPending && (!contextMatches(observed) || observed.ui.masks.length || observed.wizard?.status!=='observed'
             || owner?.status!=='observed' || owner.node.tid!==opening.workflow_path.at(-1)?.tid+'>'+opening.node.node_label
-            || !same(owner.path.slice(0,-2).map(({tid,label})=>({tid,label})),opening.workflow_path))
+            || !same(owner.path.slice(0,-2).map(({tid,label})=>({tid,label})),opening.workflow_path)))
             fail('WIZARD_OPEN_NOT_CONFIRMED','The intended node wizard was not confirmed after one click; inspect the current view before retry');
-          record('wizard_open_verified',{node:opening.node,workflow_path:opening.workflow_path,wizard_root_ref:observed.wizard.root_ref,
+          if(!deactivationPending)record('wizard_open_verified',{node:opening.node,workflow_path:opening.workflow_path,wizard_root_ref:observed.wizard.root_ref,
             owner_node:owner.node,settings_applied:false});
         }
         if(['apply_output_column','cancel_output_column','apply_reform_column','cancel_reform_column'].includes(task.action.verb)) {
@@ -2494,7 +3190,14 @@ function readRenderedInputMapping(observation) {
           } else {
           const parameterKey=choice.field.scope==='expression_parameter'?'expression_parameters':choice.field.scope==='output_column'?'column_parameters':choice.field.scope==='reform_column'?'reform_parameters':null;
           const expressionParameter=parameterKey!==null;
-          const field=observed.wizard[parameterKey??'settings']?.fields?.[choice.field.name];
+          const sourceOption=choice.field.scope==='import_source';
+          if(sourceOption)for(let attempt=0;attempt<24;attempt++) {
+            const f=observed.wizard.import_source?.fields?.[choice.field.name];
+            if(f?.value===choice.label&&!observed.ui.masks.length)break;
+            if(observed.wizard.root_ref!==current.wizard.root_ref||observed.wizard.stage!==current.wizard.stage||!same(observed.ui.dialogs,current.ui.dialogs))break;
+            timeout();await page.waitForTimeout(Math.min(100,timeout()));observed=await readUi();
+          }
+          const field=observed.wizard[sourceOption?'import_source':parameterKey??'settings']?.fields?.[choice.field.name];
           const expected=JSON.parse(JSON.stringify(current.wizard));
           if(expressionParameter)expected[parameterKey].fields[choice.field.name].value=choice.label;
           if(expressionParameter)expected[parameterKey].fields[choice.field.name].value_length_utf16=choice.label.length;
@@ -2519,7 +3222,18 @@ function readRenderedInputMapping(observation) {
           // issue a second click or turn a closed wizard into an applied claim.
           for(let attempt=0;attempt<24 && unchangedContext(observed)
             && (observed.wizard.stage!==task.action.expected_stage || observed.ui.masks.length);attempt++) {
-            timeout();await page.waitForTimeout(Math.min(200,timeout()));observed=await readUi();
+            const validation=observed.wizard.source_validation;
+            if(!observed.ui.masks.length && observed.wizard.stage===current.wizard.stage
+              && validation?.status==='observed' && validation.root_ref===current.wizard.root_ref) {
+              // Confirm the owned error once more without issuing another gesture.
+              timeout();await page.waitForTimeout(Math.min(200,timeout()));const fresh=await readUi();
+              if(unchangedContext(fresh) && !fresh.ui.masks.length && fresh.wizard.stage===current.wizard.stage
+                && same(fresh.wizard.source_validation,validation)) {
+                observed=fresh;record('wizard_source_validation_failed',validation);
+                fail('WIZARD_SOURCE_VALIDATION_FAILED',validation.message);
+              }
+              observed=fresh;
+            } else { timeout();await page.waitForTimeout(Math.min(200,timeout()));observed=await readUi(); }
           }
           if(!unchangedContext(observed) || observed.ui.masks.length || observed.wizard.stage!==task.action.expected_stage)
             fail('WIZARD_STEP_NOT_CONFIRMED','The requested destination stage was not confirmed after one click; inspect before retry');
@@ -2574,8 +3288,10 @@ function readRenderedInputMapping(observation) {
           const fields=expressionParameter?expected.expression_parameters.fields:before.wizard_field.scope==='output_column'?expected.column_parameters.fields:expected.settings.fields;
           // Native name editing can update a still-linked display label. Accept
           // only the original label or this exact name, and expose the readback.
-          if(expressionParameter && before.wizard_field.name==='name' && fields.label.value===fields.name.value
-            && observed.wizard.expression_parameters?.fields?.label?.value===task.action.text)
+          const linkedLabelFields=expressionParameter?observed.wizard.expression_parameters?.fields
+            :before.wizard_field.scope==='output_column'?observed.wizard.column_parameters?.fields:null;
+          if(linkedLabelFields && before.wizard_field.name==='name' && fields.label.value===fields.name.value
+            && linkedLabelFields.label?.value===task.action.text)
             Object.assign(fields.label,{value:task.action.text,value_length_utf16:task.action.text.length,truncated:false});
           Object.assign(fields[before.wizard_field.name],{value:task.action.text,value_length_utf16:task.action.text.length,truncated:false});
           if(!observed.authenticated || observed.origin!==current.origin || observed.loginom_build!==current.loginom_build
@@ -2631,10 +3347,18 @@ function readRenderedInputMapping(observation) {
 
 export function makeWorkspaceUiCode(options, { snapshotArgument = false } = {}) {
   if (!options || !['observe', 'act'].includes(options.mode)) throw new Error('Workspace UI mode must be observe or act');
+  if(options.mode==='act'&&['begin_wizard','confirm_wizard_deactivation','cancel_process'].includes(options.action?.verb)
+    &&!options.prepared_node_context)throw Error('Node wizard deactivation requires a prepared native node binding');
+  if(options.prepared_node_context!==undefined)validatePreparedNodeContext(options.prepared_node_context);
+  for(const key of ['import_column_page','output_column_page','table_format_page'])if(options[key]!==undefined) {
+    const p=options[key];
+    if(!p || Object.keys(p).sort().join(',')!=='limit,offset' || !Number.isInteger(p.offset) || p.offset<0 || p.offset>=1000
+      || !Number.isInteger(p.limit) || p.limit<1 || p.limit>8)throw new Error('Import definition page requires a bounded offset and limit');
+  }
   if (options.mode === 'act') validateUiAction(options.action, options.snapshot);
   const task = { ...structuredClone(options), kind: 'workspace-ui' };
   // Trusted composite operations may supply their own fresh native read after
   // a bounded preparatory gesture. This is not a public tool parameter.
-  if(snapshotArgument)return `async (page, snapshot) => (${workspaceUiCapability.toString()})(page, {...${JSON.stringify(task)},snapshot})`;
-  return `async (page) => (${workspaceUiCapability.toString()})(page, ${JSON.stringify(task)})`;
+  if(snapshotArgument)return `async (page, snapshot) => (${workspaceUiCapability.toString()})(page, {...${JSON.stringify(task)},snapshot}, ${readPreparedNodeContext.toString()})`;
+  return `async (page) => (${workspaceUiCapability.toString()})(page, ${JSON.stringify(task)}, ${readPreparedNodeContext.toString()})`;
 }

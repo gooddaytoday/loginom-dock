@@ -42,3 +42,20 @@ test('failed or abandoned operation retains unverified domain state', async () =
   assert.equal(proof.domain_effect.state, 'unverified');
   assert.equal(proof.goal.state, 'not_verified');
 });
+
+test('intermediate save proof requires its own awaited receipt and does not claim persisted contents',async()=>{
+  const action=actions.get('package.save_checkpoint');
+  const receipt=await run(new Page(),'package.save_checkpoint',{path:'/user/data/packages/checkpoint.lgp',conflict_policy:'fail'});
+  const proof=outcomeVerification(receipt,action);
+  assert.equal(proof.domain_effect.state,'verified');assert.equal(proof.data.state,'not_checked');
+  for(const event of ['save_flow_completed','open_saved_package_observed']){
+    const changed=structuredClone(receipt);changed.trace=changed.trace.filter(t=>t.event!==event);
+    assert.equal(outcomeVerification(changed,action).domain_effect.state,'unverified');
+  }
+  const permissive=structuredClone(action);
+  for(const property of Object.values(permissive.output_schema.properties))delete property.enum;
+  for(const override of [{reopened:true},{save_completed:false},{workflow_preserved:false},{persisted_content_verified:true}]){
+    const changed=structuredClone(receipt);Object.assign(changed.output,override);
+    assert.equal(outcomeVerification(changed,permissive).domain_effect.state,'unverified');
+  }
+});

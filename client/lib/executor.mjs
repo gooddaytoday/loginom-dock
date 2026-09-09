@@ -1,3 +1,6 @@
+import {resolveArtifactUploadConflict} from './artifact-upload-conflict.mjs';
+import {makeArtifactDiscoveryDownloadCode,verifiedDiscoveryReference} from './artifact-discovery.mjs';
+import {createArtifactDelivery} from './artifact-delivery.mjs';
 import { prepareNodeTarget, inspectNodeTarget } from './node-target.mjs';
 import { createNodeTargetBrowserAdapter } from './node-target-browser.mjs';
 import { validateNodeTargetRequest } from './node-contracts.mjs';
@@ -9,6 +12,9 @@ import { makeWorkspaceUiCode, validateUiAction, uiActionSchema } from './workspa
 import { createObservationPages } from './observation-pages.mjs';
 import { makeWorkspaceBootstrapCode } from './workspace.mjs';
 import { createNodeProcedure } from './node-procedure.mjs';
+import { applyNode, validateNodeApplyRequest, reconcileNodeWorkflow } from './node-apply.mjs';
+import { createNodeOperationRunner } from './node-operation-runner.mjs';
+import {nodeApiTools,deliveryApiTools} from './node-api.mjs';
 import { configureTextImportDraft, validateTextImportRequest } from './text-import-procedure.mjs';
 
 const identifier = { type: 'string', minLength: 1, maxLength: 128, pattern: '^[A-Za-z0-9._:-]+$' };
@@ -22,7 +28,7 @@ const operationRecoverTool = { name: 'dock_operation_recover',
     observation_id: identifier, strategy: { type: 'string', enum: ['complete_link', 'restore_control', 'accept_observed_state', 'abandon_operation'] } }, required: ['operation_id', 'recovery_operation_id', 'strategy'], additionalProperties: false },
   annotations: { readOnlyHint: false, destructiveHint: true, openWorldHint: false } };
 const uiActionTool = { name: 'dock_ui_action',
-  description: 'Perform one bounded UI gesture on a fresh ref from dock_workspace_observe: click, double_click, right_click, fill, press, drag, scroll, set_checked, replace_expression, set_wizard_field, wizard_step or select_wizard_option. right_click sends one right mouse click; observe the resulting menu before selecting an item. action uses verb, e.g. {verb:"click",ref:"<observed ui-ref>"}, {verb:"drag",source_ref:"<observed ui-ref>",target_ref:"<observed ui-ref>"} or {verb:"scroll",ref:"<observed ui-ref>",delta_y:300}. Scroll requires allowed_actions including scroll and targets only its observed scroll owner; delta_y is a nonzero integer within -1000..1000. For a checkbox/radio use {verb:"set_checked",ref:"<observed ui-ref>",checked:true}; check_state is read before/after and an already satisfied request does not click. Radio options can only be selected, not independently unchecked. replace_expression uses {verb:"replace_expression",ref:"<editor ui-ref>",text:"Quantity * UnitPrice"} only when explicitly offered by the Calculator editor. It replaces the selected expression through keyboard input and confirms exact LF text (max 2048 characters/128 lines) via its bound document. It does not apply wizard settings or prove valid syntax; inspect errors and apply separately. For an import format input or an output column name/label input offering set_wizard_field, use {verb:"set_wizard_field",ref:"<field ui-ref>",text:"<exact value>"}. text is literal input, not a dropdown option label. Observed native maxlength is enforced before input. This checks the observed wizard and original values, writes through the keyboard, and confirms the exact draft value (max 256 characters, no line breaks). wizard_field identifies its current form and setting; this does not establish node ownership or applied settings. Prefer this contract over generic fill when offered. For Next/Previous buttons offering wizard_step, use {verb:"wizard_step",ref:"<button ui-ref>",expected_stage:"<recognized destination stage>"}. It clicks once and waits a bounded time for that exact different stage in the same form. An unconfirmed transition remains pending; inspect before retrying. It does not apply settings, confirm syntax, execute nodes or auto-confirm dialogs. For import dropdowns, click an observed wizard_combo picker once, then observe the opened list (discover its boundlist root if it floats outside the wizard). Choose an offered option with {verb:"select_wizard_option",ref:"<observed option ui-ref>"}; its exact E2E owner/list identity binds the selection to the field, whose displayed value is read back. Never type an option label such as Точка с запятой as a raw delimiter. Selection confirms displayed UI state only, not applied settings. For an observed output column editor, apply_output_column confirms all five resulting row properties after one Apply click; cancel_output_column confirms the unchanged original row after one Cancel click. Both require separate port saving and readback. For a field-parameters editor offering apply_reform_column or cancel_reform_column, these confirm all seven row properties, including caching and exclusion, after one click; node saving and reopened readback remain separate. For observed Calculator expression parameters, use offered apply_expression_parameters or cancel_expression_parameters to confirm the resulting selected row. select_wizard_option also handles the observed expression type list. For graph settings offering open_wizard, prefer that one-click node/path-bound opening contract. For the last wizard page offering finish_wizard, it confirms Done and return to the expected graph node, but requires separate reopened settings readback and does not prove package save. Never use fill or press to bypass an unavailable editor contract. Read the new observation after scrolling; old refs/pages are invalid. Use for settings, execution, inspection and repairs outside the ready-made actions. No JavaScript or selectors. A successful gesture is not proof of task completion: inspect its result. operation_id is a NEW unique UI request ID; for a pending partial action, recovery_operation_id is that ORIGINAL pending operation ID.',
+  description: 'Perform one bounded UI gesture on a fresh ref from dock_workspace_observe: click, double_click, right_click, fill, press, drag, scroll, set_checked, replace_expression, set_wizard_field, wizard_step or select_wizard_option. right_click sends one right mouse click; observe the resulting menu before selecting an item. action uses verb, e.g. {verb:"click",ref:"<observed ui-ref>"}, {verb:"drag",source_ref:"<observed ui-ref>",target_ref:"<observed ui-ref>"} or {verb:"scroll",ref:"<observed ui-ref>",delta_y:300}. Scroll requires allowed_actions including scroll and targets only its observed scroll owner; delta_y is a nonzero integer within -1000..1000. For horizontal scrolling use the offered scroll_horizontal with delta_x in the same bounds; its horizontal_scroll identifies the exact owner. Import definition grids scroll through their observed data-preview scroller. For a checkbox/radio use {verb:"set_checked",ref:"<observed ui-ref>",checked:true}; check_state is read before/after and an already satisfied request does not click. Radio options can only be selected, not independently unchecked. replace_expression uses {verb:"replace_expression",ref:"<editor ui-ref>",text:"Quantity * UnitPrice"} only when explicitly offered by the Calculator editor. It replaces the selected expression through keyboard input and confirms exact LF text (max 2048 characters/128 lines) via its bound document. It does not apply wizard settings or prove valid syntax; inspect errors and apply separately. For an import format input or an output column name/label input offering set_wizard_field, use {verb:"set_wizard_field",ref:"<field ui-ref>",text:"<exact value>"}. text is literal input, not a dropdown option label. Observed native maxlength is enforced before input. This checks the observed wizard and original values, writes through the keyboard, and confirms the exact draft value (max 256 characters, no line breaks). wizard_field identifies its current form and setting; this does not establish node ownership or applied settings. Prefer this contract over generic fill when offered. For Next/Previous buttons offering wizard_step, use {verb:"wizard_step",ref:"<button ui-ref>",expected_stage:"<recognized destination stage>"}. It clicks once and waits a bounded time for that exact different stage in the same form. An unconfirmed transition remains pending; inspect before retrying. It does not apply settings, confirm syntax, execute nodes or auto-confirm dialogs. For import dropdowns, click an observed wizard_combo picker once, then observe the opened list (discover its boundlist root if it floats outside the wizard). Choose an offered option with {verb:"select_wizard_option",ref:"<observed option ui-ref>"}; its exact E2E owner/list identity binds the selection to the field, whose displayed value is read back. Never type an option label such as Точка с запятой as a raw delimiter. Selection confirms displayed UI state only, not applied settings. For an observed output column editor, apply_output_column confirms all five resulting row properties after one Apply click; cancel_output_column confirms the unchanged original row after one Cancel click. Both require separate port saving and readback. For a field-parameters editor offering apply_reform_column or cancel_reform_column, these confirm all seven row properties, including caching and exclusion, after one click; node saving and reopened readback remain separate. For observed Calculator expression parameters, use offered apply_expression_parameters or cancel_expression_parameters to confirm the resulting selected row. select_wizard_option also handles the observed expression type list. For graph settings offering open_wizard, prefer that one-click node/path-bound opening contract. For the last wizard page offering finish_wizard, it confirms Done and return to the expected graph node, but requires separate reopened settings readback and does not prove package save. Never use fill or press to bypass an unavailable editor contract. Read the new observation after scrolling; old refs/pages are invalid. Use for settings, execution, inspection and repairs outside the ready-made actions. No JavaScript or selectors. A successful gesture is not proof of task completion: inspect its result. operation_id is a NEW unique UI request ID; for a pending partial action, recovery_operation_id is that ORIGINAL pending operation ID.',
   inputSchema: { type: 'object', properties: { observation_id: identifier, operation_id: identifier, recovery_operation_id: identifier,
     action: uiActionSchema },
     required: ['observation_id', 'operation_id', 'action'], additionalProperties: false },
@@ -33,28 +39,37 @@ const artifactUploadTool = {name:'dock_artifact_upload',
     properties:{artifact_id:identifier,upload_grant_id:identifier,observation_id:identifier,operation_id:identifier}},
   annotations:{readOnlyHint:false,destructiveHint:true,openWorldHint:false}};
 const artifactVerifyTool={name:'dock_artifact_verify',
-  description:'Download and verify the exact authorized CSV for a pending upload. operation_id is the ORIGINAL upload; verification_id is a new unique verification request. Supply observation_id and file_ref from a fresh detailed file-row observation. If that exact CSV is vertically outside its viewport, verification may reveal it with one checked scroll of its original observed owner, at most 1000 pixels, before a fresh checked download gesture. It cannot navigate folders or reveal another file. An unconfirmed reveal remains an effect and does not verify bytes. Public UI repair remains unavailable while upload verification is pending. This checks downloaded name, size and SHA, without resubmitting the upload. Repeat the same verification_id or inspect the original operation after a lost response; never bypass uncertainty with a new ID. Confirmed submission plus matching destination bytes, cleanup and durable receipts complete the original transfer. Inspect it and obtain fresh UI refs before continuing.',
+  description:'Download and verify the exact authorized CSV/TSV for a pending upload. operation_id is the ORIGINAL upload; verification_id is a new unique verification request. Supply observation_id and file_ref from a fresh detailed file-row observation. If that exact CSV/TSV is vertically outside its viewport, verification may reveal it with one checked scroll of its original observed owner, at most 1000 pixels, before a fresh checked download gesture. It cannot navigate folders or reveal another file. An unconfirmed reveal remains an effect and does not verify bytes. Public UI repair remains unavailable while upload verification is pending. This checks downloaded name, size and SHA, without resubmitting the upload. Repeat the same verification_id or inspect the original operation after a lost response; never bypass uncertainty with a new ID. Confirmed submission plus matching destination bytes, cleanup and durable receipts complete the original transfer. Inspect it and obtain fresh UI refs before continuing.',
   inputSchema:{type:'object',additionalProperties:false,required:['operation_id','verification_id','observation_id','file_ref'],
     properties:{operation_id:identifier,verification_id:identifier,observation_id:identifier,file_ref:identifier}},
   annotations:{readOnlyHint:false,destructiveHint:false,openWorldHint:false}};
 export const executorTools = [actionDescribeTool, actionRunTool, operationInspectTool, operationRecoverTool, uiActionTool];
 
-async function browserArtifactUpload(page,task,observe) {
+async function browserArtifactUpload(page,task,observe,resolveConflict) {
   let phase='preconditions',effect=false,input;
   const trace=[];
   const outcome=(status,code,output={})=>({status,action_key:'artifact.upload',action_revision:'1',operation_id:task.operation_id,
     phase,effect_possible:effect,cleanup_complete:true,output,error:code?{code,message:code}:null,trace});
   const same=(a,b)=>JSON.stringify(a)===JSON.stringify(b);
   try {
-    if(task.artifact.upload.overwrite!=='replace')return outcome('NOT_APPLIED','UPLOAD_POLICY_UNAVAILABLE');
-    const read=await observe(page),current=read.output;
+    if(task.artifact.upload.overwrite!=='replace'&&!(task.decide_conflicts&&task.artifact.upload.overwrite==='reject'))return outcome('NOT_APPLIED','UPLOAD_POLICY_UNAVAILABLE');
+    let current,prefix,expectedEpoch=task.snapshot.dom_epoch,refreshes=0;
+    const refresh=next=>{
+      if(!task.decide_conflicts||refreshes>=2||next?.document!==task.snapshot.dom_epoch?.document)return false;
+      trace.push({event:'upload_precondition_refreshed',status:'NOT_APPLIED',effect_possible:false,
+        reason:'UPLOAD_CONTEXT_CHANGED',attempt:++refreshes,before:expectedEpoch,after:next,destination:task.artifact.upload.destination});
+      expectedEpoch=next;return true;
+    };
+    while(true) {
+    const read=await observe(page);current=read.output;
     if(read.status!=='SUCCEEDED')return outcome('NOT_APPLIED','UPLOAD_OBSERVATION_FAILED');
     if(!current.authenticated || current.origin!==task.expected_origin || current.loginom_build!==task.expected_build
-      || !same(current.workflow_ref,task.snapshot.workflow_ref) || !same(current.dom_epoch,task.snapshot.dom_epoch))
+      || !same(current.workflow_ref,task.snapshot.workflow_ref) || current.dom_epoch?.document!==task.snapshot.dom_epoch?.document)
       return outcome('NOT_APPLIED','UPLOAD_CONTEXT_CHANGED');
     if(current.file_storage?.status!=='observed' || current.file_storage.directory!==task.artifact.upload.directory
       || current.ui.dialogs.length || current.ui.masks.length)return outcome('NOT_APPLIED','UPLOAD_DESTINATION_UNAVAILABLE');
-    const prefix=current.workflow_ref?.prefix;
+    if(!same(current.dom_epoch,expectedEpoch)&&!refresh(current.dom_epoch))return outcome('NOT_APPLIED','UPLOAD_CONTEXT_CHANGED');
+    prefix=current.workflow_ref?.prefix;
     if(typeof prefix!=='string' || !/^MF;TF(?:-\d+)?$/.test(prefix))return outcome('NOT_APPLIED','UPLOAD_CONTEXT_CHANGED');
     // E2E bg/helpers/filestorage.UploadFiles uses this hidden native input.
     const toolbar=page.locator(`[data-tid="${prefix};FileStorageForm;tbrActions"]`);
@@ -69,11 +84,52 @@ async function browserArtifactUpload(page,task,observe) {
       if(!state?.observer)return null;
       state.revision+=state.observer.takeRecords().length;return {document:state.epoch,revision:state.revision};
     });
-    if(!same(epoch,current.dom_epoch))return outcome('NOT_APPLIED','UPLOAD_CONTEXT_CHANGED');
+    if(same(epoch,current.dom_epoch))break;
+    if(!refresh(epoch))return outcome('NOT_APPLIED','UPLOAD_CONTEXT_CHANGED');
+    await input.dispose();input=null;
+    }
+    if(task.decide_conflicts) {
+      const admissible=await input.evaluate((element,task)=>{
+        const f=globalThis.bg?.app?.Application?.FInstance?.FMainForm?.Items?.Workspace?.getActiveTab?.()?.Controller?.FController,s=f?.FFileSenderManager;
+        return f?.constructor?.name==='FileStorageForm'&&f.FFileInput===element&&element.files?.length===0
+          &&s?.constructor?.name==='FileSenderManager'&&s.FLastConflictResult===undefined&&s.FActiveLoadersCount===0
+          &&s.CurrentDirectory===task.artifact.upload.directory.replace(/\/?$/,'/')
+          &&Object.keys(s.FCurrentUploadFilePaths??{}).length===0;
+      },task);
+      if(!admissible)return outcome('NOT_APPLIED','UPLOAD_SENDER_NOT_IDLE');
+    }
     trace.push({event:'upload_preconditions_verified',destination:task.artifact.upload.destination});
     phase='submitting';effect=true;
     await input.setInputFiles(task.upload_path,{timeout:15000});
     phase='submitted';trace.push({event:'upload_input_submitted'});
+    if(task.decide_conflicts) {
+      const decisionTask={operation_id:task.operation_id,overwrite:task.artifact.upload.overwrite,
+        expected_origin:task.expected_origin,expected_build:task.expected_build,document:current.dom_epoch.document,prefix,
+        directory:task.artifact.upload.directory,destination:task.artifact.upload.destination,name:task.artifact.name,bytes:task.artifact.bytes};
+      const deadline=Date.now()+15000;let settled=false;
+      while(Date.now()<deadline) {
+        const state=await input.evaluate((element,task)=>{
+          const f=globalThis.bg?.app?.Application?.FInstance?.FMainForm?.Items?.Workspace?.getActiveTab?.()?.Controller?.FController,s=f?.FFileSenderManager;
+          if(f?.constructor?.name!=='FileStorageForm'||f.FFileInput!==element||!element.isConnected
+            ||s?.CurrentDirectory!==task.artifact.upload.directory.replace(/\/?$/,'/'))return 'foreign';
+          const titles=[...document.querySelectorAll('[data-tid="msgbox;p.h;p.t"]')].filter(e=>{const r=e.getBoundingClientRect();return r.x>=0&&r.y>=0&&r.width>0&&r.height>0;});
+          if(titles.length)return 'dialog';
+          return element.files?.length===0&&s.FLastConflictResult===undefined&&s.FActiveLoadersCount===0?'settled':'waiting';
+        },task);
+        if(state==='foreign')return outcome('AMBIGUOUS','UPLOAD_SENDER_CHANGED');
+        if(state==='dialog') {
+          const decision=await resolveConflict(page,decisionTask);trace.push(...decision.trace);
+          if(decision.status!=='SUCCEEDED'||!decision.cleanup_complete)return {...outcome('AMBIGUOUS','UPLOAD_CONFLICT_UNRESOLVED'),cleanup_complete:decision.cleanup_complete===true};
+          if(decision.output.disposition==='rejected')return outcome('FAILED','UPLOAD_PATH_CONFLICT',{
+            upload_submitted:false,conflict_rejected:true,destination:task.artifact.upload.destination});
+          settled=true;break;
+        }
+        if(state==='settled'){settled=true;break;}
+        await page.waitForTimeout(100);
+      }
+      if(!settled)return outcome('AMBIGUOUS','UPLOAD_DECISION_UNKNOWN');
+      trace.push({event:'upload_native_input_settled',policy:task.artifact.upload.overwrite});
+    }
     // Native input completion does not establish completion of Loginom's
     // asynchronous server transfer. Keep the operation pending, even on receipt.
     return outcome('AMBIGUOUS','UPLOAD_SERVER_VERIFICATION_REQUIRED',{upload_submitted:true,
@@ -86,7 +142,7 @@ async function browserArtifactUpload(page,task,observe) {
 export function makeArtifactUploadCode(options) {
   const observe=makeWorkspaceUiCode({mode:'observe',root_ref:options.snapshot?.observation_root?.ref,
     expected_build:options.expected_build,expected_origin:options.expected_origin});
-  return `async (page) => (${browserArtifactUpload.toString()})(page,${JSON.stringify(options)},${observe})`;
+  return `async (page) => (${browserArtifactUpload.toString()})(page,${JSON.stringify(options)},${observe},${resolveArtifactUploadConflict.toString()})`;
 }
 
 async function browserArtifactReveal(page,task,snapshot) {
@@ -138,7 +194,17 @@ async function browserArtifactDownload(page,task,observe,act,reveal) {
   try {
     let before=await observe(page);
     if(before.status!=='SUCCEEDED' || !contextMatches(before.output)
-      || !same(before.output.dom_epoch,task.snapshot.dom_epoch))return result('NOT_APPLIED','DOWNLOAD_CONTEXT_CHANGED');
+      || !same(before.output.dom_epoch,task.snapshot.dom_epoch)) {
+      const current=before.output??{};
+      trace.push({event:'download_context_refused',checks:{observation:before.status==='SUCCEEDED',
+        authenticated:current.authenticated===true,origin:current.origin===task.expected_origin,
+        build:current.loginom_build===task.expected_build,workflow:same(current.workflow_ref,task.snapshot.workflow_ref),
+        epoch:same(current.dom_epoch,task.snapshot.dom_epoch),tab:current.active_tab_ref===task.snapshot.active_tab_ref,
+        package:same(current.package_identity,task.snapshot.package_identity),
+        storage:current.file_storage?.status==='observed'&&current.file_storage.directory===task.artifact.upload.directory,
+        dialogs:current.ui?.dialogs?.length===0,masks:current.ui?.masks?.length===0}});
+      return result('NOT_APPLIED','DOWNLOAD_CONTEXT_CHANGED');
+    }
     const original=task.snapshot.ui.elements.find(e=>e.ref===task.file_ref);
     const target=current=>current.ui.elements.find(e=>e.ref===task.file_ref && e.tid===original.tid && e.label===task.artifact.name);
     if(['outside_viewport','point_not_observed'].includes(original.interaction?.state)) {
@@ -163,16 +229,25 @@ async function browserArtifactDownload(page,task,observe,act,reveal) {
         if(attempt)await page.waitForTimeout(Math.min(100,Math.max(1,settleDeadline-Date.now())));
         before=await observe(page);
         file=before.status==='SUCCEEDED' && target(before.output);
+        // Buffered Loginom rows can round the scroll extent by one CSS pixel
+        // on repaint. The owner, exact scrollTop and target still must agree.
+        const extentMatches=Number.isSafeInteger(file?.scroll?.max_top)&&file.scroll.max_top>=moved.to
+          &&Math.abs(file.scroll.max_top-moved.max_top)<=1;
         if(!file || !contextMatches(before.output) || file.scroll?.ref!==original.scroll.ref
-          || file.scroll.top!==moved.to || file.scroll.max_top!==moved.max_top)
+          || file.scroll.top!==moved.to || !extentMatches) {
+          trace.push({event:'download_reveal_refused',checks:{file:!!file,context:before.status==='SUCCEEDED'&&contextMatches(before.output),
+            owner:file?.scroll?.ref===original.scroll.ref,top:file?.scroll?.top===moved.to,max_top:extentMatches},
+            observed_scroll:file?.scroll?{top:file.scroll.top,max_top:file.scroll.max_top}:null});
           return result('AMBIGUOUS','DOWNLOAD_REVEAL_NOT_CONFIRMED');
+        }
         const stamp={epoch:before.output.dom_epoch,interaction:file.interaction,scroll:file.scroll,box:file.bounding_box};
         quiet=file.interaction?.state==='point_observed'?(same(stamp,previous)?quiet+1:1):0;
         previous=stamp;
         if(quiet>=3)break;
       }
-      if(quiet<3 || Date.now()>settleDeadline)return result('AMBIGUOUS','DOWNLOAD_REVEAL_NOT_CONFIRMED');
+      if(quiet<3 || Date.now()>settleDeadline){trace.push({event:'download_reveal_unsettled',quiet,interaction:file?.interaction?.state});return result('AMBIGUOUS','DOWNLOAD_REVEAL_NOT_CONFIRMED');}
       trace.push({event:'download_reveal_confirmed',file_ref:task.file_ref,owner_ref:file.scroll.ref,
+        max_top_before:moved.max_top,max_top_after:file.scroll.max_top,
         document:before.output.dom_epoch.document,interaction:'point_observed',file_tid:file.tid,
         origin:before.output.origin,loginom_build:before.output.loginom_build,workflow_ref:before.output.workflow_ref,
         active_tab_ref:before.output.active_tab_ref,package_identity:before.output.package_identity,directory:before.output.file_storage.directory});
@@ -228,18 +303,18 @@ async function browserArtifactDownload(page,task,observe,act,reveal) {
 
 // Trusted adapter only: every public reference must additionally be checked
 // against createObservationPages.assertIssued before this code is constructed.
-// This candidate covers CSV double-click downloads only; package files require
+// This candidate covers CSV/TSV double-click downloads only; package files require
 // an explicit download command instead of opening their scenario.
 export function makeArtifactDownloadCode(options) {
   const artifact=options?.artifact,snapshot=options?.snapshot;
   const matches=snapshot?.ui?.elements?.filter(item=>item.ref===options.file_ref) ?? [];
   const suffix=artifact?.name?.replace(/\s/g,'_').replace(/,/g,'');
-  if(!artifact?.upload || !/\.csv$/i.test(artifact.name) || matches.length!==1
+  if(!artifact?.upload || !/\.(?:csv|tsv)$/i.test(artifact.name) || matches.length!==1
     || matches[0].label!==artifact.name || matches[0].tid!==snapshot.workflow_ref?.prefix+';FileStorageForm;colName_'+suffix)
-    throw new Error('Download requires the exact observed authorized CSV file');
+    throw new Error('Download requires the exact observed authorized CSV/TSV file');
   const shared={expected_build:options.expected_build,expected_origin:options.expected_origin};
   // Upload may have observed the folder tree. Verification owns the separately
-  // issued exact CSV ref, so its narrow reads must follow that file, not the
+  // issued exact CSV/TSV ref, so its narrow reads must follow that file, not the
   // earlier upload region. Global context/blocker guards remain in native reads.
   const observe=makeWorkspaceUiCode({mode:'observe',root_ref:options.file_ref,...shared});
   const act=makeWorkspaceUiCode({mode:'act',snapshot,action:{verb:'double_click',ref:options.file_ref},...shared},{snapshotArgument:true});
@@ -779,6 +854,62 @@ function browserCapability(page, task) {
     value = value.replaceAll('\\', '/').replace(/\/+/g, '/');
     return value.startsWith('/') ? value : '/' + value;
   };
+  const packageContinuations = async binding => page.evaluate(binding => {
+    const preparation=globalThis.__loginomDockPreparationV1, app=globalThis.bg?.app;
+    if(!preparation || preparation.document!==document)return [];
+    const exact=tid=>document.querySelectorAll('[data-tid='+JSON.stringify(tid)+']');
+    const tabs=exact(binding.tab_tid);
+    if(tabs.length!==1 || !tabs[0].classList.contains('x-tab-active'))throw Error('Saved continuation tab changed');
+    const card=app?.Application?.FInstance?.FMainForm?.Items?.Workspace?.getActiveTab();
+    let node=card?.Controller?.Node?.data?.node,packageNode,workflowNode;
+    const seen=new Set();for(let i=0;node&&i<32&&!seen.has(node);i++,node=node.ParentNode){seen.add(node);
+      if(app.WorkFlowTreeNode&&node instanceof app.WorkFlowTreeNode)workflowNode=node;
+      if(app.PackageTreeNode&&node instanceof app.PackageTreeNode){packageNode=node;break;}}
+    const graph=exact(binding.prefix+';ModelForm;cmpDiagram');
+    if(!(card?.Controller?.FController instanceof app.ModelForm)||graph.length!==1
+        ||card.Controller.FController.FDiagram?.FmxGraph?.container!==graph[0])throw Error('Saved continuation graph changed');
+    const crumbs=[...document.querySelectorAll('[data-tid^='+JSON.stringify(binding.prefix+';cnrNaviMode;b.s_')+']')]
+      .map(e=>({tid:e.getAttribute('data-tid'),label:e.textContent.trim()}));
+    if(crumbs.length<3||crumbs.length>32)throw Error('Saved continuation navigation unavailable');
+    const result=new Map();
+    for(const record of preparation.receipts.values()) {
+      if(record.phase!=='verified'||record.tab!==tabs[0]||!record.nodeTargetWorkflowNode)continue;
+      if(record.packageNode!==packageNode||record.nodeTargetWorkflowNode!==workflowNode)throw Error('Saved continuation native identity changed');
+      result.set(record.workflowId,{document_id:preparation.id,workflow_ref:{...binding,workflow_id:record.workflowId,navigation_path:crumbs}});
+      if(result.size>32)throw Error('Saved continuation bound exceeded');
+    }
+    return [...result.values()];
+  },binding);
+  const refreshSavedNavigation = async current => {
+    const crumbs=current.workflow_ref.navigation_path, binding=current.workflow_ref;
+    const parent=crumbs.at(-2),last=crumbs.at(-1);
+    if(!last.tid.startsWith(parent.tid+'>'))throw Error('Saved workflow parent is not addressable');
+    const suffix=last.tid.slice(parent.tid.length);
+    const control=page.locator('[data-tid='+cssString(parent.tid)+']');
+    if(await control.count()!==1||!await control.isVisible()||(await control.innerText()).trim()!==parent.label)
+      throw Error('Saved workflow parent changed');
+    await interact(timeout=>control.click({timeout}));
+    record('saved_navigation_parent_entered',{parent_tid:parent.tid,workflow_id:binding.workflow_id});
+    const updated=await poll(async()=>{
+      const rows=await page.evaluate(prefix=>[...document.querySelectorAll('[data-tid^='+JSON.stringify(prefix+';cnrNaviMode;b.s_')+']')]
+        .map(e=>({tid:e.getAttribute('data-tid'),label:e.textContent.trim()})),binding.prefix);
+      return rows.length===crumbs.length-1&&rows.every((r,i)=>r.label===crumbs[i].label)?rows:null;
+    });
+    const path=updated.at(-1).tid.split(';cnrNaviMode;b.s_')[1];
+    if(!path)throw Error('Saved workflow parent path unavailable');
+    const treeTid=binding.prefix+';ListViewForm;MapTreeForm;colNavigation_'+path+suffix+';TreeText';
+    const tree=await poll(async()=>{
+      const item=page.locator('[data-tid='+cssString(treeTid)+']');
+      return await item.count()===1&&await item.isVisible()?item:null;
+    });
+    if((await tree.innerText()).trim()!==last.label)throw Error('Saved workflow entry differs');
+    await interact(timeout=>tree.dblclick({timeout}));
+    await poll(async()=>{
+      const graph=page.locator('[data-tid='+cssString(binding.prefix+';ModelForm;cmpDiagram')+']');
+      return await graph.count()===1&&await graph.isVisible();
+    });
+    record('saved_navigation_workflow_returned',{workflow_id:binding.workflow_id,tree_tid:treeTid});
+  };
   const packageCheckpoint = async () => {
     const prefix = await ensureReady();
     const tab = await resolve('workspace.active_tab', {}, { stable: false });
@@ -812,9 +943,10 @@ function browserCapability(page, task) {
     await interact(timeout => input.press('Tab', { timeout }));
     if (await input.inputValue() !== value) throw new Error('Loginom file name editor did not commit the requested path');
   };
-  const runPackageSaveAs = async () => {
+  const runPackageSaveAs = async ({ keepOpen = false } = {}) => {
     const before = await packageCheckpoint();
     if (task.checkpoint && !same(before, task.checkpoint)) throw new Error('Package changed after save preflight');
+    const continuationsBefore = keepOpen ? await packageContinuations(before.workflow_ref) : [];
     const click = async (symbol, effect = false) => interact(timeout => resolve(symbol).then(item => item.click({ timeout })), effect);
     transientDialog = true;
     await click('packages.menu');
@@ -823,9 +955,15 @@ function browserCapability(page, task) {
     await writeFileName(input, before.path);
     await click('file_dialog.confirm', true);
     record('save_requested', { path: before.path });
+    const expectedConflict = '"' + before.path + '" уже существует. Вы хотите заменить его?';
     const saved = await poll(async () => {
       const message = await resolve('message.text', {}, { cardinality: 'zeroOrOne', stable: false });
-      if (message && (await message.innerText()).toLocaleLowerCase('ru').includes('существует')) return 'conflict';
+      if (message) {
+        const text = (await message.innerText()).trim();
+        if (text !== expectedConflict) throw new Error('Save confirmation does not match the exact destination');
+        record('save_conflict_observed', { path: before.path, message: text });
+        return 'conflict';
+      }
       const errorMessage = await resolve('message.error', {}, { cardinality: 'zeroOrOne', stable: false });
       if (errorMessage) throw new Error((await errorMessage.innerText()).slice(0, 500));
       const dialog = await resolve('file_dialog.file_name', {}, { cardinality: 'zeroOrOne', stable: false });
@@ -833,6 +971,12 @@ function browserCapability(page, task) {
       return !dialog && !masks.length ? 'saved' : null;
     });
     if (saved === 'conflict') {
+      const message = await resolve('message.text', {}, { stable: false });
+      if ((await message.innerText()).trim() !== expectedConflict) throw new Error('Save confirmation changed before answer');
+      const yes = await resolve('message.yes', {}, { stable: false });
+      const noButton = await resolve('message.no', {}, { stable: false });
+      if ((await yes.innerText()).trim() !== 'Да' || (await noButton.innerText()).trim() !== 'Нет')
+        throw new Error('Save confirmation answer labels differ');
       if (task.parameters.conflict_policy === 'replace') {
         await click('message.yes', true);
         record('overwrite_confirmed');
@@ -848,6 +992,42 @@ function browserCapability(page, task) {
     await poll(async () => !(await resolve('file_dialog.file_name', {}, { cardinality: 'zeroOrOne', stable: false })));
     const errorMessage = await resolve('message.error', {}, { cardinality: 'zeroOrOne', stable: false });
     if (errorMessage) throw new Error((await errorMessage.innerText()).slice(0, 500));
+    if (keepOpen) {
+      // Native btnSaveAsPackageHandler awaits DoSavePackage before hiding its
+      // menu. btnSavePackageHandler does not, so it cannot supply this receipt.
+      await poll(async () => !(await resolve('packages.save_as', {}, { cardinality: 'zeroOrOne', stable: false })));
+      const saveError = await resolve('message.error', {}, { cardinality: 'zeroOrOne', stable: false });
+      if (saveError) throw new Error((await saveError.innerText()).slice(0, 500));
+      record('save_flow_completed', { path: before.path });
+      const prefix = await ensureReady();
+      const actualPath = normalizeStoredPath((await packageIdentity()).path);
+      const graph = await graphSnapshot(prefix);
+      const workflowMatches = same(workflow, before.workflow_ref);
+      const pathMatches = actualPath === before.path, graphMatches = same(graph, before.graph);
+      record('open_saved_package_observed', { requested_path: before.path, actual_path: actualPath,
+        workflow_ref: workflow, workflow_matches: workflowMatches, path_matches: pathMatches,
+        graph_matches: graphMatches, graph });
+      if (!workflowMatches || !pathMatches || !graphMatches)
+        return result('AMBIGUOUS', { reason: 'Saved destination, workflow or graph changed' });
+      let continuationsAfter = await packageContinuations(before.workflow_ref);
+      if(continuationsBefore.length && continuationsAfter.length
+          && !same(continuationsBefore[0].workflow_ref.navigation_path,continuationsAfter[0].workflow_ref.navigation_path)) {
+        await refreshSavedNavigation(continuationsAfter[0]);
+        await ensureReady();
+        if(!same(await graphSnapshot(workflow.prefix),before.graph))throw Error('Saved graph changed while refreshing navigation');
+        continuationsAfter=await packageContinuations(before.workflow_ref);
+      }
+      const identity = value => ({document_id:value.document_id,workflow_id:value.workflow_ref.workflow_id,
+        tab_tid:value.workflow_ref.tab_tid,prefix:value.workflow_ref.prefix});
+      if(!same(continuationsBefore.map(identity),continuationsAfter.map(identity)))throw new Error('Saved continuation identities changed');
+      const continuations=continuationsAfter.map((value,i)=>({...value,previous_workflow_ref:continuationsBefore[i].workflow_ref}));
+      record('save_continuations_observed', { continuations });
+      transientDialog = false; phase = 'verified';
+      record('postcondition_verified', { proof: 'awaited_save_flow_same_open_workflow', package_path: actualPath,
+        workflow_ref: workflow, graph, reopened: false, persisted_content_verified: false });
+      return result('SUCCEEDED', { package_ref: { kind: 'package', path: actualPath, active_identity: actualPath },
+        reopened: false, workflow_preserved: true, save_completed: true, persisted_content_verified: false, workflow_continuations: continuations });
+    }
     transientDialog = false;
     await click('packages.menu');
     await click('packages.close', true);
@@ -863,8 +1043,13 @@ function browserCapability(page, task) {
       return await tid('', closedTabTid).count() === 0;
     });
     record('saved_package_closed');
+    // Closing the package can remove its tab before the old Packages menu
+    // finishes hiding. Wait for that transition before one new menu click.
+    await poll(async () => !(await resolve('packages.open', {}, { cardinality: 'zeroOrOne', stable: false })));
     transientDialog = true;
     await click('packages.menu');
+    await poll(() => resolve('packages.open', {}, { cardinality: 'zeroOrOne', stable: false }));
+    record('package_open_command_ready');
     await click('packages.open');
     const openInput = await poll(() => resolve('file_dialog.file_name', {}, { cardinality: 'zeroOrOne', stable: false }));
     await writeFileName(openInput, before.path);
@@ -909,6 +1094,8 @@ function browserCapability(page, task) {
     const handlers = {
       nodeAdd: { prepare: nodeCheckpoint, apply: runNodeAdd, reconcile: () => reconcileNode(task.checkpoint) },
       linkCreate: { prepare: linkCheckpoint, apply: runLinkCreate, reconcile: () => reconcileLink(task.checkpoint), recover_link: recoverLink },
+      packageSaveCheckpoint: { prepare: packageCheckpoint, apply: () => runPackageSaveAs({ keepOpen: true }),
+        reconcile: () => result('AMBIGUOUS', {}, { code: 'SAVE_RECEIPT_MISSING', message: 'An open package does not prove completion of an unknown save' }) },
       packageSaveAs: { prepare: packageCheckpoint, apply: runPackageSaveAs,
         reconcile: () => result('AMBIGUOUS', {}, { code: 'SAVE_RECEIPT_MISSING', message: 'A lost save response cannot prove close/reopen from a read-only DOM snapshot' }) },
     };
@@ -944,7 +1131,14 @@ function browserCapability(page, task) {
       if (transientEditor) await cleanup('rename_editor', async () => {
         if (await transientEditor.isVisible()) await transientEditor.press('Escape', { timeout: 3000 });
       });
-      if (transientDialog) await cleanup('transient_dialog', () => page.keyboard.press('Escape'));
+      if (transientDialog) await cleanup('transient_dialog', async () => {
+        await page.keyboard.press('Escape');
+        if (['packageSaveAs', 'packageSaveCheckpoint'].includes(task.handler)) {
+          await poll(async () => !(await resolve('file_dialog.file_name', {}, { cardinality: 'zeroOrOne', stable: false }))
+            && !(await resolve('message.text', {}, { cardinality: 'zeroOrOne', stable: false }))
+            && !(await resolve('packages.save_as', {}, { cardinality: 'zeroOrOne', stable: false })));
+        }
+      });
       if (restoreViewport) await cleanup('viewport', restoreViewport);
     }
     outcome.cleanup_complete = !trace.some(entry => entry.event === 'cleanup_failed');
@@ -1008,7 +1202,8 @@ export function parseCapabilityResult(response) {
   throw new Error('Pinned browser capability returned no typed result');
 }
 
-export function createActionRuntime({ pinned, execute, artifactStore, allowCandidate = false, onRecord = async () => {}, now = Date.now, targetBuild = pinned?.compatibility?.loginom_build, targetOrigin, getNodeContractPins = () => pinned.pins, nodeTargetAdapterFactory = createNodeTargetBrowserAdapter }) {
+export function createActionRuntime({ pinned, execute, artifactStore, allowCandidate = false, onRecord = async () => {}, now = Date.now, targetBuild = pinned?.compatibility?.loginom_build, targetOrigin, getNodeContractPins = () => pinned.pins, nodeTargetAdapterFactory = createNodeTargetBrowserAdapter,
+  nodeApplyHandlers = new Map(), nodeApplyDriverFactory }) {
   if (!pinned?.actions || !pinned?.selectors) throw new Error('A verified pinned action catalog is required');
   let pending = null;
   let running = false;
@@ -1147,7 +1342,7 @@ export function createActionRuntime({ pinned, execute, artifactStore, allowCandi
     if(!attempt.byteOutcome && raw.status==='SUCCEEDED') {
       const expected={artifact_id:artifact.artifact_id,upload_grant_id:artifact.upload.grant_id,
         upload_operation_id:operation.id,destination:artifact.upload.destination,suggested_name:artifact.name,
-        download_completed:true,bytes_verification_required:true,file_ref:attempt.parameters.file_ref,
+        download_completed:true,bytes_verification_required:true,file_ref:attempt.checkpoint.discovery?verifiedDiscoveryReference(artifact,attempt.checkpoint.discovery,raw):attempt.parameters.file_ref,
         observation_id:attempt.parameters.observation_id};
       if(fingerprint('download.output',raw.output)!==fingerprint('download.output',expected) || raw.cleanup_complete!==true
         || raw.phase!=='downloaded' || raw.effect_possible!==true || raw.error!==null)
@@ -1204,6 +1399,44 @@ export function createActionRuntime({ pinned, execute, artifactStore, allowCandi
     phase:result.phase,effect_possible:operation.targetPhase?.effect_possible===true,cleanup_complete:result.cleanup_complete===true,
     output:result,error:result.error?{code:'NODE_TARGET_INCOMPLETE',message:result.error}:null,trace:[]});
   const nodeTargetRecord=event=>onRecord({...event,action_key:'node.target.internal',action_revision:'1'});
+  const targetAdapter=operation=>nodeTargetAdapterFactory({execute:async(code,options)=>{
+    const wrapped='async page => {const base={action_key:"node.target.transport",action_revision:"1",operation_id:'+JSON.stringify(operation.id)+',phase:"observed",effect_possible:false,trace:[]};try{return {...base,status:"SUCCEEDED",error:null,output:{value:await ('+code+')(page)}};}catch(error){return {...base,status:"FAILED",output:{},error:{code:"NODE_TARGET_TRANSPORT",message:String(error.message).slice(0,500)}};}}';
+    const response=await execute(wrapped,options);if(response.status!=='SUCCEEDED')throw new Error(response.error?.message??'Node target transport failed');return response.output.value;
+  },pinned,origin:targetOrigin,build:targetBuild});
+  const nodeApplyOutcome=(operation,result)=>({status:result.status,action_key:'node.apply',
+    action_revision:operation.action.revision,operation_id:operation.id,
+    phase:result.status==='SUCCEEDED'?'node_ready':result.pending_phase??'node_incomplete',
+    effect_possible:result.effect_possible,cleanup_complete:result.cleanup_complete,
+    output:structuredClone(result),error:result.error??null,trace:[]});
+  const inspectApply=async operation=>{
+    // An inspection never calls configuration, execution or generic action
+    // reconciliation. Unknown phases keep the gate until a phase-specific
+    // verifier is available. A durable node checkpoint is safe to redeliver.
+    if(running)return failed(operation,'OPERATION_STILL_PENDING','The local node operation is still running');
+    if(operation.nodeApply?.pending?.phase==='workflow'){
+      running=true;
+      try{
+        if(await reconcileNodeWorkflow({operation,adapter:operation.nodeTargetAdapter,record:onRecord,now})){
+          const state=operation.nodeApply;
+          operation.outcome=nodeApplyOutcome(operation,{...operation.outcome.output,
+            phases:state.phases.map(({value,...p})=>p),pending_phase:null,
+            effect_possible:state.effect_possible,cleanup_complete:true,
+            error:{code:'NODE_PHASE_RECOVERED',message:'Original workflow receipt verified; explicit resume required'}});
+          operation.cleanupConfirmed=true;
+          // The enclosing node is incomplete: retain its gate and original ID.
+          await remember(operation,'reconciled',operation.outcome);
+        }
+      }finally{running=false;}
+    }
+    if(operation.nodeApply?.result){
+      const outcome=nodeApplyOutcome(operation,operation.nodeApply.result);
+      await remember(operation,'completed',outcome);
+      operation.outcome=outcome;operation.cleanupConfirmed=true;
+      if(pending===operation)pending=null;
+      return outcome;
+    }
+    return structuredClone(operation.outcome??failed(operation,'NODE_PHASE_UNRESOLVED','The original node phase requires its own verified receipt'));
+  };
   const inspectTarget=async operation=>{
     if(running)return failed(operation,'OPERATION_STILL_PENDING','The node graph phase is still running');
     const result=await inspectNodeTarget({request:operation.parameters,operation,adapter:operation.nodeTargetAdapter,record:nodeTargetRecord,deadline:now()+15000});
@@ -1214,6 +1447,7 @@ export function createActionRuntime({ pinned, execute, artifactStore, allowCandi
   };
   const reconcilePending = async () => {
     const operation = pending;
+    if(operation.action.capability==='node.apply')return inspectApply(operation);
     if(operation.action.capability==='node.target.internal'){try{return await inspectTarget(operation);}catch(error){return failed(operation,'RECONCILIATION_FAILED',String(error.message));}}
     if (running && operation.action.capability === 'node.configure_text_import.v1') {
       return failed(operation, 'OPERATION_STILL_PENDING', 'The bounded node procedure is still running');
@@ -1240,7 +1474,7 @@ export function createActionRuntime({ pinned, execute, artifactStore, allowCandi
         }
         if (state.receipt.action_key === operation.action.action_key) operation.outcome = state.receipt;
         if (operation.cleanupConfirmed && operation.outcome.status !== 'AMBIGUOUS') {
-          if(operation.action.capability==='artifact.upload' && operation.outcome.status==='NOT_APPLIED')await operation.uploadLease?.release();
+          if(operation.action.capability==='artifact.upload' && (operation.outcome.status==='NOT_APPLIED'||operation.outcome.status==='FAILED'&&operation.outcome.output?.conflict_rejected===true))await operation.uploadLease?.release();
           pending = null; return operation.outcome;
         }
       }
@@ -1250,7 +1484,7 @@ export function createActionRuntime({ pinned, execute, artifactStore, allowCandi
         'The browser call finished but cleanup is unconfirmed. Inspect and restore_control before further mutations.');
       if (['ui.act','artifact.upload'].includes(operation.action.capability)) {
         await remember(operation, 'reconciled', operation.outcome);
-        if(operation.action.capability==='artifact.upload' && operation.outcome?.status==='NOT_APPLIED')await operation.uploadLease?.release();
+        if(operation.action.capability==='artifact.upload' && (operation.outcome?.status==='NOT_APPLIED'||operation.outcome?.status==='FAILED'&&operation.outcome.output?.conflict_rejected===true))await operation.uploadLease?.release();
         if (operation.outcome.status !== 'AMBIGUOUS') pending = null;
         return operation.outcome;
       }
@@ -1271,6 +1505,8 @@ export function createActionRuntime({ pinned, execute, artifactStore, allowCandi
     base.unshift({ tool: 'dock_operation_inspect', arguments: { operation_id: operation.id },
       required_fields: [], requires: [], provides: ['completion_receipt', 'cleanup_state'] });
     if (operation.transportUncertain) return { recovery_options: [], next_steps: base };
+    if(operation.action.capability==='node.apply')return {recovery_options:[],next_steps:base,
+      internal_resume_available:operation.cleanupConfirmed===true&&!operation.nodeApply?.pending};
     if(operation.action.capability==='node.target.internal')return {recovery_options:[],next_steps:base,internal_resume_available:operation.cleanupConfirmed===true&&!operation.targetPhase?.pending};
     if(operation.action.capability==='artifact.upload') {
       if(operation.cleanupConfirmed && (!operation.verification || operation.verification.settled))base.push({
@@ -1323,8 +1559,22 @@ export function createActionRuntime({ pinned, execute, artifactStore, allowCandi
     if (!operation || pending !== operation) return view(operation);
     return view(operation, await reconcilePending());
   };
-  return Object.freeze({
-    tools: [...executorTools,...(allowCandidate && artifactStore ? [artifactUploadTool,artifactVerifyTool] : [])],
+  const nodeJobs=createNodeOperationRunner({run:(request,options)=>runtime.runNodeApply(request,options),
+    validate:request=>{const h=validateNodeApplyRequest(request,nodeApplyHandlers).handler;return h.output_wizard==='separate'?JSON.stringify({revision:h.revision,output_wizard:'separate'}):h.revision;},
+    progress:id=>{
+      const state=operations.get(id)?.nodeApply;
+      return state?structuredClone({node:state.node,execution:state.execution,
+        accepted_phases:state.phases.map(p=>p.phase),pending_phase:state.pending?.phase??null,
+        effect_possible:state.effect_possible,cleanup_complete:state.cleanup_complete}):null;
+    }});
+  const runtime=Object.freeze({
+    startNodeApply:(request,options)=>nodeJobs.start(request,options),
+    nodeApplyStatus:id=>nodeJobs.status(id),
+    waitNodeApply:(id,options)=>nodeJobs.wait(id,options),
+    cancelNodeApply:id=>nodeJobs.cancel(id),
+    stopNodeApply:id=>nodeJobs.stop(id),
+    tools: [...executorTools,...(allowCandidate && artifactStore ? [artifactUploadTool,artifactVerifyTool,...deliveryApiTools] : []),
+      ...(allowCandidate&&nodeApplyHandlers.has('imports.text')&&nodeApplyDriverFactory?nodeApiTools:[])],
     assertPreparationAllowed() {
       if (running || pending) throw new Error('Dock preparation cannot run while an action is running or its effect remains uncertain');
     },
@@ -1338,10 +1588,12 @@ export function createActionRuntime({ pinned, execute, artifactStore, allowCandi
         if (query.action_keys !== undefined && (!Array.isArray(query.action_keys) || !query.action_keys.length
           || query.action_keys.length > 16 || new Set(query.action_keys).size !== query.action_keys.length)) throw new Error('Select distinct action keys');
         return { actions: (query.action_keys ?? []).map(key => structuredClone(find(key))),
-          node_types: query.node_types === undefined ? [] : describeNodeTypes(query.node_types, getNodeContractPins(), pinned.actions),
+          node_types: query.node_types === undefined ? [] : describeNodeTypes(query.node_types, getNodeContractPins(), pinned.actions,
+            allowCandidate&&nodeApplyDriverFactory?nodeApplyHandlers:new Map()),
           session_manifest: structuredClone(pinned.pins) };
       }
       if (actionKey === undefined) return { available_actions: [...pinned.actions.keys()],
+        candidate_operation_tools:runtime.tools.filter(t=>nodeApiTools.includes(t)||deliveryApiTools.includes(t)).map(t=>t.name),
         ...(allowCandidate && artifactStore ? {artifact_upload_tool:'dock_artifact_upload',artifact_verify_tool:'dock_artifact_verify',input_artifacts:artifactStore.list()} : {}),
         ui_action_tool: 'dock_ui_action', observation_tool: 'dock_workspace_observe', session_manifest: structuredClone(pinned.pins) };
       const action = find(actionKey);
@@ -1367,7 +1619,7 @@ export function createActionRuntime({ pinned, execute, artifactStore, allowCandi
       if (operations.has(recoveryOperationId)) throw new Error('Recovery ID conflicts with an existing operation');
       const operation = operations.get(operationId);
       if (!operation || pending !== operation) throw new Error('Recovery requires the pending operation of this session');
-      if(operation.action.capability==='node.target.internal')throw new Error('Use the enclosing node procedure to resume this internal phase');
+      if(['node.target.internal','node.apply'].includes(operation.action.capability))throw new Error('Use the enclosing node procedure to resume this internal phase');
       if(operation.action.capability==='artifact.upload')throw new Error('Upload requires server transfer verification before recovery or abandonment');
       if (!['complete_link', 'restore_control', 'accept_observed_state', 'abandon_operation'].includes(strategy)) throw new Error('Unsupported recovery strategy');
       if (strategy === 'complete_link' && operation.action.capability !== 'link.create.v1') throw new Error('complete_link requires a pending link.create operation');
@@ -1493,6 +1745,7 @@ export function createActionRuntime({ pinned, execute, artifactStore, allowCandi
         return structuredClone(previous.outcome);
       }
       if (operations.has(operationId)) throw new Error('UI operation ID conflicts with an existing operation');
+      if(pending?.action.capability==='node.apply')throw new Error('The original node phase must be verified before any UI repair');
       if(pending?.action.capability==='artifact.upload') {
         if(running || pending.transportUncertain || !pending.cleanupConfirmed)
           throw new Error('Upload is pending server verification; only observation and inspection are available');
@@ -1583,11 +1836,11 @@ export function createActionRuntime({ pinned, execute, artifactStore, allowCandi
         return outcome;
       } finally { running = false; }
     },
-    async upload({artifactId,grantId,observationId,operationId,signal}={}) {
+    async upload({artifactId,grantId,observationId,operationId,signal,decideConflicts=false}={}) {
       signal?.throwIfAborted();checkId(operationId);
       if(!allowCandidate || !artifactStore)throw new Error('Artifact upload is available only in an authorized candidate session');
       const artifact=artifactStore.getUploadGrant(artifactId,grantId);
-      const signature=fingerprint('artifact.upload',[artifactId,grantId,observationId]);
+      const signature=fingerprint(decideConflicts?'artifact.upload.delivery':'artifact.upload',[artifactId,grantId,observationId]);
       if(auxiliary.has(operationId))throw new Error('Upload operation ID conflicts with another request');
       if(operations.has(operationId)) {
         const previous=operations.get(operationId);
@@ -1595,7 +1848,7 @@ export function createActionRuntime({ pinned, execute, artifactStore, allowCandi
         return previous.outcome ? structuredClone(previous.outcome) : failed(previous,'OPERATION_STILL_PENDING','The browser operation is still running');
       }
       if(running || pending)throw new Error('Resolve the pending Dock operation before uploading');
-      if(artifact.upload.overwrite!=='replace')throw new Error('reject upload policy is not implemented; it cannot be replaced implicitly');
+      if(artifact.upload.overwrite!=='replace'&&!(decideConflicts&&artifact.upload.overwrite==='reject'))throw new Error('reject upload policy is not implemented; it cannot be replaced implicitly');
       const snapshot=observations.get(observationId);
       if(!snapshot || snapshot.file_storage?.status!=='observed' || snapshot.file_storage.directory!==artifact.upload.directory)
         throw new Error('Observe the exact authorized Loginom storage directory before uploading. Open the main Файлы (Files) workspace and enter the directory from the upload grant; require file_storage.status=observed and an exact directory match. The import file-selection dialog cannot receive this upload: cancel that dialog through its observed control, then open Files and observe again. No file was staged or submitted.');
@@ -1611,7 +1864,7 @@ export function createActionRuntime({ pinned, execute, artifactStore, allowCandi
         let outcome;
         try {
           const receipt=receiptOptions(operation,operationId,'artifact.upload',signature);
-          const code=makeArtifactUploadCode({operation_id:operationId,artifact,upload_path:lease.path,snapshot,
+          const code=makeArtifactUploadCode({operation_id:operationId,artifact,upload_path:lease.path,snapshot,decide_conflicts:decideConflicts,
             expected_build:targetBuild,expected_origin:targetOrigin});
           outcome=assertActionOutcome(await execute(withBrowserReceipt(`(${code})(page)`,receipt),{timeout:35000}));
           if(outcome.operation_id!==operationId || outcome.action_key!=='artifact.upload' || outcome.action_revision!=='1')
@@ -1620,16 +1873,16 @@ export function createActionRuntime({ pinned, execute, artifactStore, allowCandi
         operation.cleanupConfirmed=!operation.transportUncertain && outcome.cleanup_complete===true;
         operation.outcome=outcome;
         await remember(operation,'completed',outcome);
-        if(!operation.transportUncertain && outcome.status==='NOT_APPLIED' && operation.cleanupConfirmed) {
+        if(!operation.transportUncertain && (outcome.status==='NOT_APPLIED'||decideConflicts&&outcome.status==='FAILED'&&outcome.output.conflict_rejected===true) && operation.cleanupConfirmed) {
           await lease.release();pending=null;
         }
         return structuredClone(outcome);
       } finally {running=false;}
     },
-    async verifyArtifact({operationId,verificationId,observationId,fileRef,signal}={}) {
+    async verifyArtifact({operationId,verificationId,observationId,fileRef,signal,discover=false}={}) {
       signal?.throwIfAborted();checkId(operationId);checkId(verificationId);
       if(!allowCandidate || !artifactStore)throw new Error('Artifact verification is available only in a candidate session');
-      const signature=fingerprint('artifact.verify',[operationId,observationId,fileRef]);
+      const signature=fingerprint(discover?'artifact.verify.discovery':'artifact.verify',[operationId,observationId,fileRef]);
       const operation=operations.get(operationId);
       if(operations.has(verificationId))throw new Error('Verification ID conflicts with an existing operation');
       if(auxiliary.has(verificationId)) {
@@ -1646,24 +1899,26 @@ export function createActionRuntime({ pinned, execute, artifactStore, allowCandi
         throw new Error('Inspect and confirm the pending upload browser receipt before verifying its file');
       const snapshot=observations.get(observationId);
       if(!snapshot)throw new Error('Observe the authorized file row before verifying');
-      observations.assertIssued(observationId,{ref:fileRef});
+      if(!discover)observations.assertIssued(observationId,{ref:fileRef});
       const options={operation_id:verificationId,upload_operation_id:operationId,observation_id:observationId,file_ref:fileRef,
         snapshot,artifact:operation.checkpoint.artifact,storage_root_ref:operation.checkpoint.storage_root_ref,
         expected_build:targetBuild,expected_origin:targetOrigin};
       // Validate exact file identity before allocating any download lease.
-      makeArtifactDownloadCode(options);
+      const buildDownload=discover?o=>makeArtifactDiscoveryDownloadCode(o,{download:browserArtifactDownload,reveal:browserArtifactReveal}):makeArtifactDownloadCode;
+      buildDownload(options);
       running=true;
       try {
         const lease=await artifactStore.stageDownload(operation.parameters.artifact_id);
         const attempt={id:verificationId,signature,lease,action:{action_key:'artifact.verify',revision:'1',capability:'artifact.verify'},
-          parameters:{upload_operation_id:operationId,observation_id:observationId,file_ref:fileRef},checkpoint:{artifact:options.artifact},deadline:now()+60000};
+          parameters:{upload_operation_id:operationId,observation_id:observationId,file_ref:fileRef},checkpoint:{artifact:options.artifact,
+            ...(discover?{discovery:{workflow_ref:snapshot.workflow_ref,document:snapshot.dom_epoch.document,active_tab_ref:snapshot.active_tab_ref}}:{})},deadline:now()+60000};
         try {signal?.throwIfAborted();await remember(attempt,'download_prepared');signal?.throwIfAborted();}
         catch(error){await lease.release();throw error;}
         operation.verification=attempt;observations.clear();
         const receipt=receiptOptions(operation,verificationId,'artifact.download',signature);
         let raw;
         try {
-          const code=makeArtifactDownloadCode({...options,download_path:lease.path});
+          const code=buildDownload({...options,download_path:lease.path});
           raw=await execute(withBrowserReceipt(`(${code})(page)`,receipt),{timeout:65000});
         } catch {
           operation.transportUncertain=true;operation.cleanupConfirmed=false;
@@ -1674,6 +1929,8 @@ export function createActionRuntime({ pinned, execute, artifactStore, allowCandi
         return structuredClone(await finishArtifactVerification(operation,attempt,raw));
       } finally {running=false;}
     },
+    uploadDeliveredArtifact:options=>runtime.upload({...options,decideConflicts:true}),
+    verifyDeliveredArtifact:options=>runtime.verifyArtifact({...options,discover:true}),
     // Private entry point for the node.apply shell (03). No new public MCP
     // action: the graph phase shares this runtime's gate, IDs and journal.
     async runNodeTarget(request,{operationId,signal,resume=false}={}) {
@@ -1696,10 +1953,7 @@ export function createActionRuntime({ pinned, execute, artifactStore, allowCandi
       running=true;
       try{
         if(!operation){operation={id:operationId,signature,parameters:structuredClone(request),action:{action_key:'node.target.internal',capability:'node.target.internal',revision:'1'}};
-          operation.nodeTargetAdapter=nodeTargetAdapterFactory({execute:async(code,options)=>{
-            const wrapped='async page => {const base={action_key:"node.target.transport",action_revision:"1",operation_id:'+JSON.stringify(operation.id)+',phase:"observed",effect_possible:false,trace:[]};try{return {...base,status:"SUCCEEDED",error:null,output:{value:await ('+code+')(page)}};}catch(error){return {...base,status:"FAILED",output:{},error:{code:"NODE_TARGET_TRANSPORT",message:String(error.message).slice(0,500)}};}}';
-            const response=await execute(wrapped,options);if(response.status!=='SUCCEEDED')throw new Error(response.error?.message??'Node target transport failed');return response.output.value;
-          },pinned,origin:targetOrigin,build:targetBuild});
+          operation.nodeTargetAdapter=targetAdapter(operation);
           operation.checkpoint={workflow_ref:request.workflow_ref,document_id:request.document_id};
         }
         operation.deadline=now()+60000;
@@ -1713,6 +1967,119 @@ export function createActionRuntime({ pinned, execute, artifactStore, allowCandi
         try{await remember(operation,'completed',outcome);}catch(error){operation.outcome=failed(operation,'EVIDENCE_WRITE_FAILED',String(error.message));return operation.outcome;}
         if(result.status!=='AMBIGUOUS'&&operation.cleanupConfirmed)pending=null;
         return structuredClone(outcome);
+      }finally{running=false;}
+    },
+    // Host-only until the complete real drivers pass admission. All child
+    // phases own the same runtime gate; they cannot re-enter public run/act.
+    async runNodeApply(request,{signal,stopSignal,resume=false}={}) {
+      request=structuredClone(request);
+      signal?.throwIfAborted();checkId(request.operation_id);
+      const {handler}=validateNodeApplyRequest(request,nodeApplyHandlers);
+      if(typeof nodeApplyDriverFactory!=='function')throw new Error('Local node drivers are not installed');
+      if(running)throw new Error('Another Dock action is still running');
+      const signature=fingerprint('node.apply',{request,handler_revision:handler.revision,...(handler.output_wizard==='separate'?{output_wizard:'separate'}:{})});
+      const operationId=request.operation_id;
+      if(auxiliary.has(operationId))throw new Error('Operation ID conflicts with a recovery or UI operation');
+      let operation=operations.get(operationId);
+      if(operation&&operation.signature!==signature)throw new Error('operation_id was already used with different parameters or handler');
+      if(pending&&pending!==operation)throw new Error('Another Dock operation remains pending');
+      if(operation&&!resume)return inspectApply(operation);
+      if(resume&&operation?.nodeApply?.pending?.phase==='workflow')await inspectApply(operation);
+      if(resume&&(!operation||pending!==operation||operation.nodeApply?.pending||!operation.cleanupConfirmed))
+        throw new Error('Resume requires the original inspected node checkpoint without an unresolved phase');
+      running=true;
+      try {
+        if(!operation){
+          operation={id:operationId,signature,parameters:request,
+            action:{action_key:'node.apply',capability:'node.apply',revision:request.contract_revision},
+            checkpoint:{document_id:request.document_id,workflow_ref:request.workflow_ref},deadline:now()+request.budgets.total_ms};
+          operation.nodeTargetAdapter=targetAdapter(operation);
+          // Only trusted host code supplies drivers, never a tool request.
+          // Internal node readers return both typed action outcomes and plain
+          // native observations. The real bridge accepts typed envelopes only;
+          // unwrap their value locally, preserving the driver's original data.
+          const executeNodeScript=async(code,options)=>{
+            const wrapped='async page => {const base={action_key:"node.apply.transport",action_revision:"1",operation_id:'+JSON.stringify(operation.id)+',phase:"transport",effect_possible:true,trace:[]};try{return {...base,status:"SUCCEEDED",error:null,output:{value:await ('+code+')(page)}};}catch(error){return {...base,status:"FAILED",cleanup_complete:false,output:{},error:{code:"NODE_APPLY_TRANSPORT",message:String(error.message).slice(0,500)}};}}';
+            const response=await execute(wrapped,options);
+            if(response.status!=='SUCCEEDED')throw new Error(response.error?.message??'Node driver transport failed');
+            return response.output.value;
+          };
+          operation.nodeApplyDrivers=nodeApplyDriverFactory({operation,execute:executeNodeScript,onRecord,now,
+            receiptOptions:(id,key,signature)=>receiptOptions(operation,id,key,signature),
+            verifiedUploads:()=>[...operations.values()].filter(o=>o.action.capability==='artifact.upload'
+              && o.outcome?.status==='SUCCEEDED'&&o.cleanupConfirmed===true)
+              .map(o=>structuredClone({operation_id:o.id,artifact:o.checkpoint.artifact,outcome:o.outcome}))});
+          for(const name of ['verifySource','mapPorts','openWizard','finish','waitExecution','readOutput','verifyContinuation'])
+            if(typeof operation.nodeApplyDrivers?.[name]!=='function')throw new Error('Local node driver missing: '+name);
+          // Reuse the accepted graph driver directly, under this operation ID.
+          const originalContinuation=operation.nodeApplyDrivers.verifyContinuation;
+          operation.nodeApplyDrivers={...operation.nodeApplyDrivers,
+            verifyContinuation:async(state,ctx)=>{
+              if(state.phases.at(-1)?.phase!=='workflow')return originalContinuation(state,ctx);
+              if(state.pending||state.node||state.cleanup_complete!==true||state.phases.length!==2
+                ||state.phases[0].phase!=='source'||now()>=Math.min(state.deadline,state.configure_deadline)
+                ||typeof operation.nodeTargetAdapter.verifyWorkflow!=='function')return false;
+              const current=await operation.nodeTargetAdapter.verifyWorkflow(
+                {document_id:request.document_id,workflow_ref:request.workflow_ref},
+                {...ctx,deadline:Math.min(state.deadline,state.configure_deadline,now()+15000)});
+              if(current?.status!=='SUCCEEDED'||current.verified!==true||current.cleanup_complete!==true
+                ||current.effect_possible!==false||current.document_id!==request.document_id
+                ||fingerprint('workflow',current.workflow_ref)!==fingerprint('workflow',request.workflow_ref))return false;
+              const source=await operation.nodeApplyDrivers.verifySource(request.parameters,
+                {...ctx,operation_id:operation.id,document_id:request.document_id,workflow_ref:request.workflow_ref,
+                  deadline:Math.min(state.deadline,state.configure_deadline)});
+              const verified=fingerprint('source',source)===fingerprint('source',state.phases[0].value);
+              await onRecord({operation_id:operation.id,action_key:'node.apply',action_revision:request.contract_revision,
+                phase:'node_continuation_checked',boundary:'workflow',verified,current,source});
+              return verified;
+            },
+            ...(typeof operation.nodeTargetAdapter.activateWorkflow==='function'?{activateWorkflow:ctx=>operation.nodeTargetAdapter.activateWorkflow(
+              {document_id:request.document_id,workflow_ref:request.workflow_ref},ctx)}:{}),prepareTarget:async(graph,ctx)=>{
+            const overallDeadline=operation.deadline;operation.deadline=ctx.deadline;
+            let result;
+            try{result=await prepareNodeTarget({request:graph,operation,adapter:operation.nodeTargetAdapter,
+              record:onRecord,signal:ctx.signal,now});}finally{operation.deadline=overallDeadline;}
+            if(result.status!=='SUCCEEDED'){
+              const error=new Error(result.error??'Node target is not verified');
+              if(result.status==='NOT_APPLIED' && result.partial_effect===false && result.cleanup_complete===true
+                && operation.targetPhase?.effect_possible===false && !operation.targetPhase?.pending)
+                error.nodePhaseRefusal={phase:'target',status:'NOT_APPLIED',effect_possible:false,cleanup_complete:true};
+              throw error;
+            }
+            return {verified:true,cleanup_complete:!operation.targetPhase?.pending,
+              effect_possible:operation.targetPhase?.effect_possible===true,node:result.node.ref,target:result};
+          }};
+        }
+        await remember(operation,resume?'node_apply_resume_prepared':'prepared');signal?.throwIfAborted();
+        operations.set(operation.id,operation);pending=operation;observations.clear();
+        let result;
+        try{result=await applyNode({request,operation,handlers:nodeApplyHandlers,drivers:operation.nodeApplyDrivers,
+          record:onRecord,signal,stopSignal,now,resume});}
+        catch(error){
+          // Keep the claimed ID even if the first phase could not be started.
+          // A reused ID must never silently acquire a different request.
+          result={operation_id:operation.id,status:operation.nodeApply?'AMBIGUOUS':'NOT_APPLIED',
+            phases:(operation.nodeApply?.phases??[]).map(({value,...phase})=>structuredClone(phase)),
+            node:structuredClone(operation.nodeApply?.node??null),
+            execution:structuredClone(operation.nodeApply?.execution??{status:'not_requested',execution_id:null}),
+            output:structuredClone(operation.nodeApply?.output??{status:'not_refreshed',evidence_ref:null,ports:[]}),package_saved:false,warnings:[],
+            effect_possible:operation.nodeApply?.effect_possible===true,
+            cleanup_complete:operation.nodeApply?operation.nodeApply.cleanup_complete===true:true,
+            pending_phase:operation.nodeApply?.pending?.phase??null,
+            error:{code:'NODE_APPLY_STOPPED',message:String(error.message).slice(0,1000)}};
+        }
+        operation.outcome=nodeApplyOutcome(operation,result);operation.cleanupConfirmed=result.cleanup_complete===true;
+        try{await remember(operation,'completed',operation.outcome);}
+        catch(error){
+          // Failure to journal delivery must retain the configured node, accepted
+          // phases and execution identity. Inspect can redeliver the durable
+          // node checkpoint; neither an empty output nor another run is needed.
+          operation.outcome=nodeApplyOutcome(operation,{...result,status:result.effect_possible?'AMBIGUOUS':'NOT_APPLIED',
+            error:{code:'EVIDENCE_WRITE_FAILED',message:String(error.message).slice(0,1000)}});
+          return structuredClone(operation.outcome);
+        }
+        if(result.status!=='AMBIGUOUS'&&operation.cleanupConfirmed)pending=null;
+        return structuredClone(operation.outcome);
       }finally{running=false;}
     },
     async run(actionKey, parameters, { signal, operationId } = {}) {
@@ -1773,4 +2140,34 @@ export function createActionRuntime({ pinned, execute, artifactStore, allowCandi
       } finally { running = false; }
     },
   });
+  const delivery=createArtifactDelivery({runtime,artifactStore,record:onRecord,now,
+    admit:(id,signature)=>{
+      if(!allowCandidate||!artifactStore)throw Error('Artifact delivery requires an authorized candidate session');
+      if(nodeJobs.busy||running||pending)throw Error('Resolve the pending Dock operation before delivery');
+      if(operations.has(id)||auxiliary.has(id)||operations.has(id+':upload')||auxiliary.has(id+':verify'))
+        throw Error('Artifact delivery ID conflicts with an existing operation');
+      auxiliary.set(id,{signature:'delivery:'+signature});
+    },admitResume:(uploadId,resumeId,signature)=>{
+      if(!allowCandidate||!artifactStore)throw Error('Delivery resume requires an authorized candidate session');
+      if(nodeJobs.busy||running||pending&&pending.id!==uploadId)throw Error('Another Dock operation prevents delivery resume');
+      if(operations.get(uploadId)?.action.capability!=='artifact.upload')throw Error('Original upload is absent from this session');
+      if(operations.has(resumeId)||auxiliary.has(resumeId))throw Error('Resume ID conflicts with an existing operation');
+      auxiliary.set(resumeId,{signature:'delivery-resume:'+signature});
+    }});
+  // Internal delivery calls retain the original runtime methods. The returned
+  // facade prevents a second caller from changing UI between transfer stages.
+  const readOnly=new Set(['describe','requestFailure','nodeApplyStatus','waitNodeApply']);
+  const nodeControls=new Set([...readOnly,'startNodeApply','cancelNodeApply','stopNodeApply']);
+  const exposed=Object.fromEntries(Object.entries(runtime).map(([name,value])=>[name,typeof value!=='function'||readOnly.has(name)?value:
+    (...args)=>{
+      if(delivery.busy){const error=Error('Artifact delivery is in progress');
+        if(value.constructor.name==='AsyncFunction')return Promise.reject(error);throw error;}
+      if(nodeJobs.busy&&!nodeControls.has(name)){const error=Error('A background node operation is running');
+        if(value.constructor.name==='AsyncFunction')return Promise.reject(error);throw error;}
+      return value(...args);
+    }]));
+  return Object.freeze({...exposed,
+    deliverArtifact:(request,options)=>delivery.deliver(request,options),
+    resumeArtifactDelivery:(request,options)=>delivery.resume(request,options),
+    artifactDeliveryStatus:id=>delivery.status(id)});
 }

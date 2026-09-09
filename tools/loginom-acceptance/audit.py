@@ -1043,6 +1043,13 @@ def audit_directory(run):
     evidence_bytes = (run / "evidence.json").read_bytes()
     prompt_bytes = (run / "scenario.txt").read_bytes()
     request = json.loads(request_bytes)
+    if request.get('goal_id') == 'node-apply-complete':
+        from node_apply_acceptance import audit_directory as audit_node_directory
+        result = audit_node_directory(run)
+        return {**result, 'all_assertions_passed': result['passed'],
+                'assertions': [dict(name=name, passed=check['passed']) for name, check in result['checks'].items()],
+                'inputs': {'request.json': sha(request_bytes), 'evidence.json': sha(evidence_bytes), 'scenario.txt': sha(prompt_bytes)},
+                'auditor_sha256': sha(Path(__file__).with_name('node_apply_acceptance.py').read_bytes())}
     report = audit(request, json.loads(evidence_bytes), prompt_bytes.decode())
     report["inputs"] = {"request.json": sha(request_bytes), "evidence.json": sha(evidence_bytes), "scenario.txt": sha(prompt_bytes)}
     report["auditor_sha256"] = sha(Path(__file__).read_bytes())

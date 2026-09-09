@@ -4,16 +4,16 @@ import vm from 'node:vm';
 import {Page,build} from './support/executor-fixture.mjs';
 import {makeArtifactDownloadCode} from '../lib/executor.mjs';
 
-function fixture() {
+function fixture(name = 'sales.csv') {
   const page=new Page(),elements=page.elements.bind(page),snapshot=page.uiSnapshot.bind(page);
-  const name='sales.csv',tid=page.prefix+';FileStorageForm;colName_'+name;
+  const tid=page.prefix+';FileStorageForm;colName_'+name;
   page.elements=()=>[...elements(),page.element(tid,{label:name,kind:'file'})];
   page.directory='/test';
   page.uiSnapshot=()=>({...snapshot(),file_storage:{status:'observed',directory:page.directory,listing_complete:false}});
   const observed=page.uiSnapshot(),file=observed.ui.elements.find(item=>item.tid===tid);
   const artifact={artifact_id:'a',name,bytes:3,sha256:'a'.repeat(64),upload:{grant_id:'g',directory:'/test',destination:'/test/'+name}};
   const options={artifact,snapshot:observed,file_ref:file.ref,observation_id:'read',operation_id:'download',upload_operation_id:'upload',
-    expected_origin:'https://loginom.invalid',expected_build:build,download_path:'/private/new-download/sales.csv'};
+    expected_origin:'https://loginom.invalid',expected_build:build,download_path:'/private/new-download/'+name};
   const calls=[];let resolveDownload;
   const download={url:()=> 'https://loginom.invalid/download?private=not-for-output',suggestedFilename:()=>name,
     saveAs:async path=>{assert.equal(path,options.download_path);calls.push('save');},failure:async()=>null,cancel:async()=>{calls.push('cancel');}};
@@ -34,6 +34,18 @@ test('download binds the checked file gesture to its page event and exact privat
   assert.ok(!JSON.stringify(result).includes('not-for-output'));
 });
 
+test('TSV download retains exact-name, destination and event ownership checks',async()=>{
+  const f=fixture('sales.tsv'),result=await f.run();
+  assert.equal(result.status,'SUCCEEDED');assert.equal(result.cleanup_complete,true);
+  assert.equal(result.output.destination,'/test/sales.tsv');
+  assert.equal(result.output.bytes_verification_required,true);
+  assert.deepEqual(f.calls,['listen','click','save']);
+  for(const name of ['sales.tsv.lgp','sales.tsv.html','sales.zip']) {
+    const other=fixture(name);assert.throws(()=>makeArtifactDownloadCode(other.options));
+    assert.deepEqual(other.calls,[]);
+  }
+});
+
 test('download refuses a different file label, formatted-name collision or package before the browser',()=>{
   for(const change of [f=>{f.options.artifact.name='other.csv';},f=>{f.options.artifact.name='sales.lgp';},
     f=>{f.options.snapshot.ui.elements.find(item=>item.ref===f.options.file_ref).label='sale,s.csv';},
@@ -49,6 +61,9 @@ test('changed directory or epoch prevents the download gesture',async()=>{
     if(kind==='directory')f.page.directory='/other';
     else {const before=f.page.uiSnapshot.bind(f.page);f.page.uiSnapshot=()=>({...before(),dom_epoch:{document:'new',revision:1}});}
     const result=await f.run();assert.equal(result.status,'NOT_APPLIED');assert.equal(result.effect_possible,false);
+    const checks=result.trace.find(e=>e.event==='download_context_refused').checks;
+    assert.equal(checks[kind==='directory'?'storage':'epoch'],false);
+    assert.ok(Object.values(checks).every(v=>typeof v==='boolean'));
     assert.deepEqual(f.calls,[]);
   }
 });
@@ -118,6 +133,8 @@ function revealFixture(mode='success') {
       if(mode==='horizontal')file.getBoundingClientRect=()=>({x:1100,y:825,width:100,height:25});
       if(mode==='already_inside')file.getBoundingClientRect=()=>({x:30,y:100,width:100,height:25});
       const output=vm.runInContext('('+fn.toString()+')',context)(arg);
+      if(mode==='extent_rounding')owner.scrollHeight+=1;
+      if(mode==='extent_changed')owner.scrollHeight+=2;
       if(mode==='context_after')f.page.directory='/other';
       if(mode==='still_hidden')f.page.uiSnapshot=()=>{const s=snapshot();const row=s.ui.elements.find(e=>e.ref===f.options.file_ref);row.scroll={ref:ownerRef,top:owner.scrollTop,max_top:50};row.interaction={state:'outside_viewport'};return s;};
       return output;
@@ -128,7 +145,7 @@ function revealFixture(mode='success') {
 }
 
 test('verification reveals its original clipped or offscreen file owner once before one download',async()=>{
-  for(const mode of ['success','clipped','delayed_repaint']) {
+  for(const mode of ['success','clipped','delayed_repaint','extent_rounding']) {
     const f=revealFixture(mode),result=await f.run();
     assert.equal(result.status,'SUCCEEDED',JSON.stringify(result));
     assert.equal(f.owner.scrollTop,50);
@@ -176,7 +193,7 @@ test('reveal rejects other owners files documents obstruction and unbounded move
 });
 
 test('post-scroll failure retains effect and never retries reveal or download',async()=>{
-  for(const mode of ['context_after','still_hidden','context_while_settling']) {
+  for(const mode of ['context_after','still_hidden','context_while_settling','extent_changed']) {
     const f=revealFixture(mode),result=await f.run();
     assert.equal(result.status,'AMBIGUOUS',mode+JSON.stringify(result));
     assert.equal(result.effect_possible,true);assert.equal(result.cleanup_complete,true);

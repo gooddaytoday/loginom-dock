@@ -1,4 +1,34 @@
+## Runtime source identity — 8 September 2026
+
+The client revision now includes every `.mjs` and `.d.ts` file recursively under
+`client/lib`, plus explicitly listed CLI/package/plugin inputs. `runtime-pin.mjs`
+produces a sorted, deduplicated inventory and rejects source symlinks. Session
+metadata retains `clientSourceManifest` with per-file SHA256, in addition to
+`clientRevision`. The independent acceptance audit compares this inventory and
+its aggregate revision against the checkout. Historical manual inventories omitted
+some new delivery/lifecycle modules and do not prove complete source binding;
+see the current text-import checkpoint for replacement evidence.
+
 # Loginom Dock: существующие механизмы и целевая архитектура
+
+## Наблюдённые настройки в результате node.apply — 8 сентября 2026
+
+Source-кандидат импорта возвращает `configuration.readback` из принятых квитанций
+configure/output_mapping/finish. Это компактная проекция наблюдений источника,
+формата, всех настроенных полей и native source→target mapping; входные параметры
+не используются для заполнения readback. Общая оболочка вызывает чистую функцию
+обработчика после проверенного завершения и сохраняет её результат в checkpoint.
+При Close readback применённых настроек отсутствует. Повтор operation ID возвращает
+тот же результат без чтения UI или повторного запуска функции проекции.
+
+Значения кодировки и разделителей сохраняют наблюдённое UI-представление. Node ref,
+receipt_ids и scope связывают readback с конкретной операцией. Он не содержит DOM
+или UI-ref и не доказывает сохранение пакета. Независимый
+`node_configuration_evidence.py` сравнивает проекцию с исходными наблюдениями,
+проверяет полный проход по страницам полей и native mapping; сохранность пакета
+проверяется отдельным save/reopen/reexecute-аудитом. Полный MCP-цикл этой версии
+принят в `remote-readback-20260908-222113-70a0533e`; автономный Hermes222819
+прошёл30/30. [Полный аудит03](../plans/loginom-dock/03-completion-audit.md).
 
 ## Решение 7 сентября 2026 — первый аналитический выпуск
 
@@ -19,14 +49,36 @@ recovery включены в локальный цикл. В обычном пу
 
 Все будущие Hermes-прогоны — openai-codex / gpt-5.6-sol / low.
 Локальный контракт подготовки 01 реализован и описан в
-[workspace-preparation.md](workspace-preparation.md); node.apply остаётся следующим этапом.
+[workspace-preparation.md](workspace-preparation.md). Полный node.apply и обработчик
+импорта реализованы в source-кандидате подплана 03; текущие независимые проверки
+и границы приведены в [checkpoint](resume-checkpoint.md).
 Эта целевая схема **ещё не реализована целиком**: ниже описаны существующие
 механизмы и датированные итерации. Прежний импортный handler остаётся пилотом
 с уже открытым мастером и обязательным Done/reopen/readback. Профиль запуска,
 аудит и admission переведены на Sol/low при реализации 01. Приёмка нового черновика
 17/17 относится к полному рабочему дереву указанного в контракте runtime,
-не автоматически к выделенному коммиту. Следующий шаг — 02 и общие контракты 03;
-весь V1 и полный node.apply ещё не приняты. Новых прогонов эта правка не добавляет.
+не автоматически к выделенному коммиту. Драйвер 02 принят отдельно; общая основа03 принята как source runtime, Hermes30/30 PASS.
+Весь V1 и первый аналитический выпуск ещё не приняты. Ниже сохранены датированные
+сведения о прежних механизмах, которые не заменяют текущий checkpoint.
+
+### Intermediate package persistence (source candidate, 2026-09-08)
+
+`package.save_checkpoint` is a separate local capability. It uses the native
+awaited Save As flow with an explicit destination and conflict policy, then
+verifies that the same workflow and graph remain open at the exact cached path.
+The receipt also exposes bounded `workflow_continuations`, matching the old
+and new navigation to the same native package/workflow objects and active tab.
+Save As can leave old breadcrumb data-tid values under new captions. A bounded
+native parent-module/workflow navigation refreshes these before the next node
+operation; old request navigation guards remain strict. File replacement requires
+the exact full-path confirmation, and conflict cleanup must be observed complete.
+The new `persist` effect contract describes this completed save flow; the existing
+`save` effect and `package.save_as` retain their close/reopen obligations.
+Unknown saves require the completed browser receipt and are never automatically
+repeated. Neither an open-package cache nor a completed menu alone proves saved
+settings: dedicated QA closes/opens without resaving, checks the graph and complete
+settings baseline, and verifies fresh execution/output. This QA is separate from
+the normal intermediate save. See [the source acceptance checkpoint](text-import-node.md).
 
 ### Bounded text-import operation and explicit readiness (2026-09-07)
 

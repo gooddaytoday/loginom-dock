@@ -7,11 +7,19 @@ PREFIX = "mcp__loginom_dock__"
 LOCAL_TOOLS = {PREFIX + name for name in ("dock_prepare", "dock_action_describe", "dock_action_run",
     "dock_workspace_observe", "dock_ui_action", "dock_operation_inspect", "dock_operation_recover", "dock_diagnostics", "dock_artifact_upload", "dock_artifact_verify")}
 KNOWLEDGE_TOOLS = {PREFIX + name for name in ("find", "search", "read", "grep", "glob", "list", "tree")}
+# Export full-node receipts without silently expanding legacy audit allowlists.
+NODE_TOOLS = {PREFIX + name for name in ("dock_node_apply", "dock_node_resume", "dock_node_status",
+    "dock_node_wait", "dock_node_cancel", "dock_node_stop", "dock_artifact_deliver",
+    "dock_artifact_delivery_status", "dock_artifact_delivery_resume")}
 
-def clean(value, secrets):
-    if isinstance(value, list): return [clean(x, secrets) for x in value]
+def clean(value, secrets, _path=()):
+    if isinstance(value, list): return [clean(x, secrets, _path+('*',)) for x in value]
     if isinstance(value, dict):
-        return {k: ('[redacted]' if re.search(r'api.?key|password|token|secret|authorization|cookie', k, re.I) else clean(v,secrets))
+        counters={'input_tokens','output_tokens','total_tokens','cache_read_tokens','cache_write_tokens','reasoning_tokens'}
+        def safe_counter(k,v):
+            return (_path in [('process','usage'),('efficiency','usage_counts')] and k in counters
+                    and (v is None or type(v) is int and v>=0))
+        return {k: (v if safe_counter(k,v) else '[redacted]' if re.search(r'api.?key|password|token|secret|authorization|cookie', k, re.I) else clean(v,secrets,_path+(k,)))
                 for k,v in value.items() if k.lower() not in ['reasoning','reasoning_content','reasoning_details','system_prompt']}
     if not isinstance(value, str): return value
     for secret in sorted((s for s in secrets if isinstance(s,str) and len(s)>3),key=len,reverse=True):
@@ -170,7 +178,7 @@ def export_history(home, secrets):
             call=candidates[0] if len(candidates)==1 else None
             transport=name
             if name=='tool_call' and call:name=call['record']['tool']
-            if name not in LOCAL_TOOLS | KNOWLEDGE_TOOLS:
+            if name not in LOCAL_TOOLS | NODE_TOOLS | KNOWLEDGE_TOOLS:
                 # Unmatched routed replies must not disappear from the audit.
                 if transport!='tool_call':continue
             identifier=call['record']['tool_call_id'] if call else f'unmatched@{row}'
@@ -199,7 +207,7 @@ def export_history(home, secrets):
                     **({'transport_tool':transport} if transport!=name else {}),'result':unwrap(content),
                     **({'pairing_error':'missing_or_ambiguous_call'} if not call else {}),
                     **({'recovery_contexts':recovery_contexts(content),
-                        'verifications':transport_documents(content,'dock_outcome_verification')} if name in LOCAL_TOOLS else {})}
+                        'verifications':transport_documents(content,'dock_outcome_verification')} if name in LOCAL_TOOLS | NODE_TOOLS else {})}
             tools.append(record)
             originals.append({'row':row,'session':session,'identifier':identifier,'content':content,'timestamp':stamp,'active':is_active,'record':record})
         return clean(calls,secrets),clean(tools,secrets)

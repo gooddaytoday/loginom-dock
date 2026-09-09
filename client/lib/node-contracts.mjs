@@ -71,15 +71,18 @@ export function validateNodeTargetRequest(request) {
 }
 
 // Cards are data only. They never install handlers or imply platform/license availability.
-export function describeNodeTypes(types, pins = {}, actions = new Map()) {
+export function describeNodeTypes(types, pins = {}, actions = new Map(), candidateHandlers = new Map()) {
   if (!Array.isArray(types) || !types.length || types.length > 8 || new Set(types).size !== types.length
     || types.some(type => !Object.hasOwn(NODE_TYPES, type))) throw new Error('Select one to eight distinct supported node types');
   return types.map(type => {
     const card = structuredClone(NODE_TYPES[type]);
     const admitted = actions.get('node.add')?.input_schema?.properties?.component_key?.enum?.includes(type) === true;
-    const identity = { type, contract_revision: NODE_CONTRACT_REVISION, pins };
+    const candidate=candidateHandlers.get(type);
+    const identity = { type, contract_revision: NODE_CONTRACT_REVISION, pins, candidate_handler_revision:candidate?.revision??null };
     return { ...card, catalog_add_available: admitted, platform_availability: 'requires_live_preflight',
       full_node_apply_available: false, cache_key: createHash('sha256').update(JSON.stringify(identity)).digest('hex'),
+      candidate_node_apply_available:!!candidate,
+      ...(candidate?{configuration_handler:candidate.revision,configuration_status:'candidate_pending_autonomous_acceptance',candidate_apply_tool:'dock_node_apply'}:{}),
       session_manifest: structuredClone(pins) };
   });
 }

@@ -164,7 +164,9 @@ class Page {
         });
       }
       if (symbol === 'file_dialog.file_name') item.children = [this.element('fileInput', { tag: 'input' })];
-      if (symbol === 'message.text') item.text = 'Файл существует';
+      if (symbol === 'message.text') item.text = this.conflictText ?? '"'+this.fileValue+'" уже существует. Вы хотите заменить его?';
+      if (symbol === 'message.yes') item.text = 'Да';
+      if (symbol === 'message.no') item.text = 'Нет';
       if (symbol === 'message.error') item.text = this.error;
       result.push(item);
     }

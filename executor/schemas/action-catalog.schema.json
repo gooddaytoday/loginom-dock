@@ -100,7 +100,9 @@
           "enum": [
             "node.add",
             "link.create",
-            "package.save_as"
+            "package.save_as",
+            "node.configure_text_import",
+            "package.save_checkpoint"
           ]
         },
         "revision": {
@@ -117,7 +119,9 @@
           "enum": [
             "node.add.v1",
             "link.create.v1",
-            "package.save_as.v1"
+            "package.save_as.v1",
+            "node.configure_text_import.v1",
+            "package.save_checkpoint.v1"
           ]
         },
         "input_schema": {
@@ -164,7 +168,8 @@
                 "delete",
                 "execute",
                 "inspect",
-                "transfer"
+                "transfer",
+                "persist"
               ]
             },
             "resource": {

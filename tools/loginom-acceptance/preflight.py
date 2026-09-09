@@ -14,21 +14,30 @@ def sha(data):
 
 
 def runtime_pin(root):
-    # Parse only the literal input list; do not execute client/session code.
+    # Independently reproduce runtime-pin.mjs: all lib modules plus explicit
+    # outside inputs. Parse only the literal list; never execute session code.
+    root = root.resolve()
     source = (root / "client/lib/session.mjs").read_text()
-    matches = re.findall(r"for \(const file of \[([\s\S]*?)\]\) \{", source)
+    matches = re.findall(r"createRuntimeSourcePin\(import\.meta\.url,\[([\s\S]*?)\]\)", source)
     if len(matches) != 1:
         raise ValueError("Runtime input list is absent or ambiguous")
     literal = matches[0]
     labels = re.findall(r"'([^']+)'", literal)
     if not labels or len(set(labels)) != len(labels) or re.sub(r"'[^']+'|[\s,]", "", literal):
         raise ValueError("Runtime input list is not a unique literal list")
+    base = root / 'client/lib'
+    selected = set(labels)
+    for path in base.rglob('*'):
+        if path.is_symlink():
+            raise ValueError('Runtime source contains a symlink')
+        if path.is_file() and (path.name.endswith('.mjs') or path.name.endswith('.d.ts')):
+            selected.add('./' + path.relative_to(base).as_posix())
     digest = hashlib.sha256()
     inputs = {}
-    for label in labels:
-        path = root / "client/lib" / label
+    for label in sorted(selected, key=lambda value: value.encode('utf-16-be')):
+        path = base / label
         resolved = path.resolve()
-        if not resolved.is_relative_to(root) or path.is_symlink():
+        if not resolved.is_relative_to(root) or path.is_symlink() or any(p.is_symlink() for p in path.parents):
             raise ValueError("Runtime input escapes source root or is a symlink")
         data = path.read_bytes()
         digest.update(label.encode() + b"\0" + data)

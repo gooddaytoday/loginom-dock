@@ -1,6 +1,7 @@
 import { createHash } from 'node:crypto';
 import { withBrowserReceipt, makeCapabilityCode } from './executor.mjs';
 import { NODE_TYPES } from './node-contracts.mjs';
+import {activatePreparedWorkflow} from './node-workflow-activation.mjs';
 
 // Read cached graph objects and rendered SVG only. Never dereference the data
 // proxy or call Loginom server methods. GUID + prepared document/workflow is the
@@ -21,12 +22,20 @@ async function readGraph(page, task) {
     const blockers = [...document.querySelectorAll('[role="dialog"],.bg-mask-message,.x-mask-msg')].filter(visible);
     if (blockers.length) fail('Graph is blocked');
     const app = bg.app, card = app.Application.FInstance.FMainForm.Items.Workspace.getActiveTab();
-    let ancestor = card.Controller.Node?.data?.node, packageNode = null;
-    for (let i=0;ancestor && i<32;i++,ancestor=ancestor.ParentNode) if (ancestor instanceof app.PackageTreeNode) {packageNode=ancestor;break;}
+    let ancestor = card.Controller.Node?.data?.node, packageNode = null, workflowNode = null;
+    for (let i=0;ancestor && i<32;i++,ancestor=ancestor.ParentNode) {
+      if (app.WorkFlowTreeNode && ancestor instanceof app.WorkFlowTreeNode) workflowNode=ancestor;
+      if (ancestor instanceof app.PackageTreeNode) {packageNode=ancestor;break;}
+    }
     if (packageNode !== record.packageNode) fail('Prepared package identity changed');
     const model = card.Controller.FController, diagram = model.FDiagram, graph = diagram?.FmxGraph;
     const containers = exact(request.workflow_ref.prefix + ';ModelForm;cmpDiagram');
     if (!(model instanceof app.ModelForm) || containers.length !== 1 || graph?.container !== containers[0] || !visible(containers[0])) fail('Graph model/DOM binding unavailable');
+    // Retain the cached UI tree identity for the later embedded node wizard.
+    // Older hosts without this native class still support the graph driver,
+    // but cannot enter a bound composite node configuration.
+    if (record.nodeTargetWorkflowNode && record.nodeTargetWorkflowNode !== workflowNode) fail('Prepared workflow object changed');
+    if (workflowNode) record.nodeTargetWorkflowNode=workflowNode;
     const epochs=preparation.nodeTargetDomEpochs??={objects:new WeakMap(),next:0};
     const epoch=e=>{if(!epochs.objects.has(e))epochs.objects.set(e,++epochs.next);return epochs.objects.get(e);};
     const domEpoch=epoch(containers[0]);
@@ -187,7 +196,28 @@ export function createNodeTargetBrowserAdapter({execute,origin,build,pinned}) {
   const task = extra => ({request,types:NODE_TYPES,origin,build,...extra});
   const readCode = t => `async page => (${readGraph.toString()})(page,${JSON.stringify(t)})`;
   const call = (code,deadline) => execute(code,{timeout:Math.max(1,deadline-Date.now())});
+  const workflowOptions=(value,ctx)=>({receipt_namespace:'node-workflow:'+value.document_id,receipt_id:ctx.receipt_id,
+    operation_id:ctx.receipt_id,receipt_signature:createHash('sha256').update(JSON.stringify(value)).digest('hex')});
   return {
+    async readWorkflowReceipt(value,ctx){
+      return call(withBrowserReceipt('null',{...workflowOptions(value,ctx),receipt_read:true}),ctx.deadline);
+    },
+    async verifyWorkflow(value,ctx){
+      ctx.signal?.throwIfAborted();
+      return call(`async page => (${activatePreparedWorkflow.toString()})(page,${JSON.stringify({request:value,origin,build,deadline:ctx.deadline,observeOnly:true})})`,ctx.deadline);
+    },
+    async activateWorkflow(value,ctx){
+      request=value;ctx.signal?.throwIfAborted();
+      const options=workflowOptions(value,ctx);
+      const code=withBrowserReceipt(`(${activatePreparedWorkflow.toString()})(page,${JSON.stringify(task({deadline:ctx.deadline}))})`,options);
+      try{return await call(code,ctx.deadline);}
+      catch(error){
+        // Reconcile a lost transport reply by reading the original receipt only.
+        const inspected=await call(withBrowserReceipt('null',{...options,receipt_read:true}),Date.now()+15000);
+        if(inspected.output?.state==='completed')return inspected.output.receipt;
+        throw error;
+      }
+    },
     async observe(value,deadline){
       request=value;
       for(let refresh=0;refresh<3;refresh++){

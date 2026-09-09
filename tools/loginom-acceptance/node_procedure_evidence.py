@@ -12,14 +12,104 @@ def digest(value):
     return hashlib.sha256(json.dumps(value, ensure_ascii=False, separators=(',', ':')).encode()).hexdigest()
 
 
-def verify_internal_sequence(events, operation_id):
+def bound_wizard_close_confirmation(state):
+    binding = state.get('node_wizard_confirmation', {})
+    wizard = state.get('wizard', {})
+    node = state.get('prepared_node_context', {})
+    ui = state.get('ui', {})
+    if (binding.get('kind') != 'close' or wizard.get('status') != 'observed'
+            or node.get('verified') is not True
+            or any(node.get(k) != binding.get('node', {}).get(k) for k in ('document_id', 'workflow_id', 'node_id'))
+            or any(wizard.get(k) != binding.get(k) for k in ('root_ref', 'root_tid', 'stage'))
+            or wizard.get('owner_context') != binding.get('owner')):
+        return False
+    dialogs, masks = ui.get('dialogs'), ui.get('masks')
+    if (not isinstance(dialogs, list) or len(dialogs) != 1 or not isinstance(masks, list)
+            or any(m.get('kind') != 'modal_background' or m.get('ref') != binding.get('root_ref') for m in masks)):
+        return False
+    dialog = dialogs[0]
+    if (dialog.get('title') != 'Подтвердить'
+            or dialog.get('text') != 'Подтвердить Вы действительно хотите закрыть мастер настройки? Да Нет'):
+        return False
+    return all(len([e for e in ui.get('elements', []) if e.get('tid') == 'msgbox;tlb;' + name
+                    and e.get('label') == label and e.get('signature', {}).get('dialog_ref') == dialog.get('ref')
+                    and 'click' in e.get('allowed_actions', [])]) == 1 for name, label in [('yes', 'Да'), ('no', 'Нет')])
+
+
+def bound_wizard_deactivation_confirmation(state):
+    binding = state.get('node_wizard_confirmation', {})
+    node, ui = state.get('prepared_node_context', {}), state.get('ui', {})
+    dialogs, masks = ui.get('dialogs'), ui.get('masks')
+    if (binding.get('kind') != 'deactivation' or node.get('verified') is not True
+            or node.get('surface') != 'graph' or node.get('tid') != binding.get('graph_tid')
+            or any(node.get(k) != binding.get('node', {}).get(k) for k in ('document_id', 'workflow_id', 'node_id'))
+            or state.get('wizard', {}).get('status') != 'absent'
+            or state.get('wizard_pending_owner', {}).get('status') != 'observed'
+            or [{k: x.get(k) for k in ('tid', 'label')} for x in state['wizard_pending_owner'].get('path', [])[:-2]] != binding.get('opening', {}).get('workflow_path')
+            or state['wizard_pending_owner'].get('node', {}).get('tid') != (binding.get('opening', {}).get('workflow_path') or [{}])[-1].get('tid', '') + '>' + binding.get('opening', {}).get('node', {}).get('node_label', '')
+            or not isinstance(dialogs, list) or len(dialogs) != 1 or not isinstance(masks, list)
+            or any(m.get('kind') != 'modal_background' or m.get('target_tid') != binding.get('graph_tid', '').split(';Graph;')[0] or m.get('dialog_ref') is not None for m in masks)):
+        return False
+    title = 'Loginom ' + str(state.get('loginom_build'))
+    dialog = dialogs[0]
+    if (dialog.get('title') != title or dialog.get('text') != title +
+            ' Настройка узла приведет к его деактивации. Вы действительно хотите начать настраивать узел? Да Да, больше не спрашивать Нет'):
+        return False
+    return all(len([e for e in ui.get('elements', []) if e.get('tid') == 'msgbox;tlb;' + name
+                    and e.get('label') == label and e.get('signature', {}).get('dialog_ref') == dialog.get('ref')
+                    and 'click' in e.get('allowed_actions', [])]) == 1
+               for name, label in [('yes', 'Да'), ('no', 'Да, больше не спрашивать'), ('cancel', 'Нет')])
+
+
+def bound_wizard_confirmation(state):
+    return bound_wizard_close_confirmation(state) or bound_wizard_deactivation_confirmation(state)
+
+
+def bound_table_dialogs(state):
+    dialogs = state.get('ui', {}).get('dialogs')
+    if dialogs == []:
+        return True
+    binding = state.get('node_table_dialog', {})
+    table = binding.get('table', {})
+    outputs = state.get('node_outputs', {})
+    if binding.get('kind') not in ('format', 'filter') or outputs.get('verified') is not True:
+        return False
+    matches = [t for t in outputs.get('tables', []) if t.get('active') is True
+               and all(t.get(k) == table.get(k) and isinstance(table.get(k), str) and table[k]
+                       for k in ('view_guid', 'port_guid', 'table_tid'))]
+    if len(matches) != 1 or not isinstance(dialogs, list):
+        return False
+    expected = table['table_tid'] + ';ModalWindow_Browse' + binding['kind'].title()
+    return all(d.get('identity', {}).get('anchor_tid') == expected for d in dialogs)
+
+
+def bound_output_column_dialog(state):
+    wizard=state.get('wizard',{});params=wizard.get('column_parameters',{});dialogs=state.get('ui',{}).get('dialogs',[])
+    selected=params.get('selected_column',{})
+    if (wizard.get('stage')!='output_mapping' or params.get('status')!='observed'
+        or params.get('portal_bound') is not True or params.get('root_tid')!='EditColumnDefForm'
+        or not isinstance(dialogs,list) or len(dialogs)!=1
+        or dialogs[0].get('ref')!=params.get('root_ref')
+        or dialogs[0].get('identity',{}).get('anchor_tid')!='EditColumnDefForm'
+        or selected.get('status')!='observed' or selected.get('selected') is not True):return False
+    matches=[f for f in wizard.get('output_columns',{}).get('fields',[]) if f==selected]
+    fields=params.get('fields',{})
+    return len(matches)==1 and set(fields)=={'name','label','type_label','data_kind','usage'} and all(
+        f.get('status')=='observed' and f.get('truncated') is False for f in fields.values())
+
+
+def verify_internal_sequence(events, operation_id, *, max_steps=96):
     rows = [r for r in events if r.get('operation_id') == operation_id]
     failures, observations, mutations = [], [], []
     current = pending = None
     samples = []
+    observation_attempts = root_refreshes = 0
     previous_step = 0
     session = None
     document = workflow = origin = build = None
+    prepared_state = rejected = None
+    retry_count = 0
+    refresh_authorized = False
     for row in rows:
         if row.get('internal_provenance') != 'client_node_procedure_v1':
             continue
@@ -29,22 +119,34 @@ def verify_internal_sequence(events, operation_id):
         if identity != session or not identity[0] or not identity[1]:
             failures.append('journal_session_mismatch')
         phase, step = row.get('phase'), row.get('step')
-        if not isinstance(step, int) or step < 1 or step > 96:
+        if not isinstance(step, int) or step < 1 or step > max_steps:
             failures.append('invalid_step'); continue
         if row.get('internal_operation_id') != f'{operation_id}:n{step}':
             failures.append('internal_identity_mismatch')
-        if phase == 'node_observation_sample':
+        if phase == 'node_observation_root_refreshed':
+            outcome = row.get('outcome', {})
+            if (pending or step != previous_step + 1 or row.get('sample') != observation_attempts
+                    or row.get('refresh') != root_refreshes + 1 or root_refreshes >= 2
+                    or outcome.get('status') != 'NOT_APPLIED' or outcome.get('action_key') != 'workspace.observe'
+                    or outcome.get('phase') != 'observing' or outcome.get('error', {}).get('code') != 'UI_ROOT_STALE'
+                    or outcome.get('effect_possible') is not False or outcome.get('cleanup_complete') is not True):
+                failures.append('unsafe_observation_root_refresh')
+            root_refreshes += 1
+            observation_attempts += 1
+            samples = []
+        elif phase == 'node_observation_sample':
             if pending or (samples and samples[0].get('step') != step):
                 failures.append('observation_interleaving')
-            if row.get('sample') != len(samples):
+            if row.get('sample') != observation_attempts:
                 failures.append('sample_sequence')
+            observation_attempts += 1
             samples.append(row)
         elif phase == 'node_observation_completed':
             semantic = row.get('readiness', {}).get('policy') == 'semantic_condition_v2'
             required_samples = row.get('readiness', {}).get('required_samples') if semantic else 4
             if semantic and required_samples not in (1, 2):
                 failures.append('invalid_readiness_policy'); required_samples = 2
-            if step != previous_step + 1 or pending or not required_samples <= len(samples) <= (80 if row.get('readiness') else 12):
+            if step != previous_step + 1 or pending or not required_samples <= len(samples) <= (80 if row.get('readiness') else 12) or observation_attempts > 80:
                 failures.append('observation_sequence')
             readiness = row.get('readiness')
             if readiness is not None:
@@ -63,7 +165,7 @@ def verify_internal_sequence(events, operation_id):
             if outcome.get('status') != 'SUCCEEDED' or not samples or samples[-1].get('outcome') != outcome:
                 failures.append('observation_not_backed_by_sample')
             recent = [s.get('outcome', {}).get('output', {}) for s in samples[-required_samples:]]
-            if len(recent) != required_samples or any((not semantic and s.get('dom_epoch') != state.get('dom_epoch')) or s.get('ui', {}).get('masks') for s in recent):
+            if len(recent) != required_samples or any((not semantic and s.get('dom_epoch') != state.get('dom_epoch')) or s.get('ui', {}).get('masks') and not bound_wizard_confirmation(s) for s in recent):
                 failures.append('observation_not_settled')
             doc = state.get('dom_epoch', {}).get('document')
             if document is None:
@@ -71,26 +173,52 @@ def verify_internal_sequence(events, operation_id):
             if not doc or (doc, state.get('workflow_ref'), state.get('origin'), state.get('loginom_build')) != (document, workflow, origin, build):
                 failures.append('document_context_mismatch')
             ui = state.get('ui', {})
-            if state.get('scan', {}).get('complete') is not True or ui.get('masks') != [] or ui.get('dialogs') != []:
+            if state.get('scan', {}).get('complete') is not True or (ui.get('masks') != [] or not (bound_table_dialogs(state) or bound_output_column_dialog(state))) and not bound_wizard_confirmation(state):
                 failures.append('observation_blocked')
             current = state
             observations.append((step, state))
             previous_step, samples = step, []
+            observation_attempts = root_refreshes = 0
         elif phase == 'node_step_prepared':
             if step != previous_step + 1 or pending or samples or current is None:
                 failures.append('mutation_without_fresh_observation')
             action = row.get('action', {})
+            if rejected:
+                old_action, old_state, _ = rejected
+                intent = lambda a: {k: v for k, v in a.items() if k not in ('ref', 'source_ref', 'target_ref')}
+                def binding(state, act):
+                    if not isinstance(state, dict):
+                        return None
+                    result = []
+                    for key in ('ref', 'source_ref', 'target_ref'):
+                        if key in act:
+                            matches = [e for e in state.get('ui', {}).get('elements', []) if e.get('ref') == act[key]]
+                            if len(matches) != 1 or not matches[0].get('identity'):
+                                return None
+                            result.append(refresh_control_binding(state, act, matches[0]))
+                    wizard = state.get('wizard', {})
+                    editor = wizard.get('import_column_editor', {})
+                    return (result, wizard.get('owner_context'), {k: editor.get(k) for k in
+                        ('index', 'name', 'label', 'property', 'canonical_value', 'used', 'other_property', 'other_value')})
+                old_binding, new_binding = binding(old_state, old_action), binding(current, action)
+                if not refresh_authorized or intent(action) != intent(old_action) or old_binding is None or old_binding != new_binding:
+                    failures.append('unsafe_local_refresh')
+                refresh_authorized = False
             if current is not None:
                 if row.get('observation_sha256') != digest(current):
                     failures.append('observation_digest_mismatch')
                 if row.get('signature') != digest([row.get('internal_operation_id'), action, current]):
                     failures.append('step_signature_mismatch')
+                if current.get('node_wizard_confirmation') and (not bound_wizard_confirmation(current)
+                        or action.get('verb') != ('confirm_wizard_close' if current['node_wizard_confirmation'].get('kind') == 'close' else 'confirm_wizard_deactivation')
+                        or not any(e.get('ref') == action.get('ref') and e.get('tid') == 'msgbox;tlb;yes' for e in current.get('ui', {}).get('elements', []))):
+                    failures.append('unsafe_wizard_confirmation_answer')
                 refs = [action.get(k) for k in ('ref', 'source_ref', 'target_ref') if k in action]
                 for ref in refs:
                     matching = [e for e in current.get('ui', {}).get('elements', []) if e.get('ref') == ref]
                     if len(matching) != 1 or action.get('verb') not in matching[0].get('allowed_actions', []):
                         failures.append('unissued_action_reference')
-            pending = row
+            pending, prepared_state = row, current
             current = None
         elif phase == 'node_step_completed':
             outcome = row.get('outcome', {})
@@ -98,15 +226,39 @@ def verify_internal_sequence(events, operation_id):
                 failures.append('completion_without_preparation')
             if outcome.get('operation_id') != row.get('internal_operation_id') or outcome.get('action_key') != 'ui.act':
                 failures.append('receipt_identity_mismatch')
-            if outcome.get('status') != 'SUCCEEDED' or outcome.get('cleanup_complete') is not True:
+            strict_refusal = (outcome.get('status') == 'NOT_APPLIED' and outcome.get('phase') == 'preconditions'
+                and outcome.get('effect_possible') is False and outcome.get('cleanup_complete') is True
+                and outcome.get('error', {}).get('code') == 'UI_EPOCH_CHANGED'
+                and isinstance(outcome.get('trace'), list)
+                and not any(e.get('event') == 'ui_preconditions_verified' for e in outcome['trace']))
+            if not strict_refusal and (outcome.get('status') != 'SUCCEEDED' or outcome.get('cleanup_complete') is not True):
                 failures.append('incomplete_mutation')
-            if pending:
+            if pending and strict_refusal:
+                rejected = (pending['action'], prepared_state, outcome)
+            elif pending:
                 mutations.append((step, pending['action'], outcome))
+                rejected, retry_count = None, 0
             pending = None
             previous_step = step
+        elif phase == 'node_step_refresh_authorized':
+            retry_count += 1
+            expected_intent = hashlib.sha256(json.dumps(
+                {k: v for k, v in (rejected[0] if rejected else {}).items() if k not in ('ref', 'source_ref', 'target_ref')},
+                ensure_ascii=False, sort_keys=True, separators=(',', ':')).encode()).hexdigest()
+            if (not rejected or pending or samples or step != previous_step or retry_count > 2
+                    or refresh_authorized or row.get('retry') != retry_count
+                    or row.get('rejected_operation_id') != rejected[2].get('operation_id')
+                    or row.get('effect_possible') is not False
+                    or row.get('intent_sha256') != expected_intent
+                    or not isinstance(row.get('condition'), str) or not row['condition'].strip()
+                    or any(not isinstance(row.get(k), str) or len(row[k]) != 64
+                           or any(c not in '0123456789abcdef' for c in row[k])
+                           for k in ('binding_sha256', 'intent_sha256'))):
+                failures.append('invalid_refresh_authorization')
+            refresh_authorized = True
         else:
             failures.append('unknown_internal_event')
-    if pending or samples or not observations or not mutations:
+    if pending or rejected or refresh_authorized or samples or not observations or not mutations:
         failures.append('incomplete_procedure_journal')
     return {'passed': not failures, 'failures': sorted(set(failures)),
             'observations': observations, 'mutations': mutations}
@@ -237,3 +389,21 @@ def audit_bound_operation(evidence, request, expected, source_path, prefix, tran
         return {**proof, 'operation_id': operation_id, 'reason': 'bound_internal_text_import_roundtrip'}
     except (KeyError, TypeError, ValueError, IndexError, StopIteration, AttributeError):
         return failure
+
+
+def refresh_control_binding(state, action, control):
+    binding = {k: control.get(k) for k in ('tid', 'identity', 'label')}
+    process = state.get('node_processes', {})
+    node = state.get('prepared_node_context', {})
+    grid = control.get('process_grid', {})
+    # Right-click opens the console menu on its native grid, whose text changes
+    # as process rows load. Row/menu actions retain the ordinary label guard.
+    if (action.get('verb') == 'right_click' and control.get('tid') in (
+            'ConsoleForm;ProgressForm;trpProgress;grd;tbl', 'ConsoleForm;ProgressForm;trpProgress;treepanel;tree')
+            and grid.get('panel_ref') and grid.get('grid_id') and process.get('verified') is True
+            and process.get('root_id') and node.get('verified') is True
+            and process.get('node_context', {}).get('verified') is True
+            and all(node.get(k) and node[k] == process['node_context'].get(k) for k in ('document_id','workflow_id','node_id'))):
+        binding.pop('label')
+        binding.update(process_grid=grid, root_id=process['root_id'], node={k:node[k] for k in ('document_id','workflow_id','node_id')})
+    return binding

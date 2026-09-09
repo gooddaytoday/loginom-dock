@@ -178,5 +178,6 @@ test('package roots change the pinned catalog only under an explicit new candida
   await exec(process.execPath,[builder,'--out',out,'--version','2026.09.06-test-root','--package-root','/test/packages']);
   const text=await readFile(join(out,'actions.json'),'utf8'),catalog=JSON.parse(text),manifest=JSON.parse(await readFile(join(out,'manifest.json'),'utf8'));
   assert.deepEqual(catalog.actions.find(a=>a.action_key==='package.save_as').effect.allowed_roots,['/test/packages']);
+  assert.deepEqual(catalog.actions.find(a=>a.action_key==='package.save_checkpoint').effect.allowed_roots,['/test/packages']);
   assert.equal(manifest.files['actions.json'],sha256(text));assert.equal(manifest.status,'candidate');
 });

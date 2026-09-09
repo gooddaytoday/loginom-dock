@@ -12,11 +12,15 @@ export function configurePackageRoots(catalog, roots) {
   if(roots===undefined)return catalog;
   const result=structuredClone(catalog),matches=result.actions.filter(action=>action.action_key==='package.save_as');
   if(matches.length!==1 || matches[0].effect?.kind!=='save' || matches[0].effect?.resource!=='package')throw new Error('Exactly one package.save_as save contract is required');
-  const action=matches[0],effect={...action.effect,allowed_roots:[...roots]};
-  validateEffect(effect);
-  if(JSON.stringify(effect.allowed_roots)!==JSON.stringify(action.effect.allowed_roots)) {
-    if(typeof action.revision!=='string' || !/^[1-9]\d*$/.test(action.revision) || !Number.isSafeInteger(Number(action.revision)+1))throw new Error('Save revision cannot be incremented');
-    action.revision=String(Number(action.revision)+1);action.effect=effect;
+  const checkpoints=result.actions.filter(action=>action.action_key==='package.save_checkpoint');
+  if(checkpoints.length>1 || checkpoints.some(action=>action.effect?.kind!=='persist'||action.effect?.resource!=='package'))
+    throw new Error('Invalid package.save_checkpoint persistence contract');
+  for(const action of [...matches,...checkpoints]) {
+    const effect={...action.effect,allowed_roots:[...roots]};validateEffect(effect);
+    if(JSON.stringify(effect.allowed_roots)!==JSON.stringify(action.effect.allowed_roots)) {
+      if(typeof action.revision!=='string' || !/^[1-9]\d*$/.test(action.revision) || !Number.isSafeInteger(Number(action.revision)+1))throw new Error('Save revision cannot be incremented');
+      action.revision=String(Number(action.revision)+1);action.effect=effect;
+    }
   }
   return result;
 }

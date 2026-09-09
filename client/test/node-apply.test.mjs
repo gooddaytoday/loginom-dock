@@ -1,0 +1,165 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import {applyNode,validateNodeApplyRequest} from '../lib/node-apply.mjs';
+const request=()=>({operation_id:'apply1',contract_revision:'1.0.0',document_id:'doc',
+  workflow_ref:{workflow_id:'workflow',prefix:'MF;TF-1',tab_tid:'MF;cntMain;cntWorkspace;Workspace;t.br;tb-1',navigation_path:[{tid:'MF;TF-1;cnrNaviMode;b.s_Сервер',label:''}]},
+  target:{kind:'new',type:'imports.text',label:'Import',position:{x:96,y:80}},inputs:[],mode:'delimited',parameters:{},mappings:[],finish:'execute',
+  read:{ports:[0],sample_rows:10,require_exact_numbers:true},budgets:{configure_ms:1000,execute_ms:1000,total_ms:10000}});
+function fixture({badPhase,badResult,failJournal,failAfter,signal}={}){
+ const calls=[],records=[],operation={id:'apply1'};let time=1;
+ const respond=(name,value={})=>async(...args)=>{calls.push(name);if(name===failAfter)throw Error('transport lost');return {verified:true,cleanup_complete:true,effect_possible:false,...value,...(name===badPhase?badResult:{})}};
+ const handlers=new Map([['imports.text',{revision:'1',modes:['delimited'],validate:p=>{if(p.unsupported)throw Error('unsupported format')},configure:respond('configure')}]]);
+ const drivers={verifySource:respond('source'),prepareTarget:respond('target',{node:{document_id:'doc',workflow_id:'workflow',node_id:'node1'}}),
+  mapPorts:respond('mapping'),openWizard:respond('open'),finish:async mode=>respond('finish',{mode,execution_started:mode==='execute',execution_id:mode==='execute'?'execution1':null})(),
+  waitExecution:respond('execute',{execution_id:'execution1',status:'completed'}),readOutput:respond('read',{status:'complete',evidence_ref:'evidence1',execution_id:'execution1',ports:[{port:0,fresh:true,row_count:0,schema:[],sample:[]}]}),
+  verifyContinuation:async()=>true};
+ const record=async e=>{records.push(structuredClone(e));if(e.phase===failJournal)throw Error('disk unavailable');return structuredClone(e)};
+ const run=(r=request(),extra={})=>applyNode({request:r,operation,handlers,drivers,record,signal,now:()=>time,...extra});
+ return {run,calls,records,operation,handlers,drivers,setTime:v=>{time=v}};
+}
+test('full shell orders configuration before execution and binds empty fresh output',async()=>{
+ const f=fixture(),r=await f.run();assert.equal(r.status,'SUCCEEDED');assert.equal(r.execution.status,'completed');assert.equal(r.output.ports[0].row_count,0);
+ assert.deepEqual(f.calls,['source','target','mapping','open','configure','mapping','finish','execute','read']);
+ assert.equal(r.package_saved,false);assert.equal(r.persisted_package_verified,false);assert.equal(f.records.at(-1).phase,'node_checkpoint');
+});
+test('Done never waits or reads stale output',async()=>{
+ const f=fixture(),p=request();p.finish='done';p.read.ports=[];const r=await f.run(p);
+ assert.equal(r.status,'SUCCEEDED');assert.deepEqual(r.execution,{status:'not_requested',execution_id:null});assert.equal(r.output.status,'not_refreshed');
+ assert.ok(!f.calls.includes('execute')&&!f.calls.includes('read'));
+});
+test('Close requires discarded settings and never executes or refreshes output',async()=>{
+ for(const discarded of [true,false]) {
+  const f=fixture(),p=request();p.finish='close';p.read.ports=[];
+  f.handlers.get('imports.text').configurationReadback=()=>{throw Error('Discarded settings must not produce an applied readback')};
+  f.drivers.finish=async()=>({verified:true,cleanup_complete:true,mode:'close',execution_started:false,settings_applied:!discarded,draft_discarded:discarded});
+  const result=await f.run(p);
+  assert.equal(result.status,discarded?'SUCCEEDED':'AMBIGUOUS');
+  assert.ok(!f.calls.includes('execute')&&!f.calls.includes('read'));
+  if(discarded){assert.equal(result.configuration.status,'discarded');assert.equal(result.checkpoint_kind,'local_node_cancellation');}
+ }
+});
+test('repeated operation ID returns the original result without new effects',async()=>{
+ const f=fixture(),r=await f.run(),count=f.calls.length;assert.deepEqual(await f.run(),r);assert.equal(f.calls.length,count);
+ const p=request();p.parameters.changed=true;await assert.rejects(f.run(p),/different parameters/);
+});
+test('configuration projection uses accepted receipts once and survives replay',async()=>{
+ const f=fixture();let projections=0;
+ f.handlers.get('imports.text').configurationReadback=({node,phases,operation_id})=>{
+  projections++;assert.equal(operation_id,'apply1');assert.ok(phases.every(p=>p.status==='verified'));
+  assert.ok(phases.some(p=>p.phase==='finish'));assert.ok(phases.some(p=>p.phase==='read'));
+  return {node:structuredClone(node),receipt_ids:phases.map(p=>p.receipt_id)};
+ };
+ const result=await f.run();assert.equal(result.status,'SUCCEEDED');assert.equal(projections,1);
+ assert.deepEqual(result.configuration.readback.node,result.node);
+ assert.deepEqual(await f.run(),result);assert.equal(projections,1);
+});
+test('failed configuration projection cannot create a successful checkpoint',async()=>{
+ const f=fixture();f.handlers.get('imports.text').configurationReadback=()=>{throw Error('Incomplete observed settings')};
+ const result=await f.run();assert.equal(result.status,'AMBIGUOUS');
+ assert.ok(!f.records.some(e=>e.phase==='node_checkpoint'));
+});
+test('unsupported parameters reject before journal or graph',async()=>{
+ const f=fixture(),p=request();p.parameters.unsupported=true;await assert.rejects(f.run(p),/unsupported/);assert.equal(f.calls.length,0);assert.equal(f.records.length,0);
+});
+test('an unimplemented handler cannot create a partial node',()=>{assert.throws(()=>validateNodeApplyRequest(request(),new Map()),/No local configuration handler/)});
+for(const [name,alter] of Object.entries({doneRead:p=>{p.finish='done'},budget:p=>{p.budgets.configure_ms=Infinity},sample:p=>{p.read.sample_rows=11},mode:p=>{p.mode='fixed_width'},revision:p=>{p.contract_revision='2'},duplicatePorts:p=>{p.read.ports=[0,0]},recipe:p=>{p.steps=[]}})){
+ test('reject invalid contract '+name,()=>{const f=fixture(),p=request();alter(p);assert.throws(()=>validateNodeApplyRequest(p,f.handlers))});
+}
+for(const [phase,value,error] of [
+ ['target',{node:{document_id:'other',workflow_id:'workflow',node_id:'node1'}},/foreign node/],
+ ['finish',{mode:'done'},/finish mode/],['finish',{execution_id:null},/execution identity/],
+ ['execute',{execution_id:'previous'},/freshly completed/],['execute',{status:'running'},/freshly completed/],
+ ['read',{execution_id:'previous'},/bound/],['read',{ports:[{port:1,fresh:true}]},/bound/],['read',{ports:[{port:0,fresh:false}]},/bound/],
+ ['configure',{verified:false},/did not verify/],['finish',{cleanup_complete:false},/did not verify/]]){
+ test('reject bad '+phase+' fact '+JSON.stringify(value),async()=>{const f=fixture({badPhase:phase,badResult:value}),r=await f.run();assert.equal(r.status,'AMBIGUOUS');assert.match(r.error.message,error);assert.equal(r.pending_phase,phase);assert.ok(!f.records.some(e=>e.phase==='node_checkpoint'));assert.ok(!f.records.some(e=>e.phase==='node_phase_completed'&&e.receipt.phase===phase))});
+}
+test('unknown execution effect is retained and never launched twice',async()=>{
+ const f=fixture({failAfter:'finish'}),r=await f.run();assert.equal(r.pending_phase,'finish');assert.equal(r.cleanup_complete,false);
+ const count=f.calls.length;await assert.rejects(f.run(request(),{resume:true}),/unresolved/);assert.equal(f.calls.length,count);
+});
+test('pre-effect journal failure prevents any phase call',async()=>{
+ const f=fixture({failJournal:'node_phase_prepared'}),r=await f.run();assert.equal(r.status,'NOT_APPLIED');assert.equal(f.calls.length,0);
+});
+test('completion journal failure keeps the phase pending',async()=>{
+ const f=fixture({failJournal:'node_phase_completed'}),r=await f.run();assert.equal(r.pending_phase,'source');assert.equal(r.cleanup_complete,false);assert.deepEqual(f.calls,['source']);
+});
+test('checkpoint failure cannot produce success',async()=>{
+ const f=fixture({failJournal:'node_checkpoint'}),r=await f.run();assert.equal(r.status,'AMBIGUOUS');assert.equal(f.operation.nodeApply.result,undefined);
+});
+test('cancellation before starting creates no operation',async()=>{
+ const c=new AbortController();c.abort();const f=fixture({signal:c.signal});await assert.rejects(f.run());assert.equal(f.calls.length,0);assert.equal(f.operation.nodeApply,undefined);
+});
+test('a changed live package rejects resume even with a matching journal',async()=>{
+ const f=fixture({failJournal:'node_checkpoint'});await f.run();f.drivers.verifyContinuation=async()=>false;
+ const count=f.calls.length;await assert.rejects(f.run(request(),{resume:true}),/Live package/);assert.equal(f.calls.length,count);
+});
+test('total deadline also applies to the final read',async()=>{
+ const f=fixture();const read=f.drivers.readOutput;f.drivers.readOutput=async(...args)=>{const result=await read(...args);f.setTime(11000);return result};
+ const r=await f.run();assert.equal(r.status,'AMBIGUOUS');assert.match(r.error.message,/deadline/);assert.ok(!f.records.some(e=>e.phase==='node_checkpoint'));
+});
+
+test('configuration phases share one budget instead of restarting it per call',async()=>{
+ const f=fixture();const configure=f.handlers.get('imports.text').configure;
+ f.handlers.get('imports.text').configure=async(...args)=>{const r=await configure(...args);f.setTime(1002);return r};
+ const r=await f.run();assert.equal(r.status,'AMBIGUOUS');assert.match(r.error.message,/deadline/);assert.ok(!f.calls.includes('finish'));
+});
+test('cancellation between phases cannot launch the configured node',async()=>{
+ const controller=new AbortController(),f=fixture({signal:controller.signal}),configure=f.handlers.get('imports.text').configure;
+ f.handlers.get('imports.text').configure=async(...args)=>{const r=await configure(...args);controller.abort();return r};
+ const r=await f.run();assert.equal(r.status,'AMBIGUOUS');assert.ok(!f.calls.includes('finish'));assert.equal(r.cleanup_complete,true);
+});
+
+test('phase acknowledgements accept the real fsync journal metadata',async()=>{
+ const fs=await import('node:fs/promises');const os=await import('node:os');const path=await import('node:path');
+ const {createExecutionJournal}=await import('../lib/execution-journal.mjs');const dir=await fs.mkdtemp(path.join(os.tmpdir(),'dock-node-apply-'));
+ try{const f=fixture();const r=await f.run(request(),{record:createExecutionJournal({directory:dir,metadata:{sessionId:'session1',clientRevision:'runtime1'}})});
+ assert.equal(r.status,'SUCCEEDED');const rows=(await fs.readFile(path.join(dir,'execution-events.jsonl'),'utf8')).trim().split('\n').map(JSON.parse);
+ assert.equal(rows.at(-1).phase,'node_checkpoint');assert.ok(rows.every(e=>e.session_id==='session1'&&e.runtime_revision==='runtime1'));
+ }finally{await fs.rm(dir,{recursive:true,force:true})}
+});
+
+test('source validation preserves a bounded cause and partial effects without finish or replay',async()=>{
+ const f=fixture();f.handlers.get('imports.text').configure=async()=>{
+  const error=new Error('Node procedure failed');error.receipt={error:{code:'WIZARD_SOURCE_VALIDATION_FAILED',message:'Файл не найден '+'.'.repeat(400)},raw:'must not escape'};throw error;
+ };
+ const result=await f.run();assert.equal(result.status,'AMBIGUOUS');assert.equal(result.pending_phase,'configure');
+ assert.equal(result.error.cause.code,'WIZARD_SOURCE_VALIDATION_FAILED');assert.equal(result.error.cause.message.length,240);
+ assert.ok(!JSON.stringify(result).includes('must not escape'));assert.ok(!f.calls.includes('finish'));
+ const count=f.calls.length;await assert.rejects(f.run(request(),{resume:true}),/unresolved/);assert.equal(f.calls.length,count);
+});
+
+test('self source references are explicit output-only names and cannot mix opaque IDs',()=>{
+ const f=fixture(),p=request();p.mappings=[{direction:'output',port:0,fields:[{source:{kind:'configured_field',name:'Сумма'}}]}];
+ assert.doesNotThrow(()=>validateNodeApplyRequest(p,f.handlers));
+ p.mappings[0].direction='input';assert.throws(()=>validateNodeApplyRequest(p,f.handlers));
+ p.mappings[0].direction='output';p.mappings[0].fields[0].source.schema_id='foreign';assert.throws(()=>validateNodeApplyRequest(p,f.handlers));
+});
+
+function separateFixture(){
+ const f=fixture();f.handlers.get('imports.text').output_wizard='separate';
+ f.drivers.finish=async mode=>{f.calls.push('node-'+mode);return {verified:true,cleanup_complete:true,effect_possible:true,mode,settings_applied:mode==='done',draft_discarded:mode==='close',execution_started:false};};
+ f.drivers.finishGraph=async mode=>{f.calls.push('graph-'+mode);return {verified:true,cleanup_complete:true,effect_possible:mode==='execute',mode,settings_applied:true,execution_started:mode==='execute',execution_id:mode==='execute'?'execution1':null};};
+ return f;
+}
+for(const mode of ['done','execute','close'])test('separate output wizard preserves complete '+mode+' lifecycle',async()=>{
+ const f=separateFixture(),p=request();p.finish=mode;if(mode!=='execute')p.read.ports=[];
+ const r=await f.run(p);assert.equal(r.status,'SUCCEEDED');
+ assert.deepEqual(f.calls,mode==='close'?['source','target','mapping','open','configure','node-close']:
+ ['source','target','mapping','open','configure','node-done','mapping','graph-'+mode,...(mode==='execute'?['execute','read']:[])]);
+ assert.equal(r.execution.status,mode==='execute'?'completed':'not_requested');
+ const intermediate=f.operation.nodeApply.phases.find(p=>p.phase==='node_finish');
+ assert.equal(!!intermediate,mode!=='close');if(intermediate)assert.equal(intermediate.value.execution_started,false);
+});
+for(const change of [v=>v.execution_started=true,v=>v.execution_id='unexpected',v=>v.settings_applied=false,v=>v.mode='execute'])test('separate wizard rejects an incorrect intermediate Done before port changes',async()=>{
+ const f=separateFixture(),finish=f.drivers.finish;f.drivers.finish=async mode=>{const v=await finish(mode);change(v);return v;};
+ const r=await f.run();assert.equal(r.status,'AMBIGUOUS');assert.equal(r.pending_phase,'node_finish');
+ assert.equal(f.calls.filter(c=>c==='mapping').length,1);assert.ok(!f.calls.includes('graph-execute'));
+});
+test('failed separate port mapping cannot launch the graph or repeat intermediate Done',async()=>{
+ const f=separateFixture();let count=0;f.drivers.mapPorts=async()=>{f.calls.push('mapping');if(++count===2)throw Error('lost port response');return {verified:true,cleanup_complete:true};};
+ const r=await f.run();assert.equal(r.pending_phase,'output_mapping');assert.ok(!f.calls.includes('graph-execute'));
+ await assert.rejects(f.run(request(),{resume:true}),/unresolved original/);assert.equal(f.calls.filter(c=>c==='node-done').length,1);
+});
+test('separate output wizard without graph finish is rejected before any phase',async()=>{
+ const f=separateFixture();delete f.drivers.finishGraph;await assert.rejects(f.run(),/graph finish driver/);assert.deepEqual(f.calls,[]);assert.deepEqual(f.records,[]);
+});

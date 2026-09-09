@@ -18,12 +18,20 @@ export function outcomeVerification(outcome, action) {
       // A permissive server schema cannot weaken this local save contract.
       const saveReady = entry.actionKey !== 'package.save_as' || (outcome.output.reopened === true
           && events.includes('reopened_package_observed'));
+      const checkpointReady = entry.actionKey !== 'package.save_checkpoint' || (
+        outcome.output.reopened === false && outcome.output.workflow_preserved === true
+        && outcome.output.save_completed === true && outcome.output.persisted_content_verified === false
+        && events.filter(e => e === 'save_flow_completed').length === 1
+        && events.filter(e => e === 'open_saved_package_observed').length === 1
+        && !events.includes('saved_package_closed') && !events.includes('reopened_package_observed')
+        && outcome.trace.some(t => t.event === 'postcondition_verified'
+          && t.proof === 'awaited_save_flow_same_open_workflow'));
       const configureReady = entry.actionKey !== 'node.configure_text_import' || (
         outcome.output.settings_readback_verified === true && outcome.output.package_saved === false
         && outcome.output.execution_started === false && Number.isInteger(outcome.output.internal_steps)
         && outcome.output.internal_steps > 0 && outcome.output.internal_steps <= 96
         && outcome.trace.some(e => e.event === 'postcondition_verified' && e.proof === 'text_import_settings_roundtrip'));
-      if (saveReady && configureReady) domain.state = 'verified';
+      if (saveReady && checkpointReady && configureReady) domain.state = 'verified';
     } else if (outcome.status === 'NOT_APPLIED' && outcome.cleanup_complete === true) domain.state = 'not_applied';
   }
   const truncation = outcome.output.ui?.truncated;
