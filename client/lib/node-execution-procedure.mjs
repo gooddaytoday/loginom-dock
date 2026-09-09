@@ -182,7 +182,7 @@ export function createNodeExecutionProcedure(channel,node) {
       })();
       return stopPromise;
     },
-    async waitCompleted({stopSignal}={}) {
+    async waitCompleted({signal,stopSignal}={}) {
       requireValue(execution,'An identified execution is required');
       let s;
       const condition='new node execution completed';
@@ -191,6 +191,7 @@ export function createNodeExecutionProcedure(channel,node) {
       for(;;) {
         try {
           s=await observe(condition,s=>{
+            signal?.throwIfAborted();
             if(processes(s)) {
               requireValue(s.node_processes.root_id===execution.root_id,'Execution process root changed');
               const group=s.node_processes.processes.find(p=>p.parent_id===null&&p.process_id===execution.group_id
@@ -205,6 +206,14 @@ export function createNodeExecutionProcedure(channel,node) {
           });
           break;
         } catch(error) {
+          // Only this loop is read-only. Once ownership/console gestures begin,
+          // interruption must retain an unresolved phase until reconciled.
+          if(signal?.aborted&&error===signal.reason&&!stopSignal?.aborted) {
+            const interrupted=new Error(String(error.message??error));
+            interrupted.nodeExecutionWaitPause={execution_id:execution.execution_id,
+              read_only:true,cleanup_complete:true};
+            throw interrupted;
+          }
           if(!(error instanceof NodeReadinessTimeout)||error.condition!==condition)throw error;
         }
       }

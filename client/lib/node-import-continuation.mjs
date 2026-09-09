@@ -133,3 +133,37 @@ export function verifyFinishedImportContinuation({node,finish,surface}) {
     &&p.record_id===group.group_record_id&&p.state==='completed'&&p.error===false);
   return groups.length===1&&JSON.stringify(finishedImportSurface(surface))===JSON.stringify(before);
 }
+
+// A cancelled read wait retains an identified launch, not a frozen progress UI.
+// Progress/lock/active-icon changes are expected; a different document, launch,
+// port or reconfigured (inactive after completion) node is not a continuation.
+export function verifyWaitingExecutionContinuation({node,finish,surface,checkpoint}) {
+  const before=finish?.continuation_surface,execution=finish?.execution_group;
+  const sameNode=c=>c?.verified===true&&c.surface==='graph'
+    &&['document_id','workflow_id','node_id'].every(k=>typeof node?.[k]==='string'&&node[k]===c[k]);
+  const valid=s=>s?.wizard?.status==='absent'&&sameNode(s.prepared_node_context)
+    &&typeof s.dom_epoch?.document==='string'&&Number.isSafeInteger(s.dom_epoch.revision)
+    &&s.node_processes?.verified===true&&s.node_processes.inventory_complete===true
+    &&s.node_processes.show_completed===true&&sameNode(s.node_processes.node_context)
+    &&s.node_outputs?.verified===true&&sameNode(s.node_outputs.node_context)
+    &&s.node_outputs.ports?.length===1;
+  if(checkpoint?.phase!=='execute'||checkpoint.read_only!==true||checkpoint.cleanup_complete!==true
+    ||finish?.verified!==true||finish.cleanup_complete!==true||finish.mode!=='execute'
+    ||finish.execution_started!==true||finish.settings_applied!==true||!execution
+    ||checkpoint.execution_id!==finish.execution_id||finish.execution_id!==execution.execution_id
+    ||!sameNode({...execution.node,verified:true,surface:'graph'})||!valid(before)||!valid(surface)
+    ||before.dom_epoch.document!==surface.dom_epoch.document
+    ||before.node_processes.root_id!==execution.root_id||surface.node_processes.root_id!==execution.root_id)return false;
+  const roots=s=>s.node_processes.processes.filter(p=>p.parent_id===null)
+    .map(p=>[p.process_id,p.record_id]).sort((a,b)=>a[0].localeCompare(b[0]));
+  if(JSON.stringify(roots(before))!==JSON.stringify(roots(surface)))return false;
+  const groups=surface.node_processes.processes.filter(p=>p.parent_id===null
+    &&p.process_id===execution.group_id&&p.record_id===execution.group_record_id);
+  if(groups.length!==1||groups[0].error!==false)return false;
+  const group=groups[0],completed=group.state==='completed';
+  if(!completed&&!(group.progress_state?.verified===true&&group.progress_state.terminal===false
+    &&['running','not_responding','not_started'].includes(group.progress_state.state)))return false;
+  const port=p=>Object.fromEntries(Object.entries(p).filter(([k])=>k!=='active'));
+  return JSON.stringify(before.node_outputs.ports.map(port))===JSON.stringify(surface.node_outputs.ports.map(port))
+    &&(!completed||surface.node_outputs.ports.every(p=>p.active===true));
+}

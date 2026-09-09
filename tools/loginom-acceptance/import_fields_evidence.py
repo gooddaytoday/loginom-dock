@@ -3,11 +3,13 @@
 Reads native observations and mutation receipts, not the handler's success flag.
 This does not prove delivery, execution, port mapping or persistence.
 """
+from import_limits import import_operation_step_budget
+
 from node_procedure_evidence import verify_internal_sequence
 
 
 def verify_text_import_fields(events, operation_id, expected):
-    sequence = verify_internal_sequence(events, operation_id, max_steps=2048)
+    sequence = verify_internal_sequence(events, operation_id, max_steps=import_operation_step_budget(events, operation_id))
     return verify_import_field_observations(sequence['observations'], sequence['mutations'], expected, sequence['failures'])
 
 

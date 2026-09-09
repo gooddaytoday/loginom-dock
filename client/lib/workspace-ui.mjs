@@ -87,7 +87,8 @@ export function workspaceUiCapability(page, task, readNodeContext) {
     const nodeContext=await boundNode();
     const observed = await page.evaluate(({rootRef,discoverRoots,storageName,columnPage,mappingPage,tableFormatPage,cacheReadPredicates,definitionPrefix,preparedWorkflowPath,preparedNodeId,preparedOutputPort,preparedInputPort}) => {
     try {
-    const scanStarted = Date.now(), maxElements = 6000, maxWork = 250000, maxMs = 500;
+    const scanStarted = Date.now(), maxElements = 6000, maxWork = 250000;
+    let maxMs = 500;
     let work = 0,scanStage='collect';
     const charge = () => {
       if (++work > maxWork || Date.now() - scanStarted > maxMs) {
@@ -145,11 +146,11 @@ export function workspaceUiCapability(page, task, readNodeContext) {
     if (!Number.isSafeInteger(state.revision)) {
       const error = new Error('DOM mutation revision overflow'); error.code = 'UI_EPOCH_UNAVAILABLE'; throw error;
     }
-    const refOf = element => {
+    const refOf = (element,retain=true) => {
       if (!state.ids.has(element)) state.ids.set(element, `ui-${state.epoch}-${++state.sequence}`);
       const ref=state.ids.get(element);
       state.refs ??= new Map();
-      if (!state.refs.has(ref)) state.refs.set(ref,new WeakRef(element));
+      if (retain&&!state.refs.has(ref)) state.refs.set(ref,new WeakRef(element));
       while (state.refs.size>4096) state.refs.delete(state.refs.keys().next().value);
       return ref;
     };
@@ -185,6 +186,16 @@ export function workspaceUiCapability(page, task, readNodeContext) {
     charge();
     if (discoverRoots) for (const element of regionElements) include(element);
     const omittedRegions=new Set();
+    const importGrid=definitionPrefix?definitionPrefix+';WizrdMCF;ImportTextFileParamsWizard;ColumnDefsTuning;grdSettings;grd-1':null;
+    const importFieldBase=importGrid?importGrid+';normalHeaderCt;':null;
+    const addressedImportField=element=>{
+      const tid=element.getAttribute('data-tid')??'';
+      if(!importFieldBase||!tid.startsWith(importFieldBase))return true;
+      const match=/^(\d{1,4})(?:_[0-4])?$/.exec(tid.slice(importFieldBase.length));
+      if(!match)return false;
+      const index=Number(match[1]),offset=columnPage?.offset??0;
+      return index>=offset&&index<offset+(columnPage?.limit??8);
+    };
     const definitionFilter=definitionPrefix?{acceptNode:element=>{
       charge();const tid=element.getAttribute('data-tid')??'',base=definitionPrefix+';WizrdMCF;';
       if(new RegExp('^'+definitionPrefix+';ViewsForm;BrowseView(?:-[0-9]+)?;grdData$').test(tid)) {
@@ -192,6 +203,11 @@ export function workspaceUiCapability(page, task, readNodeContext) {
       }
       if(tid===base+'ImportTextFileParamsWizard;ColumnDefsTuning;grdData') {
         omittedRegions.add('import_data_preview');return 2; // FILTER_REJECT: subtree is not configuration.
+      }
+      if(tid===importGrid) {
+        // Native definition metadata is inventoried separately below. Only the
+        // addressed fields become action refs; 1000 columns render ~18000 nodes.
+        omittedRegions.add('unaddressed_import_definition_cells');return 2;
       }
       if(['ImportTextFilePreviewWizard','ImportTextFileParamsWizard','ColumnsMappingEngineOutputPortWizard','DoneWizard']
         .some(name=>tid===base+name) && element.classList.contains('x-hidden-offsets')) {
@@ -239,6 +255,7 @@ export function workspaceUiCapability(page, task, readNodeContext) {
       ...(definitionPrefix?['[data-tid^='+JSON.stringify(definitionPrefix+';ViewsForm;BrowseView')+'][data-tid$=";grdData;grd-1;tbl"]']:[]),
       ...['',';normalHeaderCt',';tbl'].map(suffix=>'[data-tid$=";WizrdMCF;ImportTextFileParamsWizard;ColumnDefsTuning;grdSettings;grd-1'+suffix+'"]'),
       '[data-tid*=";WizrdMCF;ImportTextFileParamsWizard;ColumnDefsTuning;grdSettings;grd-1;tbl;celleditor"][data-tid$=";cbx"]',
+      '[data-tid*=";WizrdMCF;ImportTextFileParamsWizard;ColumnDefsTuning;grdSettings;grd-1;tbl;celleditor"][data-tid$=";txt"]',
       '[data-tid*=";WizrdMCF;ImportTextFileParamsWizard;ColumnDefsTuning;grdSettings;grd-1;tbl;celleditor"][data-tid$=";cbx;trg_picker"]',
       ...['edtName','edtDisplayName','cbxDataType','cbxDataKind','cbxUsageType','cntMain;cbxCachingMethod'].flatMap(name=>{const owner='[data-tid$=";WizrdMCF;EditReformColumnDefForm;'+name+'"]';return [owner,owner+' input'];}),
       '[data-tid$=";WizrdMCF;EditReformColumnDefForm;cntMain;chbExcluded"]','[data-tid$=";WizrdMCF;EditReformColumnDefForm;cntMain;chbExcluded;DisplayEl"]',
@@ -255,7 +272,7 @@ export function workspaceUiCapability(page, task, readNodeContext) {
       // every unrelated subtree in JavaScript. Their synchronous browser cost
       // cannot be preempted; charge immediately after each native operation.
       const guards=document.querySelectorAll(wizardSelectors+',[data-tid="MF;cntMain;tlbMainToolbar;btnAvatar"],.x-tab-active[data-tid],[role="dialog"],.x-window,.bg-dialog,.bg-mask-message,.x-mask-msg,[role="alert"],[role="status"],.bg-message,.x-message-box,.x-form-invalid-under,[data-tid$="FileStorageForm;pnlFileStorage;tbl"]');
-      charge();for (const element of guards) include(element);
+      charge();for (const element of guards)if(addressedImportField(element))include(element);
       // Ext renders Table modals in a portal outside the owning BrowseView.
       // Include exact view roots as global identity guards, never their trees.
       const tableOwners=document.querySelectorAll('[data-tid$=";ViewsForm;BrowseView"],[data-tid$=";ViewsForm"],[data-tid*=";ViewsForm;BrowseView-"]');
@@ -291,27 +308,40 @@ export function workspaceUiCapability(page, task, readNodeContext) {
         return values.get(element);
       };
     };
+    const ancestorCheck=(accept,stop=null)=>{
+      const cache=new WeakMap();
+      return element=>{
+        const path=[];let result=true;
+        for(let parent=element;parent&&parent!==stop;parent=parent.parentElement) {
+          charge();
+          if(cacheReadPredicates&&cache.has(parent)){result=cache.get(parent);break;}
+          path.push(parent);
+          if(!accept(parent)){result=false;break;}
+        }
+        if(cacheReadPredicates)for(const parent of path)cache.set(parent,result);
+        return result;
+      };
+    };
+    // Native 1000-column definitions share almost all ancestors. Cache each
+    // ancestor's checks only within this synchronous observation, without
+    // weakening visibility/redaction or retaining values across UI changes.
+    const visibleAncestors=ancestorCheck(parent=>{
+      const style=getComputedStyle(parent);
+      return style.display!=='none'&&style.visibility!=='hidden'&&style.visibility!=='collapse'
+        &&style.opacity!=='0'&&!parent.hasAttribute('hidden');
+    });
     const visible = memoRead(element => {
       if (!element?.isConnected) return false;
       const box = boxOf(element);
       const graphLink = /^MF;TF(?:-\d+)?;Graph;[^;|]+\|[^;|]+\|[^;|]+\|[^;|]+$/.test(getTid(element) ?? '');
       if (!(box.width > 0 && box.height > 0) && !(graphLink && box.width >= 0 && box.height >= 0 && (box.width > 0 || box.height > 0))) return false;
-      for (let parent = element; parent; parent = parent.parentElement) {
-        charge();
-        const style = getComputedStyle(parent);
-        if (style.display === 'none' || style.visibility === 'hidden' || style.visibility === 'collapse' || style.opacity === '0' || parent.hasAttribute('hidden')) return false;
-      }
-      return true;
+      return visibleAncestors(element);
     });
     const sensitivePattern = /password|passwd|\bpwd\b|secret|token|credential|authorization|api[_ -]?key|private[_ -]?key|one[_ -]?time|\botp\b|парол|секрет|токен/i;
-    const sensitive = memoRead(element => {
-      for (let parent = element; parent && parent !== document.body; parent = parent.parentElement) {
-        charge();
-        if (parent.matches('input[type="password"],input[type="hidden"],input[type="file"]')) return true;
-        if (sensitivePattern.test(['name', 'id', 'data-tid', 'autocomplete', 'aria-label'].map(name => parent.getAttribute(name) ?? '').join(' ')) || (getTid(parent) ?? '').startsWith('LoginForm;')) return true;
-      }
-      return false;
-    });
+    const safeAncestors=ancestorCheck(parent=>!parent.matches('input[type="password"],input[type="hidden"],input[type="file"]')
+      &&!sensitivePattern.test(['name','id','data-tid','autocomplete','aria-label'].map(name=>parent.getAttribute(name)??'').join(' '))
+      &&!(getTid(parent)??'').startsWith('LoginForm;'),document.body);
+    const sensitive = memoRead(element => !safeAncestors(element));
     const short = (value, limit = 240) => String(value ?? '').replace(/\s+/g, ' ').trim().slice(0, limit);
     const textOf = (element, fixedContext=false, separator=' ') => {
       if (sensitive(element)) return '[REDACTED]';
@@ -1452,12 +1482,25 @@ function readRenderedInputMapping(observation) {
       // index. These are rendered draft settings, never complete output schema.
       scanStage='import_definitions';
       const columnBase=base+'ColumnDefsTuning;grdSettings;grd-1;normalHeaderCt;';
-      const headers=all.filter(e=>{charge();const tid=getTid(e);return tid?.startsWith(columnBase)
+      const definitionElements=importFieldBase===columnBase
+        ? [...document.querySelectorAll('[data-tid^='+JSON.stringify(columnBase)+']')].filter(e=>{
+          charge();return /^\d{1,4}(?:_[0-4])?$/.test(getTid(e).slice(columnBase.length));}) : all;
+      if(importFieldBase===columnBase&&definitionElements.length>6000) {
+        const error=new Error('Import definition inventory exceeds 1000 fields');error.code='UI_SCAN_LIMIT';error.limit_kind='elements';throw error;
+      }
+      // Full native schema validation adds at most 1000 ms for 1000 fields.
+      // Generic scans retain 500 ms, and the element/work limits stay fixed.
+      if(importFieldBase===columnBase)maxMs+=Math.ceil(definitionElements.length/6);
+      const definitionTids=new Map();
+      for(const element of definitionElements) {
+        const tid=getTid(element),matches=definitionTids.get(tid)??[];matches.push(element);definitionTids.set(tid,matches);
+      }
+      const headers=definitionElements.filter(e=>{charge();const tid=getTid(e);return tid?.startsWith(columnBase)
         && /^\d{1,4}$/.test(tid.slice(columnBase.length)) && visible(e) && !sensitive(e);});
       const indexes=[...new Set(headers.map(e=>getTid(e).slice(columnBase.length)))];
       const types={'Целый':'integer','Вещественный':'real','Строковый':'string','Логический':'boolean','Дата/Время':'datetime','Переменный':'variant'};
-      const readColumn=index=>{
-        const cells=[0,1,2,3,4].map(row=>(tids.get(columnBase+index+'_'+row)??[])
+      const readColumn=(index,retain=true)=>{
+        const cells=[0,1,2,3,4].map(row=>(definitionTids.get(columnBase+index+'_'+row)??[])
           .filter(e=>visible(e) && !sensitive(e) && wizardForms[0].contains(e)));
         const unique=headers.filter(e=>getTid(e)===columnBase+index).length===1 && cells.every(es=>es.length===1);
         if(!unique)return {index:Number(index),status:'unobserved_or_ambiguous'};
@@ -1466,11 +1509,11 @@ function readRenderedInputMapping(observation) {
         const used=checks.length===1 && visible(checks[0]) && !sensitive(checks[0]) ? checks[0].classList.contains('x-grid-checkcolumn-checked'):null;
         if(values.some(v=>!v || v.length>120) || !types[values[2]] || used===null)
           return {index:Number(index),status:'unobserved_or_ambiguous'};
-        return {index:Number(index),status:'observed',header_ref:refOf(headers.find(e=>getTid(e)===columnBase+index)),name:values[0],label:values[1],label_associated:cells[1][0].classList.contains('bg-associated-value'),type:types[values[2]],data_kind:values[3],used,
-          cell_refs:Object.fromEntries(['name','label','type','data_kind','used'].map((key,i)=>[key,refOf(cells[i][0])]))};
+        return {index:Number(index),status:'observed',header_ref:refOf(headers.find(e=>getTid(e)===columnBase+index),retain),name:values[0],label:values[1],label_associated:cells[1][0].classList.contains('bg-associated-value'),type:types[values[2]],data_kind:values[3],used,
+          cell_refs:Object.fromEntries(['name','label','type','data_kind','used'].map((key,i)=>[key,refOf(cells[i][0],retain)]))};
       };
       const offset=columnPage?.offset??0,limit=columnPage?.limit??8;
-      const columns=indexes.slice(offset,offset+limit).map(readColumn);
+      const columns=indexes.slice(offset,offset+limit).map(index=>readColumn(index));
       // The cell's old text is hidden while the floating editor is open.
       // Bind the draft input to one selected property; never promote it to an
       // applied column value. Choice actions require the whole column binding.
@@ -1486,7 +1529,7 @@ function readRenderedInputMapping(observation) {
           const [index,row]=getTid(selected[0]).slice(columnBase.length).split('_');
           const nativeInputs=editors[0].querySelectorAll('input:not([type="hidden"])');charge();
           const inputs=[...nativeInputs].filter(e=>{charge();return visible(e) && !sensitive(e);});
-          const boundCells=[0,1,2,3,4].map(r=>(tids.get(columnBase+index+'_'+r)??[]).filter(e=>visible(e) && !sensitive(e) && wizardForms[0].contains(e)));
+          const boundCells=[0,1,2,3,4].map(r=>(definitionTids.get(columnBase+index+'_'+r)??[]).filter(e=>visible(e) && !sensitive(e) && wizardForms[0].contains(e)));
           const value=inputs.length===1?String(inputs[0].value??''):'';
           const name=boundCells[0].length===1?textOf(boundCells[0][0],true):'',label=boundCells[1].length===1?textOf(boundCells[1][0],true):'';
           const canonical=row==='2'?types[value]:row==='3' && ['Неопределенное','Непрерывный','Дискретный'].includes(value)?value:null;
@@ -1557,7 +1600,7 @@ function readRenderedInputMapping(observation) {
         const first=nativeHeaders.filter(e=>{charge();return e.classList.contains('x-column-header-first');});
         const last=nativeHeaders.filter(e=>{charge();return e.classList.contains('x-column-header-last');});
         const everyCell=ordered.every((header,index)=>[0,1,2,3,4].every(row=>{
-          const peers=tids.get(columnBase+index+'_'+row)??[];
+          const peers=definitionTids.get(columnBase+index+'_'+row)??[];
           return peers.length===1 && body.contains(peers[0]) && contained(peers[0],body);
         }));
         if(count>0 && count<=8 && nativeHeaders.length===count && columns.length===count
@@ -1591,7 +1634,7 @@ function readRenderedInputMapping(observation) {
             && contained(grid,grid) && visible(container) && visible(body)
             && indexes.every((index,i)=>index===String(i) && headers.filter(h=>getTid(h)===columnBase+index).length===1
               && native.includes(headers.find(h=>getTid(h)===columnBase+index))
-              && [0,1,2,3,4].every(row=>{const cells=tids.get(columnBase+index+'_'+row)??[];return cells.length===1&&body.contains(cells[0]);}))
+              && [0,1,2,3,4].every(row=>{const cells=definitionTids.get(columnBase+index+'_'+row)??[];return cells.length===1&&body.contains(cells[0]);}))
             && native.filter(h=>h.classList.contains('x-column-header-first')).length===1
             && native[0].classList.contains('x-column-header-first')
             && native.filter(h=>h.classList.contains('x-column-header-last')).length===1
@@ -1600,11 +1643,11 @@ function readRenderedInputMapping(observation) {
             // one overlong field name. Its rendered parse is ready to configure,
             // but it is not a valid configured schema or an actionable field.
             if(indexes.every(index=>{
-              const values=[0,1,2,3].map(row=>textOf(tids.get(columnBase+index+'_'+row)[0],true));
-              const checks=tids.get(columnBase+index+'_4')[0].querySelectorAll('.x-grid-checkcolumn');charge();
+              const values=[0,1,2,3].map(row=>textOf(definitionTids.get(columnBase+index+'_'+row)[0],true));
+              const checks=definitionTids.get(columnBase+index+'_4')[0].querySelectorAll('.x-grid-checkcolumn');charge();
               return values.every(Boolean) && types[values[2]] && ['Неопределенное','Непрерывный','Дискретный'].includes(values[3]) && checks.length===1;
             }))wizard.import_columns.initial_layout={status:'rendered_definition_layout',count,source_schema_verified:false};
-            const definitions=indexes.map(readColumn);
+            const definitions=indexes.map(index=>readColumn(index,false));
             if(definitions.every(c=>c.status==='observed' && ['Неопределенное','Непрерывный','Дискретный'].includes(c.data_kind))) {
               const signature=JSON.stringify({root:wizard.root_ref,definitions});
               if(state.importDefinition?.signature!==signature)state.importDefinition={signature,

@@ -2,13 +2,16 @@
 import hashlib
 from import_fields_evidence import verify_import_field_observations
 from node_procedure_evidence import verify_internal_sequence
+from import_limits import import_step_budget
+from execution_wait_evidence import verify_execution_wait_pauses
 from import_source_binding import source_ordered_settings
 
 
 def _verify_text_import(events, request, source_bytes, finish, *, settings_override=None, output_columns_override=None, target_label_override=None):
     operation_id = request['operation_id']
-    sequence = verify_internal_sequence(events, operation_id, max_steps=2048)
+    sequence = verify_internal_sequence(events, operation_id, max_steps=import_step_budget(request))
     failures = list(sequence['failures'])
+    failures.extend(verify_execution_wait_pauses(events, request)['failures'])
     rows = [e for e in events if e.get('operation_id') == operation_id]
     identity_keys=('session_id','runtime_revision','target')
     identity=tuple(rows[0].get(k) for k in identity_keys) if rows else ()
@@ -26,6 +29,12 @@ def _verify_text_import(events, request, source_bytes, finish, *, settings_overr
             if pending is not None:
                 failures.append('phase_overlap')
             pending = (e.get('receipt', {}), index)
+        if e.get('phase') == 'node_phase_paused':
+            # The dedicated verifier above proves the read-only interruption,
+            # explicit resume, original launch and non-extended deadline.
+            if not pending or e.get('receipt', {}).get('phase') != 'execute':
+                failures.append('invalid_phase_pause')
+            pending = None
         if e.get('phase') == 'node_phase_completed':
             receipt = e.get('receipt', {})
             if (not pending or receipt.get('receipt_id') != pending[0].get('receipt_id')

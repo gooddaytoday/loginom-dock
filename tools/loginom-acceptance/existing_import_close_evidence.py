@@ -3,6 +3,8 @@
 This is a component audit: runtime inventory and package persistence are separate.
 The baseline comes from the independently checked seed, never the cancelled edit.
 """
+from import_limits import import_operation_step_budget
+
 from existing_import_evidence import _verify_existing_import_output
 from import_done_evidence import _verify_text_import
 from import_patch_evidence import verify_import_patch_observations
@@ -44,7 +46,7 @@ def verify_existing_import_close(events, seed, cancelled, restored, source_bytes
             failures.append('close_journal_identity')
         if any(e.get('phase') == 'node_apply_prepared' and e.get('operation_id') not in ids for e in events):
             failures.append('close_unaccounted_node_operation')
-        sequence = verify_internal_sequence(events, cancelled['operation_id'], max_steps=2048)
+        sequence = verify_internal_sequence(events, cancelled['operation_id'], max_steps=import_operation_step_budget(events, cancelled['operation_id']))
         rows = [e for e in events if e.get('operation_id') == cancelled['operation_id']]
         starts = [i for i,e in enumerate(rows) if e.get('phase') == 'node_phase_prepared' and e.get('receipt', {}).get('phase') == 'configure']
         ends = [i for i,e in enumerate(rows) if e.get('phase') == 'node_phase_completed' and e.get('receipt', {}).get('phase') == 'configure']

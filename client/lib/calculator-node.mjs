@@ -13,7 +13,7 @@ import {readOutputDefinitionPages} from './import-definition-pages.mjs';
 import {openNewOutputTable,configureTablePrecision,prepareTableRead,returnFromOutputTable} from './node-output-procedure.mjs';
 import {readTableOutputPages} from './table-output-pages.mjs';
 import {decodeTableOutput} from './table-output-values.mjs';
-import {finishedImportSurface,verifyFinishedImportContinuation} from './node-import-continuation.mjs';
+import {finishedImportSurface,verifyFinishedImportContinuation,verifyWaitingExecutionContinuation} from './node-import-continuation.mjs';
 
 const requireValue=(ok,message)=>{if(!ok)throw Error(message);};
 const verified=v=>({verified:true,cleanup_complete:true,effect_possible:false,...v});
@@ -35,7 +35,7 @@ export function createCalculatorNodeSupport({targetOrigin,targetBuild}) {
   let channel,activeSignal,configured,mapping,columns,executionDriver,executionReceipt;
   const enter=ctx=>{activeSignal=ctx.signal;operation.deadline=ctx.deadline;
    channel??=createNodeProcedure({operation,execute,record:onRecord,now,maxSteps:4096,targetOrigin,targetBuild,
-    signal:{throwIfAborted:()=>activeSignal?.throwIfAborted()},preparedNodeContext:{document_id:ctx.document_id,workflow_ref:ctx.workflow_ref,node:ctx.node},
+    signal:{throwIfAborted:()=>activeSignal?.throwIfAborted(),get aborted(){return activeSignal?.aborted;},get reason(){return activeSignal?.reason;}},preparedNodeContext:{document_id:ctx.document_id,workflow_ref:ctx.workflow_ref,node:ctx.node},
     wrapMutation:(code,r)=>withBrowserReceipt('('+code+')(page)',{...receiptOptions(r.id,r.action_key,r.signature),operation_id:r.id})});return channel;};
   const finishWizard=async (mode,port=false)=>{
    const verb=mode==='execute'?'execute_wizard':'finish_wizard',key=mode==='execute'?'btnExecute':'btnDone';
@@ -153,7 +153,7 @@ export function createCalculatorNodeSupport({targetOrigin,targetBuild}) {
    },
    async waitExecution(ctx){
     enter(ctx);requireValue(executionDriver,'Calculator execution driver is missing');
-    try{executionReceipt=await executionDriver.waitCompleted({stopSignal:ctx.stopSignal});}
+    try{executionReceipt=await executionDriver.waitCompleted({signal:ctx.signal,stopSignal:ctx.stopSignal});}
     catch(error){
      if(!ctx.stopSignal?.aborted||error!==ctx.stopSignal.reason||operation.transportUncertain)throw error;
      const saved=await onRecord({phase:'node_server_stop_requested',operation_id:operation.id,
@@ -178,13 +178,13 @@ export function createCalculatorNodeSupport({targetOrigin,targetBuild}) {
     // Only a durably accepted graph launch can be resumed. A partially edited
     // expression or port needs reconciliation; never replay its mutations.
     if(!channel||!configured||state.pending||state.cleanup_complete!==true
-     ||state.phases.at(-1)?.phase!=='finish'||now()>=state.deadline)return false;
+     ||state.phases.at(-1)?.phase!=='finish'||now()>=Math.min(state.deadline,state.execution_wait?.deadline??Infinity))return false;
     activeSignal=signal;signal?.throwIfAborted();operation.deadline=Math.min(state.deadline,now()+15000);
     const surface=await channel.observe({condition:'calculator retains accepted execution checkpoint',readProcesses:true,readOutputs:true,
      ready:s=>s.prepared_node_context?.surface==='graph'&&s.node_processes?.verified===true&&s.node_outputs?.verified===true});
-    const confirmed=verifyFinishedImportContinuation({node:state.node,finish:state.phases.at(-1).value,surface});
+    const confirmed=(state.execution_wait?verifyWaitingExecutionContinuation:verifyFinishedImportContinuation)({node:state.node,finish:state.phases.at(-1).value,surface,checkpoint:state.execution_wait});
     await onRecord({operation_id:operation.id,action_key:'node.apply',action_revision:state.request.contract_revision,
-     phase:'node_continuation_checked',boundary:'finish',verified:confirmed,surface:finishedImportSurface(surface)});
+     phase:'node_continuation_checked',boundary:state.execution_wait?'execute_wait':'finish',verified:confirmed,surface:finishedImportSurface(surface)});
     return confirmed;
    },
   };

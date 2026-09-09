@@ -1,4 +1,6 @@
 """Independent audit of configure-boundary pause, inspected resume and fresh output."""
+from import_limits import import_operation_step_budget
+
 from import_output_evidence import verify_text_import_output
 from workflow_activation_evidence import verify_workflow_activation
 
@@ -57,7 +59,7 @@ def verify_changed_null_resume_refusal(events,request,source_bytes):
     import hashlib
     from node_procedure_evidence import verify_internal_sequence
     op=request['operation_id'];rows=[e for e in events if e.get('operation_id')==op]
-    seq=verify_internal_sequence(events,op,max_steps=2048);failures=list(seq['failures'])
+    seq=verify_internal_sequence(events, op, max_steps=import_operation_step_budget(events, op));failures=list(seq['failures'])
     identities=[(e.get('session_id'),e.get('runtime_revision'),e.get('target')) for e in rows]
     if not identities or not all(identities[0]) or any(i!=identities[0] for i in identities):failures.append('journal_identity')
     source=request['parameters']['source']
@@ -133,7 +135,7 @@ def verify_mapped_import_resume(events,request,source_bytes):
 def verify_changed_completion_resume_refusal(events,request):
     from node_procedure_evidence import verify_internal_sequence
     rows=[e for e in events if e.get('operation_id')==request['operation_id']]
-    failures=list(verify_internal_sequence(events,request['operation_id'],max_steps=2048)['failures'])
+    failures=list(verify_internal_sequence(events, request['operation_id'], max_steps=import_operation_step_budget(events, request['operation_id']))['failures'])
     identities=[(e.get('session_id'),e.get('runtime_revision'),e.get('target')) for e in rows]
     if not identities or not all(identities[0]) or any(i!=identities[0] for i in identities):failures.append('mapped_refusal_journal_identity')
     completed=[e['receipt'] for e in rows if e.get('phase')=='node_phase_completed']
@@ -244,7 +246,8 @@ def verify_async_import_run(events,request,source_bytes,start,probes,final,*,com
 
 def verify_background_cancel_resume(events,request,source_bytes,cancel,attempts):
     boundary=cancel.get('boundary')
-    verifier={'configure':verify_configured_import_resume,'output_mapping':verify_mapped_import_resume,'finish':verify_finished_import_resume}.get(boundary)
+    verifier={'configure':verify_configured_import_resume,'output_mapping':verify_mapped_import_resume,'finish':verify_finished_import_resume,
+              'execute_wait':verify_text_import_output}.get(boundary)
     if verifier is None:return dict(passed=False,failures=['unknown_cancel_boundary'])
     result=verifier(events,request,source_bytes);failures=list(result['failures']);op=request['operation_id']
     receipt=cancel.get('cancelled',{})

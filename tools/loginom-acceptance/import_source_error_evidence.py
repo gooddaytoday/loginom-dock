@@ -5,11 +5,12 @@ package persistence, prove fixture deletion itself, or admit recovery/retry.
 """
 import hashlib
 from node_procedure_evidence import verify_internal_sequence
+from import_limits import import_step_budget
 
 
 def verify_import_source_error(events, request, source_bytes, result, replayed):
     op = request['operation_id']
-    seq = verify_internal_sequence(events, op, max_steps=2048)
+    seq = verify_internal_sequence(events, op, max_steps=import_step_budget(request))
     failures = [f for f in seq['failures'] if f != 'incomplete_mutation']
     rows = [e for e in events if e.get('operation_id') == op]
     source = request['parameters']['source']

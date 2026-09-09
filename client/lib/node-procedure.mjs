@@ -148,6 +148,7 @@ export function createNodeProcedure({ operation, execute, record, wrapMutation,
       const step = ++sequence, id = operation.id + ':n' + step;
       const started = now(), deadline = Math.min(operation.deadline, started + timeoutMs);
       let result, satisfied = false, previousIdentity, confirmations = 0, rootRefreshes = 0;
+      try {
       for (let sample = 0; sample < 80; sample++) {
         signal?.throwIfAborted();
         if (now() >= deadline) break;
@@ -271,6 +272,16 @@ export function createNodeProcedure({ operation, execute, record, wrapMutation,
       snapshotTableDialog=tableDialog?structuredClone(tableDialog):null;
       snapshotWizardConfirmation=snapshot.node_wizard_confirmation??null;
       return structuredClone(snapshot);
+      } catch(error) {
+        if(signal?.aborted&&error===signal.reason) {
+          const interrupted=await entry('node_observation_interrupted',{step,internal_operation_id:id,
+            condition,reason:'local_cancel',effect_possible:false,cleanup_complete:true});
+          if(interrupted?.step!==step||interrupted.internal_operation_id!==id||interrupted.condition!==condition
+            ||interrupted.reason!=='local_cancel'||interrupted.effect_possible!==false||interrupted.cleanup_complete!==true)
+            throw Error('Interrupted observation was not durably acknowledged');
+        }
+        throw error;
+      }
     },
     async act(action) {
       checkBudget();

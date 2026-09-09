@@ -4,7 +4,7 @@ import {createNodeProcedure} from './node-procedure.mjs';
 import {configureTextImportFields,configureTextImportPatch,validateTextImportFieldsRequest,validateTextImportPatch,isTextImportSourceReady} from './text-import-procedure.mjs';
 import {withBrowserReceipt} from './executor.mjs';
 import {readOutputDefinitionPages,readImportDefinitionPages} from './import-definition-pages.mjs';
-import {makeRetainedImportSourceCode,makeRetainedImportFormatCode,verifyConfiguredImportContinuation,verifyMappedImportContinuation,finishedImportSurface,verifyFinishedImportContinuation} from './node-import-continuation.mjs';
+import {makeRetainedImportSourceCode,makeRetainedImportFormatCode,verifyConfiguredImportContinuation,verifyMappedImportContinuation,finishedImportSurface,verifyFinishedImportContinuation,verifyWaitingExecutionContinuation} from './node-import-continuation.mjs';
 import {openNewOutputTable,configureTablePrecision,prepareTableRead,returnFromOutputTable} from './node-output-procedure.mjs';
 import {readTableOutputPages} from './table-output-pages.mjs';
 import {decodeTableOutput} from './table-output-values.mjs';
@@ -12,6 +12,7 @@ import {createNodeExecutionProcedure} from './node-execution-procedure.mjs';
 import {closePreparedWizard} from './node-wizard-close.mjs';
 import {openPreparedWizard} from './node-wizard-open.mjs';
 import {textImportConfigurationReadback} from './text-import-readback.mjs';
+import {textImportStepBudget} from './text-import-limits.mjs';
 
 const requireValue=(v,m)=>{if(!v)throw new Error(m);};
 const one=(xs,m)=>{requireValue(xs.length===1,m);return xs[0];};
@@ -37,6 +38,7 @@ export function validateTextImportNodeParameters(p,mode,request) {
 }
 
 export function verifyTextImportSource(parameters,uploads) {
+  try {
   const s=parameters.source;
   const u=one(uploads.filter(u=>u.operation_id===s.upload_operation_id),'Verified upload operation is missing or ambiguous');
   const o=u.outcome,proof=o?.output?.server_copy_verification;
@@ -51,6 +53,12 @@ export function verifyTextImportSource(parameters,uploads) {
   'Upload bytes, digest, artifact or exact destination do not match the source');
   validateTextImportPatch({source:{source_path:proof.destination}});
   return verified({source:{...s,destination:proof.destination,verification_id:proof.verification_id}});
+  } catch(error) {
+    // This preflight reads only the host's completed upload receipts. No browser
+    // call or source upload can have occurred, even when the supplied ID is wrong.
+    error.nodePhaseRefusal={phase:'source',status:'NOT_APPLIED',effect_possible:false,cleanup_complete:true};
+    throw error;
+  }
 }
 
 export function bindIdentityOutputColumns(configured,actual) {
@@ -86,11 +94,11 @@ export function createTextImportNodeSupport({targetOrigin,targetBuild}) {
     configure:(ctx,p,drivers)=>drivers.configureTextImport(ctx,p)}]]);
   const nodeApplyDriverFactory=({operation,execute,onRecord,now,receiptOptions,verifiedUploads})=>{
     let channel,configured,outputColumns,owner,executionDriver,executionReceipt,sourceReceipt,activeSignal;
-    const continuationSignal={throwIfAborted:()=>activeSignal?.throwIfAborted()};
+    const continuationSignal={throwIfAborted:()=>activeSignal?.throwIfAborted(),get aborted(){return activeSignal?.aborted;},get reason(){return activeSignal?.reason;}};
     const enter=ctx=>{
       activeSignal=ctx.signal;
       operation.deadline=ctx.deadline;
-      channel??=createNodeProcedure({operation,execute,record:onRecord,now,signal:continuationSignal,maxSteps:2048,targetOrigin,targetBuild,
+      channel??=createNodeProcedure({operation,execute,record:onRecord,now,signal:continuationSignal,maxSteps:textImportStepBudget(operation.nodeApply.request),targetOrigin,targetBuild,
         preparedNodeContext:{document_id:ctx.document_id,workflow_ref:ctx.workflow_ref,node:ctx.node},
         wrapMutation:(code,r)=>withBrowserReceipt('('+code+')(page)',{
           ...receiptOptions(r.id,r.action_key,r.signature),operation_id:r.id})});
@@ -194,7 +202,7 @@ export function createTextImportNodeSupport({targetOrigin,targetBuild}) {
       },
       async waitExecution(ctx) {
         enter(ctx);requireValue(executionDriver,'Execution driver is unavailable');
-        try { executionReceipt=await executionDriver.waitCompleted({stopSignal:ctx.stopSignal}); }
+        try { executionReceipt=await executionDriver.waitCompleted({signal:ctx.signal,stopSignal:ctx.stopSignal}); }
         catch(error) {
           // The readiness callback interrupts only after its browser read has
           // completed. The normal signal and operation gate remain in force.
@@ -225,15 +233,15 @@ export function createTextImportNodeSupport({targetOrigin,targetBuild}) {
       },
       async verifyContinuation(state,{signal}={}) {
         if(!channel||!configured||state.pending||state.cleanup_complete!==true
-          ||!['configure','output_mapping','finish'].includes(state.phases.at(-1)?.phase)||now()>=state.deadline)return false;
+          ||!['configure','output_mapping','finish'].includes(state.phases.at(-1)?.phase)||now()>=Math.min(state.deadline,state.execution_wait?.deadline??Infinity))return false;
         activeSignal=signal;signal?.throwIfAborted();
         operation.deadline=Math.min(state.deadline,now()+15000);
         if(state.phases.at(-1).phase==='finish') {
           const surface=await channel.observe({condition:'finished import retains its original execution checkpoint',readProcesses:true,readOutputs:true,
             ready:s=>s.prepared_node_context?.surface==='graph'&&s.node_processes?.verified===true&&s.node_outputs?.verified===true});
-          const confirmed=verifyFinishedImportContinuation({node:state.node,finish:state.phases.at(-1).value,surface});
+          const confirmed=(state.execution_wait?verifyWaitingExecutionContinuation:verifyFinishedImportContinuation)({node:state.node,finish:state.phases.at(-1).value,surface,checkpoint:state.execution_wait});
           await onRecord({operation_id:operation.id,action_key:'node.apply',action_revision:state.request.contract_revision,
-            phase:'node_continuation_checked',boundary:'finish',verified:confirmed,surface:finishedImportSurface(surface)});
+            phase:'node_continuation_checked',boundary:state.execution_wait?'execute_wait':'finish',verified:confirmed,surface:finishedImportSurface(surface)});
           return confirmed;
         }
         const binding={document_id:state.request.document_id,workflow_ref:state.request.workflow_ref,node:state.node};

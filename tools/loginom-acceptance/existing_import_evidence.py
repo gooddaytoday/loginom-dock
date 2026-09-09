@@ -6,6 +6,7 @@ from import_execution_evidence import verify_text_import_execution
 from import_output_evidence import _verify_text_import_output, verify_text_import_output
 from import_patch_evidence import verify_import_patch_observations
 from node_procedure_evidence import verify_internal_sequence
+from import_limits import import_step_budget
 from wizard_open_evidence import verify_wizard_open_sequence
 from import_source_binding import source_ordered_settings
 
@@ -60,7 +61,7 @@ def _verify_existing_import_output(events, seed_request, request, source_bytes, 
                   for e in events if e.get('operation_id') in ids and e.get('internal_provenance') == 'client_node_procedure_v1'}
     if len(identities) != 1:
         failures.append('seed_patch_runtime_mismatch')
-    sequence = verify_internal_sequence(events, request['operation_id'], max_steps=2048)
+    sequence = verify_internal_sequence(events, request['operation_id'], max_steps=import_step_budget(request))
     failures.extend(sequence['failures'])
     rows = [e for e in events if e.get('operation_id') == request['operation_id']]
     def phase(name):

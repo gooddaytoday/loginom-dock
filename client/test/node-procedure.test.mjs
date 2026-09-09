@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { createNodeProcedure } from '../lib/node-procedure.mjs';
 import { validateTextImportRequest } from '../lib/text-import-procedure.mjs';
 
-function fixture({ recordFailure, executeFailure, changedDocument, foreignReceipt, movingEpoch, dialogsAtRead, staleReads = 0, staleEffect = false, loadingSamples = 0, maxSteps = 8 } = {}) {
+function fixture({ recordFailure, executeFailure, changedDocument, foreignReceipt, movingEpoch, dialogsAtRead, staleReads = 0, staleEffect = false, loadingSamples = 0, maxSteps = 8, signal } = {}) {
   const events = [], records = []; let reads = 0;
   const operation = { id: 'parent', action: { action_key: 'node.import.configure', revision: '1' },
     deadline: 10000, checkpoint: { workflow_ref: { prefix: 'MF;TF-1', tab_tid: 'tab' }, document_id: 'doc' } };
@@ -11,7 +11,7 @@ function fixture({ recordFailure, executeFailure, changedDocument, foreignReceip
     dom_epoch: { document: changedDocument ? 'foreign' : 'doc', revision: 1 }, scan: { complete: true }, wizard: staleReads ? {status:'observed',root_ref:'ui-root',root_tid:'Wizard'} : { status: 'absent' },
     ui: { masks: [], dialogs: [], truncated: { elements: false, masks: false, dialogs: false },
       elements: [{ ref: 'ui-button', allowed_actions: ['click'] }] } };
-  const channel = createNodeProcedure({ operation, maxSteps, now: () => 1, wait: async () => {},
+  const channel = createNodeProcedure({ operation, maxSteps, signal, now: () => 1, wait: async () => {},
     targetOrigin: 'http://example.test', targetBuild: '7.4.2',
     record: async entry => { events.push(entry.phase); if (recordFailure && entry.phase === recordFailure) throw new Error('disk failure'); records.push(entry); return structuredClone(entry); },
     wrapMutation: (code, options) => { events.push('wrapped'); return { code, options }; },
@@ -361,4 +361,22 @@ test('calculator parameter portal admits only its bound modal background',async(
   if(mode==='bound'){assert.equal((await read()).wizard.expression_parameters.root_ref,'editor');assert.ok(roots.every(Boolean));}
   else await assert.rejects(read());
  }
+});
+
+
+test('cancelled observation is journaled as read-only and cannot authorize a gesture',async()=>{
+ let controller=new AbortController();
+ const signal={throwIfAborted:()=>controller.signal.throwIfAborted(),get aborted(){return controller.signal.aborted;},get reason(){return controller.signal.reason;}};
+ const f=fixture({signal});
+ await assert.rejects(f.channel.observe({condition:'identified execution wait',ready:()=>{controller.abort(Error('local cancel'));return false;}}),/local cancel/);
+ const interrupted=f.records.at(-1);assert.equal(interrupted.phase,'node_observation_interrupted');assert.equal(interrupted.step,1);
+ assert.equal(interrupted.effect_possible,false);assert.equal(interrupted.cleanup_complete,true);assert.ok(!f.events.includes('mutated'));
+ controller=new AbortController();
+ await assert.rejects(f.channel.act({verb:'click',ref:'ui-button'}),/fresh internal observation/);
+ await f.channel.observe({condition:'fresh resumed read',ready:()=>true});assert.equal(f.channel.steps,2);
+});
+test('failed interruption journal cannot supply a safe continuation proof',async()=>{
+ const controller=new AbortController(),f=fixture({signal:controller.signal,recordFailure:'node_observation_interrupted'});
+ await assert.rejects(f.channel.observe({condition:'wait',ready:()=>{controller.abort(Error('local cancel'));return false;}}),/disk failure/);
+ assert.ok(!f.records.some(e=>e.phase==='node_observation_interrupted'));assert.ok(!f.events.includes('mutated'));
 });

@@ -1,4 +1,6 @@
 """Independent CSV/source, execution and Table audit; no persistence/Hermes proof."""
+from import_limits import import_operation_step_budget
+
 import csv
 import io
 import math
@@ -284,7 +286,7 @@ def verify_table_output_observations(observations, mutations, request, source_by
 
 def _verify_text_import_output(events, request, source_bytes, *, settings_override=None, output_columns_override=None, target_label_override=None):
     base = _verify_text_import(events, request, source_bytes, 'execute', settings_override=settings_override, output_columns_override=output_columns_override, target_label_override=target_label_override)
-    seq = verify_internal_sequence(events, request['operation_id'], max_steps=2048)
+    seq = verify_internal_sequence(events, request['operation_id'], max_steps=import_operation_step_budget(events, request['operation_id']))
     failures = list(base['failures'])
     if request.get('read', {}).get('ports') != [0] or not seq['observations']:
         return dict(base, passed=False, failures=failures+['output_audit_request'])

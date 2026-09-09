@@ -38,6 +38,8 @@ if(replaceSource&&!['same-schema','changed-schema'].includes(replaceSource))thro
 if(replaceSource&&(!process.argv.includes('--existing-patch')||count!==3||encoding!=='UTF-8'||!firstLineAsTitle||rowsToSkip!==0||delimiter!==';'||settingsPatch))throw Error('Replacement fixture requires the standard seed and no settings override');
 const existingPatch=process.argv.includes('--existing-patch'),seedReadOutput=process.argv.includes('--seed-read-output');
 const typedFixture=process.argv.includes('--typed-fixture');
+const wideMixedFixture=process.argv.includes('--wide-mixed-fixture');
+if(wideMixedFixture&&(count<10||typedFixture||existingPatch||replaceSource))throw Error('Wide mixed fixture requires a new import with at least 10 columns');
 const largeRowsIndex=process.argv.indexOf('--large-import-rows'),largeRows=largeRowsIndex<0?0:Number(process.argv[largeRowsIndex+1]);
 if(largeRowsIndex>=0&&(!Number.isInteger(largeRows)||largeRows<100000||largeRows>(typedFixture?450000:2500000)||count!==3
   ||encoding!=='UTF-8'||!firstLineAsTitle||delimiter!==';'||rowsToSkip!==0||process.argv.includes('--empty')))
@@ -73,6 +75,9 @@ if(existingPatch&&(!process.argv.includes('--execute')||process.argv.includes('-
 const finish=process.argv.includes('--close')?'close':process.argv.includes('--execute')?'execute':'done',readOutput=process.argv.includes('--read-output');
 const pauseAfterConfigure=process.argv.includes('--pause-after-configure');
 const asyncNode=process.argv.includes('--async-node');
+const pauseDuringWait=process.argv.includes('--pause-during-execution-wait');
+const sourcePreflightRefusal=process.argv.includes('--source-preflight-refusal');
+if(pauseDuringWait&&(!asyncNode||finish!=='execute'||existingPatch||pauseAfterConfigure||saveReopen))throw Error('Read-wait pause requires an isolated async Execute');
 const publicApi=process.argv.includes('--public-api');
 if(publicApi&&(asyncNode||deliveryPause||pauseAfterConfigure))throw Error('Public wire fixture currently requires an unpaused node and delivery');
 const requestServerStop=process.argv.includes('--request-server-stop');
@@ -96,9 +101,18 @@ session.metadata.targetIdentity={origin:url.origin,loginom_build:'7.4.2'};
 await fs.writeFile(dir+'/session.json',JSON.stringify(session.metadata,null,2));
 const client=new Client({name:'node-import-done-qa',version:'1'});
 const transport=new StdioClientTransport({command:process.execPath,args:[session.browserCli,'--config',session.browserConfig],env:{...getDefaultEnvironment(),PLAYWRIGHT_BROWSERS_PATH:session.browserRoot},stderr:'pipe'});transport.stderr?.on('data',()=>{});
-let sequence=0,diagnosticContext={},serverStopRequested=false,publicWire;const pauseController=new AbortController();
+let sequence=0,diagnosticContext={},serverStopRequested=false,publicWire,waitPauseRequested=false;const pauseController=new AbortController();
 const journal=createExecutionJournal({directory:dir,metadata:session.metadata});
 const record=async event=>{const saved=await journal(event);
+ if(pauseDuringWait&&!waitPauseRequested&&event.phase==='node_phase_prepared'&&event.receipt?.phase==='execute') {
+  waitPauseRequested=true;
+  // The next browser read yields after the shell claims execute. Cancel while
+  // that read is in flight, never at the preceding finish checkpoint.
+  setTimeout(()=>{
+   const before=sequence,cancelled=diagnosticContext.runtime.cancelNodeApply(event.operation_id),after=sequence;
+   diagnosticContext.waitCancel={before,after,cancelled,boundary:'execute_wait'};
+  },0);
+ }
  if(deliveryPause&&(deliveryPause==='upload'&&event.phase==='artifact_delivery_upload_receipt'&&event.operation_id==='deliver-source'
    ||deliveryPause==='verify'&&event.phase==='verification_completed'&&event.operation_id==='deliver-source:verify'))
   deliveryPauseController.abort(new Error('Operator delivery pause after '+deliveryPause));
@@ -140,6 +154,8 @@ try {
  if(prep.status!=='READY')throw Error('Workspace preparation failed');await fs.writeFile(dir+'/preparation.json',JSON.stringify(prep,null,2));
  const name='Dock03-done-'+Date.now()+(delimiter==='\t'?'.tsv':'.csv');
  let bytes=Buffer.from(count===3?'Id;Title;Amount\n1;"one;two";1.23456789012345\n2;"";-2.5\n3;NULL;0\n':Array.from({length:count},(_,i)=>'Field'+String(i+1).padStart(2,'0')).join(';')+'\n'+Array.from({length:count},(_,i)=>i===count-1?'1.23456789012345':String(i+1)).join(';')+'\n'+Array.from({length:count},(_,i)=>String(-i-1)).join(';')+'\n');
+ if(wideMixedFixture)bytes=Buffer.from(Array.from({length:count},(_,i)=>'Field'+String(i+1).padStart(2,'0')).join(';')+'\n'
+  +[0,1].map(row=>Array.from({length:count},(_,i)=>i===0?String(row+1):i===count-1?(row?'-2.5':'1.23456789012345'):'value_'+row+'_'+i).join(';')).join('\n')+'\n');
  if(typedFixture)bytes=Buffer.from('Flag;Moment;Note\ntrue;29.02.2024 23:59:58.123;leap\nfalse;01.01.2000 00:00:00.001;epoch\nNULL;NULL;NULL\n');
  if(largeRows)bytes=Buffer.from(typedFixture?'Flag;Moment;Note\n'+'true;29.02.2024 23:59:58.123;leap\n'.repeat(largeRows):'Id;Title;Amount\n'+'1;z;0\n'.repeat(largeRows));
  let fixtureText=bytes.toString('utf8');
@@ -330,10 +346,12 @@ try {
  const settings={source:{source_path:storage+'/'+name,encoding,rows_to_skip:rowsToSkip,first_line_as_title:firstLineAsTitle},format:{delimiter,decimal_separator:decimalSeparator,null_marker:'NULL',text_qualifier:'"'},columns:[{name:'Id',label:'Id',type:'integer',data_kind:'Дискретный',used:true},{name:'Title',label:'Title',type:'string',data_kind:'Дискретный',used:true},{name:'Amount',label:'Amount',type:'real',data_kind:'Непрерывный',used:true}]};
  if(typedFixture)settings.columns=[{name:'Flag',label:'Flag',type:'boolean',data_kind:'Дискретный',used:true},{name:'Moment',label:'Moment',type:'datetime',data_kind:'Непрерывный',used:true},{name:'Note',label:'Note',type:'string',data_kind:'Дискретный',used:true}];
  if(count!==3)settings.columns=Array.from({length:count},(_,i)=>({name:'Field'+String(i+1).padStart(2,'0'),label:'Field'+String(i+1).padStart(2,'0'),type:i===count-1?'real':'integer',data_kind:i===0?'Дискретный':'Непрерывный',used:true}));
+ if(wideMixedFixture)settings.columns=settings.columns.map((c,i)=>({...c,type:i>0&&i<count-1?'string':c.type,
+  data_kind:i<count-1?'Дискретный':c.data_kind,label:i===count-1?'Последнее поле':c.label}));
  if(onlyColumn){if(!settings.columns.some(c=>c.name===onlyColumn))throw Error('Unknown sole output field');settings.columns=settings.columns.map(c=>({...c,used:c.name===onlyColumn}));}
  if(!firstLineAsTitle)settings.columns=settings.columns.map((column,i)=>({...column,source_name:'COL'+(i+1)}));
  if(process.argv.includes('--edit-fields')){settings.columns[0]={...settings.columns[0],source_name:settings.columns[0].source_name??settings.columns[0].name,name:'RecordId',label:'Идентификатор'};settings.columns[1].used=false;settings.columns.at(-1).label='Сумма';}
- let request={operation_id:'import-'+finish,contract_revision:'1.0.0',document_id:prep.document_id,workflow_ref:prep.workflow_ref,target:{kind:'new',type:'imports.text',label:'Import03Done',position:{x:96,y:80}},inputs:[],mode:'delimited',parameters:{settings,source:{artifact_id:artifact.artifact_id,upload_operation_id:sourceUploadId,bytes:artifact.bytes,sha256:artifact.sha256}},mappings:[],finish,read:{ports:readOutput?[0]:[],sample_rows:readOutput?10:0,require_exact_numbers:readOutput},budgets:{configure_ms:240000,execute_ms:30000,total_ms:300000}};
+ let request={operation_id:'import-'+finish,contract_revision:'1.0.0',document_id:prep.document_id,workflow_ref:prep.workflow_ref,target:{kind:'new',type:'imports.text',label:'Import03Done',position:{x:96,y:80}},inputs:[],mode:'delimited',parameters:{settings,source:{artifact_id:artifact.artifact_id,upload_operation_id:sourceUploadId,bytes:artifact.bytes,sha256:artifact.sha256}},mappings:[],finish,read:{ports:readOutput?[0]:[],sample_rows:readOutput?10:0,require_exact_numbers:readOutput},budgets:{configure_ms:Math.max(240000,count*1200),execute_ms:30000,total_ms:Math.max(300000,count*1800)}};
  if(mappedOutput)request.mappings=[{direction:'output',port:0,autosync:false,fields:[{source:{kind:'configured_field',name:'Amount'},name:'AmountMapped',label:'Сумма выхода'},{source:{kind:'configured_field',name:'Title'},name:'Id',label:'Название'},{source:{kind:'configured_field',name:'Id'},name:'Title',label:'Номер'}]}];
  if(mappedOutput&&count!==3){const fields=settings.columns.map(c=>({source:{kind:'configured_field',name:c.name},name:c.name,label:c.label}));for(const f of fields.slice(-2)){f.name='Output'+f.name;f.label='Выход '+f.source.name;}[fields[fields.length-2],fields[fields.length-1]]=[fields.at(-1),fields.at(-2)];request.mappings=[{direction:'output',port:0,autosync:false,fields}];}
  if(existingPatch) {
@@ -349,6 +367,16 @@ try {
  }
  await fs.writeFile(dir+'/request.json',JSON.stringify(request,null,2));
  diagnosticContext={runtime,request,prep};
+ if(sourcePreflightRefusal) {
+  for(const kind of ['missing_upload','digest']) {
+   const bad=structuredClone(request);bad.operation_id='bad-source-'+kind;
+   if(kind==='missing_upload')bad.parameters.source.upload_operation_id='unknown-upload';else bad.parameters.source.sha256='0'.repeat(64);
+   const before=sequence,refused=await runtime.runNodeApply(bad),replayed=await runtime.runNodeApply(bad);
+   await fs.writeFile(dir+'/'+bad.operation_id+'.json',JSON.stringify({before,after:sequence,refused,replayed},null,2));
+   if(before!==sequence||refused.status!=='NOT_APPLIED'||refused.effect_possible!==false||refused.cleanup_complete!==true)
+    throw Error('Source preflight refusal did not safely release the gate');
+  }
+ }
  const runBackground=async(resume=false,tag='async')=>{
   const started=runtime.startNodeApply(request,{resume}),probes=[];
   const replayStart=runtime.startNodeApply(request,{resume});
@@ -366,6 +394,18 @@ try {
   return current.outcome;
  };
  let result=asyncNode?await runBackground():await runtime.runNodeApply(request,{signal:pauseController.signal});
+ if(pauseDuringWait) {
+  const cancel=diagnosticContext.waitCancel;
+  await fs.writeFile(dir+'/async-cancel.json',JSON.stringify(cancel,null,2));
+  await fs.writeFile(dir+'/paused-result.json',JSON.stringify(result,null,2));
+  if(!cancel||cancel.before!==cancel.after||cancel.cancelled.progress?.pending_phase!=='execute'
+    ||result.status!=='AMBIGUOUS'||result.cleanup_complete!==true||result.output.pending_phase!==null
+    ||result.output.execution?.status!=='pending')throw Error('Read-wait cancellation did not produce a safe checkpoint');
+  const before=sequence,inspected=await runtime.inspect({operationId:request.operation_id});
+  await fs.writeFile(dir+'/paused-inspect.json',JSON.stringify(inspected,null,2));
+  if(before!==sequence||inspected.output.internal_resume_available!==true)throw Error('Paused wait is not inspectable without browser effects');
+  result=await runBackground(true,'async-resume');
+ }
  if(resumeAfterConfigure) {
   await fs.writeFile(dir+'/paused-result.json',JSON.stringify(result,null,2));
   if(result.status!=='AMBIGUOUS'||result.output?.pending_phase!==null||result.cleanup_complete!==true

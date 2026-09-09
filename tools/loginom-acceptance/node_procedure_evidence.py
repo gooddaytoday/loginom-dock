@@ -178,6 +178,15 @@ def verify_internal_sequence(events, operation_id, *, max_steps=96):
                 failures.append('sample_sequence')
             observation_attempts += 1
             samples.append(row)
+        elif phase == 'node_observation_interrupted':
+            if (pending or rejected or step != previous_step + 1
+                    or any(s.get('step') != step or s.get('readiness', {}).get('condition') != row.get('condition') for s in samples)
+                    or not isinstance(row.get('condition'), str) or not row['condition']
+                    or row.get('reason') != 'local_cancel' or row.get('effect_possible') is not False
+                    or row.get('cleanup_complete') is not True):
+                failures.append('unsafe_observation_interruption')
+            previous_step, current, samples = step, None, []
+            observation_attempts = root_refreshes = 0
         elif phase == 'node_observation_completed':
             semantic = row.get('readiness', {}).get('policy') == 'semantic_condition_v2'
             required_samples = row.get('readiness', {}).get('required_samples') if semantic else 4

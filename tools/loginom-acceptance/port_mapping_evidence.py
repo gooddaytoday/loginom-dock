@@ -1,4 +1,6 @@
 """Independent audit of a prepared output-field edit; not node/package persistence."""
+from import_limits import import_operation_step_budget
+
 from copy import deepcopy
 from node_procedure_evidence import verify_internal_sequence
 
@@ -88,7 +90,7 @@ def verify_output_field_edit(events,operation_id,source_name,target_name,target_
 
 
 def verify_output_order(events,operation_id,source_names):
-    sequence=verify_internal_sequence(events,operation_id,max_steps=2048)
+    sequence=verify_internal_sequence(events, operation_id, max_steps=import_operation_step_budget(events, operation_id))
     failures=list(sequence['failures']);observations=sequence['observations'];mutations=sequence['mutations']
     native=[(step,s['node_mapping']) for step,s in observations if s.get('node_mapping',{}).get('verified') is True]
     if not native:return dict(passed=False,failures=failures+['native_mapping_missing'])
@@ -127,7 +129,7 @@ def verify_output_order(events,operation_id,source_names):
 
 def verify_output_field_batch(events,operation_id,requested):
     """Replay editor receipts independently; temporary names never define the goal."""
-    sequence=verify_internal_sequence(events,operation_id,max_steps=2048)
+    sequence=verify_internal_sequence(events, operation_id, max_steps=import_operation_step_budget(events, operation_id))
     failures=list(sequence['failures']);observations=sequence['observations'];mutations=sequence['mutations']
     native=[(step,s['node_mapping']) for step,s in observations if s.get('node_mapping',{}).get('verified') is True]
     if not native:return dict(passed=False,failures=failures+['native_mapping_missing'])

@@ -1,4 +1,6 @@
 """Independent file/configuration/process audit. No output data or persistence proof."""
+from import_limits import import_operation_step_budget
+
 import re
 from import_done_evidence import _verify_text_import
 from node_procedure_evidence import verify_internal_sequence
@@ -128,7 +130,7 @@ def verify_execution_observations(observations, mutations, node, *, launch_mode=
 
 def verify_text_import_execution(events, request, source_bytes):
     result = _verify_text_import(events, request, source_bytes, 'execute')
-    seq = verify_internal_sequence(events, request['operation_id'], max_steps=2048)
+    seq = verify_internal_sequence(events, request['operation_id'], max_steps=import_operation_step_budget(events, request['operation_id']))
     bindings = [s.get('prepared_node_context', {}) for _, s in seq['observations']]
     if not bindings:
         return dict(result, passed=False, failures=result['failures']+['prepared_node_missing'])

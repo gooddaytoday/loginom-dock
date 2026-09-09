@@ -5,13 +5,15 @@ summary. Both the original and final schemas must appear in native observations.
 The general verifier includes source/format changes with the same known schema.
 Done and persistence require their own evidence.
 """
+from import_limits import import_operation_step_budget
+
 from copy import deepcopy
 from import_fields_evidence import verify_import_field_observations
 from node_procedure_evidence import verify_internal_sequence
 
 
 def verify_text_import_column_patch(events, operation_id, before, patch):
-    sequence = verify_internal_sequence(events, operation_id, max_steps=2048)
+    sequence = verify_internal_sequence(events, operation_id, max_steps=import_operation_step_budget(events, operation_id))
     return verify_column_patch_observations(sequence['observations'], sequence['mutations'],
                                             before, patch, sequence['failures'])
 
@@ -21,8 +23,8 @@ def verify_text_import_column_patch_roundtrip(events, operation_id, qa_operation
     result = verify_text_import_column_patch(events, operation_id, before, patch)
     if not result['passed']:
         return result
-    original = verify_internal_sequence(events, operation_id, max_steps=2048)
-    qa = verify_internal_sequence(events, qa_operation_id, max_steps=2048)
+    original = verify_internal_sequence(events, operation_id, max_steps=import_operation_step_budget(events, operation_id))
+    qa = verify_internal_sequence(events, qa_operation_id, max_steps=import_operation_step_budget(events, qa_operation_id))
     failures = list(qa['failures'])
     positions = {key: [i for i, e in enumerate(events) if e.get('operation_id') == key
                       and e.get('internal_provenance') == 'client_node_procedure_v1']

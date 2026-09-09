@@ -146,7 +146,8 @@ export async function applyNode({request, operation, handlers, drivers, record,
     check();
     const configuration=!['source','execute','read'].includes(name);
     if(configuration)state.configure_deadline??=Math.min(state.deadline,now()+request.budgets.configure_ms);
-    const deadline=Math.min(state.deadline,now()+budget,configuration?state.configure_deadline:Infinity);
+    const deadline=Math.min(state.deadline,now()+budget,configuration?state.configure_deadline:Infinity,
+      name==='execute'?state.execution_wait?.deadline??Infinity:Infinity);
     requireValue(now()<deadline,'node.apply configuration deadline elapsed');
     const pending={phase:name,receipt_id:operation.id+':'+name,deadline,
       effect_possible:mutation,before_node:structuredClone(state.node)};
@@ -159,13 +160,23 @@ export async function applyNode({request, operation, handlers, drivers, record,
     let value;
     try{value=await call({...context(),receipt_id:pending.receipt_id,deadline:pending.deadline});}
     catch(error){
-      // Only the trusted target driver can prove its graph preflight performed
-      // no gesture. A transport exception alone never clears uncertainty.
+      // Explicit trusted-driver proof is required: a transport exception alone
+      // never clears uncertainty, even in a nominally non-mutating phase.
       const refusal=error.nodePhaseRefusal;
-      if(name==='target' && refusal?.phase===name && refusal.status==='NOT_APPLIED'
+      if((name==='target'||name==='source'&&state.phases.length===0&&!previousEffect)
+        && refusal?.phase===name && refusal.status==='NOT_APPLIED'
         && refusal.effect_possible===false && refusal.cleanup_complete===true){
         await acknowledge({phase:'node_phase_refused',signature,receipt:{...pending,...refusal}});
         state.effect_possible=previousEffect;state.pending=null;state.cleanup_complete=true;
+      }
+      const pause=error.nodeExecutionWaitPause;
+      if(name==='execute'&&signal?.aborted&&!stopSignal?.aborted
+        &&pause?.read_only===true&&pause.cleanup_complete===true
+        &&pause.execution_id===state.execution.execution_id&&state.execution.status==='pending'
+        &&operation.cleanupConfirmed===true&&!operation.transportUncertain) {
+        const checkpoint={...pending,...pause};
+        await acknowledge({phase:'node_phase_paused',signature,receipt:checkpoint});
+        state.execution_wait=checkpoint;state.pending=null;state.cleanup_complete=true;
       }
       throw error;
     }
@@ -180,6 +191,7 @@ export async function applyNode({request, operation, handlers, drivers, record,
     const receipt={phase:name,receipt_id:pending.receipt_id,status:'verified',effect_possible:value.effect_possible===true,value:structuredClone(value)};
     await acknowledge({phase:'node_phase_completed',signature,receipt});
     state.phases.push(receipt);state.pending=null;state.cleanup_complete=true;
+    if(name==='execute')delete state.execution_wait;
     requireValue(now()<pending.deadline,'node.apply phase deadline elapsed: '+name);
     return value;
   };

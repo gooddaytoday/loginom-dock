@@ -62,3 +62,26 @@ test('finish continuation requires unchanged live document, process incarnation 
   const f=structuredClone(base);mutate(f);assert.equal(verifyFinishedImportContinuation(f),false,String(mutate));
  }
 });
+
+test('a paused execution permits progress changes but binds the same launch and ports',async()=>{
+ const {finishedImportSurface,verifyWaitingExecutionContinuation:verify}=await import('../lib/node-import-continuation.mjs');
+ const node={document_id:'doc',workflow_id:'flow',node_id:'node'},context={...node,verified:true,surface:'graph',locked:true};
+ const surface={dom_epoch:{document:'dom',revision:21},prepared_node_context:context,wizard:{status:'absent'},
+  node_processes:{verified:true,inventory_complete:true,show_completed:true,node_context:context,root_id:'root',processes:[{
+   parent_id:null,process_id:'1',record_id:'record',state:'running',error:false,progress_state:{verified:true,state:'running',terminal:false}}]},
+  node_outputs:{verified:true,node_context:context,ports:[{index:0,port_guid:'port',active:false}]}};
+ const finish={verified:true,cleanup_complete:true,mode:'execute',execution_started:true,settings_applied:true,execution_id:'execution',
+  execution_group:{node,execution_id:'execution',root_id:'root',group_id:'1',group_record_id:'record'},continuation_surface:finishedImportSurface(surface)};
+ const checkpoint={phase:'execute',read_only:true,cleanup_complete:true,execution_id:'execution'};
+ const base={node,finish,surface,checkpoint};assert.equal(verify(base),true);
+ const completed=structuredClone(base);completed.surface.dom_epoch.revision++;
+ completed.surface.node_processes.processes[0].state='completed';completed.surface.node_outputs.ports[0].active=true;
+ completed.surface.prepared_node_context.locked=false;assert.equal(verify(completed),true);
+ for(const mutate of [f=>f.surface.dom_epoch.document='new',f=>f.surface.prepared_node_context.node_id='foreign',
+  f=>f.surface.node_processes.root_id='new',f=>f.surface.node_processes.processes[0].record_id='reused',
+  f=>f.surface.node_processes.processes.push({parent_id:null,process_id:'2',record_id:'second'}),f=>f.surface.node_outputs.ports[0].port_guid='changed',
+  f=>f.surface.node_outputs.ports[0].active=false,f=>f.surface.wizard.status='observed',f=>f.checkpoint.execution_id='other',
+  f=>f.checkpoint.read_only=false,f=>f.surface.node_processes.processes[0].error=true]) {
+  const f=structuredClone(completed);mutate(f);assert.equal(verify(f),false,String(mutate));
+ }
+});

@@ -87,3 +87,24 @@ for(const fault of ['ambiguous_native_owner','missing_native_owner','lost_termin
   await assert.rejects(f.driver.stop());
   assert.equal(f.cancelCalls,['ambiguous_native_owner','missing_native_owner'].includes(fault)?0:1);
  });
+
+test('only a local abort inside the read wait supplies a continuation proof',async()=>{
+ const f=await fixture(),controller=new AbortController();
+ f.channel.observe=async()=>{controller.abort(Error('local cancel'));throw controller.signal.reason;};
+ await assert.rejects(f.driver.waitCompleted({signal:controller.signal}),e=>{
+  assert.deepEqual(e.nodeExecutionWaitPause,{execution_id:'doc:root:1',read_only:true,cleanup_complete:true});return true;
+ });assert.deepEqual(f.actions,[]);
+});
+test('a concurrent read failure is not a confirmed local cancellation',async()=>{
+ const f=await fixture(),controller=new AbortController();
+ f.channel.observe=async()=>{controller.abort(Error('local cancel'));throw Error('browser disconnected');};
+ await assert.rejects(f.driver.waitCompleted({signal:controller.signal}),e=>{assert.equal(e.nodeExecutionWaitPause,undefined);return /disconnected/.test(e.message);});
+});
+test('an abort after the read loop cannot authorize replaying ownership gestures',async()=>{
+ const f=await fixture(),controller=new AbortController();
+ f.channel.observe=async options=>{
+  if(options.condition==='new node execution completed')return {node_processes:{processes:[{process_id:'1',record_id:'group',expanded:true}]}};
+  controller.abort(Error('cancel after completion read'));throw controller.signal.reason;
+ };
+ await assert.rejects(f.driver.waitCompleted({signal:controller.signal}),e=>{assert.equal(e.nodeExecutionWaitPause,undefined);return e===controller.signal.reason;});
+});

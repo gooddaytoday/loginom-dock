@@ -307,3 +307,72 @@ test('background node operation identity includes separate wizard placement',asy
  const f=fixture();f.runtime.startNodeApply(request());await f.runtime.waitNodeApply('apply',{timeoutMs:1000});
  f.handler.output_wizard='separate';assert.throws(()=>f.runtime.startNodeApply(request()),/different parameters/);
 });
+
+for(const mismatch of ['missing_upload','digest'])test('real source preflight '+mismatch+' releases the session before any browser call',async()=>{
+ const {verifyTextImportSource,validateTextImportNodeParameters}=await import('../lib/text-import-node.mjs');
+ const r=request();r.parameters={source:{artifact_id:'a',upload_operation_id:'upload',bytes:12,sha256:'a'.repeat(64)},settings:{
+  source:{source_path:'/user/data.csv',encoding:'UTF-8',rows_to_skip:0,first_line_as_title:true},
+  format:{delimiter:';',text_qualifier:'"',null_marker:'NULL',decimal_separator:'.'},
+  columns:[{name:'A',label:'A',type:'integer',data_kind:'Дискретный',used:true}]}};
+ const artifact={artifact_id:'a',bytes:12,sha256:'a'.repeat(64)},proof={...artifact,status:'SUCCEEDED',verification_id:'verify',bytes_verified:true,upload_completion_verified:true,destination:'/user/data.csv'};
+ const uploads=[{operation_id:'upload',artifact,outcome:{status:'SUCCEEDED',cleanup_complete:true,operation_id:'upload',action_key:'artifact.upload',output:{...proof,server_copy_verification:proof}}}];
+ const f=fixture();f.handler.validate=validateTextImportNodeParameters;
+ f.drivers.verifySource=async p=>{f.calls.push('source');return verifyTextImportSource(p,uploads);};
+ const bad=structuredClone(r);bad.operation_id='bad-source';
+ if(mismatch==='missing_upload')bad.parameters.source.upload_operation_id='typo';else bad.parameters.source.sha256='b'.repeat(64);
+ const failed=await f.runtime.runNodeApply(bad);
+ assert.equal(failed.status,'NOT_APPLIED');assert.equal(failed.effect_possible,false);assert.equal(failed.cleanup_complete,true);assert.equal(failed.output.pending_phase,null);
+ assert.deepEqual(f.calls,['source']);f.runtime.assertPreparationAllowed();
+ assert.ok(f.events.some(e=>e.phase==='node_phase_refused'&&e.receipt.phase==='source'));
+ await f.runtime.runNodeApply(bad);assert.deepEqual(f.calls,['source']);
+ assert.equal((await f.runtime.runNodeApply(r)).status,'SUCCEEDED');assert.equal(f.calls.filter(c=>c==='create').length,1);
+});
+
+for(const ending of ['completed','cancelled'])test('cancel during execute wait resumes the same execution and can finish '+ending,async()=>{
+ let operation,waitEntered,attempt=0;const f=fixture({wrapDrivers:(ctx,drivers)=>{operation=ctx.operation;return drivers;}});
+ const r={...request(),finish:'execute'};
+ f.drivers.finish=async()=>{f.calls.push('finish');operation.cleanupConfirmed=true;return {verified:true,cleanup_complete:true,mode:'execute',execution_id:'doc:root:1'};};
+ f.drivers.waitExecution=async ctx=>{
+  attempt++;waitEntered=true;f.calls.push('wait');
+  if(attempt===1){await new Promise(resolve=>ctx.signal.addEventListener('abort',resolve,{once:true}));const error=new Error('read wait cancelled');
+   error.nodeExecutionWaitPause={execution_id:ctx.execution.execution_id,read_only:true,cleanup_complete:true};throw error;}
+  if(ending==='cancelled')await new Promise(resolve=>ctx.stopSignal.addEventListener('abort',resolve,{once:true}));
+  return {verified:true,cleanup_complete:true,status:ending,execution_id:ctx.execution.execution_id,...(ending==='cancelled'?{owner_verified:true,stop_verified:true}:{})};
+ };
+ f.drivers.readOutput=async(read,ctx)=>({verified:true,cleanup_complete:true,status:'complete',ports:[],evidence_ref:'read',execution_id:ctx.execution.execution_id});
+ f.runtime.startNodeApply(r);
+ for(let i=0;!waitEntered&&i<100;i++)await new Promise(resolve=>setImmediate(resolve));assert.ok(waitEntered);
+ f.runtime.cancelNodeApply('apply');const paused=await f.runtime.waitNodeApply('apply',{timeoutMs:1000});assertJob(paused);
+ assert.equal(paused.outcome.status,'AMBIGUOUS');assert.equal(paused.outcome.cleanup_complete,true);assert.equal(paused.progress.pending_phase,null);
+ assert.equal(paused.progress.execution.execution_id,'doc:root:1');assert.ok(operation.nodeApply.execution_wait);
+ const originalDeadline=operation.nodeApply.execution_wait.deadline;
+ await assert.rejects(f.runtime.runNodeApply({...r,operation_id:'other'}),/remains pending/);
+ const count=f.calls.length;const inspected=await f.runtime.inspect({operationId:'apply'});assert.equal(inspected.output.cleanup_confirmed,true);assert.equal(f.calls.length,count);
+ waitEntered=false;assert.equal(f.runtime.startNodeApply(r,{resume:true}).attempt,2);
+ if(ending==='cancelled'){
+  for(let i=0;!waitEntered&&i<100;i++)await new Promise(resolve=>setImmediate(resolve));assert.ok(waitEntered);
+  f.runtime.stopNodeApply('apply');
+ }
+ const done=await f.runtime.waitNodeApply('apply',{timeoutMs:1000});assertJob(done);
+ assert.equal(done.outcome.output.execution.status,ending);assert.equal(done.outcome.cleanup_complete,true);
+ assert.equal(f.calls.filter(c=>c==='create').length,1);assert.equal(f.calls.filter(c=>c==='configure').length,1);assert.equal(f.calls.filter(c=>c==='finish').length,1);
+ assert.equal(operation.nodeApply.execution_wait,undefined);
+ const waits=f.events.filter(e=>e.phase==='node_phase_prepared'&&e.receipt.phase==='execute');
+ assert.equal(waits.length,2);assert.ok(waits[1].receipt.deadline<=originalDeadline);f.runtime.assertPreparationAllowed();
+});
+
+for(const fault of ['unknown_transport','cleanup_missing','foreign_execution','journal_failure','untyped_abort'])test('execute wait refuses unsafe pause: '+fault,async()=>{
+ let operation,entered;const f=fixture({wrapDrivers:(ctx,drivers)=>{operation=ctx.operation;return drivers;}}),r={...request(),finish:'execute'};
+ f.drivers.finish=async()=>{operation.cleanupConfirmed=fault!=='cleanup_missing';return {verified:true,cleanup_complete:true,mode:'execute',execution_id:'doc:root:1'};};
+ f.drivers.waitExecution=async ctx=>{
+  entered=true;await new Promise(resolve=>ctx.signal.addEventListener('abort',resolve,{once:true}));
+  if(fault==='unknown_transport')operation.transportUncertain=true;
+  const error=new Error('interrupted');if(fault!=='untyped_abort')error.nodeExecutionWaitPause={read_only:true,cleanup_complete:true,execution_id:fault==='foreign_execution'?'other':'doc:root:1'};
+  throw error;
+ };
+ if(fault==='journal_failure')f.failRecord('node_phase_paused');
+ f.runtime.startNodeApply(r);for(let i=0;!entered&&i<100;i++)await new Promise(resolve=>setImmediate(resolve));assert.ok(entered);
+ f.runtime.cancelNodeApply('apply');const done=await f.runtime.waitNodeApply('apply',{timeoutMs:1000});
+ assert.equal(done.outcome.status,'AMBIGUOUS');assert.equal(done.outcome.cleanup_complete,false);assert.equal(done.progress.pending_phase,'execute');
+ await assert.rejects(f.runtime.runNodeApply(r,{resume:true}),/unresolved phase/);
+});

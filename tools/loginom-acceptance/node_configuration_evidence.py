@@ -3,6 +3,8 @@
 This proves the projection only. Source identity, requested semantics, execution
 and saved-package persistence require their existing independent auditors.
 """
+from import_limits import import_operation_step_budget
+
 from node_procedure_evidence import verify_internal_sequence
 
 
@@ -11,7 +13,7 @@ def verify_configuration_readback(events, request):
     try:
         operation = request['operation_id']
         rows = [e for e in events if e.get('operation_id') == operation]
-        sequence = verify_internal_sequence(events, operation, max_steps=2048)
+        sequence = verify_internal_sequence(events, operation, max_steps=import_operation_step_budget(events, operation))
         if sequence['failures']:
             raise ValueError('readback_internal_sequence')
         checkpoints = [e['result'] for e in rows if e.get('phase') == 'node_checkpoint']

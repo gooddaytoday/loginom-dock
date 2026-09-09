@@ -223,16 +223,19 @@ async function configureImport(channel, parameters, owner,fieldsOnly,patch) {
     const s = await read('text_import_format'), f = field(s, name);
     if (f.value !== text) await act(s, { verb: 'set_wizard_field', ref: f.input_ref, text });
   }
+  let parsedColumns;
   if(patch) {
     const after=(await read('text_import_format')).wizard.settings;
     requireValue(Object.keys(formatBaseline.fields).filter(k=>!Object.hasOwn(parameters.format,k))
       .every(k=>after.fields[k]?.value===formatBaseline.fields[k].value),'Unrequested format parameter changed');
     const parsedSchema=await readImportDefinitionPages(channel,{ready:state=>same(identity(state.wizard?.owner_context),identity(currentOwner))});
+    parsedColumns=parsedSchema.fields;
     parameters.columns=reconcileImportColumnPatch(columnBaseline.fields,parsedSchema.fields,parameters.columns,{schemaChangeRequested:
       Object.keys(parameters.source).length>0||Object.keys(parameters.format).length>0});
   } else if(fieldsOnly) {
     const parsed=await readImportDefinitionPages(channel,{expectedCount:parameters.columns.length,
       ready:state=>same(identity(state.wizard?.owner_context),identity(currentOwner))});
+    parsedColumns=parsed.fields;
     parameters.columns=bindImportSourceColumns(parameters.columns,parsed.fields);
   }
   const columns = s => {
@@ -248,8 +251,28 @@ async function configureImport(channel, parameters, owner,fieldsOnly,patch) {
       && c.fields.every((f, i) => f.status === 'observed' && f.index === i), 'Configured columns are not completely visible');
     return c.fields;
   };
+  const scrollField=async(s,c,scroller,delta)=>{
+    const describe=state=>{
+      const field=state.wizard?.import_columns?.fields?.find(f=>f.index===c.index);
+      const owner=one(state.ui.elements.filter(e=>e.tid===scroller.tid&&e.allowed_actions.includes('scroll_horizontal')),
+        'Import field scroll owner changed');
+      requireValue(state.wizard?.stage==='text_import_format'&&field?.status==='observed'
+        &&owner.horizontal_scroll?.ref===owner.ref,'Import field scroll binding is incomplete');
+      return {owner:identity(state.wizard.owner_context),field:Object.fromEntries(['index','name','label','type','data_kind','used'].map(k=>[k,field[k]])),
+        page:state.wizard.import_columns.page,
+        scroll:{tid:owner.tid,left:owner.horizontal_scroll.left,max_left:owner.horizontal_scroll.max_left}};
+    };
+    const expected=describe(s);
+    await channel.perform({condition:'reveal bound import field '+c.index,initialObservation:s,
+      ready:state=>same(describe(state),expected),identity:describe,
+      resolve:state=>({verb:'scroll_horizontal',ref:one(state.ui.elements.filter(e=>e.tid===scroller.tid),'Unique import scroller required').ref,delta_x:delta})});
+  };
   for (let i = 0; i < parameters.columns.length; i++) {
     columnOffset=fieldsOnly?Math.floor(i/8)*8:0;
+    // A complete initial page sweep already read these values. A no-op column
+    // needs no five extra browser reads. Every edit still starts with fresh refs,
+    // and the final complete sweep verifies all fields, including skipped ones.
+    if(fieldsOnly&&['name','label','type','data_kind','used'].every(k=>parsedColumns[i][k]===parameters.columns[i][k]))continue;
     for (const property of ['type', 'data_kind']) {
       const definitionReady=state=>fieldsOnly?state.wizard.import_columns?.page?.status==='complete_definition_page'
         :state.wizard.import_columns?.definition_coverage?.status==='complete_configured_columns'
@@ -270,7 +293,7 @@ async function configureImport(channel, parameters, owner,fieldsOnly,patch) {
             &&e.allowed_actions.includes('scroll_horizontal')),'Import field has no observed horizontal scroller');
           requireValue(target?.bounding_box,'Import field position is unobserved');
           const direction=target.bounding_box.x<scroller.bounding_box.x?-1:1;
-          await act(s,{verb:'scroll_horizontal',ref:scroller.ref,delta_x:direction*1000});
+          await scrollField(s,c,scroller,direction*1000);
           s=await read('text_import_format','requested column revealed',definitionReady);c=columns(s).find(f=>f.index===i);
           requireValue(c.name===wanted.name&&c.label===wanted.label&&c.used===wanted.used,'Import field changed while scrolling');
         }
@@ -330,7 +353,7 @@ async function configureImport(channel, parameters, owner,fieldsOnly,patch) {
         const scroller=one(s.ui.elements.filter(e=>e.tid===s.wizard.root_tid+';ImportTextFileParamsWizard;ColumnDefsTuning;grdData;grd-1;tbl'
           &&e.allowed_actions.includes('scroll_horizontal')),'Import field has no observed horizontal scroller');
         requireValue(target?.bounding_box,'Import metadata cell position is unobserved');
-        await act(s,{verb:'scroll_horizontal',ref:scroller.ref,delta_x:(target.bounding_box.x<scroller.bounding_box.x?-1:1)*1000});
+        await scrollField(s,c,scroller,(target.bounding_box.x<scroller.bounding_box.x?-1:1)*1000);
         s=await read('text_import_format','metadata cell revealed',ready);c=columns(s).find(f=>f.index===i);
         requireValue(Object.keys(before).every(k=>c[k]===before[k]),'Import metadata changed while scrolling');
       }

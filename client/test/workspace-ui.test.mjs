@@ -64,8 +64,12 @@ class Document {
   }
   all() { return [this.documentElement, ...this.documentElement.descendants()]; }
   querySelectorAll(selector) { return this.all().filter(element => element.matches(selector)); }
-  createTreeWalker(element, kind) {
-    if (kind === 1) { const items = element.descendants(); let index=0; return { nextNode: () => items[index++] ?? null }; }
+  createTreeWalker(element, kind, filter) {
+    if (kind === 1) {
+      const items=[];
+      const visit=parent=>{for(const child of parent.children){const accepted=filter?.acceptNode(child)??1;if(accepted===2)continue;if(accepted===1)items.push(child);visit(child);}};
+      visit(element);let index=0;return {nextNode:()=>items[index++]??null};
+    }
     const text = [element, ...element.descendants()].filter(item => item.ownText).map(item => ({ parentElement: item, textContent: item.ownText }));
     let index = 0; return { nextNode: () => text[index++] ?? null };
   }
@@ -4428,4 +4432,26 @@ test('graph launch remains observable when inspection is scoped to the graph con
  const root=roots.output.ui.elements.find(e=>e.tid==='MF;TF-1;ModelForm;cmpDiagram');assert.ok(root);
  const r=await f.execute({mode:'observe',root_ref:root.ref});assert.equal(r.status,'SUCCEEDED');
  const e=r.output.ui.elements.find(e=>e.tid===f.button.attrs['data-tid']);assert.ok(e);assert.deepEqual(clone(e.allowed_actions),['execute_graph_node']);
+});
+
+test('prepared 1000-column import keeps page refs and rejects hidden or sensitive offscreen definitions',async()=>{
+ const page=new Page({clock:fixtureClock().Date}),c=importCoverageFixture(page,1000);
+ const binding={node:{node_id:'node'},workflow_ref:{prefix:'MF;TF-1',navigation_path:[]}};
+ const read=async offset=>clone(await vm.runInContext('('+workspaceUiCapability.toString()+')',page.context)(page,
+  {expected_build:build,expected_origin:origin,prepared_node_context:binding,mode:'observe',discover_roots:true,import_column_page:{offset,limit:8}},
+  async()=>({verified:true,surface:'wizard',node_id:'node'})));
+ const first=await read(0),last=await read(992);
+ assert.equal(first.status,'SUCCEEDED');assert.equal(last.status,'SUCCEEDED');
+ assert.equal(first.output.wizard.import_columns.page.total_columns,1000);assert.equal(last.output.wizard.import_columns.page.status,'complete_definition_page');
+ assert.equal(first.output.wizard.import_columns.page.schema_id,last.output.wizard.import_columns.page.schema_id);
+ assert.deepEqual(last.output.wizard.import_columns.fields.map(f=>f.index),[992,993,994,995,996,997,998,999]);
+ assert.ok(last.output.scan.visited_elements<6000);
+ const root=last.output.wizard.root_ref;
+ const sameRoot=await vm.runInContext('('+workspaceUiCapability.toString()+')',page.context)(page,
+  {expected_build:build,expected_origin:origin,prepared_node_context:binding,mode:'observe',root_ref:root,import_column_page:{offset:992,limit:8}},
+  async()=>({verified:true,surface:'wizard',node_id:'node'}));
+ assert.equal(sameRoot.status,'SUCCEEDED','full definition identities must not evict the actionable root');
+ c.cols[999].cells[1].style.display='none';assert.equal((await read(0)).output.wizard.import_columns.page.status,'unverified');
+ c.cols[999].cells[1].style.display='block';c.cols[999].cells[1].attrs['aria-label']='password';
+ assert.equal((await read(0)).output.wizard.import_columns.page.status,'unverified');
 });
