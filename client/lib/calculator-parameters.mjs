@@ -31,6 +31,8 @@ export function validateCalculatorParameters(parameters,mode,request) {
   requireValue(request.inputs.length<=1&&request.inputs.every(i=>i.input===0),'Calculator accepts one table input');
   requireValue(request.read.ports.every(p=>p===0),'Calculator has one table output');
   requireValue(request.mappings.length<=2&&request.mappings.every(m=>m.port===0),'Calculator has one input and output mapping');
+  requireValue(request.finish!=='close'||request.mappings.every(m=>m.direction!=='input'),
+    'Close cannot combine a calculator draft with input mappings: Loginom commits the input in a separate wizard; use Done/Execute or omit input mappings');
 }
 
 // Resolve a patch against observed identities, preserving every unrequested
@@ -71,4 +73,30 @@ export function resolveCalculatorPatch(parameters,observed,inputFields,{newNode=
     resolved.sort((a,b)=>parameters.order.indexOf(a.name)-parameters.order.indexOf(b.name));
   }
   return {baseline,changes,expressions:resolved.map((e,index)=>({...e,index})),order:resolved.map(e=>e.name)};
+}
+
+// Loginom checks names on each Apply, not just the final inventory. Free a
+// dependency first; break cycles with a reserved temporary name on the same
+// record. Formulas and options are preserved during that temporary edit.
+export function planCalculatorEdits(plan,inputFields) {
+  const pending=structuredClone(plan.changes),current=structuredClone(plan.baseline),steps=[];
+  const reserved=new Set([...current,...plan.expressions,...inputFields].map(e=>e.name.toLowerCase()));
+  const occupied=change=>current.some(e=>e.record_id!==change.before?.record_id&&e.name.toLowerCase()===change.after.name.toLowerCase());
+  let serial=0;
+  while(pending.length) {
+    const free=pending.findIndex(change=>!occupied(change));
+    if(free>=0) {
+      const [change]=pending.splice(free,1);steps.push(change);
+      const index=current.findIndex(e=>e.record_id===change.before?.record_id);
+      if(change.before)current[index]=change.after;else current.push({...change.after,record_id:'planned-new-'+serial++});
+      continue;
+    }
+    const change=pending.find(c=>c.before&&c.before.name!==c.after.name);
+    requireValue(change,'Calculator rename dependencies cannot be resolved');
+    let temporary;do{temporary='DockExprTemp'+serial++;}while(reserved.has(temporary.toLowerCase()));
+    reserved.add(temporary.toLowerCase());
+    const after={...change.before,name:temporary};steps.push({before:change.before,after});
+    current[current.findIndex(e=>e.record_id===after.record_id)]=after;change.before=after;
+  }
+  return steps;
 }

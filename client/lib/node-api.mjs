@@ -30,7 +30,7 @@ export const nodeApplyInputSchema=object({
   settings:object({source:sourceSettings,format,columns:array(column,1000,1)},[]),
   expressions:array(calculatorExpressionSchema,128),order:array(text(128),128,1)},[]),
  mappings:array(object({direction:choice('input','output'),port:integer(0,0),autosync:boolean,
-  fields:array(object({source:object({kind:choice('configured_field'),name:text(120)}),name:text(120),label:text(120),excluded:boolean},['source']),1000,1)},['direction','port']),2),
+  fields:array(object({source:object({kind:choice('configured_field'),name:text(128)}),name:text(128),label:text(120),excluded:boolean},['source']),1000,1)},['direction','port']),2),
  finish:choice('done','execute','close'),
  read:object({ports:array(integer(0,0),1),sample_rows:integer(0,10),require_exact_numbers:boolean}),
  budgets:object({configure_ms:integer(1,1800000),execute_ms:integer(1,1800000),total_ms:integer(1,1800000)}),
@@ -43,7 +43,7 @@ const tool=(name,description,inputSchema,readOnlyHint=false)=>({name,description
  outputSchema:name.startsWith('dock_node_')?nodeJobResultSchema:deliveryJobResultSchema,
  annotations:{readOnlyHint,destructiveHint:!readOnlyHint,openWorldHint:false}});
 export const nodeApiTools=Object.freeze([
- tool('dock_node_apply','Candidate node operation: text import or expression Calculator when its handler is installed. Import requires a byte-verified source and settings. Calculator accepts ordered expressions with new/existing targets and preserves unrequested settings; optional order lists every resulting expression name. New expressions require name, label, type, formula, replace. Done saves without executing; Close discards the draft; Execute reads output 0. Poll the SAME operation_id; timeout never restarts work. Save the package separately.',nodeApplyInputSchema),
+ tool('dock_node_apply','Candidate node operation: text import or expression Calculator when its handler is installed. Import requires a byte-verified source and settings. Calculator accepts ordered expressions with new/existing targets and preserves unrequested settings; optional order lists every resulting expression name. New expressions require name, label, type, formula, replace. Done saves without executing; Close discards the draft and rejects Calculator input mappings, which require a separate committed wizard; Execute reads output 0. Poll the SAME operation_id; timeout never restarts work. Save the package separately.',nodeApplyInputSchema),
  tool('dock_node_resume','Candidate explicit continuation of the SAME known node operation with identical original parameters. Retains accepted phases; unresolved effects or lost document refuse continuation. Does not reconstruct a lost session.',nodeApplyInputSchema),
  tool('dock_node_status','Read local state and accepted progress without browser access or re-execution.',operation,true),
  tool('dock_node_wait','Wait up to timeout_ms for the SAME worker. Timeout returns running; never infer termination or start a replacement.',object({operation_id:id,timeout_ms:integer(0,60000)},['operation_id']),true),

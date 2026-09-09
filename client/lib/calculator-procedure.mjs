@@ -1,4 +1,4 @@
-import {resolveCalculatorPatch} from './calculator-parameters.mjs';
+import {resolveCalculatorPatch,planCalculatorEdits} from './calculator-parameters.mjs';
 
 const requireValue=(ok,message)=>{if(!ok)throw Error(message);};
 const types={integer:'Целый',real:'Вещественный',string:'Строковый',boolean:'Логический',datetime:'Дата/Время'};
@@ -17,13 +17,35 @@ export async function configureCalculator(channel,parameters,{newNode=false}={})
  const identities=new Map(baseline.node_calculator.expressions.map(e=>[e.name,e.record_id]));
  const row=(s,id)=>s.node_calculator?.expressions.find(e=>e.record_id===id);
  const select=async id=>{
-  let s=await observe('select calculator expression by retained record');const e=row(s,id);requireValue(e,'Expression identity disappeared');
-  if(e.selected)return s;
+  let s=await observe('select calculator expression by retained record');
+  // A complete native store does not imply that every rendered row can be
+  // clicked. Scroll through visible rows of this grid with the existing guard.
+  for(let attempt=0;attempt<=128;attempt++) {
+   const e=row(s,id);requireValue(e,'Expression identity disappeared');
+   const prefix=s.wizard.root_tid+';CalcDataWizard;colExpressionName_';
+   const target=s.ui.elements.find(c=>c.tid===prefix+e.name&&c.allowed_actions.includes('click'));
+   if(target?.interaction?.state==='point_observed')break;
+   const visible=s.ui.elements.filter(c=>c.tid?.startsWith(prefix)&&c.interaction?.state==='point_observed'
+    &&c.allowed_actions.includes('scroll')&&c.scroll).map(c=>({control:c,
+     expression:s.node_calculator.expressions.find(r=>prefix+r.name===c.tid)})).filter(c=>c.expression);
+   requireValue(attempt<128&&visible.length>0&&new Set(visible.map(c=>c.control.scroll.ref)).size===1,'Calculator expression cannot be revealed in its grid');
+   visible.sort((a,b)=>a.expression.index-b.expression.index);
+   const direction=e.index<visible[0].expression.index?-1:e.index>visible.at(-1).expression.index?1:0;
+   requireValue(direction!==0,'Calculator expression is obscured within the visible rows');
+   const anchor=visible[Math.floor(visible.length/2)].control,previous=anchor.scroll;
+   const distance=Math.max(24,Math.min(1000,Math.floor(visible.at(-1).control.bounding_box.y-visible[0].control.bounding_box.y)));
+   await channel.perform({condition:'reveal retained calculator expression',initialObservation:s,ready,
+    identity:()=>({record_id:id,scroll_owner:previous.ref}),resolve:()=>({verb:'scroll',ref:anchor.ref,delta_y:direction*distance})});
+   s=await observe('calculator expression grid scrolled');
+   const next=s.ui.elements.find(c=>c.tid?.startsWith(prefix)&&c.scroll?.ref===previous.ref)?.scroll;
+   requireValue(next&&direction*(next.top-previous.top)>0,'Calculator expression scroll made no progress');
+  }
+  if(row(s,id).selected)return s;
   await channel.perform({condition:'select retained expression',initialObservation:s,ready:s=>ready(s)&&!!row(s,id),identity:()=>({record_id:id}),
    resolve:s=>({verb:'click',ref:control(s,';CalcDataWizard;colExpressionName_'+row(s,id).name,'click').ref})});
   return observe('selected calculator expression');
  };
- for(const change of plan.changes) {
+ for(const change of planCalculatorEdits(plan,baseline.node_calculator.input_fields)) {
   let s,recordId=change.before?.record_id,addedTo=null;
   if(recordId)s=await select(recordId);
   else {
@@ -85,8 +107,10 @@ export async function configureCalculator(channel,parameters,{newNode=false}={})
  }
  // Move existing records with Loginom controls. Never delete/recreate expressions
  // to obtain an order: dependent references and unrequested options survive.
- for(const [index,name] of plan.order.entries()) {
-  const id=identities.get(name);let s=await select(id);
+ for(const [index,name] of (parameters.order===undefined?[]:plan.order).entries()) {
+  const id=identities.get(name);let s=await observe('calculator expression position');
+  if(row(s,id)?.index===index)continue;
+  s=await select(id);
   while(row(s,id).index>index) {
    const before=row(s,id).index;
    await channel.perform({condition:'move calculator expression up one row',initialObservation:s,ready,

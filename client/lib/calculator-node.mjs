@@ -25,7 +25,7 @@ export function calculatorOutputSources(configuration) {
 }
 
 export function createCalculatorNodeSupport({targetOrigin,targetBuild}) {
- const nodeApplyHandlers=new Map([['transform.calculator',{revision:'calculator-v3-internal-1',modes:['expression'],output_wizard:'separate',
+ const nodeApplyHandlers=new Map([['transform.calculator',{revision:'calculator-v3-internal-2',modes:['expression'],output_wizard:'separate',
   configurationReadback:calculatorConfigurationReadback,parameter_schema:calculatorParametersSchema,
   validate:(p,m,r)=>{validateCalculatorParameters(p,m,r);
    requireValue(r.mappings.every(x=>(x.fields??[]).every(f=>f.source?.kind==='configured_field'&&(x.direction==='output'||f.excluded!==true))),
@@ -58,6 +58,9 @@ export function createCalculatorNodeSupport({targetOrigin,targetBuild}) {
    },
    async configureCalculator(ctx,p) {
     enter(ctx);const changed=await configureCalculator(channel,p,{newNode:operation.nodeApply.request.target.kind==='new'});configured=changed.configuration;
+    // Close discards this editor draft directly. Next can validate a formula or
+    // synchronize a derived port, neither of which is needed for cancellation.
+    if(operation.nodeApply.request.finish==='close')return verified({...changed});
     const s=await channel.observe({condition:'calculator syntax validation available',readCalculator:true,ready:s=>s.wizard?.stage==='calculator'&&s.node_calculator?.verified===true});
     await channel.perform({condition:'validate calculator expressions and advance',initialObservation:s,ready:s=>s.wizard?.stage==='calculator',identity:()=>ctx.node,
      resolve:s=>({verb:'wizard_step',ref:control(s,'btnNext','wizard_step').ref,expected_stage:['output_mapping','done']})});
@@ -89,6 +92,12 @@ export function createCalculatorNodeSupport({targetOrigin,targetBuild}) {
    },
    async mapPorts(mappings,ctx) {
     if(ctx.receipt_id===operation.id+':input_mapping'){
+     // Even an unchanged input wizard's Done may synchronize/reorder fields.
+     // Cancellation must never open and commit that separate settings form.
+     if(operation.nodeApply.request.finish==='close'){
+      requireValue(mappings.length===0,'Close cannot commit input mappings');
+      return verified({not_applicable:true,mappings:[]});
+     }
      enter(ctx);await channel.openInputPort(0);
      const ready=s=>s.wizard?.stage==='input_mapping'&&s.node_mapping?.verified===true;
      let s=await channel.observe({condition:'calculator incoming port schema',readMappings:true,ready});
