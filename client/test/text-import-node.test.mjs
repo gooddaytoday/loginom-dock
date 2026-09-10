@@ -29,6 +29,31 @@ for(const [name,change] of Object.entries({
  submitted_only:u=>delete u.outcome.output.server_copy_verification,unverified:u=>u.outcome.output.server_copy_verification.bytes_verified=false,
  incomplete:u=>u.outcome.output.server_copy_verification.upload_completion_verified=false,
 }))test('source refuses '+name,()=>{const u=uploaded();change(u);assert.throws(()=>verifyTextImportSource(params(),[u]));});
+test('source reference resolves integrity metadata without mutating the request',()=>{
+ const p=params();delete p.source.bytes;delete p.source.sha256;
+ const before=structuredClone(p);
+ validateTextImportNodeParameters(p,'delimited',request());
+ const result=verifyTextImportSource(p,[uploaded()]);
+ assert.equal(result.source.bytes,15);assert.equal(result.source.sha256,'a'.repeat(64));
+ assert.deepEqual(p,before);
+ for(const [key,value] of [['bytes',16],['sha256','b'.repeat(64)]]) {
+  const mismatch=structuredClone(p);mismatch.source[key]=value;
+  assert.throws(()=>verifyTextImportSource(mismatch,[uploaded()]), /do not match/);
+ }
+});
+test('reference cannot bypass missing, duplicate or corrupted upload evidence',()=>{
+ const p=params();delete p.source.bytes;delete p.source.sha256;
+ for(const uploads of [[],[uploaded(),uploaded()]])assert.throws(()=>verifyTextImportSource(p,uploads));
+ for(const mutate of [
+  u=>u.artifact.artifact_id='foreign',u=>u.outcome.status='AMBIGUOUS',
+  u=>u.outcome.cleanup_complete=false,u=>delete u.outcome.output.server_copy_verification,
+  u=>u.outcome.output.server_copy_verification.bytes_verified=false,
+  u=>u.outcome.output.server_copy_verification.upload_completion_verified=false,
+  u=>u.outcome.output.server_copy_verification.sha256='b'.repeat(64),
+  u=>u.outcome.output.bytes=16,u=>delete u.artifact.sha256,
+  u=>{for(const a of [u.artifact,u.outcome.output,u.outcome.output.server_copy_verification])a.sha256='invalid'},
+ ]){const u=uploaded();mutate(u);assert.throws(()=>verifyTextImportSource(p,[u]));}
+});
 test('handler receives only its operation-local trusted drivers',async()=>{
  const support=createTextImportNodeSupport({targetOrigin:'https://example.test',targetBuild:'7.4.2'});
  const h=support.nodeApplyHandlers.get('imports.text'),calls=[];

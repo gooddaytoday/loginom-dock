@@ -26,8 +26,10 @@ executor-режиме. Для `node.add`, `link.create` и `package.save_as` п�
 В `parameters.source.upload_operation_id` копируй точное значение поля
 `upload_operation_id` из успешного результата доставки (также в `outcome`),
 не её корневой `operation_id`. Не конструируй идентификатор самостоятельно.
-`artifact_id` берётся из подготовленного входного артефакта; bytes и sha256 —
-из подтверждённого результата доставки.
+`artifact_id` берётся из подготовленного входного артефакта. В source передавай
+только `artifact_id` и `upload_operation_id`: Dock сам берёт bytes и SHA-256 из
+проверенной доставки. Не переписывай их вручную. Старые явные bytes/sha256
+поддерживаются, но любое несовпадение по-прежнему отклоняется.
 
 Если карточка `transform.calculator` объявляет candidate handler, передавай
 `mode: expression` и `parameters.expressions`. Каждый элемент описывает выражение:

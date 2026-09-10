@@ -53,5 +53,8 @@ test('complete import and existing patch pass the public schema and installed ha
  await dispatchNodeApi(runtime,'dock_node_apply',patch);
  const incomplete=structuredClone(request);delete incomplete.parameters.settings.format;
  await assert.rejects(dispatchNodeApi(runtime,'dock_node_apply',incomplete));
- assert.equal(calls.length,3);
+ const short=structuredClone(request);delete short.parameters.source.bytes;delete short.parameters.source.sha256;
+ await dispatchNodeApi(runtime,'dock_node_apply',short);
+ await dispatchNodeApi(runtime,'dock_node_resume',short);
+ assert.equal(calls.length,5);
 });

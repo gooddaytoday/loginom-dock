@@ -24,10 +24,10 @@ export function validateTextImportNodeParameters(p,mode,request) {
   (existing?validateTextImportPatch:validateTextImportFieldsRequest)(p.settings);
   if(!existing)resolveTextImportEncoding(p.settings.source.encoding);
   const s=p.source;
-  requireValue(s && Object.keys(s).sort().join(',')==='artifact_id,bytes,sha256,upload_operation_id'
+  requireValue(s && Object.keys(s).every(k=>['artifact_id','upload_operation_id','bytes','sha256'].includes(k))
     && ['artifact_id','upload_operation_id'].every(k=>typeof s[k]==='string' && /^[A-Za-z0-9_.:-]{1,128}$/.test(s[k]))
-    && Number.isSafeInteger(s.bytes) && s.bytes>=0 && s.bytes<=16*1024*1024
-    && typeof s.sha256==='string' && /^[a-f0-9]{64}$/.test(s.sha256),'Verified source identity required');
+    && (s.bytes===undefined || Number.isSafeInteger(s.bytes) && s.bytes>=0 && s.bytes<=16*1024*1024)
+    && (s.sha256===undefined || typeof s.sha256==='string' && /^[a-f0-9]{64}$/.test(s.sha256)),'Verified source identity required');
   // Explicit admission boundary for the private Done increment. Both definition
   // readers require complete native schemas, including every offscreen field.
   requireValue(mode==='delimited' && ['done','execute','close'].includes(request.finish) && (request.read.ports.length===0||request.finish==='execute'&&request.read.ports.length===1&&request.read.ports[0]===0)
@@ -42,6 +42,10 @@ export function verifyTextImportSource(parameters,uploads) {
   const s=parameters.source;
   const u=one(uploads.filter(u=>u.operation_id===s.upload_operation_id),'Verified upload operation is missing or ambiguous');
   const o=u.outcome,proof=o?.output?.server_copy_verification;
+  // Resolve integrity metadata from admitted local state, never from model text.
+  const bytes=u.artifact?.bytes,sha256=u.artifact?.sha256;
+  requireValue(Number.isSafeInteger(bytes) && bytes>=0 && bytes<=16*1024*1024
+    && typeof sha256==='string' && /^[a-f0-9]{64}$/.test(sha256), 'Verified artifact metadata is invalid');
   requireValue(o?.status==='SUCCEEDED' && o.cleanup_complete===true && o.operation_id===s.upload_operation_id
     && o.action_key==='artifact.upload' && o.output?.artifact_id===s.artifact_id
     && u.artifact?.artifact_id===s.artifact_id && proof?.status==='SUCCEEDED'
@@ -49,10 +53,11 @@ export function verifyTextImportSource(parameters,uploads) {
     && typeof proof.verification_id==='string' && proof.verification_id.length>0
     && proof.destination===(parameters.settings.source?.source_path??proof.destination)
     && o.output.destination===proof.destination
-    && [u.artifact,o.output,proof].every(a=>a.bytes===s.bytes && a.sha256===s.sha256),
+    && [o.output,proof].every(a=>a.bytes===bytes && a.sha256===sha256)
+    && (s.bytes===undefined || s.bytes===bytes) && (s.sha256===undefined || s.sha256===sha256),
   'Upload bytes, digest, artifact or exact destination do not match the source');
   validateTextImportPatch({source:{source_path:proof.destination}});
-  return verified({source:{...s,destination:proof.destination,verification_id:proof.verification_id}});
+  return verified({source:{...s,bytes,sha256,destination:proof.destination,verification_id:proof.verification_id}});
   } catch(error) {
     // This preflight reads only the host's completed upload receipts. No browser
     // call or source upload can have occurred, even when the supplied ID is wrong.
