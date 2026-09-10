@@ -4458,7 +4458,7 @@ test('prepared 1000-column import keeps page refs and rejects hidden or sensitiv
 });
 
 test('a populated console scans nested cell wrappers without quadratic work',async()=>{
- const page=new Page();page.context.innerWidth=1440;page.context.innerHeight=1000;
+ const page=new Page({clock:fixtureClock().Date});page.context.innerWidth=1440;page.context.innerHeight=1000;
  const panel=page.add('div','ConsoleForm','',{x:0,y:0,width:1400,height:950});
  for(let i=0;i<400;i++){
   const cell=page.add('td',null,'',{x:(i%20)*60,y:Math.floor(i/20)*30,width:60,height:30},panel);
