@@ -38,6 +38,28 @@ class NaturalSaveEvidenceTests(unittest.TestCase):
         self.assertTrue(result['passed'], result)
         self.assertEqual((result['saves'], result['boundaries']), (4, 1))
 
+    def test_user_policy_accepts_one_final_checkpoint_without_reopen(self):
+        events = copy.deepcopy(self.events[:4])
+        events[-1]['outcome']['action_revision'] = '2'
+        result = verify_checkpoint_schedule(events, self.requests, ['/user/dock-p3'], self.revisions, policy='user')
+        self.assertTrue(result['passed'], result)
+        self.assertEqual(result['saves'], 1)
+        self.assertFalse(verify_checkpoint_schedule(self.events, self.requests, ['/user/dock-p3'], self.revisions, policy='user')['passed'])
+        events[-1]['outcome']['output']['reopened'] = True
+        self.assertFalse(verify_checkpoint_schedule(events, self.requests, ['/user/dock-p3'], self.revisions, policy='user')['passed'])
+
+    def test_user_policy_preserves_explicitly_requested_reopening(self):
+        events = copy.deepcopy(self.events[:2] + self.events[-2:])
+        events[-1]['outcome']['action_revision'] = '2'
+        for event in events[2:]:
+            event['parameters']['conflict_policy'] = 'fail'
+            event['checkpoint']['package_identity']['path'] = ''
+            if 'outcome' in event:
+                event['outcome']['trace'] = [t for t in event['outcome']['trace'] if t.get('event') not in ('save_conflict_observed', 'overwrite_confirmed')]
+        result = verify_checkpoint_schedule(events, self.requests, ['/user/dock-p3'], self.revisions, policy='user', reopen_requested=True)
+        self.assertTrue(result['passed'], result)
+        self.assertFalse(verify_checkpoint_schedule(events, self.requests, ['/user/dock-p3'], self.revisions, policy='user')['passed'])
+
     def add_declined_conflict(self):
         pair = copy.deepcopy(self.events[2:4]); path = '/user/dock-p3/existing.lgp'
         for e in pair:

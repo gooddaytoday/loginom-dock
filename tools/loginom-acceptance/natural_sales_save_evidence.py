@@ -18,20 +18,23 @@ def graph_at(requests, results):
     return dict(nodes=sorted(nodes), ports=sorted(ports, key=lambda p: p['node_label']), links=sorted(links))
 
 
-def verify_checkpoint_schedule(events, declarations, roots, revisions):
+def verify_checkpoint_schedule(events, declarations, roots, revisions, *, policy='legacy', reopen_requested=False):
     failures = []
     def need(v, name):
         if not v: raise ValueError(name)
     keys = ('package.save_checkpoint', 'package.save_as')
     try:
+        need(policy in ('legacy', 'user'), 'save_policy')
         need(set(revisions) == set(keys) and all(isinstance(v, str) and v for v in revisions.values()), 'save_revision_contract')
         new = [r for r in declarations if r['target']['kind'] == 'new']
         checkpoints = {e['operation_id']: (i, e) for i, e in enumerate(events) if e.get('phase') == 'node_checkpoint'}
         results = {op: e['result'] for op, (_, e) in checkpoints.items()}
         starts = [(i, e) for i, e in enumerate(events) if e.get('phase') == 'prepared' and e.get('action_key') in keys]
         ends = [(i, e) for i, e in enumerate(events) if e.get('phase') == 'completed' and e.get('action_key') in keys]
-        need(4 <= len(starts) == len(ends) <= 12, 'checkpoint_attempt_count')
-        need([e['action_key'] for _, e in starts] == [keys[0]]*(len(starts)-1)+[keys[1]], 'checkpoint_then_final_reopen')
+        need((4 if policy == 'legacy' else 1) <= len(starts) == len(ends) <= 12, 'checkpoint_attempt_count')
+        expected_keys = ([keys[0]]*(len(starts)-1)+[keys[1]] if policy == 'legacy'
+                         else [keys[1] if reopen_requested else keys[0]]*len(starts))
+        need([e['action_key'] for _, e in starts] == expected_keys, 'requested_save_mode')
         seed = next(r for r in new if r['target']['type'] == 'imports.text')
         seed_event = checkpoints[seed['operation_id']][1]
         identity = lambda e: (e.get('session_id'), e.get('runtime_revision'), e.get('target'))
@@ -49,7 +52,8 @@ def verify_checkpoint_schedule(events, declarations, roots, revisions):
             if parameters['conflict_policy'] == 'replace': need(bool(saved_path) and path == saved_path, 'replace_only_current_owned_package')
             accepted = [r for r in new if checkpoints[r['operation_id']][0] < start_pos]
             expected = graph_at(accepted, results)
-            need(cp['path'] == path and cp['graph'] == expected and cp['package_identity']['path'] == saved_path, 'save_graph_and_prior_path')
+            prior_matches = cp['package_identity']['path'] == saved_path or (policy == 'user' and not saved_path and cp['package_identity']['path'] is None)
+            need(cp['path'] == path and cp['graph'] == expected and prior_matches, 'save_graph_and_prior_path')
             need(cp['workflow_ref'] == {k: seed['workflow_ref'][k] for k in ('tab_tid', 'prefix')}, 'save_workflow')
             need(all(e['operation_id'] == operation and e['action_key'] == key and e['action_revision'] == revisions[key]
                      and e['parameters'] == parameters and e['checkpoint'] == cp and identity(e) == identity(seed_event) for e in (start, end)), 'save_receipt_binding')
@@ -71,6 +75,7 @@ def verify_checkpoint_schedule(events, declarations, roots, revisions):
                 continue
             need(outcome['status'] == 'SUCCEEDED' and outcome['phase'] == 'verified' and outcome['cleanup_complete'] is True
                  and outcome['error'] is None and outcome['operation_id'] == operation and outcome['action_key'] == key
+                 and (policy == 'legacy' or outcome.get('action_revision') == revisions[key])
                  and out['package_ref'] == dict(kind='package', path=path, active_identity=path) and out['reopened'] is reopened, 'save_verified_outcome')
             names = (['save_requested', 'saved_package_closed', 'package_open_command_ready', 'reopened_package_observed', 'postcondition_verified'] if reopened
                      else ['save_requested', 'save_flow_completed', 'open_saved_package_observed', 'postcondition_verified'])
@@ -96,19 +101,20 @@ def verify_checkpoint_schedule(events, declarations, roots, revisions):
             need(not any(t.get('event') == 'conflict_rejected' for t in trace), 'save_conflict_rejected')
             saved_path = path
             persisted.append(((start_pos, start), (end_pos, end)))
-        need(4 <= len(persisted) <= 8, 'checkpoint_count')
+        need(4 <= len(persisted) <= 8 if policy == 'legacy' else len(persisted) == 1, 'checkpoint_count')
         starts = [start for start, _ in persisted]; ends = [end for _, end in persisted]
         used_sources = {s['source']['node_id'] for r in new for s in r['inputs']}
         boundaries = [r for r in new if r['target']['type'] == 'imports.text' or results[r['operation_id']]['node']['node_id'] not in used_sources]
         new_starts = [i for i, e in enumerate(events) if e.get('phase') == 'node_apply_prepared' and e['request']['target']['kind'] == 'new']
-        for r in boundaries:
+        for r in boundaries if policy == 'legacy' else []:
             end_pos = checkpoints[r['operation_id']][0]
             limit = min([i for i in new_starts if i > end_pos]+[starts[-1][0]])
             need(any(end_pos < a < b < limit and s['action_key'] == keys[0] for (a, s), (b, _) in zip(starts, ends)), 'missing_boundary_save:'+r['operation_id'])
         need(starts[-1][0] > max(checkpoints[r['operation_id']][0] for r in new), 'final_after_all_nodes')
-        return dict(passed=True, failures=[], saves=len(starts), boundaries=len(boundaries), package_path=saved_path,
+        return dict(passed=True, failures=[], saves=len(starts), boundaries=len(boundaries) if policy == 'legacy' else 0, package_path=saved_path,
                     declined_conflicts=declined,
-                    scope='journal_bound_import_branch_checkpoints_and_final_reopen')
+                    scope='journal_bound_import_branch_checkpoints_and_final_reopen' if policy == 'legacy'
+                    else 'journal_bound_user_final_save' + ('_with_requested_reopen' if reopen_requested else '_without_reopen'))
     except (KeyError, TypeError, ValueError, IndexError, StopIteration) as error:
         failures.append(str(error))
     return dict(passed=False, failures=failures)

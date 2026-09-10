@@ -1,3 +1,39 @@
+## Локальный пользовательский профиль Hermes — установлен 10 сентября 2026
+
+Согласован [план](../plans/loginom-dock/09-hermes-user-diagnostics.md).
+Диспетчер Hermes выбирает `~/.loginom-dock/profiles/hermes-user.json`, если файл
+существует; Codex продолжает читать `~/.loginom-dock/config.json`. Файл профиля
+приватный (0600), содержит Dock connection и `hermes_profile` version1:
+`mode=executor-replay`, `result_profile=user-v1`, закреплённые manifest URI/SHA,
+`input_upload_directory=/user/dock-p3`, `passwordless_login=true`, `loginom_user=user`.
+Целевой URL — проверенный 7.4.2 `http://logi-test-plan.bg.local/app/?testable=true`.
+Пароль не добавляется. Подключение 7.5 сохраняется в общем config для Codex и отката.
+
+Провайдер основного Hermes установлен: `openai-codex`, модель `gpt-5.6-sol`,
+`agent.reasoning_effort=low`, без fallback. Иные параметры Hermes сохраняются.
+Перед установкой сохранены исходные конфигурации, runtime pointer и native source
+в `.dock/hermes-user-20260910/before-install/` (приватно, не Git). Установлен комплект `0.1.0-dev.20260910.3`, собранный на VPS; runtime
+`84a47863909ad7ca90389e9e54a12da85af12e531a0562821234723c9695901e`.
+Source commit — в `~/.loginom-dock/current/release.json`, тот же pin у native-плагина.
+[Обычная приёмка и независимый аудит](hermes-user-diagnostics-2026-09-10.md) прошли.
+Native source доступен в `~/.loginom-dock/native-sources/` как локальное bare Git
+зеркало чистого коммита; установленные файлы сверены с VPS-комплектом.
+
+Локальный отчёт обычного запуска: `~/.loginom-dock/bin/loginom-dock report SESSION_ID`;
+добавление `--json` возвращает счётчики по запросам и задачам без полного тела журнала.
+Данные лежат только в `~/.loginom-dock/diagnostics/`; исходные квитанции браузерных
+операций — в `sessions/SESSION_ID/execution-events.jsonl`. Новые журналы на сервер
+не отправляются. Поля null означают отсутствие подтверждённой метрики, не ноль.
+
+Откат требует восстановления прежнего native source Hermes, прежнего runtime и
+сохранённой конфигурации Hermes, а также удаления нового файла Hermes-profile,
+если его раньше не было. Не заменять общий config или конфигурацию Codex.
+Исходный rollback runtime: `releases/0.1.0-dev.20260910.2-0afdd48cc0d2`;
+указатель `previous` сохраняется на него. Первоначальные снимки в before-install
+не заменяются снимками промежуточных сборок. Публичный выпуск и landing исключены.
+
+---
+
 ## 8 сентября 2026 — staged-каталог полного node.apply
 
 На VPS собран и staged/read-back `2026.09.08-node-apply.1-candidate`; activated=false.

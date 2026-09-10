@@ -29,6 +29,14 @@ test('non-exact numeric request returns an explicit precision limitation instead
  const f=fixture();f.options.requireExactNumbers=false;f.output.rows[0].cells[1].text='1,23';const r=decodeTableOutput(f.output,f.options);
  assert.equal(r.precision.numbers_verified,false);assert.equal(r.sample[0][1].value,undefined);assert.equal(r.sample[0][1].display_text,'1,23');
 });
+test('ordinary display reading needs no format mutation and never claims numeric precision',()=>{
+ const f=fixture();f.options.requireExactNumbers=false;f.options.formatProof=null;
+ const r=decodeTableOutput(f.output,f.options);
+ assert.equal(r.precision.numbers_verified,false);assert.equal(r.sample[0][0].value,undefined);
+ assert.equal(r.sample[0][1].display_text,'1,2345678901234567E+00');
+ assert.equal(r.sample[0][2].value,'text');
+ f.options.requireExactNumbers=true;assert.throws(()=>decodeTableOutput(f.output,f.options));
+});
 test('unverified datetime and boolean formats retain type and display limitations',()=>{
  const f=fixture(['datetime','boolean']);const r=decodeTableOutput(f.output,f.options);
  assert.deepEqual(r.precision.limitations,['datetime_display_precision','boolean_display_precision']);assert.equal(r.sample[0][0].value,undefined);

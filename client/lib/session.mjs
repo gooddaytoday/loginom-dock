@@ -47,7 +47,7 @@ export async function createSession(config, { headless = false } = {}) {
   const sourcePin=await createRuntimeSourcePin(import.meta.url,['../.node-version', '../package.json', '../package-lock.json',
     '../bin/loginom-dock.mjs', './config.mjs', './session.mjs', './catalog.mjs', './action-catalog.mjs', './capability-registry.mjs', './effect-contracts.mjs', './outcome-verification.mjs', './executor.mjs',
     './bridge.mjs', './managed-shutdown.mjs', './workspace.mjs', './workspace-ui.mjs', './node-procedure.mjs', './node-wizard-close.mjs', './node-wizard-open.mjs', './node-apply.mjs', './node-context.mjs', './node-output-context.mjs', './node-table-context.mjs', './node-output-procedure.mjs', './table-format-pages.mjs', './table-output-pages.mjs', './table-output-values.mjs', './node-execution-evidence.mjs', './node-process-context.mjs', './node-execution-procedure.mjs', './text-import-node.mjs', './text-import-limits.mjs', './text-import-limits.json', './text-import-encoding.mjs', './import-definition-pages.mjs', './node-contracts.mjs', './node-target.mjs', './node-target-browser.mjs', './node-contracts.d.ts', './text-import-procedure.mjs', './observation-pages.mjs', './artifacts.mjs', './execution-journal.mjs', './recovery-context.mjs', './platform.mjs', './native.mjs', './clipboard.mjs', './skill.mjs', './hooks.mjs', './history.mjs', './archive.mjs', './redact.mjs',
-    '../bin/hook.mjs', '../bin/dispatch.mjs', './hook-runtime.mjs', './install.mjs', './diagnostics.mjs', '../../examples/memory-plugin-shared/lib/mcp-proxy-config.mjs',
+    '../bin/hook.mjs', '../bin/diagnostic.mjs', '../bin/dispatch.mjs', './hook-runtime.mjs', './install.mjs', './diagnostics.mjs', '../../examples/memory-plugin-shared/lib/mcp-proxy-config.mjs',
     '../../examples/memory-plugin-shared/lib/batch-send.mjs', '../../examples/memory-plugin-shared/lib/capture-utils.mjs',
     '../../examples/memory-plugin-shared/lib/pending-queue.mjs', '../../examples/memory-plugin-shared/lib/retryable.mjs',
     '../../plugins/loginom-dock/.codex-plugin/plugin.json', '../../plugins/loginom-dock/.mcp.json',
@@ -75,6 +75,7 @@ export async function createSession(config, { headless = false } = {}) {
   const runtimeRelease = /^[0-9A-Za-z.+-]+-[a-f0-9]{12}$/.test(releaseName) ? releaseName : null;
   const metadata = {
     sessionId: id, agent: config.agent, adapterRevision: config.adapterRevision, mode: config.mode,
+    resultProfile: config.resultProfile ?? 'diagnostic', loginomUrl: config.loginomUrl ?? null,
     node: process.versions.node, client: own.version, playwrightMcp: mcp.version,
     clientRevision: sourcePin.revision, clientSourceManifest: sourcePin.manifest,
     runtimeRelease,

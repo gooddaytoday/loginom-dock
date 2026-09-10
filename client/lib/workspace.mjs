@@ -85,7 +85,8 @@ async function prepareWorkspace(page, options) {
     if (mode==='verify') {
       if (options.intent==='existing_workflow' && (!knownWorkflow || packageNode!==knownWorkflow.packageNode || tab!==knownWorkflow.tab
           || state.id!==options.workflowRef.document_id || tabTid!==options.workflowRef.tab_tid
-          || JSON.stringify(crumbs)!==JSON.stringify(options.workflowRef.navigation_path))) return {error:'WORKFLOW_CHANGED'};
+          || crumbs.length!==options.workflowRef.navigation_path.length
+          || crumbs.some((crumb,i)=>crumb.tid!==options.workflowRef.navigation_path[i].tid || crumb.label!==options.workflowRef.navigation_path[i].label))) return {error:'WORKFLOW_CHANGED'};
       if (options.intent==='open_package' && openErrors.length) return {error:'PACKAGE_OPEN_REJECTED'};
       if (!ready) return null;
       if (current?.tab && (tab!==current.tab || packageNode!==current.packageNode

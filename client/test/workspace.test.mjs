@@ -310,6 +310,11 @@ test('explicit existing workflow requires matching document, tab and navigation 
   assert.equal(returned.status,'READY');assert.equal(returned.created_draft,false);
   assert.equal(returned.workflow_ref.tab_tid,first.workflow_ref.tab_tid);
   assert.equal(fixture.events.filter(e=>e==='create_draft').length,1);
+  const reordered={...workflowRef,navigation_path:workflowRef.navigation_path.map(c=>({label:c.label,tid:c.tid}))};
+  const reorderedResult=await execute(fixture,{operationId:'reordered-ref',intent:'existing_workflow',workflowRef:reordered});
+  assert.equal(reorderedResult.status,'READY','JSON object key order must not change workflow identity');
+  const damaged=structuredClone(reordered);damaged.navigation_path[1].tid+='-wrong';
+  assert.equal((await execute(fixture,{operationId:'damaged-ref',intent:'existing_workflow',workflowRef:damaged})).reason,'WORKFLOW_CHANGED');
   const lost=await execute(fixture,{operationId:'bad-ref',intent:'existing_workflow',workflowRef:{...workflowRef,document_id:'foreign'}});
   assert.equal(lost.reason,'WORKFLOW_LOST');assert.equal(lost.effect_possible,false);
 });

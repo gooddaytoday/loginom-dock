@@ -1,8 +1,13 @@
 name: loginom-dock
-version: "0.1.0-dev.20260910.2"
+version: "0.1.0-dev.20260910.3"
 description: "Loginom Dock: общие знания, проверенный skill и локальный браузер Loginom."
 author: Loginom Dock
 provides_hooks:
+  - on_session_start
+  - pre_tool_call
+  - pre_api_request
+  - post_api_request
+  - api_request_error
   - post_tool_call
   - on_session_end
   - on_session_finalize

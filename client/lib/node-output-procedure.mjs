@@ -79,7 +79,7 @@ export function verifyTableDateTimeFormat(observed,target) {
   return {index:target.index,key:target.key,type:target.type,mask,representation:'custom',precision:'millisecond',timezone:'unspecified'};
 }
 
-export async function configureTablePrecision(channel,table,{alreadyOpen=false}={}) {
+export async function configureTablePrecision(channel,table,{alreadyOpen=false,restore=null}={}) {
   const dialog={table,kind:'format'};let offset=0,definition;
   const read=(condition,ready=()=>true)=>channel.observe({condition,tableDialog:dialog,tableFormatPage:{offset,limit:8},ready:s=>s.table_settings?.status==='observed'
     &&s.table_settings.kind==='format'&&!!s.table_settings.format?.page?.schema_id&&(!definition||s.table_settings.format.page.schema_id===definition.schema_id)&&ready(s)});
@@ -95,6 +95,7 @@ export async function configureTablePrecision(channel,table,{alreadyOpen=false}=
   let s;
   const fields=definition.fields.map(f=>({index:f.source_index,definition_index:f.index,key:f.name_key,type:f.type,label:f.label}));
   const numeric=fields.filter(f=>['integer','real'].includes(f.type)),datetime=fields.filter(f=>f.type==='datetime'),targets=[...numeric,...datetime];
+  const originals=[];
   const select=async target=>{
     const native=definition.fields.find(f=>f.index===target.definition_index);
     offset=Math.floor(native.index/8)*8;
@@ -105,6 +106,13 @@ export async function configureTablePrecision(channel,table,{alreadyOpen=false}=
   };
   for(const target of targets) {
     await select(target);
+    const original=restore?.find(f=>f.index===target.index&&f.key===target.key&&f.type===target.type);
+    if(restore)requireValue(original,'Original Table field format is missing');
+    const settings=Object.fromEntries(['formatting','custom','format_string','thousands','scientific','decimal_digits','currency']
+      .filter(name=>field(s)?.[name]?.status==='observed').map(name=>[name,field(s)[name].value]));
+    requireValue(typeof settings.formatting==='boolean'&&typeof settings.custom==='boolean'&&typeof settings.format_string==='string',
+      'Original Table format settings cannot be captured');
+    originals.push({index:target.index,key:target.key,type:target.type,settings});
     for(const name of ['formatting','custom']) {
       const setting=field(s)[name];requireValue(setting?.status==='observed','Numeric format control unavailable');
       if(!setting.value) {
@@ -113,12 +121,22 @@ export async function configureTablePrecision(channel,table,{alreadyOpen=false}=
         s=await read('Table '+name+' enabled',s=>field(s)?.source_index===target.index&&field(s)[name]?.value===true);
       }
     }
-    const mask=target.type==='datetime'?'yyyy-mm-dd hh:nn:ss.zzz':target.type==='real'?'0.################E+00':'0';
+    const mask=original?original.settings.format_string:target.type==='datetime'?'yyyy-mm-dd hh:nn:ss.zzz':target.type==='real'?'0.################E+00':'0';
     await action(s,'set exact Table numeric mask',s=>({verb:'fill',ref:field(s).format_string.input_ref,text:mask}),()=>({field:target,mask}));
     s=await read('Table numeric mask draft matches',s=>field(s)?.source_index===target.index&&field(s).format_string?.value===mask);
     await action(s,'commit Table numeric mask',s=>({verb:'press',ref:field(s).format_string.input_ref,key:'Tab'}),()=>({field:target,mask}));
     s=await read('Table numeric mask applied to draft',s=>field(s)?.source_index===target.index&&field(s).format_string?.value===mask);
     target.mask=mask;
+    if(original) {
+      for(const name of ['custom','formatting']) {
+        const value=original.settings[name];
+        if(field(s)[name]?.value!==value) {
+          await action(s,'restore Table '+name,s=>{const control=field(s)[name],refs=[control.input_ref,control.display_ref];
+            return {verb:'set_checked',checked:value,ref:one(s.ui.elements.filter(e=>refs.includes(e.ref)&&e.allowed_actions.includes('set_checked')&&e.interaction?.state==='point_observed').slice(0,1),'Original Table checkbox unavailable').ref};},()=>({field:target,setting:name,value}));
+          s=await read('original Table '+name+' restored',s=>field(s)?.source_index===target.index&&field(s)[name]?.value===value);
+        }
+      }
+    }
   }
   // Selecting another field and returning verifies the stored dialog model;
   // merely reading an input immediately after typing is insufficient in Ext.
@@ -126,14 +144,25 @@ export async function configureTablePrecision(channel,table,{alreadyOpen=false}=
     const alternate=fields.find(f=>f.index!==target.index);
     if(alternate)await select(alternate);
     await select(target);
-    target.verified_format=(target.type==='datetime'?verifyTableDateTimeFormat:verifyTableNumericFormat)(field(s),target);
+    if(restore) {
+      const original=restore.find(f=>f.index===target.index&&f.key===target.key&&f.type===target.type);
+      requireValue(Object.entries(original.settings).every(([name,value])=>field(s)?.[name]?.status==='observed'&&field(s)[name].value===value),
+        'Restored Table format differs from original');
+    } else target.verified_format=(target.type==='datetime'?verifyTableDateTimeFormat:verifyTableNumericFormat)(field(s),target);
     if(alternate)requireValue(s.table_settings.format.metadata_fields.find(f=>f.source_index===target.index&&f.name_key===target.key)?.format_string===target.mask,
       'Stored Table field mask differs from the selected format');
   }
   if(!s)s=await read('Table format ready to apply');
   await action(s,'apply bound Table format',s=>({verb:'click',ref:one(s.ui.elements.filter(e=>e.tid===table.table_tid+';ModalWindow_BrowseFormat;btnApply'),'Unique Table format Apply missing').ref}),()=>({fields:targets}));
   await channel.observe({condition:'Table format dialog closed',tableDialog:dialog,readOutputs:true,ready:s=>s.ui.dialogs.length===0&&s.node_outputs?.tables?.some(t=>t.active&&t.view_guid===table.view_guid)});
-  return {table,fields,numeric_formats:numeric,datetime_formats:datetime,dialog_readback_verified:fields.length!==1||targets.length===0,format_application_pending:fields.length===1&&targets.length===1,values_verified:false};
+  return {table,fields,numeric_formats:numeric,datetime_formats:datetime,original_formats:originals,restored:restore!==null,
+    dialog_readback_verified:fields.length!==1||targets.length===0,format_application_pending:fields.length===1&&targets.length===1,values_verified:false};
+}
+
+export async function restoreTablePrecision(channel,proof) {
+  requireValue(proof?.table&&Array.isArray(proof.original_formats),'Original Table formatting is unavailable');
+  const result=await configureTablePrecision(channel,proof.table,{restore:proof.original_formats});
+  return {table:proof.table,restored:result.restored,fields:result.fields};
 }
 
 export async function prepareTableRead(channel,table) {

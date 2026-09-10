@@ -103,9 +103,12 @@
   a general scenario-plan interpreter as a release dependency.
 - Do not reopen each wizard in the normal product path. Verify settings during
   configuration and let the agent assess output; retain dedicated handler
-  roundtrip tests and final package reopen verification. Save local checkpoints
-  after accepted nodes, and save the package after imports, completed branches
-  and at the end. A local checkpoint is not proof of package persistence.
+  roundtrip tests and independent diagnostic package reopen verification.
+  Normal Hermes saves the package at the end with package.save_checkpoint.
+  Intermediate saves are for explicit user requests or a concrete risk of lost
+  work; package.save_as with reopening is for an explicit reopening request.
+  Local node checkpoints remain recovery receipts, not proof of persistence.
+  The approved implementation is docs/plans/loginom-dock/09-hermes-user-diagnostics.md.
 - Primary implementation debugging is performed by the current Codex model in
   this task, using the real Loginom UI, E2E/Help and focused source tests. Finish
   debugging the declared task and its independent verifiers before the final

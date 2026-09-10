@@ -44,7 +44,11 @@ export async function admitStartupArtifacts(store, requests) {
   }
   if (total>64*1024*1024) throw new Error('Input artifact batch exceeds its byte limit');
   const admitted=[];
-  for (const request of requests) admitted.push(await store.admit(request));
+  try { for (const request of requests) admitted.push(await store.admit(request)); }
+  catch (error) {
+    if (store.discardUnpublished) await store.discardUnpublished(admitted.map(item=>item.artifact_id));
+    throw error;
+  }
   return admitted;
 }
 
@@ -154,6 +158,11 @@ export async function createArtifactStore({directory,maxBytes=16*1024*1024}) {
       return structuredClone(descriptor);
     },
     list() {return [...entries.values()].map(value=>structuredClone(value));},
+    async discardUnpublished(ids) {
+      if (transfers.size || pendingStages.size) throw Error('Cannot discard artifacts during transfer');
+      const paths=ids.filter(id=>entries.has(id)).map(id=>{entries.delete(id);return join(root,id);});
+      for(const path of paths)await unlink(path);
+    },
     // Trusted dispatcher resolves BOTH identifiers. A model cannot supply a
     // different directory, filename or overwrite policy through this lookup.
     // This is authorization only; it does not prove absence/ownership, perform

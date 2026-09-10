@@ -23,7 +23,7 @@ try {
   const config = await loadConfig({
     configPath: values.config || process.env.LOGINOM_DOCK_CONFIG,
     stateDir: values['state-dir'], agent: values.agent, adapterRevision: values['adapter-revision'],
-    mode: values.mode || process.env.LOGINOM_DOCK_MODE || 'classic',
+    mode: values.mode || process.env.LOGINOM_DOCK_MODE,
     actionManifestUri: values['action-manifest-uri'], actionManifestSha256: values['action-manifest-sha256'],
     replayBootstrap: values['replay-bootstrap'], replayLoginUser: values['replay-login-user'] ?? null,
   });

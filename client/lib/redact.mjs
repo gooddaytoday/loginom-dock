@@ -1,6 +1,8 @@
 const sensitiveKey = /(?:^|[_-])(?:api[_-]?key|access[_-]?key|secret|password|passwd|token|cookie|authorization|private[_-]?key)(?:$|[_-])/i;
 const forbiddenKey = /^(?:reasoning|reasoning_content|reasoning_details|codex_reasoning_items|system_prompt|systemPrompt|developer_prompt|browser_profile|binary|base64)$/i;
 const marker = '[redacted]';
+const usageCounters = new Set(['input_tokens', 'output_tokens', 'prompt_tokens', 'completion_tokens', 'total_tokens',
+  'cache_read_tokens', 'cache_write_tokens', 'cache_read_input_tokens', 'cache_creation_input_tokens', 'cached_tokens', 'reasoning_tokens']);
 const secretField = key => sensitiveKey.test(key.replace(/([a-z])([A-Z])/g, '$1_$2'));
 
 export function createRedactor(knownValues = []) {
@@ -45,7 +47,7 @@ export function createRedactor(knownValues = []) {
       for (const item of [value.text, value.value]) if (typeof item === 'string' && item.length >= 4) known.add(item);
     }
     for (const [key, item] of Object.entries(value)) {
-      if (secretField(key) && typeof item === 'string' && item.length >= 4) known.add(item);
+      if ((secretField(key) || usageCounters.has(key)) && typeof item === 'string' && item.length >= 4) known.add(item);
       else if (!forbiddenKey.test(key)) collect(item, depth + 1);
     }
   }
@@ -71,7 +73,8 @@ export function createRedactor(knownValues = []) {
       const result = Object.create(null);
       for (const [key, item] of Object.entries(value)) {
         if (forbiddenKey.test(key)) continue;
-        if (secretField(key)) result[key] = marker;
+        if (usageCounters.has(key)) result[key] = item === null || (Number.isSafeInteger(item) && item >= 0) ? item : marker;
+        else if (secretField(key)) result[key] = marker;
         else if (['code', 'command', 'cmd'].includes(key) && typeof item === 'string'
             && /password|passwd|cookie|authorization|private.?key/i.test(item)) result[key] = '[credential operation omitted]';
         else result[key] = clean(item, seen, depth + 1);

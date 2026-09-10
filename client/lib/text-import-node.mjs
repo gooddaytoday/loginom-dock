@@ -5,7 +5,7 @@ import {configureTextImportFields,configureTextImportPatch,validateTextImportFie
 import {withBrowserReceipt} from './executor.mjs';
 import {readOutputDefinitionPages,readImportDefinitionPages} from './import-definition-pages.mjs';
 import {makeRetainedImportSourceCode,makeRetainedImportFormatCode,verifyConfiguredImportContinuation,verifyMappedImportContinuation,finishedImportSurface,verifyFinishedImportContinuation,verifyWaitingExecutionContinuation} from './node-import-continuation.mjs';
-import {openNewOutputTable,configureTablePrecision,prepareTableRead,returnFromOutputTable} from './node-output-procedure.mjs';
+import {openNewOutputTable,configureTablePrecision,restoreTablePrecision,prepareTableRead,returnFromOutputTable} from './node-output-procedure.mjs';
 import {readTableOutputPages} from './table-output-pages.mjs';
 import {decodeTableOutput} from './table-output-values.mjs';
 import {createNodeExecutionProcedure} from './node-execution-procedure.mjs';
@@ -222,14 +222,17 @@ export function createTextImportNodeSupport({targetOrigin,targetBuild}) {
         requireValue(read.ports.length===1&&read.ports[0]===0,'Text import has one data output');
         requireValue(Array.isArray(outputColumns)&&outputColumns.length>0,'Verified output mapping is unavailable');
         const opened=await openNewOutputTable(channel,0);
-        const formatProof=await configureTablePrecision(channel,opened.table);
-        const readSettings=await prepareTableRead(channel,opened.table);
-        const raw=await readTableOutputPages(channel,opened.table,{sampleRows:read.sample_rows});
-        const data=decodeTableOutput(raw,{formatProof,readSettings,expectedColumns:outputColumns,requireExactNumbers:read.require_exact_numbers});
+        const formatProof=read.require_exact_numbers?await configureTablePrecision(channel,opened.table):null;
+        let readSettings,data,formatRestoration;
+        try {
+          readSettings=await prepareTableRead(channel,opened.table);
+          const raw=await readTableOutputPages(channel,opened.table,{sampleRows:read.sample_rows});
+          data=decodeTableOutput(raw,{formatProof,readSettings,expectedColumns:outputColumns,requireExactNumbers:read.require_exact_numbers});
+        } finally { if(formatProof)formatRestoration=await restoreTablePrecision(channel,formatProof); }
         const workflowReturn=await returnFromOutputTable(channel,opened.table);
         return verified({effect_possible:true,status:data.sample_complete?'complete':'partial',execution_id:executionReceipt.execution_id,evidence_ref:ctx.receipt_id,
           ports:[{port:0,port_guid:opened.port_guid,fresh:true,freshness_basis:'new_bound_table_after_verified_node_execution',execution_id:executionReceipt.execution_id,...data}],
-          table_creation:opened,format_proof:formatProof,read_settings:readSettings,workflow_return:workflowReturn});
+          table_creation:opened,format_proof:formatProof,format_restoration:formatRestoration,read_settings:readSettings,workflow_return:workflowReturn});
       },
       async verifyContinuation(state,{signal}={}) {
         if(!channel||!configured||state.pending||state.cleanup_complete!==true

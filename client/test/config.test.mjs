@@ -8,6 +8,23 @@ import { loadConfig } from '../lib/config.mjs';
 const actor = { agent: 'codex', adapterRevision: 'test-1' };
 const valid = { endpoint: 'https://dock.example/mcp', api_key: 'test-only', account: 'loginom-dock', user: 'loginom-dock' };
 
+test('installed Hermes profile supplies pins without changing the Codex profile', async t => {
+  const directory = await mkdtemp(join(tmpdir(), 'dock-hermes-profile-'));
+  t.after(() => rm(directory, { recursive: true, force: true }));
+  const path = join(directory, 'profile.json');
+  const profile = { version: 1, mode: 'executor-replay', result_profile: 'user-v1',
+    action_manifest_uri: 'viking://resources/loginom-dock/catalogs/executor-preview/releases/2026.09.04-mvp.1-candidate/manifest.json',
+    action_manifest_sha256: 'a'.repeat(64) };
+  await writeFile(path, JSON.stringify({ ...valid, hermes_profile: profile }), { mode: 0o600 });
+  const options = { configPath: path, stateDir: directory, adapterRevision: 'test' };
+  const hermes = await loadConfig({ ...options, agent: 'hermes' });
+  assert.equal(hermes.mode, 'executor-replay');assert.equal(hermes.resultProfile, 'user-v1');
+  assert.equal(hermes.actionManifestSha256, profile.action_manifest_sha256);
+  const codex = await loadConfig({ ...options, agent: 'codex' });
+  assert.equal(codex.mode, 'classic');assert.equal(codex.resultProfile, 'diagnostic');
+  assert.equal(codex.actionManifestSha256, null);
+});
+
 test('requires Dock config even when personal OpenViking config is set', async () => {
   process.env.OPENVIKING_CLI_CONFIG_FILE = '/personal/ovcli.conf';
   await assert.rejects(loadConfig(actor), /explicit Dock config/);

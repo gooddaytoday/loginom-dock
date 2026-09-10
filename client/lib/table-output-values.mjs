@@ -12,12 +12,13 @@ export function decodeTableOutput(output,{formatProof,readSettings,expectedColum
     &&applied.source==='applied_table_format_ui_cache'&&applied.result==='ok'&&applied.modal_tid===table.table_tid+';ModalWindow_BrowseFormat'
     &&expectedMask.length===1&&applied.fields?.length===1&&applied.fields[0].index===0&&applied.fields[0].key===columns[0].name
     &&applied.fields[0].type===columns[0].type&&applied.fields[0].mask===expectedMask[0].mask;
-  requireValue(sameTable(table,formatProof?.table)&&sameTable(table,readSettings?.table)
-    &&(formatProof.dialog_readback_verified===true||appliedSingle)&&readSettings.settings_applied===true
+  const displayOnly = formatProof === null && requireExactNumbers === false;
+  requireValue((displayOnly || (sameTable(table,formatProof?.table)
+    &&(formatProof.dialog_readback_verified===true||appliedSingle)))&&sameTable(table,readSettings?.table)&&readSettings.settings_applied===true
     &&readSettings.filter_enabled===false&&readSettings.null_display===true&&readSettings.type_icons===true,'Table settings proof is missing or foreign');
   requireValue(Array.isArray(expectedColumns)&&columns.length===expectedColumns.length&&columns.length===output.column_total
     &&columns.every((c,i)=>c.index===i&&['name','label','type'].every(k=>c[k]===expectedColumns[i][k])),'Table schema differs from the configured output');
-  requireValue(formatProof.fields?.length===columns.length&&formatProof.fields.every((f,i)=>f.index===i&&f.key===columns[i].name&&f.type===columns[i].type),
+  requireValue(displayOnly || (formatProof.fields?.length===columns.length&&formatProof.fields.every((f,i)=>f.index===i&&f.key===columns[i].name&&f.type===columns[i].type)),
     'Table formatting schema differs');
   const schema=columns.map((c,i)=>({...c,data_kind:expectedColumns[i].data_kind})),limits=new Set();
   const values=rows.map((r,i)=>{
@@ -27,7 +28,7 @@ export function decodeTableOutput(output,{formatProof,readSettings,expectedColum
       if(cell.is_null){requireValue(cell.text===null,'Null cell carries text');return {type,is_null:true,value:null,precision:'exact_null'};}
       requireValue(typeof cell.text==='string','Table cell text is missing');
       if(type==='integer'||type==='real') {
-        const proofs=formatProof.numeric_formats.filter(f=>f.index===j&&f.key===schema[j].name&&f.type===type);
+        const proofs=(formatProof?.numeric_formats??[]).filter(f=>f.index===j&&f.key===schema[j].name&&f.type===type);
         const mask=type==='integer'?'0':'0.################E+00';
         const precision=proofs.length===1&&proofs[0].mask===mask&&proofs[0].verified_format?.mask===mask&&proofs[0].verified_format.index===j&&proofs[0].verified_format.key===schema[j].name&&proofs[0].verified_format.type===type;
         if(precision&&type==='integer'&&/^-?(?:0|[1-9][0-9]*)$/.test(cell.text))return {type,is_null:false,value:BigInt(cell.text).toString(),representation:'decimal_integer',precision:'exact_integer',display_text:cell.text};
@@ -39,7 +40,7 @@ export function decodeTableOutput(output,{formatProof,readSettings,expectedColum
       } else if(type==='boolean' && ['Истина','Ложь'].includes(cell.text))return {
         type,is_null:false,value:cell.text==='Истина',representation:'native_boolean_label',precision:'exact_boolean',display_text:cell.text};
       else if(type==='datetime') {
-        const proofs=(formatProof.datetime_formats??[]).filter(f=>f.index===j&&f.key===schema[j].name&&f.type===type);
+        const proofs=(formatProof?.datetime_formats??[]).filter(f=>f.index===j&&f.key===schema[j].name&&f.type===type);
         const mask='yyyy-mm-dd hh:nn:ss.zzz',proof=proofs[0];
         const m=/^([0-9]{4})-([0-9]{2})-([0-9]{2}) ([0-9]{2}):([0-9]{2}):([0-9]{2})[.]([0-9]{3})$/.exec(cell.text);
         if(proofs.length===1&&proof.mask===mask&&proof.verified_format?.mask===mask

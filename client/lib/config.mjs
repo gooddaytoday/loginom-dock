@@ -7,11 +7,30 @@ import { ACTION_CATALOG_ROOT } from './action-catalog.mjs';
 
 const SHA256 = /^[a-f0-9]{64}$/;
 
-export async function loadConfig({ configPath, stateDir, agent, adapterRevision, mode = 'classic',
+export async function loadConfig({ configPath, stateDir, agent, adapterRevision, mode,
   actionManifestUri = null, actionManifestSha256 = null, replayBootstrap = false, replayLoginUser = null }) {
   if (!configPath) throw new Error('An explicit Dock config path is required');
   if (!['codex', 'hermes'].includes(agent) || !adapterRevision?.trim()) {
     throw new Error('Explicit agent and adapter revision are required');
+  }
+  const path = normalizeConfigPath(configPath);
+  const info = await lstat(path);
+  if (!info.isFile() || !privatePath(info)) {
+    throw new Error('Dock credentials must be a private regular file');
+  }
+  const data = JSON.parse(await readFile(path, 'utf8'));
+  const profile = agent === 'hermes' ? data.hermes_profile : null;
+  if (profile && (profile.version !== 1 || profile.result_profile !== 'user-v1' || profile.mode !== 'executor-replay')) {
+    throw new Error('Unsupported installed Hermes profile');
+  }
+  mode ??= profile?.mode ?? 'classic';
+  if (mode === 'executor-replay' && profile) {
+    actionManifestUri ??= profile.action_manifest_uri;
+    actionManifestSha256 ??= profile.action_manifest_sha256;
+    if (profile.passwordless_login === true && replayLoginUser === null && replayBootstrap === false) {
+      replayBootstrap = true;
+      replayLoginUser = profile.loginom_user;
+    }
   }
   if (!['classic', 'executor-preview', 'executor-replay', 'research'].includes(mode)) {
     throw new Error('Dock mode must be classic, executor-preview, executor-replay or research');
@@ -29,12 +48,6 @@ export async function loadConfig({ configPath, stateDir, agent, adapterRevision,
   if (replayBootstrap && mode !== 'executor-replay') throw new Error('Replay bootstrap is only allowed in executor-replay');
   if (replayBootstrap && (typeof replayLoginUser !== 'string' || !replayLoginUser.trim() || replayLoginUser.length>200 || /[\x00-\x1f\x7f]/.test(replayLoginUser))) throw new Error('Replay bootstrap requires an explicit Loginom account');
   if (!replayBootstrap && replayLoginUser !== null) throw new Error('Replay login account requires replay bootstrap');
-  const path = normalizeConfigPath(configPath);
-  const info = await lstat(path);
-  if (!info.isFile() || !privatePath(info)) {
-    throw new Error('Dock credentials must be a private regular file');
-  }
-  const data = JSON.parse(await readFile(path, 'utf8'));
   const endpoint = new URL(data.endpoint);
   if (endpoint.protocol !== 'https:' || endpoint.username || endpoint.password
       || endpoint.search || endpoint.hash || endpoint.pathname !== '/mcp') {
@@ -57,6 +70,7 @@ export async function loadConfig({ configPath, stateDir, agent, adapterRevision,
     endpoint: endpoint.href, apiKey: data.api_key, loginomUrl,
     account: data.account, user: data.user, agent, adapterRevision, mode,
     actionManifestUri, actionManifestSha256, replayBootstrap, replayLoginUser,
+    resultProfile: profile?.result_profile ?? 'diagnostic',
     stateDir: normalizeConfigPath(stateDir || join(homedir(), '.loginom-dock')),
   });
 }

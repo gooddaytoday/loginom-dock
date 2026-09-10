@@ -10,7 +10,7 @@ import {closePreparedWizard} from './node-wizard-close.mjs';
 import {createNodeExecutionProcedure,finishConfiguredGraph} from './node-execution-procedure.mjs';
 import {configureOutputFields,configureOutputAutosync,reorderOutputFields,resolveConfiguredOutputMapping} from './port-mapping-procedure.mjs';
 import {readOutputDefinitionPages} from './import-definition-pages.mjs';
-import {openNewOutputTable,configureTablePrecision,prepareTableRead,returnFromOutputTable} from './node-output-procedure.mjs';
+import {openNewOutputTable,configureTablePrecision,restoreTablePrecision,prepareTableRead,returnFromOutputTable} from './node-output-procedure.mjs';
 import {readTableOutputPages} from './table-output-pages.mjs';
 import {decodeTableOutput} from './table-output-values.mjs';
 import {finishedImportSurface,verifyFinishedImportContinuation,verifyWaitingExecutionContinuation} from './node-import-continuation.mjs';
@@ -187,12 +187,16 @@ export function createTabularTransformNodeSupport({targetOrigin,targetBuild},imp
    async readOutput(read,ctx) {
     enter(ctx);requireValue(executionReceipt?.verified&&executionReceipt.owner_verified&&executionReceipt.execution_id===ctx.execution.execution_id,'Calculator execution proof missing');
     if(!read.ports.length)return verified({status:'complete',ports:[],execution_id:ctx.execution.execution_id,evidence_ref:ctx.receipt_id});
-    const table=await openNewOutputTable(channel,0),formatProof=await configureTablePrecision(channel,table.table),readSettings=await prepareTableRead(channel,table.table);
-    const raw=await readTableOutputPages(channel,table.table,{sampleRows:read.sample_rows});
-    const data=decodeTableOutput(raw,{formatProof,readSettings,expectedColumns:columns,requireExactNumbers:read.require_exact_numbers});
+    const table=await openNewOutputTable(channel,0),formatProof=read.require_exact_numbers?await configureTablePrecision(channel,table.table):null;
+    let readSettings,data,formatRestoration;
+    try {
+      readSettings=await prepareTableRead(channel,table.table);
+      const raw=await readTableOutputPages(channel,table.table,{sampleRows:read.sample_rows});
+      data=decodeTableOutput(raw,{formatProof,readSettings,expectedColumns:columns,requireExactNumbers:read.require_exact_numbers});
+    } finally { if(formatProof)formatRestoration=await restoreTablePrecision(channel,formatProof); }
     const returned=await returnFromOutputTable(channel,table.table);
     return verified({effect_possible:true,status:data.sample_complete?'complete':'partial',execution_id:ctx.execution.execution_id,evidence_ref:ctx.receipt_id,
-     ports:[{port:0,port_guid:table.port_guid,fresh:true,execution_id:ctx.execution.execution_id,...data}],table_creation:table,format_proof:formatProof,read_settings:readSettings,workflow_return:returned});
+     ports:[{port:0,port_guid:table.port_guid,fresh:true,execution_id:ctx.execution.execution_id,...data}],table_creation:table,format_proof:formatProof,format_restoration:formatRestoration,read_settings:readSettings,workflow_return:returned});
    },
    async verifyContinuation(state,{signal}={}){
     // Only a durably accepted graph launch can be resumed. A partially edited

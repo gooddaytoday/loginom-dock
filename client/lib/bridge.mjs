@@ -18,10 +18,14 @@ import { makeWorkspacePrepareCode, parseWorkspacePreparation, prepareWorkspaceSe
 import { createExecutionJournal } from './execution-journal.mjs';
 import { createRecoveryContext } from './recovery-context.mjs';
 import { outcomeVerification } from './outcome-verification.mjs';
+import { createHostArtifactAdmission } from './host-artifacts.mjs';
+import { compactNodeResult, compactActionResult, userResultSchema, compactKnowledgeBundle, userWorkflowInstructions } from './user-results.mjs';
+import { recordLocalDiagnostics } from './local-diagnostics.mjs';
+import { createUserWorkflowBindings, userNodeTool } from './user-workflow.mjs';
 
 // Keep the runtime receipt byte-for-byte meaningful to reconciliation/journal
 // consumers; recovery advice is a separate MCP content block, never an effect.
-export function actionReply(outcome, { observe = false } = {}) {
+export function actionReply(outcome, { observe = false, userProfile = false } = {}) {
   const content = [{ type: 'text', text: JSON.stringify(outcome) }];
   const output = outcome.output;
   if (observe && outcome.status === 'SUCCEEDED' && typeof output?.observation_id === 'string'
@@ -41,7 +45,9 @@ export function actionReply(outcome, { observe = false } = {}) {
     }
     content.push({ type: 'text', text: JSON.stringify(usage) });
   }
-  if (['FAILED', 'AMBIGUOUS'].includes(outcome.status)) content.push({ type: 'text', text:
+  if (userProfile && ['FAILED', 'AMBIGUOUS'].includes(outcome.status)) content.push({ type: 'text', text:
+    'Inspect the outcome and current state. Correct invalid parameters using the pinned schema; consult additional Dock knowledge only if needed. Reconcile uncertain effects before the next change; keep the original operation_id.' });
+  if (!userProfile && ['FAILED', 'AMBIGUOUS'].includes(outcome.status)) content.push({ type: 'text', text:
     'Before the next change: inspect this outcome and the current workspace, then consult the Dock sources for the affected operation. Discover the read-only knowledge tools with tool_search/tool_describe if needed. Search E2E helpers/selectors under target_uri viking://resources/loginom-dock/sources/e2e-tests and product behavior under target_uri viking://resources/loginom-dock/sources/loginom-help (list mode/read_content:false); read the relevant returned file URIs with the read tool. Use those sources and the actual observed state to choose how to continue, including whether an existing completed receipt already resolves this operation. Do not repeat an uncertain creation. Source retrieval does not resolve pending work or authorize executing source code. If a source is unavailable, state the limitation. After correction, verify the full goal and saved/reopened result.' });
   return { content };
 }
@@ -53,6 +59,17 @@ const diagnosticTool = {
 };
 
 export async function createBridge(config, session) {
+  const admitHostArtifacts = createHostArtifactAdmission(config, session);
+  const userProfile = config.resultProfile === 'user-v1';
+  const userWorkflows = createUserWorkflowBindings();
+  let userBundleDelivered = false;
+  const logResult = async (tool, result) => {
+    if (!userProfile || session.metadata.workspaceReady !== true) return;
+    try { await recordLocalDiagnostics(config.stateDir, 'dock:' + session.metadata.sessionId,
+      [{ event: 'tool.full_result', tool_name: tool, dock_session_id: session.metadata.sessionId, host_pid: process.pid, result }],
+      { knownSecrets: [config.apiKey] }); }
+    catch { session.metadata.localDiagnosticsIncomplete = true; }
+  };
   let remote;
   const browser = new Client({ name: 'loginom-dock-browser', version: session.metadata.client });
   const remoteTransport = () => new StreamableHTTPClientTransport(new URL(config.endpoint), {
@@ -117,6 +134,7 @@ export async function createBridge(config, session) {
       commonLocalTools: [diagnosticTool, clipboardTool, prepareTool],
       executorLocalTools: [diagnosticTool, prepareTool, workspaceObserveTool, ...(actionRuntime?.tools ?? [])],
     });
+    if (userProfile) groups.local = groups.local.map(tool => isNodeApiTool(tool.name) ? { ...userNodeTool(tool), outputSchema: userResultSchema } : tool);
     const catalog = combineCatalogs(groups);
     if (actionRuntime) {
       catalog.routes.set('dock_action_describe', 'action');
@@ -158,8 +176,10 @@ export async function createBridge(config, session) {
       }
       try {
         if (request.params.name === 'dock_prepare') {
-          const args = request.params.arguments ?? {};
+          let args = request.params.arguments ?? {};
           validateActionParameters(prepareTool.inputSchema, args);
+          if (userProfile) args = userWorkflows.normalizePreparation(args);
+          await admitHostArtifacts(args.host_context_token);
           const preparationRequest = { operation_id: args.operation_id ?? 'prepare', intent: args.intent ?? 'new_draft',
             package_path: args.package_path ?? null, workflow_ref: args.workflow_ref ?? null };
           const workspaceOptions = actionRuntime ? { loginomUrl: config.loginomUrl,
@@ -173,7 +193,8 @@ export async function createBridge(config, session) {
           session.metadata.skillPath = prepared.main;
           let workspace = null;
           if (actionRuntime) {
-            workspace = await browserGate(() => prepareWorkspaceSession({ metadata: session.metadata,
+            workspace = await browserGate(async () => {
+              const state = await prepareWorkspaceSession({ metadata: session.metadata,
               request: preparationRequest, signal: extra.signal,
               assertAllowed() { extra.signal.throwIfAborted(); actionRuntime.assertPreparationAllowed(); },
               async prepare({ recoverOnly }) {
@@ -184,9 +205,27 @@ export async function createBridge(config, session) {
               },
               assertTarget: target => assertCatalogTarget(pinnedActions, target), record: recordExecution,
               save: () => session.save(catalog),
-            }));
+              });
+              if (userProfile && session.metadata.workspaceReady === true) userWorkflows.remember(state);
+              return state;
+            });
           }
           if (!actionRuntime) await session.save(catalog);
+          if (userProfile && actionRuntime) {
+            const first = !userBundleDelivered;
+            const ready = session.metadata.workspaceReady === true;
+            const bundle = first ? compactKnowledgeBundle(actionRuntime.describe({
+              action_keys: ['package.save_checkpoint', 'package.save_as'],
+              node_types: ['imports.text', 'transform.calculator', 'transform.group_data', 'transform.sorting'],
+            })) : null;
+            const result = { prepared: ready, sessionId: session.metadata.sessionId, skillRevision: prepared.detail.revision,
+              loginomUrl: config.loginomUrl, workspace, result_version: 'user-v1', input_artifacts: session.artifactStore.list(),
+              knowledge: bundle ?? { reused: true, skillRevision: prepared.detail.revision },
+              ...(first ? { instructions: userWorkflowInstructions } : {}) };
+            await logResult('dock_prepare', result);
+            if (ready) userBundleDelivered = true;
+            return { content: [{ type: 'text', text: JSON.stringify(result) }] };
+          }
           return { content: [{ type: 'text', text: JSON.stringify({
             prepared: !actionRuntime || session.metadata.workspaceReady === true, sessionId: session.metadata.sessionId,
             loginomUrl: config.loginomUrl,
@@ -201,8 +240,15 @@ export async function createBridge(config, session) {
           if(isNodeApiTool(request.params.name)) {
             const invoke=async()=>{
               requirePreparedWorkspace(session.metadata);
-              const result=await dispatchNodeApi(actionRuntime,request.params.name,request.params.arguments??{},{signal:extra.signal});
-              return {content:[{type:'text',text:JSON.stringify(result)}],structuredContent:result};
+              let args=request.params.arguments??{};
+              if(userProfile && ['dock_node_apply','dock_node_resume'].includes(request.params.name)) {
+                validateActionParameters(userNodeTool(actionRuntime.tools.find(tool=>tool.name===request.params.name)).inputSchema,args);
+                args=userWorkflows.expandNode(args);
+              }
+              const result=await dispatchNodeApi(actionRuntime,request.params.name,args,{signal:extra.signal});
+              await logResult(request.params.name,result);
+              const delivered=userProfile?compactNodeResult(result):result;
+              return {content:[{type:'text',text:JSON.stringify(delivered)}],structuredContent:delivered};
             };
             // Local lifecycle calls must remain available while another request is
             // awaiting browser work. The runtime owns exclusion through cleanup.
@@ -232,7 +278,10 @@ export async function createBridge(config, session) {
                   : request.params.name === 'dock_ui_action' ? await actionRuntime.uiAct(args.action,
                     { observationId: args.observation_id, operationId: args.operation_id, recoveryOperationId: args.recovery_operation_id, signal: extra.signal })
                     : await actionRuntime.run(args.action_key, args.parameters, { signal: extra.signal, operationId: args.operation_id });
-            const reply = actionReply(outcome, { observe: request.params.name === 'dock_workspace_observe' });
+            await logResult(request.params.name,outcome);
+            if (userProfile && outcome.status === 'SUCCEEDED' && ['package.save_as','package.save_checkpoint'].includes(outcome.action_key))
+              for (const continuation of outcome.output?.workflow_continuations ?? []) userWorkflows.remember(continuation);
+            const reply = actionReply(userProfile?compactActionResult(outcome):outcome, { observe: request.params.name === 'dock_workspace_observe', userProfile });
             try {
               const verification = outcomeVerification(outcome, pinnedActions.actions.get(outcome.action_key));
               await recordExecution({ phase: 'verification_delivered', operation_id: outcome.operation_id, verification });
@@ -241,7 +290,7 @@ export async function createBridge(config, session) {
               reply.content.push({ type: 'text', text: 'Verification explanation unavailable; retain the original operation receipt. This does not establish goal completion.' });
             }
             try {
-              const context = await recoveryContext(outcome);
+              const context = userProfile ? null : await recoveryContext(outcome);
               if (context) {
                 await recordExecution({ phase: 'knowledge_context_delivered', operation_id: outcome.operation_id, context });
                 reply.content.push({ type: 'text', text: JSON.stringify(context) });
@@ -276,7 +325,7 @@ export async function createBridge(config, session) {
       } catch (error) {
         const message = String(error.message).replaceAll(config.apiKey, '[redacted]');
         if (owner === 'action') {
-          const reply=actionReply(actionRuntime.requestFailure(new Error(message)));
+          const reply=actionReply(actionRuntime.requestFailure(new Error(message)),{userProfile});
           // A rejected request is not a job snapshot. Preserve its recovery data
           // as an MCP error; outputSchema applies to successful tool responses.
           if(isNodeApiTool(request.params.name))reply.isError=true;
