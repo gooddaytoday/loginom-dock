@@ -13,7 +13,7 @@ export function validateSortingParameters(p,mode,r){
    need(k.case_sensitive===undefined||typeof k.case_sensitive==='boolean','Boolean case flag required');
    need(!names.has(k.field.name.toLowerCase()),'Duplicate sorting key');names.add(k.field.name.toLowerCase());
   }
-  need(r.inputs.length===1,'Sorting replacement requires one explicit input');
+  need(r.target.kind==='existing'||r.inputs.length===1,'New sorting requires one explicit input');
  }
  need(r.inputs.length<=1&&r.inputs.every(i=>i.input===0),'Sorting accepts one input');
  need(r.read.ports.every(i=>i===0),'Sorting has one output');
@@ -32,4 +32,10 @@ export function resolveSortingParameters(p,fields){
   need(text?typeof k.case_sensitive==='boolean':k.case_sensitive===undefined,'Explicit case_sensitive required only for string/variant keys');
   return {...f,direction:k.direction,...(text?{case_sensitive:k.case_sensitive}:{})};
  });
+}
+export function validateSortingInputParameters(p,resolved,native){
+ if(p.keys===undefined)return;
+ // The mapping resolver preserves a retained name when a patch omits it.
+ // Source names alone cannot describe the fields the sorting wizard will see.
+ resolveSortingParameters(p,resolved.fields??native.target_fields);
 }

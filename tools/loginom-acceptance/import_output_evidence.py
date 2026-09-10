@@ -60,6 +60,120 @@ def equal_number(a, b):
         return False
 
 
+def verify_table_format_restoration(observations, mutations, table, expected, first_apply, last_page, restore_apply, proof):
+    """Admit a second Apply only from raw, owner-bound restoration readbacks."""
+    before = lambda step: next((s for n, s in reversed(observations) if n < step), {})
+    ref = {k: table[k] for k in ('view_guid', 'port_guid', 'table_tid')}
+    modal = table['table_tid'] + ';ModalWindow_BrowseFormat'
+    def control(step, action):
+        es = [e for e in before(step).get('ui', {}).get('elements', []) if e.get('ref') == action.get('ref')]
+        return es[0] if len(es) == 1 else {}
+    opens = [n for n, a, _ in mutations if last_page < n < restore_apply and a.get('verb') == 'click'
+             and control(n, a).get('tid') == table['table_tid'] + ';btnDataGridFormat']
+    if len(opens) != 1 or not first_apply < last_page < opens[0] < restore_apply:
+        return ['table_format_restoration_order'], set()
+    start = opens[0]
+    segment = [(n, a) for n, a, _ in mutations if start <= n <= restore_apply]
+    original_node = before(first_apply).get('prepared_node_context', {})
+    def owned(s):
+        node, outputs = s.get('prepared_node_context', {}), s.get('node_outputs', {})
+        other = outputs.get('node_context', {})
+        return (node.get('verified') is True and node.get('surface') == 'views' and outputs.get('verified') is True
+                and other.get('verified') is True and all(node.get(k) and node[k] == other.get(k) == original_node.get(k)
+                    for k in ('document_id', 'workflow_id', 'node_id'))
+                and len([t for t in outputs.get('tables', []) if t.get('active') is True
+                         and all(t.get(k) == v for k, v in ref.items())]) == 1)
+    def dialog(s):
+        return (owned(s) and s.get('node_table_dialog') == dict(table=ref, kind='format')
+                and s.get('table_settings', {}).get('status') == 'observed'
+                and s['table_settings'].get('kind') == 'format')
+    failures = []
+    for n, action in segment:
+        s, e = before(n), control(n, action)
+        anchor = e.get('tid') or e.get('identity', {}).get('anchor_tid', '')
+        allowed = action.get('verb') in e.get('allowed_actions', [])
+        if n == start:
+            valid = owned(s) and allowed
+        elif n == restore_apply:
+            valid = dialog(s) and allowed and action.get('verb') == 'click' and anchor == modal + ';btnApply'
+        else:
+            valid = (dialog(s) and allowed and isinstance(anchor, str) and anchor.startswith(modal + ';BrowseFormat;')
+                     and action.get('verb') in ('click', 'fill', 'press', 'set_checked', 'scroll')
+                     and (action.get('verb') != 'press' or action.get('key') == 'Tab'))
+        if not valid:
+            failures.append('table_format_restoration_mutation')
+    original = [(n, s) for n, s in observations if n < first_apply and dialog(s)]
+    restored = [(n, s) for n, s in observations if start < n < restore_apply and dialog(s)]
+    def definitions(states, latest):
+        fields, schemas = {}, set()
+        for _, s in states:
+            fmt = s['table_settings']['format']; page = fmt.get('page', {}); items = fmt.get('metadata_fields')
+            offset, count = page.get('offset'), page.get('total_columns')
+            if (page.get('status') not in ('complete_definition_page', 'rendered_definition_window')
+                    or type(offset) is not int or offset < 0 or count != len(expected) or page.get('limit') != 8
+                    or not isinstance(page.get('schema_id'), str) or not page['schema_id']
+                    or not isinstance(items, list) or len(items) != min(8, count-offset)
+                    or page.get('next_offset') != (None if offset + len(items) == count else offset + len(items))):
+                raise ValueError('table_format_restoration_definition')
+            schemas.add(page['schema_id'])
+            for i, f in enumerate(items):
+                keys = ('index', 'source_index', 'name_key', 'label', 'type', 'format_string')
+                if (any(k not in f for k in keys) or type(f['index']) is not int or f['index'] != offset+i
+                        or type(f['source_index']) is not int or not 0 <= f['source_index'] < count
+                        or not isinstance(f['format_string'], str)):
+                    raise ValueError('table_format_restoration_definition')
+                value = {k:f[k] for k in keys}
+                if latest or f['index'] not in fields: fields[f['index']] = value
+        if len(schemas) != 1 or set(fields) != set(range(len(expected))):
+            raise ValueError('table_format_restoration_coverage')
+        result = [fields[i] for i in range(len(expected))]
+        if len({f['source_index'] for f in result}) != len(result):
+            raise ValueError('table_format_restoration_definition')
+        for f in result:
+            column = expected[f['source_index']]
+            if (f['name_key'], f['label'], f['type']) != (column['name'], column['label'], column['type']):
+                raise ValueError('table_format_restoration_definition')
+        return result
+    try:
+        initial_fields, final_fields = definitions(original, False), definitions(restored, True)
+        if initial_fields != final_fields:
+            failures.append('table_format_restoration_fields')
+        setting_names = ('formatting', 'custom', 'format_string', 'thousands', 'scientific', 'decimal_digits', 'currency')
+        def selected(states, field):
+            found = []
+            for n, s in states:
+                fmt = s['table_settings']['format']
+                item = fmt.get('selected_datetime' if field['type'] == 'datetime' else 'selected_numeric', {})
+                if item.get('source_index') == field['source_index'] and item.get('name_key') == field['name_key']:
+                    values = {k:item[k]['value'] for k in setting_names if item.get(k, {}).get('status') == 'observed' and 'value' in item[k]}
+                    if (type(values.get('formatting')) is not bool or type(values.get('custom')) is not bool
+                            or not isinstance(values.get('format_string'), str)):
+                        raise ValueError('table_format_restoration_settings')
+                    found.append((n, values))
+            return found
+        for field in initial_fields:
+            if field['type'] not in ('integer', 'real', 'datetime'): continue
+            old, final = selected(original, field), selected(restored, field)
+            if not old or not final or old[0][1] != final[-1][1] or old[0][1]['format_string'] != field['format_string']:
+                failures.append('table_format_restoration_settings'); continue
+            for n, action, _ in mutations:
+                if action.get('verb') not in ('fill', 'press', 'set_checked'): continue
+                prior = selected([(n, before(n))], field) if dialog(before(n)) else []
+                if prior and (n < first_apply and old[0][0] >= n or start < n < restore_apply and final[-1][0] <= n):
+                    failures.append('table_format_restoration_settings_order')
+        projected = [dict(index=f['source_index'], definition_index=f['index'], key=f['name_key'], type=f['type'], label=f['label'],
+                          **({'mask':f['format_string']} if f['type'] in ('integer','real','datetime') else {})) for f in final_fields]
+        if (not isinstance(proof, dict) or proof.get('table') != ref or proof.get('restored') is not True
+                or proof.get('fields') != projected or any(type(f.get('index')) is not int or type(f.get('definition_index')) is not int for f in proof.get('fields', []))):
+            failures.append('table_format_restoration_checkpoint')
+    except (KeyError, TypeError, ValueError) as error:
+        failures.append(str(error) if isinstance(error, ValueError) else 'table_format_restoration_malformed')
+    closed = [s for n, s in observations if n > restore_apply and owned(s) and s.get('ui', {}).get('dialogs') == []]
+    if not closed:
+        failures.append('table_format_restoration_not_closed')
+    return sorted(set(failures)), {n for n, _ in segment} if not failures else set()
+
+
 def verify_table_output_observations(observations, mutations, request, source_bytes, checkpoint, execution_id):
     failures = []
     if not execution_id or checkpoint.get('execution', {}).get('execution_id') != execution_id:
@@ -122,7 +236,7 @@ def verify_table_output_observations(observations, mutations, request, source_by
             for kind in ('Format', 'Filter'):
                 if es[0].get('tid') == key+';ModalWindow_Browse'+kind+';btnApply':
                     apply_steps.setdefault(kind, []).append(step)
-    if any(len(apply_steps.get(k, [])) != 1 for k in ('Format', 'Filter')):
+    if len(apply_steps.get('Format', [])) not in (1, 2) or len(apply_steps.get('Filter', [])) != 1:
         return failures + ['one_format_and_filter_apply_required']
     fmt_step, filter_step = apply_steps['Format'][0], apply_steps['Filter'][0]
     filter_state = before(filter_step).get('table_settings', {}).get('filter', {}).get('enabled', {})
@@ -176,12 +290,19 @@ def verify_table_output_observations(observations, mutations, request, source_by
         return failures + ['verified_table_pages_missing']
     if any(not same_node(s, s['node_table'].get('node_context', {})) for n, s in bound if s.get('node_table', {}).get('verified') is True):
         failures.append('native_data_node_owner')
-    extra = [(n, a, r) for n, a, r in mutations if n > filter_step and a.get('verb') not in ('scroll', 'scroll_horizontal')]
+    restoration_steps = set(); return_after = max(n for n, _ in pages)
+    if len(apply_steps['Format']) == 2:
+        restore_step = apply_steps['Format'][1]
+        restoration_failures, restoration_steps = verify_table_format_restoration(observations, mutations, table, expected,
+            fmt_step, return_after, restore_step, checkpoint.get('output', {}).get('format_restoration'))
+        failures += restoration_failures
+        if not restoration_failures: return_after = restore_step
+    extra = [(n, a, r) for n, a, r in mutations if n > filter_step and n not in restoration_steps and a.get('verb') not in ('scroll', 'scroll_horizontal')]
     proof = checkpoint.get('output', {}).get('workflow_return')
     if extra or proof is not None:
-        return_failures = verify_table_return(observations, mutations, table, max(n for n, _ in pages), proof or {})
+        return_failures = verify_table_return(observations, mutations, table, return_after, proof or {})
         failures += return_failures
-        if return_failures or any(n <= max(n for n, _ in pages) for n, _, _ in extra):
+        if return_failures or any(n <= return_after for n, _, _ in extra):
             failures.append('unexpected_mutation_after_filter')
     try:
         encoding = settings['source'].get('encoding', 'UTF-8')

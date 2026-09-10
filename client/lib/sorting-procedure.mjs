@@ -4,6 +4,7 @@ export async function configureSorting(channel,p,{newNode=false}={}){
  const ready=s=>s.wizard?.stage==='sorting'&&s.node_sorting?.verified===true;
  const observe=condition=>channel.observe({condition,readSorting:true,ready});
  const initial=await observe('complete sorting configuration'),baseline=initial.node_sorting;
+ need(p.keys!==undefined||baseline.keys.every(k=>!k.missing_input),'Existing sorting contains missing input keys; provide complete replacement keys');
  const plan=p.keys===undefined?baseline.keys:resolveSortingParameters(p,baseline.input_fields);
  need(plan.length>0,'Existing sorting requires nonempty keys');
  const element=(s,name,role,part)=>{const es=s.ui.elements.filter(e=>e.sorting_field?.field_key===name&&e.sorting_field.role===role&&e.sorting_field.part===part&&e.allowed_actions.includes('click'));need(es.length===1,'Sorting field control unavailable: '+name+'/'+part);return es[0];};
@@ -49,7 +50,7 @@ export async function configureSorting(channel,p,{newNode=false}={}){
   await channel.perform({condition:'set sorting locale explicitly',initialObservation:s,ready,identity:()=>({locale}),resolve:s=>{const es=s.ui.elements.filter(e=>e.tid===s.wizard.root_tid+';SortingWizard;SortingColumnCollection;chkLocaleAware;ValueControl;DisplayEl'&&e.allowed_actions.includes('set_checked'));need(es.length===1,'Sorting locale control unavailable');return {verb:'set_checked',ref:es[0].ref,checked:locale};}});
  }
  const after=(await observe('complete final sorting configuration')).node_sorting;
- need(same(after.keys.map(k=>k.name),plan.map(k=>k.name))&&after.keys.every((k,i)=>k.direction===plan[i].direction&&(plan[i].case_sensitive===undefined||k.case_sensitive===plan[i].case_sensitive)),'Final sorting keys differ');
+ need(same(after.keys.map(k=>k.name),plan.map(k=>k.name))&&after.keys.every((k,i)=>!k.missing_input&&k.direction===plan[i].direction&&(plan[i].case_sensitive===undefined||k.case_sensitive===plan[i].case_sensitive)),'Final sorting keys differ');
  need(same(after.input_fields,baseline.input_fields)&&same(after.options.chkBufferWhole,baseline.options.chkBufferWhole)&&same(after.options.cbxMaxThreadCount,baseline.options.cbxMaxThreadCount),'Unrequested sorting settings changed');
  need(after.options.chkLocaleAware.value===locale,'Sorting locale differs');
  return {verified:true,cleanup_complete:true,effect_possible:true,configuration:after,preservation:{input_identity:true,cache:true,threads:true}};

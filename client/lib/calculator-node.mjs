@@ -116,6 +116,7 @@ export function createTabularTransformNodeSupport({targetOrigin,targetBuild},imp
      let s=await channel.observe({condition:'calculator incoming port schema',readMappings:true,ready});
      const requested=mappings[0]??{direction:'input',port:0},sources=s.node_mapping.source_fields.map(f=>({...f,used:true}));
      const resolved=resolveConfiguredOutputMapping(requested,sources,s.node_mapping),changes=[];
+     implementation?.validateInput?.(operation.nodeApply.request.parameters,resolved,s.node_mapping);
      if(requested.fields)changes.push(await configureOutputFields(channel,requested,sources));
      if(resolved.fields)changes.push(await reorderOutputFields(channel,resolved.fields.map(f=>f.current.record_id)));
      if(requested.autosync!==undefined)changes.push(await configureOutputAutosync(channel,requested.autosync));

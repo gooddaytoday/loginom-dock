@@ -249,3 +249,103 @@ class SingleAppliedFormatEvidenceTests(unittest.TestCase):
                 if kind=='modal':proof['modal_tid']='other'
                 if kind=='preapply_input':self.f.observations[3][1]['table_settings']['format']['selected_datetime']['format_string']['value']='yyyy-mm-dd'
                 self.assertTrue(self.f.audit())
+
+
+class TableFormatRestorationEvidenceTests(unittest.TestCase):
+    audit = TableOutputEvidenceTests.audit
+
+    def setUp(self):
+        TableReturnEvidenceTests.setUp(self)
+        self.observations = [(n*10, s) for n, s in self.observations]
+        self.mutations = [(n*10, a, r) for n, a, r in self.mutations]
+        self.observations[-2][1].pop('node_table')
+        template = copy.deepcopy(self.observations[-2][1])
+        template['ui'] = dict(elements=[], dialogs=[])
+        template.pop('workflow_navigation')
+        self.original_fields = [dict(index=i, source_index=i, name_key=c['name'], label=c['label'], type=c['type'],
+            format_string='0.00' if i == 0 else '') for i,c in enumerate(self.request['parameters']['settings']['columns'])]
+        self.original_settings = dict(formatting=True,custom=True,format_string='0.00',thousands=False,
+                                      scientific=False,decimal_digits='',currency='')
+        def format_state(mask):
+            state = copy.deepcopy(template)
+            fields = copy.deepcopy(self.original_fields);fields[0]['format_string'] = mask
+            settings = dict(self.original_settings, format_string=mask)
+            state['node_table_dialog'] = dict(table=self.table,kind='format')
+            state['table_settings'] = dict(status='observed',kind='format',format=dict(
+                page=dict(status='complete_definition_page',schema_id='format-schema',offset=0,limit=8,total_columns=2,returned=2,next_offset=None),
+                metadata_fields=fields,
+                selected_numeric=dict(source_index=0,name_key='Id',**{k:dict(status='observed',value=v) for k,v in settings.items()})))
+            state['ui'] = dict(dialogs=[dict(identity=dict(anchor_tid='Table;ModalWindow_BrowseFormat'))],elements=[
+                dict(ref='mask',tid='Table;ModalWindow_BrowseFormat;BrowseFormat;FormatPanel;edtFormat',allowed_actions=['fill','press']),
+                dict(ref='apply_format',tid='Table;ModalWindow_BrowseFormat;btnApply',allowed_actions=['click'])])
+            return state
+        self.observations = [(n,format_state('0') if n == 70 else s) for n,s in self.observations]
+        available = copy.deepcopy(template)
+        available['ui']['elements'] = [dict(ref='format',tid='Table;btnDataGridFormat',allowed_actions=['click'])]
+        self.observations += [(67,format_state('0.00')),(68,format_state('0.00')),(111,available),
+                              (113,format_state('0')),(115,format_state('0.00')),(117,format_state('0.00')),(119,copy.deepcopy(template))]
+        self.observations.sort(key=lambda row:row[0])
+        self.mutations += [(69,dict(verb='fill',ref='mask',text='0'),{}),(112,dict(verb='click',ref='format'),{}),
+                           (114,dict(verb='fill',ref='mask',text='0.00'),{}),(116,dict(verb='press',ref='mask',key='Tab'),{}),
+                           (118,dict(verb='click',ref='apply_format'),{})]
+        self.mutations.sort(key=lambda row:row[0])
+        self.checkpoint['output']['format_restoration'] = dict(table=self.table,restored=True,fields=[
+            dict(index=i,definition_index=i,key=f['name_key'],label=f['label'],type=f['type'],**({'mask':f['format_string']} if i == 0 else {}))
+            for i,f in enumerate(self.original_fields)])
+
+    def state(self, step):
+        return next(s for n,s in self.observations if n == step)
+
+    def test_precision_read_restore_and_return_pass_without_a_verified_summary_flag(self):
+        self.assertNotIn('verified',self.checkpoint['output']['format_restoration'])
+        self.assertEqual(self.audit(),[])
+
+    def test_second_apply_needs_raw_restoration_not_only_checkpoint_flags(self):
+        for variant in ['no_original','no_restored','only_flag','wrong_table','wrong_mask','wrong_order','wrong_key',
+                        'wrong_index','wrong_source_index','wrong_type','wrong_other_field_mask','wrong_settings','unobserved_settings']:
+            with self.subTest(variant=variant):
+                self.setUp()
+                if variant=='no_original':self.observations=[(n,s) for n,s in self.observations if n not in (67,68)]
+                if variant=='no_restored':self.observations=[(n,s) for n,s in self.observations if n not in (115,117)]
+                if variant=='only_flag':self.checkpoint['output']['format_restoration']={'restored':True}
+                if variant=='wrong_table':self.checkpoint['output']['format_restoration']={**self.checkpoint['output']['format_restoration'],'table':{**self.table,'view_guid':'foreign'}}
+                final=self.state(117) if variant!='no_restored' else self.state(113)
+                fmt=final['table_settings']['format'];fields=fmt['metadata_fields']
+                if variant=='wrong_mask':fields[0]['format_string']='0.000'
+                if variant=='wrong_order':fields.reverse()
+                if variant=='wrong_key':fields[0]['name_key']='Other'
+                if variant=='wrong_index':fields[0]['index']=1
+                if variant=='wrong_source_index':fields[0]['source_index']=1
+                if variant=='wrong_type':fields[0]['type']='real'
+                if variant=='wrong_other_field_mask':fields[1]['format_string']='unexpected'
+                if variant=='wrong_settings':fmt['selected_numeric']['custom']['value']=False
+                if variant=='unobserved_settings':fmt['selected_numeric']['format_string']['status']='unobserved'
+                self.assertTrue(self.audit())
+
+    def test_restoration_requires_its_own_owner_and_no_foreign_or_later_mutations(self):
+        for variant in ['foreign_node','foreign_dialog','foreign_control','unallowed_control','missing_close','late_cells',
+                        'edit_after_readback','extra_apply','extra_action','extra_before_restore','no_workflow_return']:
+            with self.subTest(variant=variant):
+                self.setUp()
+                if variant=='foreign_node':
+                    for n,s in self.observations:
+                        if 111<=n<=119:
+                            s['prepared_node_context']={**s['prepared_node_context'],'node_id':'foreign'}
+                            s['node_outputs']['node_context']={**s['prepared_node_context']}
+                if variant=='foreign_dialog':self.state(117)['node_table_dialog']={'table':{**self.table,'port_guid':'foreign'},'kind':'format'}
+                if variant=='foreign_control':self.state(113)['ui']['elements'][0]['tid']='Other;ModalWindow_BrowseFormat;BrowseFormat;edtFormat'
+                if variant=='unallowed_control':self.state(113)['ui']['elements'][0]['allowed_actions']=[]
+                if variant=='missing_close':
+                    for n,s in self.observations:
+                        if n>118:s['ui']['dialogs']=[{'title':'Format still open'}]
+                if variant=='late_cells':self.state(119)['node_table']=copy.deepcopy(self.state(110)['node_table'])
+                if variant=='edit_after_readback':
+                    self.observations=[(n,s) for n,s in self.observations if n!=117]
+                if variant=='extra_apply':
+                    self.observations.append((118.5,copy.deepcopy(self.state(117))))
+                    self.mutations.append((118.75,dict(verb='click',ref='apply_format'),{}))
+                if variant=='extra_action':self.mutations.append((131,dict(verb='click',ref='unknown'),{}))
+                if variant=='extra_before_restore':self.mutations.append((111.5,dict(verb='click',ref='unknown'),{}))
+                if variant=='no_workflow_return':self.checkpoint['output'].pop('workflow_return')
+                self.observations.sort(key=lambda row:row[0]);self.mutations.sort(key=lambda row:row[0])
+                self.assertTrue(self.audit())

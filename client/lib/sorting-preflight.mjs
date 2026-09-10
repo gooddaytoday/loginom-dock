@@ -5,6 +5,10 @@ const need=(v,m)=>{if(!v)throw Error(m);};
 export async function preflightSortingSource(options,ctx,config){
  const {operation,execute,onRecord,now,receiptOptions}=options,request=operation.parameters;
  if(request.parameters.keys===undefined)return {verified:true,not_applicable:true};
+ // Existing input mappings can retain names absent from the upstream output.
+ // Validate their effective schema in the normal input wizard, before editing
+ // or committing it. New nodes still reject bad keys before graph creation.
+ if(request.target.kind==='existing')return {verified:true,not_applicable:true,validation_deferred:'input_mapping'};
  need(request.inputs.length===1,'Sorting preflight requires an explicit input');
  const input=request.inputs[0],binding={document_id:request.document_id,workflow_ref:request.workflow_ref,node:input.source};
  const channel=createNodeProcedure({operation,execute,record:onRecord,now,maxSteps:256,...config,signal:ctx.signal,preparedNodeContext:binding,

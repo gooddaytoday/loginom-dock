@@ -16,6 +16,26 @@ function fixture(){
 }
 test('sorting uses item priority, not stale Index or totalCount, and exact input names',()=>{const r=fixture().read();assert.equal(r.verified,true);assert.equal(r.keys[0].name,'Amount');assert.equal(r.keys[1].order,1);assert.equal(r.keys[0].direction,'DESC');assert.equal(r.comparison.locale_verified,false);assert.equal(r.settings_applied,false);});
 test('sorting accepts a source selection retained after moving that field',()=>{const f=fixture();assert.equal(f.read().verified,true);f.selections[0]=[{}];assert.equal(f.read().verified,false);});
+function renamedInputFixture(){
+ const f=fixture();f.records[1].data.Name='RevenueAlias';f.records[1].data.DisplayName='Выручка alias';
+ Object.assign(f.keys[0].data,{Name:'total_revenue',DisplayName:'total_revenue',DataType:0});return f;
+}
+test('sorting exposes the native missing-input key after an input alias changes, retaining its deletion identity',()=>{
+ const f=renamedInputFixture(),r=f.read();assert.equal(r.verified,true);
+ assert.deepEqual(JSON.parse(JSON.stringify(r.keys[0])),{record_id:'k1',name:'total_revenue',label:'total_revenue',type:null,missing_input:true,order:0,direction:'DESC',case_sensitive:true});
+ assert.equal(r.input_fields.find(field=>field.name==='RevenueAlias').type,'real');
+ assert.equal(r.keys[1].name,'Key');assert.equal(r.inventory_complete,true);assert.equal(r.settings_applied,false);
+});
+test('sorting rejects unknown typed keys and malformed missing-input placeholders',()=>{
+ for(const change of [f=>f.keys[0].data.DataType=3,f=>f.keys[0].data.DisplayName='Unverified label',f=>f.keys[0].data.Name='',f=>f.keys[0].data.Name='RevenueAlias']){
+  const f=renamedInputFixture();change(f);assert.equal(f.read().verified,false);
+ }
+});
+test('sorting rejects duplicate selected record IDs and keys, including missing-input placeholders',()=>{
+ for(const change of [f=>f.keys[1].internalId=f.keys[0].internalId,f=>f.keys[1].data={...f.keys[0].data}]){
+  for(const create of [fixture,renamedInputFixture]){const f=create();change(f);assert.equal(f.read().verified,false);}
+ }
+});
 test('sorting rejects incomplete inventory, stale bindings, duplicate keys and wrong field types',()=>{
  for(const change of [f=>f.source.getCount=()=>99,f=>f.sort.isLoading=()=>true,f=>f.keys.push(f.keys[0]),f=>f.keys[0].data.Name='missing',f=>f.keys[0].data.DataType=5,f=>f.keys[0].data.SortDirection=2,f=>f.keys[0].data.CaseSensitive='false',f=>f.records[2].data.Name='KEY',f=>f.chain.getData=()=>({items:f.records}),f=>f.source.getData=()=>({items:f.records,getSource:()=>({items:[]})}),f=>f.root.checkVisibility=()=>false]){
  const f=fixture();change(f);assert.equal(f.read().verified,false);

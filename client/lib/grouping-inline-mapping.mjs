@@ -28,12 +28,17 @@ export function verifyGroupingAutosyncRestore(before,after,value){
   'Grouping autosync restoration changed fields');
  return true;
 }
-export async function configureGroupingInlineMapping(channel,configuration){
+export function configureGroupingInlineMapping(channel,configuration){
+ return configureDerivedInlineMapping(channel,configuration,validateGroupingInlineSources);
+}
+// Both grouping and sorting expose this same conditional native output page
+// after their input-derived schema changes. Each supplies its source contract.
+export async function configureDerivedInlineMapping(channel,configuration,validateSources){
  const ready=s=>s.wizard?.stage==='output_mapping'&&s.node_mapping?.verified===true
   &&s.node_mapping.mapping_wizard==='DerivedDataSourceMappingEngineOutputPortWizard';
  let state=await channel.observe({condition:'grouping conditional output inventory',readMappings:true,ready});
  const before=state.node_mapping,removed=[];
- for(const obsolete of validateGroupingInlineSources(configuration,before)){
+ for(const obsolete of validateSources(configuration,before)){
   state=await channel.observe({condition:'obsolete grouping field before removal',readMappings:true,ready});
   const baseline=state.node_mapping,field=baseline.target_fields.find(f=>f.record_id===obsolete.record_id);
   need(field&&same(retained(field),retained(obsolete)),'Obsolete grouping field changed');
@@ -53,7 +58,7 @@ export async function configureGroupingInlineMapping(channel,configuration){
   verifyGroupingStaleRemoval(baseline,state.node_mapping,field);removed.push({field,before:baseline,after:state.node_mapping});
  }
  state=await channel.observe({condition:'grouping output after pruning',readMappings:true,ready});
- validateGroupingInlineSources(configuration,state.node_mapping);
+ validateSources(configuration,state.node_mapping);
  const baseline=state.node_mapping,linked=baseline.target_fields.map(f=>f.source?.record_id);
  need(linked.every(Boolean)&&new Set(linked).size===linked.length,'Grouping output must have unique source links');
  const missing=baseline.source_fields.filter(f=>!linked.includes(f.record_id));

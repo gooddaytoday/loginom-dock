@@ -25,12 +25,17 @@ export function readSortingBrowser(prefix){
   if(!r?.isModel||!id||ids.has(id)||typeof d?.Name!=='string'||!d.Name||d.Name.length>128||names.has(d.Name.toLowerCase())||typeof d.DisplayName!=='string'||!types[d.DataType])return fail('sorting_input_record');
   ids.add(id);names.add(d.Name.toLowerCase());fields.push({record_id:id,name:d.Name,label:d.DisplayName,type:types[d.DataType]});
  }
- const ordered=[],seen=new Set();for(const [order,r] of keys.entries()){const d=r?.data,f=fields.find(f=>f.name===d?.Name),id=String(r?.internalId??'');
-  if(!r?.isModel||!f||!id||seen.has(f.name)||f.label!==d.DisplayName||f.type!==types[d.DataType]||![0,1].includes(d.SortDirection)||typeof d.CaseSensitive!=='boolean')return fail('sorting_key_record');
-  seen.add(f.name);ordered.push({...f,record_id:id,order,direction:d.SortDirection===0?'ASC':'DESC',case_sensitive:d.CaseSensitive});
+ const ordered=[],seen=new Set(),keyIds=new Set();for(const [order,r] of keys.entries()){const d=r?.data,f=fields.find(f=>f.name===d?.Name),id=String(r?.internalId??'');
+  // Loginom retains a removed/renamed key as an explicit unknown-type row.
+  // Keep its identity so a complete replacement can delete it in this wizard;
+  // never treat it as a usable input field or accept an unexplained typed row.
+  const missing=!f&&d?.DataType===0&&d.DisplayName===d.Name;
+  if(!r?.isModel||typeof d?.Name!=='string'||!d.Name||d.Name.length>128||!id||keyIds.has(id)||seen.has(d.Name.toLowerCase())
+   ||!missing&&(!f||f.label!==d.DisplayName||f.type!==types[d.DataType])||![0,1].includes(d.SortDirection)||typeof d.CaseSensitive!=='boolean')return fail('sorting_key_record');
+  keyIds.add(id);seen.add(d.Name.toLowerCase());ordered.push({...f,...(missing?{name:d.Name,label:d.DisplayName,type:null,missing_input:true}:{}),record_id:id,order,direction:d.SortDirection===0?'ASC':'DESC',case_sensitive:d.CaseSensitive});
  }
  const free=chain.getData?.()?.items;
- if(!Array.isArray(free)||free.length!==fields.length-keys.length||free.some(r=>!ins.includes(r)||seen.has(r.data.Name)))return fail('sorting_available_partition');
+ if(!Array.isArray(free)||new Set(free).size!==free.length||free.length!==fields.length-ordered.filter(k=>!k.missing_input).length||free.some(r=>!ins.includes(r)||seen.has(r.data.Name.toLowerCase())))return fail('sorting_available_partition');
  const selections={};for(const [name,c,rs] of [['available',available,ins],['selected',selected,keys]]){
   const selection=c.getSelectionModel?.().getSelection?.();if(!Array.isArray(selection)||selection.some(r=>!rs.includes(r)))return fail('sorting_selection');selections[name]=selection.map(r=>String(r.internalId));
  }
