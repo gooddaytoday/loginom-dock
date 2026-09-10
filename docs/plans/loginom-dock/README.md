@@ -1,6 +1,6 @@
 # Подпланы реализации Loginom Dock
 
-Редакция: 9 сентября 2026 года. Подплан 01 реализован локально; goal-only приёмка
+Редакция: 10 сентября 2026 года. Подплан 01 реализован локально; goal-only приёмка
 нового черновика — 17/17 PASS. Подплан 02 — **implemented / live_verified**:
 внутренний графовый драйвер, Hermes 15/15 audit PASS; не released.
 Подплан 03 — **implemented / live_verified (source runtime)**: общий node.apply,
@@ -9,7 +9,12 @@
 Подплан 04 — **implemented / live_verified (source runtime)**, Hermes45/45 PASS.
 [Проверка каждого требования](04-completion-audit.md); не released.
 Подплан 07 — **implemented / live_verified**, [аудит 49/49 PASS](07-completion-audit.md).
-Подпланы 05, 06, 08–10 остаются **planned**.
+Подплан08 — **implemented / live_verified**, [аудит56/56 PASS](08-completion-audit.md).
+Сквозной этап V3 завершён в source runtime; не released.
+Внутренняя сборка для Mac обновлена после естественного пользовательского опыта:
+[замечания закрыты, аудит48/48](../../loginom-dock/sales-followups-2026-09-10.md).
+Обычный режим и candidate-каталог не переключены; V5 этим не закрыт.
+Подпланы05,06,09,10 остаются **planned**.
 Это конкретизация [действующего плана](../2026-09-02-loginom-dock-implementation-plan.md),
 а не отчёт о выполнении. Наличие прежнего пилота или примитива не закрывает подплан.
 
