@@ -133,3 +133,19 @@ test('conditional calculator mapping keeps the same strict excluded-record proof
  assert.equal(r.target_fields[1].exclusion_source.record_id,'s1');
  f.target[1].data.IsDerived=true;assert.equal(f.read().verified,false);
 });
+
+test('grouping input roles retain native group and measure usage without accepting unknown roles',()=>{
+ const f=fixture({input:true});f.target[0].data.UsageType=6;f.target[1].data.UsageType=7;
+ const r=f.read();assert.equal(r.verified,true);assert.deepEqual(Array.from(r.target_fields,x=>x.usage_type),[6,7]);
+ f.target[0].data.UsageType=99;assert.equal(f.read().reason,'mapping_input_usage');
+});
+
+test('only a settled local CollectionProxy may retain the previous total after a grouping deletion',()=>{
+ const f=fixture({grouped:true}),s=f.stores[1],proxy={$className:'bg.ext.CollectionProxy',pendingOperations:{}};
+ s.getTotalCount=()=>3;s.currentPage=1;s.getProxy=()=>proxy;s.getRemoteFilter=()=>false;s.getRemoteSort=()=>false;
+ assert.equal(f.read().verified,true);
+ for(const mutate of [()=>{proxy.pendingOperations={running:{}};},()=>{s.currentPage=2;},()=>{s.getRemoteFilter=()=>true;},()=>{proxy.$className='Ext.data.proxy.Ajax';}]){
+  proxy.pendingOperations={};proxy.$className='bg.ext.CollectionProxy';s.currentPage=1;s.getRemoteFilter=()=>false;
+  mutate();assert.equal(f.read().reason,'mapping_filtered_store');
+ }
+});

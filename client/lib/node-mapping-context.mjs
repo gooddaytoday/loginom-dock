@@ -40,7 +40,15 @@ export function readMappingBrowser(prefix) {
     // cached source collection; every active/excluded record is validated below.
     const total=store.getTotalCount?.(),activeTotal=grouped&&store===stores[1]&&Array.isArray(records)&&Array.isArray(source)
       &&total===records.filter(r=>r?.data?.GroupField==='').length;
-    if(!Array.isArray(records)||records.length>1000||store.getCount?.()!==records.length||total!==records.length&&!activeTotal
+    const proxy=store.getProxy?.();
+    // CollectionProxy keeps the last load's total after a local deletion. The
+    // complete unfiltered cache and mutation-specific before/after proof remain
+    // authoritative; remote/paged stores never receive this allowance.
+    const localTotal=grouped&&store===stores[1]&&proxy?.$className==='bg.ext.CollectionProxy'
+      &&store.currentPage===1&&store.getRemoteFilter?.()===false&&store.getRemoteSort?.()===false
+      &&proxy.pendingOperations&&Object.keys(proxy.pendingOperations).length===0
+      &&Array.isArray(source)&&Number.isSafeInteger(total)&&total>=0&&total<=1000;
+    if(!Array.isArray(records)||records.length>1000||store.getCount?.()!==records.length||total!==records.length&&!activeTotal&&!localTotal
       ||source&&(!Array.isArray(source)||source.length!==records.length||new Set(source).size!==records.length||source.some(r=>!records.includes(r))))return fail('mapping_filtered_store');
     const ids=new Set(),names=new Set(),fieldIds=new Set(),groupIndices=new Map();
     for(const [i,r] of records.entries()) {
@@ -61,7 +69,7 @@ export function readMappingBrowser(prefix) {
   const describe=r=>({record_id:String(r.internalId),field_id:String(r.data.ID),index:r.data.Index,
     name:r.data.Name,label:r.data.DisplayName,type:types[r.data.DataType],required:r.data.Required});
   for(const target of targets) {
-    if(input&&(![0,1,2,3,4,5].includes(target.data.UsageType)||typeof target.data.ReverseBroken!=='boolean'||target.data.ReverseBroken))return fail('mapping_input_usage');
+    if(input&&(![0,1,2,3,4,5,6,7].includes(target.data.UsageType)||typeof target.data.ReverseBroken!=='boolean'||target.data.ReverseBroken))return fail('mapping_input_usage');
     if(![0,1,2].includes(target.data.DataKind))return fail('mapping_target_kind');
     if(grouped&&typeof target.data.IsDerived!=='boolean')return fail('mapping_inherited');
     const source=target.data.ConnectedRecord;

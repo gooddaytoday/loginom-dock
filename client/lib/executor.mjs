@@ -2037,8 +2037,17 @@ export function createActionRuntime({ pinned, execute, artifactStore, allowCandi
               {document_id:request.document_id,workflow_ref:request.workflow_ref},ctx)}:{}),prepareTarget:async(graph,ctx)=>{
             const overallDeadline=operation.deadline;operation.deadline=ctx.deadline;
             let result;
-            try{result=await prepareNodeTarget({request:graph,operation,adapter:operation.nodeTargetAdapter,
-              record:onRecord,signal:ctx.signal,now});}finally{operation.deadline=overallDeadline;}
+            try{
+              if(operation.nodeApplyDrivers.beforeTarget){
+                const current=await operation.nodeTargetAdapter.verifyWorkflow({document_id:graph.document_id,workflow_ref:graph.workflow_ref},ctx);
+                if(current?.status!=='SUCCEEDED'||current.verified!==true||current.cleanup_complete!==true
+                  ||current.effect_possible!==false||current.document_id!==graph.document_id
+                  ||JSON.stringify(current.workflow_ref)!==JSON.stringify(graph.workflow_ref))throw Error('Workflow ownership changed before node preflight');
+                await operation.nodeApplyDrivers.beforeTarget(ctx);
+              }
+              result=await prepareNodeTarget({request:graph,operation,adapter:operation.nodeTargetAdapter,
+                record:onRecord,signal:ctx.signal,now});
+            }finally{operation.deadline=overallDeadline;}
             if(result.status!=='SUCCEEDED'){
               const error=new Error(result.error??'Node target is not verified');
               if(result.status==='NOT_APPLIED' && result.partial_effect===false && result.cleanup_complete===true

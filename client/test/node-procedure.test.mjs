@@ -3,9 +3,9 @@ import assert from 'node:assert/strict';
 import { createNodeProcedure } from '../lib/node-procedure.mjs';
 import { validateTextImportRequest } from '../lib/text-import-procedure.mjs';
 
-function fixture({ recordFailure, executeFailure, changedDocument, foreignReceipt, movingEpoch, dialogsAtRead, staleReads = 0, staleEffect = false, loadingSamples = 0, maxSteps = 8, signal } = {}) {
+function fixture({ recordFailure, executeFailure, changedDocument, foreignReceipt, movingEpoch, dialogsAtRead, staleReads = 0, staleEffect = false, loadingSamples = 0, maxSteps = 8, signal, sharedOperation } = {}) {
   const events = [], records = []; let reads = 0;
-  const operation = { id: 'parent', action: { action_key: 'node.import.configure', revision: '1' },
+  const operation = sharedOperation ?? { id: 'parent', action: { action_key: 'node.import.configure', revision: '1' },
     deadline: 10000, checkpoint: { workflow_ref: { prefix: 'MF;TF-1', tab_tid: 'tab' }, document_id: 'doc' } };
   const state = { origin: 'http://example.test', loginom_build: '7.4.2', workflow_ref: operation.checkpoint.workflow_ref,
     dom_epoch: { document: changedDocument ? 'foreign' : 'doc', revision: 1 }, scan: { complete: true }, wizard: staleReads ? {status:'observed',root_ref:'ui-root',root_tid:'Wizard'} : { status: 'absent' },
@@ -150,9 +150,9 @@ test('target incarnation confirmation waits for the same identity twice', async 
   assert.equal(f.records.at(-1).readiness.required_samples, 2);
 });
 
-function recoveryFixture({ refusals = 1, receipt = {}, changedIdentity = false, changedIntent = false, recordFailure = false } = {}) {
+function recoveryFixture({ initialSequence = 0, refusals = 1, receipt = {}, changedIdentity = false, changedIntent = false, recordFailure = false } = {}) {
   let reads = 0, mutations = 0; const records = [];
-  const operation = {id:'recovery',action:{action_key:'node.apply',revision:'1'},deadline:10000,
+  const operation = {nodeStepSequence:initialSequence,id:'recovery',action:{action_key:'node.apply',revision:'1'},deadline:10000,
     checkpoint:{document_id:'doc',workflow_ref:{prefix:'MF;TF-1',tab_tid:'tab'}}};
   const channel = createNodeProcedure({operation,now:()=>1,wait:async()=>{},maxSteps:20,targetOrigin:'http://example.test',targetBuild:'7.4.2',
     record:async e=>{records.push(e);if(recordFailure && e.phase==='node_step_refresh_authorized')throw Error('disk failure');return structuredClone(e)},
@@ -379,4 +379,24 @@ test('failed interruption journal cannot supply a safe continuation proof',async
  const controller=new AbortController(),f=fixture({signal:controller.signal,recordFailure:'node_observation_interrupted'});
  await assert.rejects(f.channel.observe({condition:'wait',ready:()=>{controller.abort(Error('local cancel'));return false;}}),/disk failure/);
  assert.ok(!f.records.some(e=>e.phase==='node_observation_interrupted'));assert.ok(!f.events.includes('mutated'));
+});
+
+
+test('preflight and configuration channels share collision-free internal receipts', async () => {
+  const preflight = fixture();
+  const configure = fixture({sharedOperation: preflight.operation});
+  for (const f of [preflight, configure, preflight]) {
+    await f.channel.observe({condition: 'owned field', ready: () => true});
+    await f.channel.act({verb: 'click', ref: 'ui-button'});
+  }
+  const ids = [...preflight.records, ...configure.records]
+    .filter(r => r.phase === 'node_step_prepared').map(r => r.internal_operation_id);
+  assert.deepEqual(ids.sort(), ['parent:n2', 'parent:n4', 'parent:n6']);
+  assert.equal(new Set(ids).size, 3);
+});
+
+test('refresh authorization keeps the shared operation sequence after preflight',async()=>{
+ const f=recoveryFixture({initialSequence:7});await f.perform();
+ for(const e of f.records)assert.equal(e.internal_operation_id,'recovery:n'+e.step);
+ const auth=f.records.find(e=>e.phase==='node_step_refresh_authorized');assert.ok(auth.step>7);
 });

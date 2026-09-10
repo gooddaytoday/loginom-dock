@@ -1473,9 +1473,9 @@ test('wizard step clicks once and verifies only the requested stage in the same 
   }
 });
 
-test('Calculator validation accepts either owned conditional destination after one click',async()=>{
- for(const destination of ['done','output_mapping','input_mapping']) {
-  const page=new Page(),c=wizardStepFixture(page);c.marker.attrs['data-tid']=c.base+';CalcDataWizard;btnAddExpr';
+test('Calculator and Grouping accept only owned conditional destinations after one click',async()=>{
+ for(const marker of [';CalcDataWizard;btnAddExpr',';GroupDataWizard;grdUsedFields;tbl'])for(const destination of ['done','output_mapping','input_mapping']) {
+  const page=new Page(),c=wizardStepFixture(page);c.marker.attrs['data-tid']=c.base+marker;
   const snapshot=await page.observe(),button=snapshot.ui.elements.find(e=>e.wizard_step);
   page.waitForTimeout=async()=>{};const click=page.mouse.click;
   page.mouse.click=async(...args)=>{await click(...args);c.marker.remove();page.add('div',c.base+(destination==='done'?';DoneWizard;edtDisplayName':destination==='output_mapping'?';DerivedDataSourceMappingEngineOutputPortWizard;btnAddMappingColumn':';TuneDataSourceInputPortWizard;btnAddMappingColumn'),'',undefined,c.form);};
@@ -4454,4 +4454,18 @@ test('prepared 1000-column import keeps page refs and rejects hidden or sensitiv
  c.cols[999].cells[1].style.display='none';assert.equal((await read(0)).output.wizard.import_columns.page.status,'unverified');
  c.cols[999].cells[1].style.display='block';c.cols[999].cells[1].attrs['aria-label']='password';
  assert.equal((await read(0)).output.wizard.import_columns.page.status,'unverified');
+});
+
+test('a populated console scans nested cell wrappers without quadratic work',async()=>{
+ const page=new Page();page.context.innerWidth=1440;page.context.innerHeight=1000;
+ const panel=page.add('div','ConsoleForm','',{x:0,y:0,width:1400,height:950});
+ for(let i=0;i<400;i++){
+  const cell=page.add('td',null,'',{x:(i%20)*60,y:Math.floor(i/20)*30,width:60,height:30},panel);
+  const inner=page.add('div',null,'value'+i,{x:(i%20)*60,y:Math.floor(i/20)*30,width:60,height:30},cell);inner.attrs.class='x-grid-cell-inner';
+ }
+ const roots=await page.execute({mode:'observe',discover_roots:true});
+ const root=roots.output.ui.elements.find(e=>e.tid==='ConsoleForm');assert.ok(root);
+ const scoped=await page.execute({mode:'observe',root_ref:root.ref});
+ assert.equal(scoped.status,'SUCCEEDED');assert.equal(scoped.output.scan.complete,true);
+ assert.equal(scoped.output.ui.table_cells.length,120);assert.equal(scoped.output.ui.table_cells[0].text,'value0');
 });

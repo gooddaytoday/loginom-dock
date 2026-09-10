@@ -12,7 +12,7 @@ export const uiActionSchema = {
     delta_y: { type: 'integer', minimum: -1000, maximum: 1000 },
     delta_x: { type: 'integer', minimum: -1000, maximum: 1000 },
     ref: { type: 'string', maxLength: 128 }, text: { type: 'string', maxLength: 2048 },
-    key: { type: 'string', enum: ['Enter', 'Escape', 'Tab', 'Shift+Tab', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Home', 'End', 'PageUp', 'PageDown', 'Backspace', 'Delete', 'Space', 'F2'] },
+    key: { type: 'string', enum: ['Enter', 'Escape', 'Tab', 'Shift+Tab', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Home', 'End', 'PageUp', 'PageDown', 'Backspace', 'Delete', 'Space', 'F2', 'F3'] },
     source_ref: { type: 'string', maxLength: 128 }, target_ref: { type: 'string', maxLength: 128 },
   },
 };
@@ -34,12 +34,13 @@ export function validateUiAction(action, snapshot) {
   if (action.verb === 'scroll_horizontal' && (!Number.isInteger(action.delta_x) || !action.delta_x || Math.abs(action.delta_x)>1000)) throw new Error('Horizontal scroll requires a nonzero integer delta_x within -1000..1000');
   if (action.verb === 'set_checked' && typeof action.checked !== 'boolean') throw new Error('set_checked requires a boolean checked value');
   if (snapshot) {
-    if(action.verb==='wizard_step'&&Array.isArray(action.expected_stage)&&snapshot.wizard?.stage!=='calculator')throw new Error('Conditional destinations belong only to Calculator validation');
+    if(action.verb==='wizard_step'&&Array.isArray(action.expected_stage)&&!['calculator','grouping'].includes(snapshot.wizard?.stage))throw new Error('Conditional destinations require Calculator or Grouping validation');
     if(action.verb==='wizard_step' && (snapshot.wizard?.status!=='observed' || snapshot.wizard.stage===action.expected_stage))throw new Error('wizard_step requires a different destination stage and an observed wizard');
     if (!Array.isArray(snapshot.ui?.elements)) throw new Error('UI action requires an observation snapshot');
     for (const ref of refs) {
       const elements = snapshot.ui.elements.filter(element => element.ref === ref);
       if (elements.length !== 1 || !elements[0].allowed_actions?.includes(action.verb)) throw new Error('UI reference is absent, ambiguous, or does not support this action');
+      if(action.verb==='press'&&action.key==='F3'&&(snapshot.wizard?.status!=='absent'||elements[0].kind!=='port'||!/^MF;TF(?:-\d+)?;Graph;[^;]+;Output_Data-\d+$/.test(elements[0].tid??'')))throw Error('F3 is restricted to an observed graph table output');
       if(action.verb==='set_wizard_field' && action.text.length>elements[0].wizard_field.max_length_utf16)throw new Error('Wizard text exceeds the observed native input limit; select an observed option instead of typing its label');
       if (action.verb==='set_checked' && elements[0].check_state?.kind==='radio' && !action.checked) throw new Error('Select the desired radio option; a radio cannot be independently unchecked');
     }
@@ -1902,6 +1903,29 @@ function readRenderedInputMapping(observation) {
         grid_ref:wizard.grouping.grid_ref,wizard_root_ref:wizard.root_ref}]) : []);
     for(const field of wizard.grouping?.available_fields??[])groupingCells.set(field.cell_ref,{
       field_key:field.field_key,row_ref:field.row_ref,grid_ref:field.grid_ref,role:'available',wizard_root_ref:wizard.root_ref});
+    // Bind partially populated/virtualized grouping lists to their actual local
+    // records. Empty section summaries share data-tid with rows and are excluded.
+    if(!discoverRoots&&wizard.stage==='grouping')for(const [gridName,column,role] of [
+      ['grdDataFields','colDisplayName_','available'],['grdUsedFields','colUsedFields_',null]]) {
+      const base=wizard.root_tid+';GroupDataWizard;',grids=tids.get(base+gridName+';tbl')??[];
+      if(grids.length!==1)continue;
+      const grid=grids[0],view=globalThis.Ext?.getCmp?.(grid.id),store=view?.getStore?.();
+      if(view?.el?.dom!==grid||store?.$className!=='Ext.data.ChainedStore')continue;
+      const records=store.getData?.()?.items;
+      if(!Array.isArray(records)||records.length>1002)continue;
+      const rows=[...grid.querySelectorAll('table.x-grid-item')];charge();
+      if(rows.length>200)continue;
+      for(const row of rows){
+        const index=Number(row.getAttribute('data-recordindex')),record=records[index],d=record?.data;
+        if(!Number.isSafeInteger(index)||index<0||!record?.isModel||typeof d?.Name!=='string'||!d.Name
+          ||row.getAttribute('data-recordid')!==String(record.internalId)||row.getAttribute('data-boundview')!==grid.id
+          ||![0,6,7].includes(d.Disposition)||role==='available'&&d.Disposition!==0)continue;
+        const cells=[...row.querySelectorAll('[data-tid]')].filter(e=>getTid(e)===base+column+d.Name&&!e.closest('.x-grid-row-summary'));
+        if(cells.length!==1||!visible(cells[0])||sensitive(cells[0]))continue;
+        groupingCells.set(refOf(cells[0]),{field_key:d.Name,record_id:String(record.internalId),row_ref:refOf(row),
+          grid_ref:refOf(grid),role:role??(d.Disposition===6?'group':d.Disposition===7?'measure':'invalid'),wizard_root_ref:wizard.root_ref});
+      }
+    }
     // The real delimited-import UI synchronizes the definitions with the
     // native horizontal scroller of its DATA preview. The settings grid itself
     // has overflow:hidden and must not be scrolled by guessing its internals.
@@ -1951,7 +1975,7 @@ function readRenderedInputMapping(observation) {
       &&visible(storageRootPanels[0])&&storageRootPanels[0].contains(storageRootCandidates[0])
       &&visible(storageRootCandidates[0])&&!sensitive(storageRootCandidates[0])
       &&textOf(storageRootCandidates[0],true)==='Файлы'?storageRootCandidates[0]:null;
-    const interesting = element => element===storageRoot || outputColumnCells.has(state.ids.get(element)) || tableScrollers.has(state.ids.get(element)) || viewerControls.has(state.ids.get(element)) || /;ViewsForm;colVendors_Визуализаторы>[^;]+;TreeText$/.test(getTid(element)??'') || processGridControls.has(state.ids.get(element)) || processExpanders.has(state.ids.get(element)) || outputScroller(element) || importScroller(element) || processCells.has(state.ids.get(element)) || processMenuControls.has(state.ids.get(element)) || groupingCells.has(state.ids.get(element)) || !!comboPart(element) || importColumnCellRefs.has(state.ids.get(element)) || element.matches('button,input,textarea,select,[contenteditable="true"],[role="button"],[role="checkbox"],[role="radio"],[role="combobox"],[role="menuitem"],[role="tab"],[role="treeitem"],[role="option"],[role="spinbutton"]')
+    const interesting = element => /^MF;TF(?:-\d+)?;ModelForm;PreviewWindow;p\.h;close$/.test(getTid(element)??'') || element===storageRoot || outputColumnCells.has(state.ids.get(element)) || tableScrollers.has(state.ids.get(element)) || viewerControls.has(state.ids.get(element)) || /;ViewsForm;colVendors_Визуализаторы>[^;]+;TreeText$/.test(getTid(element)??'') || processGridControls.has(state.ids.get(element)) || processExpanders.has(state.ids.get(element)) || outputScroller(element) || importScroller(element) || processCells.has(state.ids.get(element)) || processMenuControls.has(state.ids.get(element)) || groupingCells.has(state.ids.get(element)) || !!comboPart(element) || importColumnCellRefs.has(state.ids.get(element)) || element.matches('button,input,textarea,select,[contenteditable="true"],[role="button"],[role="checkbox"],[role="radio"],[role="combobox"],[role="menuitem"],[role="tab"],[role="treeitem"],[role="option"],[role="spinbutton"]')
       || /;(?:Input|Output)_[^;]+$|;Label;Label$|;Graph;[^;]+$|;btn[^;]+$|;edt[^;]+$|;mi[^;]+$|;tb(?:-\d+)?$/.test(getTid(element) ?? '')
       // Pinned E2E bg/selectors.ts:272,279,286: palette tree labels and
       // expanders are spans without button/treeitem roles in some UI builds.
@@ -2273,7 +2297,7 @@ function readRenderedInputMapping(observation) {
         enabled: isEnabled, visible: true, interaction, bounding_box: boxOf(element),
         // A bounded prefix is not a sufficient value precondition. A dedicated
         // large-field driver must establish its own complete read/write contract.
-        allowed_actions: tid===workflow?.prefix+';ModelForm;btnToggleActivateCurrent' ? (allowed&&graphExecution&&interaction.state==='point_observed'?['execute_graph_node']:[]) : element===storageRoot ? (allowed && interaction.state==='point_observed'?['click']:[]) : outputColumn ? (allowed && interaction.state==='point_observed'?['click','double_click','press']:[]) : tableScroller ? (allowed && horizontalScroll?.ref===refOf(element) && interaction.state==='point_observed'?['scroll_horizontal']:[]) : viewerControl ? (allowed && interaction.state==='point_observed' ? [viewerControl.kind==='enter'?'enter_table':'click'] : []) : processGrid || processExpander ? (allowed && interaction.state==='point_observed' ? (processGrid?['right_click','press',...(scroll?.ref===refOf(element)?['scroll']:[])]:['click']) : []) : outputScroller(element) ? (allowed && scroll && scroll.ref===refOf(element) && interaction.state==='point_observed'?['scroll']:[]) : importScroller(element) ? (allowed && horizontalScroll && interaction.state==='point_observed'?['scroll_horizontal']:[]) : processRow || processMenu ? (allowed && interaction.state==='point_observed' ? (processRow?['click','right_click','press']:processMenu.action==='mniCancel'?['cancel_process']:['click','press',...(processMenu.action==='mniShowNodeToProcess'?['show_process_node']:[])]) : []) : groupingField ? (allowed && interaction.state==='point_observed' ? ['click','double_click','press'] : []) : expressionWritable ? ['replace_expression'] : allowed && !valueTruncated ? ['click', 'double_click', 'right_click', 'press', 'drag', ...(editable ? ['fill',...(wizardFields.has(element)?['set_wizard_field']:[])] : []), ...(checkState ? ['set_checked'] : []), ...(wizardStep?['wizard_step']:[]), ...(closeConfirmation?['confirm_wizard_close']:[]), ...(deactivationConfirmation?['confirm_wizard_deactivation']:[]), ...(openWizard?['open_wizard','begin_wizard']:[]),...(openNodeViews?['open_node_views']:[]),...(graphExecution?['execute_graph_node']:[]), ...(finishWizard?[finishWizard.mode==='execute'?'execute_wizard':'finish_wizard']:[]), ...(columnClose?[columnClose.mode+'_'+columnClose.scope+'_column']:[]), ...(expressionApply?['apply_expression_parameters']:[]), ...(expressionCancel?['cancel_expression_parameters']:[]), ...(combo?.kind==='option'?['select_wizard_option']:[]), ...(scroll && interaction.state === 'point_observed' ? ['scroll'] : []), ...(horizontalScroll && interaction.state==='point_observed'?['scroll_horizontal']:[])] : [] };
+        allowed_actions: tid===workflow?.prefix+';ModelForm;btnToggleActivateCurrent' ? (allowed&&graphExecution&&interaction.state==='point_observed'?['execute_graph_node']:[]) : element===storageRoot ? (allowed && interaction.state==='point_observed'?['click']:[]) : outputColumn ? (allowed && interaction.state==='point_observed'?['click','double_click','press']:[]) : tableScroller ? (allowed && horizontalScroll?.ref===refOf(element) && interaction.state==='point_observed'?['scroll_horizontal']:[]) : viewerControl ? (allowed && interaction.state==='point_observed' ? [viewerControl.kind==='enter'?'enter_table':'click'] : []) : processGrid || processExpander ? (allowed && interaction.state==='point_observed' ? (processGrid?['right_click','press',...(scroll?.ref===refOf(element)?['scroll']:[])]:['click']) : []) : outputScroller(element) ? (allowed && scroll && scroll.ref===refOf(element) && interaction.state==='point_observed'?['scroll']:[]) : importScroller(element) ? (allowed && horizontalScroll && interaction.state==='point_observed'?['scroll_horizontal']:[]) : processRow || processMenu ? (allowed && interaction.state==='point_observed' ? (processRow?['click','right_click','press']:processMenu.action==='mniCancel'?['cancel_process']:['click','press',...(processMenu.action==='mniShowNodeToProcess'?['show_process_node']:[])]) : []) : groupingField ? (allowed && interaction.state==='point_observed' ? ['click','double_click','press',...(scroll?['scroll']:[])] : []) : expressionWritable ? ['replace_expression'] : allowed && !valueTruncated ? ['click', 'double_click', 'right_click', 'press', 'drag', ...(editable ? ['fill',...(wizardFields.has(element)?['set_wizard_field']:[])] : []), ...(checkState ? ['set_checked'] : []), ...(wizardStep?['wizard_step']:[]), ...(closeConfirmation?['confirm_wizard_close']:[]), ...(deactivationConfirmation?['confirm_wizard_deactivation']:[]), ...(openWizard?['open_wizard','begin_wizard']:[]),...(openNodeViews?['open_node_views']:[]),...(graphExecution?['execute_graph_node']:[]), ...(finishWizard?[finishWizard.mode==='execute'?'execute_wizard':'finish_wizard']:[]), ...(columnClose?[columnClose.mode+'_'+columnClose.scope+'_column']:[]), ...(expressionApply?['apply_expression_parameters']:[]), ...(expressionCancel?['cancel_expression_parameters']:[]), ...(combo?.kind==='option'?['select_wizard_option']:[]), ...(scroll && interaction.state === 'point_observed' ? ['scroll'] : []), ...(horizontalScroll && interaction.state==='point_observed'?['scroll_horizontal']:[])] : [] };
     });
     scanStage='data_views';
     const nodes = labels.slice(0, 200).map(label => {
@@ -2315,8 +2339,15 @@ function readRenderedInputMapping(observation) {
     const definitionOnly=!!definitionPrefix && wizard.status==='observed';
     if(definitionOnly)omittedRegions.add('generic_table_cells');
     const allCells = definitionOnly?[]:select('td,th,[role="gridcell"],[role="columnheader"],.x-column-header[data-tid],.x-grid-cell-inner');
+    // Identify nested cell wrappers by walking ancestors once per candidate.
+    // Pairwise contains() exhausted the fixed work budget for a normal process
+    // history after eleven executions, even inside the selected Console root.
+    const cellSet=new Set(allCells),nonLeafCells=new Set();
+    for(const cell of allCells)for(let parent=cell.parentElement;parent;parent=parent.parentElement){
+      charge();if(cellSet.has(parent))nonLeafCells.add(parent);
+    }
     const cells = allCells.filter(visible).filter(element=>!selectedRoot || selectedRoot===element || selectedRoot.contains(element))
-      .filter(element => !allCells.some(other => { charge(); return other !== element && element.contains(other); }));
+      .filter(element => !nonLeafCells.has(element));
     // E2E previewTable.ts and sBrowseView.ts: header key + zero-based row
     // identify rendered data cells. CSS type/null markers are observations,
     // not execution freshness, full result coverage or parsed value claims.

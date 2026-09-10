@@ -2,6 +2,8 @@ import { createHash } from 'node:crypto';
 import { makeWorkspaceUiCode, validateUiAction } from './workspace-ui.mjs';
 import {validatePreparedNodeContext} from './node-context.mjs';
 import {makeNodeMappingContextCode} from './node-mapping-context.mjs';
+import {makeNodePreviewSchemaCode} from './node-preview-schema.mjs';
+import {makeGroupingContextCode} from './grouping-context.mjs';
 import {makeCalculatorContextCode} from './calculator-context.mjs';
 import {makePreparedOutputPortOpenCode,makePreparedInputPortOpenCode} from './node-port-open.mjs';
 import {makeNodeProcessContextCode} from './node-process-context.mjs';
@@ -38,6 +40,7 @@ export function createNodeProcedure({ operation, execute, record, wrapMutation,
   targetOrigin, targetBuild, now = Date.now, maxSteps = 96, signal, preparedNodeContext,
   wait = ms => new Promise(resolve => setTimeout(resolve, ms)) }) {
   let sequence = 0;
+  const nextStep=()=>{sequence++;return operation.nodeStepSequence=(operation.nodeStepSequence??0)+1;};
   let snapshot = null;
   let evidenceSnapshot = null;
   let snapshotTableDialog = null;
@@ -65,6 +68,15 @@ export function createNodeProcedure({ operation, execute, record, wrapMutation,
     &&state.wizard.expression_parameters?.status==='observed'&&state.wizard.expression_selection?.status==='observed'
     &&state.wizard.expression_parameters.selected_expression?.tid===state.wizard.root_tid+';CalcDataWizard;colExpressionName_'+state.wizard.expression_selection.name
     &&dialog.ref===state.wizard.expression_parameters.root_ref&&dialog.identity?.anchor_tid===state.wizard.root_tid+';ExprDataEditForm';
+  const allowedFactorEditor=(dialog,state)=>state.wizard?.stage==='grouping'
+    &&state.wizard.factor_editor?.status==='rendered_factor_options'
+    &&state.wizard.factor_editor.selected_field?.status==='rendered_selected'
+    &&dialog.ref===state.wizard.factor_editor.dialog_ref
+    &&dialog.identity?.anchor_tid===state.wizard.root_tid+';FactorEditDialog';
+  const allowedPreview=(dialog,state)=>state.node_preview_schema?.verified===true
+    &&dialog.identity?.anchor_tid===state.node_preview_schema.root_tid
+    &&state.node_preview_schema.node_id===preparedNodeContext?.node.node_id;
+  const allowedNodeEditor=(dialog,state)=>allowedExpressionEditor(dialog,state)||allowedFactorEditor(dialog,state)||allowedPreview(dialog,state);
   const assertContext = (state, allowTransient = false, tableDialog = null, rootsOnly = false, wizardConfirmation = null) => {
     if(preparedNodeContext) {
       const b=state.prepared_node_context;
@@ -83,11 +95,11 @@ export function createNodeProcedure({ operation, execute, record, wrapMutation,
     // A rediscovery never authorizes a gesture; its next full read checks them.
     if(rootsOnly)return;
     const closing=boundWizardConfirmation(state,wizardConfirmation,false);
-    const expressionModal=state.ui?.dialogs?.length===1&&allowedExpressionEditor(state.ui.dialogs[0],state);
+    const expressionModal=state.ui?.dialogs?.length===1&&allowedNodeEditor(state.ui.dialogs[0],state);
     const expressionMask=m=>expressionModal&&m.kind==='modal_background'&&m.target_tid===state.wizard.root_tid&&m.ref===state.wizard.root_ref;
     if (!Array.isArray(state.ui?.masks) || !Array.isArray(state.ui?.dialogs)
       || (!allowTransient && !closing && state.ui.masks.some(m=>!expressionMask(m)))
-      || !closing && state.ui.dialogs.some(d => !allowedDialog(d,tableDialog) && !allowedOutputEditor(d,state) && !allowedExpressionEditor(d,state) && (!allowTransient || d.identity?.anchor_tid !== 'toast'))
+      || !closing && state.ui.dialogs.some(d => !allowedDialog(d,tableDialog) && !allowedOutputEditor(d,state) && !allowedNodeEditor(d,state) && (!allowTransient || d.identity?.anchor_tid !== 'toast'))
       || ['dialogs','masks'].some(key => state.ui.truncated?.[key] !== false)
       || state.scan?.complete !== true) {
       throw new Error('Node procedure is blocked by a mask or dialog');
@@ -104,7 +116,7 @@ export function createNodeProcedure({ operation, execute, record, wrapMutation,
         ready:s=>s.prepared_node_context?.surface==='graph'&&s.prepared_node_context.locked===false&&s.wizard?.status==='absent'});
       assertContext(before);
       checkBudget();
-      const step=++sequence,id=operation.id+':n'+step,action={verb:'open_'+direction+'_port',port},actionKey='node.'+direction+'_port.open.internal';
+      const step=nextStep(),id=operation.id+':n'+step,action={verb:'open_'+direction+'_port',port},actionKey='node.'+direction+'_port.open.internal';
       const signature=digest([id,action,evidenceSnapshot]),observationHash=digest(evidenceSnapshot);
       snapshot=null;evidenceSnapshot=null;
       const prepared=await entry('node_step_prepared',{step,internal_operation_id:id,action,observation_sha256:observationHash,signature});
@@ -128,7 +140,7 @@ export function createNodeProcedure({ operation, execute, record, wrapMutation,
         throw new NodeProcedureStepError(result);
       return structuredClone(result);
     },
-    async observe({ condition, ready, confirmIdentity, timeoutMs = 15000, importColumnPage, outputColumnPage, readProcesses = false, readOutputs = false, readMappings = false, readCalculator = false, readNavigation = false, tablePage, tableDialog, tableFormatPage, wizardConfirmation } = {}) {
+    async observe({ condition, ready, confirmIdentity, timeoutMs = 15000, importColumnPage, outputColumnPage, readProcesses = false, readOutputs = false, readMappings = false, readCalculator = false, readGrouping = false, readPreview = false, readNavigation = false, tablePage, tableDialog, tableFormatPage, wizardConfirmation } = {}) {
       checkBudget();
       if (typeof condition !== 'string' || !condition.trim() || typeof ready !== 'function'
         || !Number.isFinite(timeoutMs) || timeoutMs <= 0 || timeoutMs > 15000) {
@@ -139,13 +151,13 @@ export function createNodeProcedure({ operation, execute, record, wrapMutation,
       if(tableDialog && (!['format','filter'].includes(tableDialog.kind)||!tableDialog.table))throw new Error('A typed Table dialog binding is required');
       if(tablePage)makeNodeTableContextCode(preparedNodeContext,tablePage.table,tablePage.page);
       if(tableDialog)makeNodeTableContextCode(preparedNodeContext,tableDialog.table,{row_offset:0,row_limit:0,column_offset:0,column_limit:1});
-      if ((readProcesses || readOutputs || readMappings || readCalculator) && !preparedNodeContext) throw new Error('Native process/output reads require a prepared node');
+      if ((readProcesses || readOutputs || readMappings || readCalculator || readGrouping || readPreview) && !preparedNodeContext) throw new Error('Native process/output reads require a prepared node');
       // A failed wait must invalidate even a previously usable observation.
       snapshot = null;
       evidenceSnapshot = null;
       snapshotTableDialog=null;
       snapshotWizardConfirmation=null;
-      const step = ++sequence, id = operation.id + ':n' + step;
+      const step = nextStep(), id = operation.id + ':n' + step;
       const started = now(), deadline = Math.min(operation.deadline, started + timeoutMs);
       let result, satisfied = false, previousIdentity, confirmations = 0, rootRefreshes = 0;
       try {
@@ -178,11 +190,13 @@ export function createNodeProcedure({ operation, execute, record, wrapMutation,
         if(readNavigation&&!navigationRoot)throw Error('Prepared workflow navigation region unavailable');
         const outputEditors=['output_mapping','input_mapping'].includes(wizard?.stage)?(roots.output.ui?.elements??[]).filter(e=>e.tid===(wizard.stage==='input_mapping'?'EditTuneColumnDefForm':'EditColumnDefForm')):[];
         if(outputEditors.length>1)throw Error('Output field editor is ambiguous');
-        const expressionEditors=wizard?.stage==='calculator'?(roots.output.ui?.elements??[]).filter(e=>e.tid===wizard.root_tid+';ExprDataEditForm'):[];
+        const editorSuffix=wizard?.stage==='calculator'?';ExprDataEditForm':wizard?.stage==='grouping'?';FactorEditDialog':null;
+        const expressionEditors=editorSuffix?(roots.output.ui?.elements??[]).filter(e=>e.tid===wizard.root_tid+editorSuffix):[];
         if(expressionEditors.length>1)throw Error('Calculator expression editor is ambiguous');
         // This is read-only root selection. The subsequent full read must prove
         // its native ownership before any dialog or mutation is admitted.
-        const root = dialogRoot[0]?.ref ?? outputEditors[0]?.ref ?? navigationRoot ?? processRoot ?? outputRoot ?? (portals.length===1 ? portals[0].ref : expressionEditors[0]?.ref ?? (wizard?.status === 'observed' ? wizard.root_ref : graphRoot));
+        const previewRoot=readPreview?(roots.output.ui?.elements??[]).find(e=>e.tid===preparedNodeContext.workflow_ref.prefix+';ModelForm;PreviewWindow')?.ref:undefined;
+        const root = previewRoot ?? dialogRoot[0]?.ref ?? outputEditors[0]?.ref ?? navigationRoot ?? processRoot ?? outputRoot ?? (portals.length===1 ? portals[0].ref : expressionEditors[0]?.ref ?? (wizard?.status === 'observed' ? wizard.root_ref : graphRoot));
         if (now() >= deadline) break;
         result = await execute(makeWorkspaceUiCode({ mode: 'observe', operation_id: id,
           ...boundOptions,
@@ -213,6 +227,9 @@ export function createNodeProcedure({ operation, execute, record, wrapMutation,
           }
           throw new Error('Node procedure observation is incomplete');
         }
+        if(readPreview){
+          result.output.node_preview_schema=await execute(makeNodePreviewSchemaCode(preparedNodeContext),{timeout:Math.min(35000,Math.max(1,deadline-now()))});
+        }
         assertContext(result.output, true, tableDialog, false, wizardConfirmation);
         if(readNavigation)result.output.node_navigation_read=true;
         if(boundWizardConfirmation(result.output,wizardConfirmation))result.output.node_wizard_confirmation=structuredClone(wizardConfirmation);
@@ -221,7 +238,7 @@ export function createNodeProcedure({ operation, execute, record, wrapMutation,
         // observation; they are not an execution or data-freshness claim.
         for (const [requested,key,makeCode] of [[readProcesses,'node_processes',makeNodeProcessContextCode],
           [readOutputs,'node_outputs',makeNodeOutputContextCode], [readMappings,'node_mapping',makeNodeMappingContextCode],
-          [readCalculator,'node_calculator',makeCalculatorContextCode]]) {
+          [readCalculator,'node_calculator',makeCalculatorContextCode], [readGrouping,'node_grouping',makeGroupingContextCode]]) {
           if (!requested) continue;
           if (now() >= deadline) break;
           const native=await execute(makeCode(preparedNodeContext),{timeout:Math.min(35000,Math.max(1,deadline-now()))});
@@ -243,9 +260,9 @@ export function createNodeProcedure({ operation, execute, record, wrapMutation,
           result.output.node_table_dialog=structuredClone(tableDialog);
         }
         satisfied = (boundWizardConfirmation(result.output,wizardConfirmation)
-          || result.output.ui.masks.every(m=>result.output.ui.dialogs.length===1&&allowedExpressionEditor(result.output.ui.dialogs[0],result.output)
+          || result.output.ui.masks.every(m=>result.output.ui.dialogs.length===1&&allowedNodeEditor(result.output.ui.dialogs[0],result.output)
             &&m.kind==='modal_background'&&m.target_tid===result.output.wizard.root_tid&&m.ref===result.output.wizard.root_ref)
-            &&result.output.ui.dialogs.every(d=>allowedDialog(d,tableDialog)||allowedOutputEditor(d,result.output)||allowedExpressionEditor(d,result.output)))
+            &&result.output.ui.dialogs.every(d=>allowedDialog(d,tableDialog)||allowedOutputEditor(d,result.output)||allowedNodeEditor(d,result.output)))
           && ready(result.output) === true && now() < deadline;
         const identity = satisfied && confirmIdentity ? digest(confirmIdentity(result.output)) : null;
         confirmations = satisfied ? (confirmIdentity ? (identity === previousIdentity ? confirmations + 1 : 1) : 1) : 0;
@@ -289,7 +306,7 @@ export function createNodeProcedure({ operation, execute, record, wrapMutation,
       validateUiAction(action, snapshot);
       assertContext(snapshot,false,snapshotTableDialog,false,snapshotWizardConfirmation);
       if(snapshotWizardConfirmation && (action.verb!==(snapshotWizardConfirmation.kind==='close'?'confirm_wizard_close':'confirm_wizard_deactivation') || snapshot.ui.elements.find(e=>e.ref===action.ref)?.tid!=='msgbox;tlb;yes'))throw Error('Only the bound wizard confirmation can answer this question');
-      const step = ++sequence, id = operation.id + ':n' + step;
+      const step = nextStep(), id = operation.id + ':n' + step;
       const before = snapshot;
       snapshot = null;
       const signature = digest([id, action, evidenceSnapshot]);
@@ -353,6 +370,8 @@ export function createNodeProcedure({ operation, execute, record, wrapMutation,
           readNavigation:initialObservation?.node_navigation_read===true,
           readMappings:initialObservation?.node_mapping!==undefined,
           readCalculator:initialObservation?.node_calculator!==undefined,
+          readGrouping:initialObservation?.node_grouping!==undefined,
+          readPreview:initialObservation?.node_preview_schema!==undefined,
           readProcesses:initialObservation?.node_processes!==undefined,readOutputs:initialObservation?.node_outputs!==undefined,tableDialog:initialObservation?.node_table_dialog,
           tableFormatPage:initialObservation?.table_settings?.format?.page?{offset:initialObservation.table_settings.format.page.offset,limit:initialObservation.table_settings.format.page.limit}:undefined });
         const action = resolve(observed), object = identity(observed);
@@ -376,7 +395,7 @@ export function createNodeProcedure({ operation, execute, record, wrapMutation,
             || r.trace?.some(e => e.event === 'ui_preconditions_verified')
             || !Array.isArray(r.trace)) throw error;
           const event = await entry('node_step_refresh_authorized', {
-            step:sequence,internal_operation_id:r.operation_id,
+            step:operation.nodeStepSequence,internal_operation_id:r.operation_id,
             rejected_operation_id: r.operation_id, retry: attempt + 1,
             condition, binding_sha256: binding, intent_sha256: intent,
             effect_possible: false,

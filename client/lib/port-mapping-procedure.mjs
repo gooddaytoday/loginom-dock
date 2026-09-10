@@ -2,7 +2,7 @@ import {readOutputDefinitionPages,observeOutputDefinitionPage} from './import-de
 
 const same=(a,b)=>JSON.stringify(a)===JSON.stringify(b);
 const mappingControl=(s,suffix)=>{
-  const tids=['ColumnsMappingEngineOutputPortWizard','DerivedDataSourceOutputSocketWizard','TuneDataSourceMappingWizard'].map(form=>s.wizard.root_tid+';'+form+';'+suffix);
+  const tids=['ColumnsMappingEngineOutputPortWizard','DerivedDataSourceOutputSocketWizard','TuneDataSourceMappingWizard','DerivedDataSourceMappingEngineOutputPortWizard'].map(form=>s.wizard.root_tid+';'+form+';'+suffix);
   const controls=s.ui.elements.filter(e=>tids.includes(e.tid)&&e.allowed_actions.includes('click'));
   if(controls.length!==1)throw Error('Unique output mapping control unavailable');
   return controls[0];

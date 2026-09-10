@@ -45,3 +45,14 @@ test('process reveal refuses foreign process identity and an exhausted scroll ra
   await assert.rejects(revealExecutionControl(channel,node,state,process,'offscreen'),/identity changed|complete scroll range/);
  }
 });
+
+test('virtual process identity becomes available only after revealing its exact cached record',async()=>{
+ const {revealExecutionControl}=await import('../lib/node-execution-procedure.mjs');
+ const process={process_id:'20',record_id:'cached20'};let top=0;
+ const state=()=>({prepared_node_context:{...node,verified:true},node_processes:{verified:true,root_id:'root',processes:[{...process,process_tid:top===87?'native20':null}]},
+  ui:{elements:[{tid:'ConsoleForm;ProgressForm;trpProgress;treepanel;tree',ref:'scroll',process_grid:{grid_id:'tree'},scroll:{ref:'scroll',top,max_top:87},allowed_actions:['scroll']},
+   ...(top===87?[{tid:'native20',ref:'row20',allowed_actions:['click']}]:[])]}});
+ const calls=[],channel={perform:async o=>{assert.ok(o.ready(state()));const a=o.resolve(state());calls.push(a);top+=a.delta_y;},observe:async o=>{assert.ok(o.ready(state()));return state();}};
+ const resolved=await revealExecutionControl(channel,node,state(),process,s=>s.node_processes.processes.find(p=>p.record_id===process.record_id)?.process_tid);
+ assert.deepEqual(calls,[{verb:'scroll',ref:'scroll',delta_y:87}]);assert.equal(resolved.node_processes.processes[0].process_tid,'native20');
+});

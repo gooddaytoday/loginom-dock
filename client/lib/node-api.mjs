@@ -17,18 +17,21 @@ const column=object({source_name:text(120),name:text(120),label:text(120),
 export const calculatorExpressionSchema=object({target:object({kind:choice('new','existing'),name:text(128)},['kind']),
  name:text(128),label:text(200),type:choice('integer','real','string','boolean','datetime'),formula:text(2048),replace:boolean},['target']);
 export const calculatorParametersSchema=object({expressions:array(calculatorExpressionSchema,128),order:array(text(128),128,1)},['expressions']);
+export const groupingFieldSchema=object({kind:choice('input_field'),name:text(128)});
+export const groupingMeasureSchema=object({field:groupingFieldSchema,function:choice('sum','count','avg','min','max'),name:text(128),label:text(120)});
+export const groupingParametersSchema=object({group_by:array(groupingFieldSchema,128,1),measures:array(groupingMeasureSchema,256,1)},[]);
 // New nodes require complete settings; existing nodes accept a patch. The installed
 // handler validates that distinction and cross-field invariants before any UI work.
 export const nodeApplyInputSchema=object({
  operation_id:id,contract_revision:choice('1.0.0'),document_id:id,
  workflow_ref:object({workflow_id:id,tab_tid:text(128),prefix:text(128),navigation_path:array(object({tid:text(512),label:{type:'string'}}),32,1)}),
- target:object({kind:choice('new','existing'),type:choice('imports.text','transform.calculator'),label:text(200),ref,
+ target:object({kind:choice('new','existing'),type:choice('imports.text','transform.calculator','transform.group_data'),label:text(200),ref,
   position:object({x:{type:'number',minimum:8,maximum:10000},y:{type:'number',minimum:8,maximum:10000}})},['kind','type']),
  inputs:array(object({source:ref,output:integer(0,99),input:integer(0,99)}),1),
- mode:choice('delimited','expression'),parameters:object({
+ mode:choice('delimited','expression','aggregate'),parameters:object({
   source:object({artifact_id:id,upload_operation_id:id,bytes:integer(0,16777216),sha256:{...text(64),minLength:64,pattern:'^[a-f0-9]{64}$'}}),
   settings:object({source:sourceSettings,format,columns:array(column,1000,1)},[]),
-  expressions:array(calculatorExpressionSchema,128),order:array(text(128),128,1)},[]),
+  expressions:array(calculatorExpressionSchema,128),order:array(text(128),128,1),group_by:array(groupingFieldSchema,128,1),measures:array(groupingMeasureSchema,256,1)},[]),
  mappings:array(object({direction:choice('input','output'),port:integer(0,0),autosync:boolean,
   fields:array(object({source:object({kind:choice('configured_field'),name:text(128)}),name:text(128),label:text(120),excluded:boolean},['source']),1000,1)},['direction','port']),2),
  finish:choice('done','execute','close'),
@@ -43,7 +46,7 @@ const tool=(name,description,inputSchema,readOnlyHint=false)=>({name,description
  outputSchema:name.startsWith('dock_node_')?nodeJobResultSchema:deliveryJobResultSchema,
  annotations:{readOnlyHint,destructiveHint:!readOnlyHint,openWorldHint:false}});
 export const nodeApiTools=Object.freeze([
- tool('dock_node_apply','Candidate node operation: text import or expression Calculator when its handler is installed. Import requires a byte-verified source and settings. Calculator accepts ordered expressions with new/existing targets and preserves unrequested settings; optional order lists every resulting expression name. New expressions require name, label, type, formula, replace. Done saves without executing; Close discards the draft and rejects Calculator input mappings, which require a separate committed wizard; Execute reads output 0. Poll the SAME operation_id; timeout never restarts work. Save the package separately.',nodeApplyInputSchema),
+ tool('dock_node_apply','Candidate node operation: text import, expression Calculator, or aggregate Grouping when its handler is installed. Grouping uses ordered group_by input_field names and a full measures list (field, function, name, label); supported functions are sum/count/avg/min/max, count includes null rows. Import requires a byte-verified source and settings. Calculator accepts ordered expressions with new/existing targets and preserves unrequested settings; optional order lists every resulting expression name. New expressions require name, label, type, formula, replace. Done saves without executing; Close discards the draft and rejects Calculator input mappings, which require a separate committed wizard; Execute reads output 0. Poll the SAME operation_id; timeout never restarts work. Save the package separately.',nodeApplyInputSchema),
  tool('dock_node_resume','Candidate explicit continuation of the SAME known node operation with identical original parameters. Retains accepted phases; unresolved effects or lost document refuse continuation. Does not reconstruct a lost session.',nodeApplyInputSchema),
  tool('dock_node_status','Read local state and accepted progress without browser access or re-execution.',operation,true),
  tool('dock_node_wait','Wait up to timeout_ms for the SAME worker. Timeout returns running; never infer termination or start a replacement.',object({operation_id:id,timeout_ms:integer(0,60000)},['operation_id']),true),

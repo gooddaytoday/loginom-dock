@@ -119,6 +119,37 @@ def bound_expression_dialog(state):
         f.get('status')=='observed' and f.get('truncated') is False for f in fields.values())
 
 
+def bound_grouping_factor(state):
+    wizard=state.get('wizard',{});factor=wizard.get('factor_editor',{})
+    native=state.get('node_grouping',{});owner=state.get('prepared_node_context',{})
+    dialogs=state.get('ui',{}).get('dialogs',[]);masks=state.get('ui',{}).get('masks',[])
+    if (wizard.get('stage')!='grouping' or factor.get('status')!='rendered_factor_options'
+            or factor.get('dialog_tid')!=wizard.get('root_tid','')+';FactorEditDialog'
+            or native.get('verified') is not True or native.get('inventory_complete') is not True
+            or owner.get('verified') is not True
+            or any(native.get('node_context',{}).get(k)!=owner.get(k) for k in ('document_id','workflow_id','node_id'))
+            or len(dialogs)!=1 or dialogs[0].get('ref')!=factor.get('dialog_ref')
+            or dialogs[0].get('identity',{}).get('anchor_tid')!=factor.get('dialog_tid')
+            or masks):return False
+    fields=[f for f in native.get('measures',[]) if f.get('name')==factor.get('selected_field',{}).get('field_key')]
+    options=factor.get('options',[])
+    return (len(fields)==1 and native.get('selected_records')==[fields[0].get('record_id')]
+        and [o.get('aggregation') for o in options]==['sum','count','min','max','average','median','mode','standard_deviation','unique_count','null_count','first','last','only','concat']
+        and all(type(o.get('checked')) is bool and type(o.get('enabled')) is bool for o in options))
+
+
+def bound_schema_preview(state):
+    preview=state.get('node_preview_schema',{});owner=state.get('prepared_node_context',{})
+    dialogs=state.get('ui',{}).get('dialogs',[])
+    return (preview.get('verified') is True and preview.get('inventory_complete') is True
+        and preview.get('state_source')=='cached_preview_column_infos' and preview.get('port')==0
+        and preview.get('node_id')==owner.get('node_id') and owner.get('verified') is True
+        and preview.get('node_context')==owner and owner.get('surface')=='graph'
+        and preview.get('root_tid')==state.get('workflow_ref',{}).get('prefix','')+';ModelForm;PreviewWindow'
+        and len(dialogs)==1 and dialogs[0].get('identity',{}).get('anchor_tid')==preview.get('root_tid')
+        and state.get('ui',{}).get('masks')==[])
+
+
 def bound_port_open(action, outcome, state):
     direction={'open_input_port':'input','open_output_port':'output'}.get(action.get('verb'))
     if direction is None or set(action)!={'verb','port'} or type(action['port']) is not int:
@@ -211,7 +242,7 @@ def verify_internal_sequence(events, operation_id, *, max_steps=96):
             if outcome.get('status') != 'SUCCEEDED' or not samples or samples[-1].get('outcome') != outcome:
                 failures.append('observation_not_backed_by_sample')
             recent = [s.get('outcome', {}).get('output', {}) for s in samples[-required_samples:]]
-            if len(recent) != required_samples or any((not semantic and s.get('dom_epoch') != state.get('dom_epoch')) or s.get('ui', {}).get('masks') and not (bound_wizard_confirmation(s) or bound_expression_dialog(s)) for s in recent):
+            if len(recent) != required_samples or any((not semantic and s.get('dom_epoch') != state.get('dom_epoch')) or s.get('ui', {}).get('masks') and not (bound_wizard_confirmation(s) or bound_expression_dialog(s) or bound_grouping_factor(s) or bound_schema_preview(s)) for s in recent):
                 failures.append('observation_not_settled')
             doc = state.get('dom_epoch', {}).get('document')
             if document is None:
@@ -219,7 +250,7 @@ def verify_internal_sequence(events, operation_id, *, max_steps=96):
             if not doc or (doc, state.get('workflow_ref'), state.get('origin'), state.get('loginom_build')) != (document, workflow, origin, build):
                 failures.append('document_context_mismatch')
             ui = state.get('ui', {})
-            if state.get('scan', {}).get('complete') is not True or (ui.get('masks') != [] or not (bound_table_dialogs(state) or bound_output_column_dialog(state))) and not (bound_wizard_confirmation(state) or bound_expression_dialog(state)):
+            if state.get('scan', {}).get('complete') is not True or (ui.get('masks') != [] or not (bound_table_dialogs(state) or bound_output_column_dialog(state))) and not (bound_wizard_confirmation(state) or bound_expression_dialog(state) or bound_grouping_factor(state) or bound_schema_preview(state)):
                 failures.append('observation_blocked')
             current = state
             observations.append((step, state))

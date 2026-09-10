@@ -190,6 +190,10 @@ export async function applyNode({request, operation, handlers, drivers, record,
     verify(value);
     const receipt={phase:name,receipt_id:pending.receipt_id,status:'verified',effect_possible:value.effect_possible===true,value:structuredClone(value)};
     await acknowledge({phase:'node_phase_completed',signature,receipt});
+    // Anticipated mutation is uncertainty until the verified receipt arrives.
+    // A proven unchanged workflow must not turn a later pre-target refusal into
+    // an ambiguous configuration effect.
+    if(name==='workflow')state.effect_possible=previousEffect||value.effect_possible===true;
     state.phases.push(receipt);state.pending=null;state.cleanup_complete=true;
     if(name==='execute')delete state.execution_wait;
     requireValue(now()<pending.deadline,'node.apply phase deadline elapsed: '+name);

@@ -38,6 +38,17 @@ class TableOutputEvidenceTests(unittest.TestCase):
     def test_independent_source_values_and_ui_chain_pass(self):
         self.assertEqual(self.audit(), [])
 
+    def test_empty_numeric_is_null_but_empty_string_is_not(self):
+        self.source = b'Id;Text\n;""\n2;NULL\n'
+        raw = self.observations[-1][1]['node_table']['rows'][0]['cells'][0]
+        typed = self.checkpoint['output']['ports'][0]['sample'][0][0]
+        raw.update(is_null=True, text=None)
+        typed.update(is_null=True, value=None)
+        self.assertEqual(self.audit(), [])
+        raw.update(is_null=False, text='0')
+        typed.update(is_null=False, value='0')
+        self.assertTrue(self.audit())
+
     def test_old_checkpoint_execution_cannot_wrap_a_fresh_port(self):
         self.checkpoint['execution']['execution_id'] = 'old-execution'
         self.assertIn('output_checkpoint_execution_identity', self.audit())

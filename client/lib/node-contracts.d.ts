@@ -35,7 +35,7 @@ export interface NodeHandler<T extends NodeType, P> {
   configure(context: NodeProcedureContext, parameters: P): Promise<VerifiedNodePhase>;
   /** Pure projection of accepted receipts; never executes or rereads the UI. */
   configurationReadback?(context: {node: NodeRef; operation_id: string;
-    phases: Array<PhaseReceipt & {value: VerifiedNodePhase}>}): TextImportConfigurationReadback | CalculatorConfigurationReadback;
+    phases: Array<PhaseReceipt & {value: VerifiedNodePhase}>}): TextImportConfigurationReadback | CalculatorConfigurationReadback | GroupingConfigurationReadback;
 }
 export interface VerifiedNodePhase { verified: true; cleanup_complete: true; effect_possible: boolean }
 export interface NodeProcedureContext {
@@ -52,7 +52,7 @@ export interface NodeApplyResult {
   execution: NodeExecution; output: NodeOutput;
   /** A local node checkpoint never proves that the package was saved. */
   package_saved: false; cleanup_complete: boolean; warnings: string[];
-  configuration?: {status: 'applied' | 'discarded'; readback?: TextImportConfigurationReadback | CalculatorConfigurationReadback};
+  configuration?: {status: 'applied' | 'discarded'; readback?: TextImportConfigurationReadback | CalculatorConfigurationReadback | GroupingConfigurationReadback};
   checkpoint_kind?: 'local_node_checkpoint' | 'local_node_cancellation' | 'local_node_stopped';
   persisted_package_verified?: false; pending_phase?: PhaseName | null; error?: NodeError;
 }
@@ -81,6 +81,24 @@ export interface CalculatorConfigurationReadback {
   input_fields: Array<{name: string; label: string; type: string}>;
   input_mapping: {port: 0; autosync: boolean;
     fields: Array<{index: number; name: string; label: string; type: string; data_kind: string; source_name: string; excluded: boolean}>};
+  output_mapping: {port: 0; autosync: boolean;
+    fields: Array<{index: number; name: string; label: string; type: string; data_kind: string; source_name: string; excluded: boolean}>};
+}
+export interface GroupingParameters {
+  /** Full ordered lists, or both omitted to retain an existing configuration. */
+  group_by?: Array<{kind: 'input_field'; name: string}>;
+  measures?: Array<{field: {kind: 'input_field'; name: string};
+    function: 'sum' | 'count' | 'avg' | 'min' | 'max'; name: string; label: string}>;
+}
+export interface GroupingConfigurationReadback {
+  kind: 'grouping'; scope: 'observed_before_verified_finish'; node: NodeRef;
+  receipt_ids: string[]; values_are: 'observed_ui_values'; package_persistence_verified: false;
+  mode: 'aggregate';
+  group_by: Array<{name: string; label: string; type: string; order: number}>;
+  measures: Array<{name: string; label: string; type: string; order: number; functions: number}>;
+  options: {pedDimCache: {value: boolean; switch_pressed: boolean}; pedSortResult: {value: boolean; switch_pressed: boolean}};
+  input_mapping: {port: 0; autosync: boolean;
+    fields: Array<{index: number; name: string; label: string; type: string; data_kind: string; source_name: string}>};
   output_mapping: {port: 0; autosync: boolean;
     fields: Array<{index: number; name: string; label: string; type: string; data_kind: string; source_name: string; excluded: boolean}>};
 }

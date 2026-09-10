@@ -376,3 +376,14 @@ for(const fault of ['unknown_transport','cleanup_missing','foreign_execution','j
  assert.equal(done.outcome.status,'AMBIGUOUS');assert.equal(done.outcome.cleanup_complete,false);assert.equal(done.progress.pending_phase,'execute');
  await assert.rejects(f.runtime.runNodeApply(r,{resume:true}),/unresolved phase/);
 });
+
+test('verified unchanged workflow followed by typed preflight refusal frees the gate without creating a node',async()=>{
+ let invalid=true;
+ const f=fixture({wrapDrivers:(_context,drivers)=>({...drivers,beforeTarget:async()=>{
+  if(invalid){const error=Error('missing input');error.nodePhaseRefusal={phase:'target',status:'NOT_APPLIED',effect_possible:false,cleanup_complete:true};throw error;}
+ }})});
+ f.adapter.verifyWorkflow=async()=>({status:'SUCCEEDED',verified:true,document_id:request().document_id,workflow_ref:request().workflow_ref,effect_possible:false,cleanup_complete:true});
+ f.adapter.activateWorkflow=f.adapter.verifyWorkflow;
+ const refused=await f.runtime.runNodeApply(request());assert.equal(refused.status,'NOT_APPLIED');assert.equal(refused.effect_possible,false);assert.equal(refused.cleanup_complete,true);assert.equal(refused.output.node,null);assert.equal(f.graph.nodes.length,0);
+ invalid=false;const corrected=await f.runtime.runNodeApply({...request(),operation_id:'corrected'});assert.equal(corrected.status,'SUCCEEDED');assert.equal(f.graph.nodes.length,1);
+});

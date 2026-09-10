@@ -10,7 +10,7 @@ async function fixture(fault, multiple=false) {
  const proof={root_id:'root',record_id:'child',process_id:'1.1',node_id:'node',owner_verified:true,can_cancel:true,source:'native_process_model_identity'};
  const state=()=>{
   const progress_state={verified:true,state:terminal?'cancelled':'running',terminal,can_cancel:!terminal};
-  const ps=launched?[{process_id:'1',record_id:'group',parent_id:null,expanded:true,children_loaded:true,progress_state},
+  const ps=launched?[{process_id:'1',record_id:'group',parent_id:null,rendered:true,expanded:true,children_loaded:true,progress_state},
    {process_id:'1.1',record_id:'child',parent_id:'1',rendered:true,process_tid:'child-row',progress_state}]:[];
   if(multiple&&launched){
    ps[1].owner={verified:true,node_id:'node',source:'native_process_model_identity'};
@@ -103,7 +103,7 @@ test('a concurrent read failure is not a confirmed local cancellation',async()=>
 test('an abort after the read loop cannot authorize replaying ownership gestures',async()=>{
  const f=await fixture(),controller=new AbortController();
  f.channel.observe=async options=>{
-  if(options.condition==='new node execution completed')return {node_processes:{processes:[{process_id:'1',record_id:'group',expanded:true}]}};
+  if(options.condition==='new node execution completed')return {node_processes:{processes:[{process_id:'1',record_id:'group',rendered:true,expanded:true}]}};
   controller.abort(Error('cancel after completion read'));throw controller.signal.reason;
  };
  await assert.rejects(f.driver.waitCompleted({signal:controller.signal}),e=>{assert.equal(e.nodeExecutionWaitPause,undefined);return e===controller.signal.reason;});

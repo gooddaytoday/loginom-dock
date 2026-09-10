@@ -247,7 +247,7 @@ def verify_table_output_observations(observations, mutations, request, source_by
                 typed = port['sample'][i][j]
                 if typed.get('type') != column['type']:
                     raise ValueError('type')
-                if raw == fmt['null_marker']:
+                if raw == fmt['null_marker'] or raw == '' and column['type'] in {'integer', 'real'}:
                     ok = cell.get('is_null') is True and cell.get('text') is None and typed.get('is_null') is True and typed.get('value') is None
                 else:
                     ok = cell.get('is_null') is False and typed.get('is_null') is False

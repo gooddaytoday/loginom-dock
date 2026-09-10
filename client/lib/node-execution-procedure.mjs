@@ -32,7 +32,7 @@ export async function returnToExecutedWorkflow(channel,node) {
 export async function revealExecutionControl(channel,node,initial,process,tid,verb='click') {
   let state=initial,reset=false;
   const root=initial.node_processes?.root_id;
-  const matches=s=>s.ui.elements.filter(e=>e.tid===tid&&e.allowed_actions.includes(verb));
+  const matches=s=>s.ui.elements.filter(e=>e.tid===(typeof tid==='function'?tid(s):tid)&&e.allowed_actions.includes(verb));
   const valid=s=>s.prepared_node_context?.verified===true
     &&['document_id','workflow_id','node_id'].every(k=>s.prepared_node_context[k]===node[k])
     &&s.node_processes?.verified===true&&s.node_processes.root_id===root
@@ -79,6 +79,13 @@ export function createNodeExecutionProcedure(channel,node) {
   }
   const processes=s=>s.node_processes?.verified===true&&s.node_processes.show_completed===true;
   async function revealChildren(s,group) {
+    // A cached process can be complete while its virtualized row is offscreen.
+    // Reveal the exact record before requiring its painted expander identity.
+    if(group.rendered!==true){
+      const current=state=>state.node_processes?.processes.find(p=>p.process_id===group.process_id&&p.record_id===group.record_id);
+      s=await revealExecutionControl(channel,node,s,group,state=>current(state)?.process_tid);
+      group=current(s);requireValue(group?.rendered===true,'Execution group did not become visible');
+    }
     if(group.expanded!==true) {
       requireValue(group.expander_tid,'Execution group expander must be identified');
       s=await revealExecutionControl(channel,node,s,group,group.expander_tid);

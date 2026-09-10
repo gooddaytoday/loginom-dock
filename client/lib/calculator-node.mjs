@@ -24,14 +24,24 @@ export function calculatorOutputSources(configuration) {
   .map(f=>({name:f.name,label:f.label,type:f.type,used:true}));
 }
 
-export function createCalculatorNodeSupport({targetOrigin,targetBuild}) {
+export function createCalculatorNodeSupport(config) {return createTabularTransformNodeSupport(config);}
+
+// Shared lifecycle for a single-input transformation with a separate output
+// wizard. Type-specific code supplies configuration and derived-output hooks;
+// graph ownership, execution, continuation and data reading remain shared.
+export function createTabularTransformNodeSupport({targetOrigin,targetBuild},implementation=null) {
  const nodeApplyHandlers=new Map([['transform.calculator',{revision:'calculator-v3-internal-2',modes:['expression'],output_wizard:'separate',
   configurationReadback:calculatorConfigurationReadback,parameter_schema:calculatorParametersSchema,
   validate:(p,m,r)=>{validateCalculatorParameters(p,m,r);
    requireValue(r.mappings.every(x=>(x.fields??[]).every(f=>f.source?.kind==='configured_field'&&(x.direction==='output'||f.excluded!==true))),
     'Calculator mappings require configured field names; input exclusions are unsupported');},
   configure:(ctx,p,drivers)=>drivers.configureCalculator(ctx,p)}]]);
- const nodeApplyDriverFactory=({operation,execute,onRecord,now,receiptOptions})=>{
+ if(implementation){nodeApplyHandlers.clear();nodeApplyHandlers.set(implementation.type,{
+  revision:implementation.revision,modes:[implementation.mode],output_wizard:'separate',
+  configurationReadback:implementation.readback,parameter_schema:implementation.parameterSchema,
+  validate:implementation.validate,configure:(ctx,p,drivers)=>drivers.configureCalculator(ctx,p)});}
+ const nodeApplyDriverFactory=options=>{
+  const {operation,execute,onRecord,now,receiptOptions}=options;
   let channel,activeSignal,configured,mapping,columns,executionDriver,executionReceipt;
   const enter=ctx=>{activeSignal=ctx.signal;operation.deadline=ctx.deadline;
    channel??=createNodeProcedure({operation,execute,record:onRecord,now,maxSteps:4096,targetOrigin,targetBuild,
@@ -46,6 +56,7 @@ export function createCalculatorNodeSupport({targetOrigin,targetBuild}) {
    return verified({effect_possible:true,mode,settings_applied:true,execution_started:false,node_context:graph.prepared_node_context});
   };
   return {
+   ...(implementation?.preflight?{beforeTarget:ctx=>implementation.preflight(options,ctx,{targetOrigin,targetBuild})}:{}),
    verifySource:async()=>verified({not_applicable:true,source_kind:'upstream_table'}),
    async openWizard(ctx) {
     enter(ctx);executionDriver=createNodeExecutionProcedure(channel,ctx.node);await executionDriver.prepare();
@@ -53,11 +64,13 @@ export function createCalculatorNodeSupport({targetOrigin,targetBuild}) {
     await channel.perform({condition:'select calculator graph node',initialObservation:s,ready:s=>s.prepared_node_context?.surface==='graph',identity:()=>ctx.node,
      resolve:s=>{const e=s.ui.elements.find(e=>e.tid===s.prepared_node_context.tid&&e.graph_node?.part==='body');requireValue(e,'Calculator graph body unavailable');return {verb:'click',ref:e.ref};}});
     await openPreparedWizard(channel);
-    const opened=await channel.observe({condition:'calculator expression page',readCalculator:true,ready:s=>s.wizard?.stage==='calculator'&&s.node_calculator?.verified===true});
+    const opened=await channel.observe(implementation?.configurationObservation??{condition:'calculator expression page',readCalculator:true,ready:s=>s.wizard?.stage==='calculator'&&s.node_calculator?.verified===true});
     return verified({effect_possible:true,node_context:opened.prepared_node_context});
    },
    async configureCalculator(ctx,p) {
-    enter(ctx);const changed=await configureCalculator(channel,p,{newNode:operation.nodeApply.request.target.kind==='new'});configured=changed.configuration;
+    enter(ctx);
+    if(implementation){const changed=await implementation.configure(channel,p,{request:operation.nodeApply.request});configured=changed.configuration;return changed;}
+    const changed=await configureCalculator(channel,p,{newNode:operation.nodeApply.request.target.kind==='new'});configured=changed.configuration;
     // Close discards this editor draft directly. Next can validate a formula or
     // synchronize a derived port, neither of which is needed for cancellation.
     if(operation.nodeApply.request.finish==='close')return verified({...changed});
@@ -114,6 +127,13 @@ export function createCalculatorNodeSupport({targetOrigin,targetBuild}) {
     }
     enter(ctx);requireValue(configured,'Configured calculator missing');await channel.openOutputPort(0);
     const ready=s=>s.wizard?.stage==='output_mapping'&&s.node_mapping?.verified===true;
+    if(implementation){
+     const result=await implementation.configureOutput(channel,configured,operation.nodeApply.request.parameters,mappings[0]??{});
+     mapping=result.native_mapping;columns=mapping.target_fields.filter(f=>!f.excluded);
+     const definition=await readOutputDefinitionPages(channel,{expectedCount:mapping.target_fields.length});
+     requireValue(definition.fields.every((f,i)=>['name','label','type','data_kind'].every(k=>f[k]===mapping.target_fields[i][k])),'Derived output definition differs');
+     const finish=await finishWizard('done',true);return verified({...result,effect_possible:true,definition,finish,source_identity_verified:true});
+    }
     const sources=calculatorOutputSources(configured);
     let s=await channel.observe({condition:'calculator native output mapping',readMappings:true,ready});
     resolveConfiguredOutputMapping({direction:'output',port:0},sources,s.node_mapping);
