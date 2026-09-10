@@ -30,13 +30,14 @@ def verify_checkpoint_schedule(events, declarations, roots, revisions):
         results = {op: e['result'] for op, (_, e) in checkpoints.items()}
         starts = [(i, e) for i, e in enumerate(events) if e.get('phase') == 'prepared' and e.get('action_key') in keys]
         ends = [(i, e) for i, e in enumerate(events) if e.get('phase') == 'completed' and e.get('action_key') in keys]
-        need(4 <= len(starts) == len(ends) <= 8, 'checkpoint_count')
+        need(4 <= len(starts) == len(ends) <= 12, 'checkpoint_attempt_count')
         need([e['action_key'] for _, e in starts] == [keys[0]]*(len(starts)-1)+[keys[1]], 'checkpoint_then_final_reopen')
         seed = next(r for r in new if r['target']['type'] == 'imports.text')
         seed_event = checkpoints[seed['operation_id']][1]
         identity = lambda e: (e.get('session_id'), e.get('runtime_revision'), e.get('target'))
         need(all(identity(seed_event)), 'save_source_identity')
         used_ids, saved_path, previous_end = set(), '', -1
+        persisted, declined = [], []
         for (start_pos, start), (end_pos, end) in zip(starts, ends):
             operation = start['operation_id']; key = start['action_key']; reopened = key == keys[1]
             need(operation not in used_ids and previous_end < start_pos < end_pos, 'save_sequence')
@@ -53,6 +54,21 @@ def verify_checkpoint_schedule(events, declarations, roots, revisions):
             need(all(e['operation_id'] == operation and e['action_key'] == key and e['action_revision'] == revisions[key]
                      and e['parameters'] == parameters and e['checkpoint'] == cp and identity(e) == identity(seed_event) for e in (start, end)), 'save_receipt_binding')
             outcome = end['outcome']; out = outcome['output']; trace = outcome['trace']
+            if outcome.get('status') == 'NOT_APPLIED':
+                need(not reopened and parameters['conflict_policy'] == 'fail'
+                     and outcome['phase'] == 'applying' and outcome['effect_possible'] is True
+                     and outcome['cleanup_complete'] is True and outcome['error'] is None
+                     and outcome['operation_id'] == operation and outcome['action_key'] == key
+                     and outcome['action_revision'] == revisions[key]
+                     and out == dict(path=path, conflict=True), 'declined_conflict_outcome')
+                need([t.get('event') for t in trace] == ['action_started', 'preconditions_verified',
+                     'save_requested', 'save_conflict_observed', 'conflict_rejected', 'cleanup_completed']
+                     and trace[0]['capability'] == 'package.save_checkpoint.v1' and trace[0]['mode'] == 'apply'
+                     and trace[1]['active_tab'] == cp['workflow_ref']['prefix']
+                     and trace[2]['path'] == trace[3]['path'] == path
+                     and trace[5]['resource'] == 'transient_dialog', 'declined_conflict_trace')
+                declined.append(operation)
+                continue
             need(outcome['status'] == 'SUCCEEDED' and outcome['phase'] == 'verified' and outcome['cleanup_complete'] is True
                  and outcome['error'] is None and outcome['operation_id'] == operation and outcome['action_key'] == key
                  and out['package_ref'] == dict(kind='package', path=path, active_identity=path) and out['reopened'] is reopened, 'save_verified_outcome')
@@ -79,6 +95,9 @@ def verify_checkpoint_schedule(events, declarations, roots, revisions):
                      and conflicts[0][1]['path'] == path and selected[0][0] < conflicts[0][0] < overwrites[0][0] < selected[1][0], 'save_owned_overwrite_trace')
             need(not any(t.get('event') == 'conflict_rejected' for t in trace), 'save_conflict_rejected')
             saved_path = path
+            persisted.append(((start_pos, start), (end_pos, end)))
+        need(4 <= len(persisted) <= 8, 'checkpoint_count')
+        starts = [start for start, _ in persisted]; ends = [end for _, end in persisted]
         used_sources = {s['source']['node_id'] for r in new for s in r['inputs']}
         boundaries = [r for r in new if r['target']['type'] == 'imports.text' or results[r['operation_id']]['node']['node_id'] not in used_sources]
         new_starts = [i for i, e in enumerate(events) if e.get('phase') == 'node_apply_prepared' and e['request']['target']['kind'] == 'new']
@@ -88,6 +107,7 @@ def verify_checkpoint_schedule(events, declarations, roots, revisions):
             need(any(end_pos < a < b < limit and s['action_key'] == keys[0] for (a, s), (b, _) in zip(starts, ends)), 'missing_boundary_save:'+r['operation_id'])
         need(starts[-1][0] > max(checkpoints[r['operation_id']][0] for r in new), 'final_after_all_nodes')
         return dict(passed=True, failures=[], saves=len(starts), boundaries=len(boundaries), package_path=saved_path,
+                    declined_conflicts=declined,
                     scope='journal_bound_import_branch_checkpoints_and_final_reopen')
     except (KeyError, TypeError, ValueError, IndexError, StopIteration) as error:
         failures.append(str(error))

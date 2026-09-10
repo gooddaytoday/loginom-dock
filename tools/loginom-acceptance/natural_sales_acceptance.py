@@ -18,6 +18,19 @@ from node_public_acceptance_evidence import verify_public_nodes_and_saves
 from node_apply_reopen_binding import verify_reopen_binding
 from natural_sales_save_evidence import verify_checkpoint_schedule
 
+def described_save_contracts(tools):
+ contracts=[]
+ for tool in tools:
+  if tool.get('tool')!=PREFIX+'dock_action_describe':continue
+  result=tool.get('result',{})
+  actions=result.get('actions',[result['action']] if 'action' in result else [])
+  if not isinstance(actions,list) or 'actions' in result and 'action' in result:raise ValueError('ambiguous_action_description')
+  for action in actions:
+   if action.get('action_key')=='package.save_as':
+    contract=dict(action=action,session_manifest=result['session_manifest'])
+    if contract not in contracts:contracts.append(contract)
+ return contracts
+
 def oracle(source):
  rows=list(csv.DictReader(io.StringIO(source.decode('utf-8')),delimiter=';'))
  if not rows or set(rows[0])!={'id','region','product','quantity','price'}:raise ValueError('input_schema')
@@ -80,7 +93,7 @@ def audit(request,e,source,prompt,user_prompt,final_answer):
   saves=[r for r in events if r.get('phase')=='completed' and r.get('action_key') in ('package.save_as','package.save_checkpoint')]
   check('saved_package',bool(saves));need(bool(saves),'no_save')
   save=saves[-1];out=save['outcome'];path=out['output']['package_ref']['path'];trace=out['trace']
-  described=[t['result'] for t in e['tools'] if t.get('tool')==PREFIX+'dock_action_describe' and t.get('result',{}).get('action',{}).get('action_key')=='package.save_as']
+  described=described_save_contracts(e['tools'])
   need(len(described)==1,'one_save_contract');description=described[0]
   check('admitted_save_contract',description['action']['revision']=='2' and description['session_manifest']['actionManifestDigest']=='936ef73d933e85bfd8429b8b0f2b515c543ca415a2b22ba57e108232c54ddf44')
   roots=description['action']['effect']['allowed_roots']

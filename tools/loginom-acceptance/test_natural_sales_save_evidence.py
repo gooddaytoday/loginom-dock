@@ -38,6 +38,43 @@ class NaturalSaveEvidenceTests(unittest.TestCase):
         self.assertTrue(result['passed'], result)
         self.assertEqual((result['saves'], result['boundaries']), (4, 1))
 
+    def add_declined_conflict(self):
+        pair = copy.deepcopy(self.events[2:4]); path = '/user/dock-p3/existing.lgp'
+        for e in pair:
+            e['operation_id'] = 'declined-name'; e['parameters']['path'] = path; e['checkpoint']['path'] = path
+        pair[1]['outcome'] = dict(status='NOT_APPLIED', action_key='package.save_checkpoint', action_revision='2',
+            operation_id='declined-name', phase='applying', effect_possible=True, cleanup_complete=True, error=None,
+            output=dict(path=path, conflict=True), trace=[
+                dict(event='action_started', capability='package.save_checkpoint.v1', mode='apply'),
+                dict(event='preconditions_verified', active_tab=pair[0]['checkpoint']['workflow_ref']['prefix']),
+                dict(event='save_requested', path=path), dict(event='save_conflict_observed', path=path),
+                dict(event='conflict_rejected'), dict(event='cleanup_completed', resource='transient_dialog')])
+        self.events[2:2] = pair
+
+    def test_declined_existing_name_does_not_count_as_persistence(self):
+        self.add_declined_conflict(); result = self.audit()
+        self.assertTrue(result['passed'], result)
+        self.assertEqual(result['saves'], 4)
+        self.assertEqual(result['declined_conflicts'], ['declined-name'])
+        del self.events[4:6]
+        self.assertFalse(self.audit()['passed'])
+
+    def test_declined_conflict_requires_bound_receipts_and_complete_cancellation(self):
+        mutations = [
+            lambda es: es[3]['outcome'].update(cleanup_complete=False),
+            lambda es: es[3]['outcome']['trace'].insert(4, dict(event='overwrite_confirmed')),
+            lambda es: es[3]['outcome']['trace'].pop(),
+            lambda es: es[3]['outcome']['trace'][3].update(path='/foreign.lgp'),
+            lambda es: es[3]['outcome']['output'].update(reopened=True),
+            lambda es: es[3]['outcome'].update(action_revision='unverified'),
+            lambda es: es[3].update(session_id='foreign'),
+            lambda es: es[2]['parameters'].update(conflict_policy='replace'),
+        ]
+        for mutate in mutations:
+            with self.subTest(mutation=mutate):
+                self.setUp(); self.add_declined_conflict(); mutate(self.events)
+                self.assertFalse(self.audit()['passed'])
+
     def test_missing_or_duplicate_receipts_and_wrong_sequence(self):
         original = copy.deepcopy(self.events)
         for index in range(2, len(original)):
