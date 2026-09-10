@@ -257,6 +257,8 @@ export function workspaceUiCapability(page, task, readNodeContext) {
       ...['',';normalHeaderCt',';tbl'].map(suffix=>'[data-tid$=";WizrdMCF;ImportTextFileParamsWizard;ColumnDefsTuning;grdSettings;grd-1'+suffix+'"]'),
       '[data-tid*=";WizrdMCF;ImportTextFileParamsWizard;ColumnDefsTuning;grdSettings;grd-1;tbl;celleditor"][data-tid$=";cbx"]',
       '[data-tid*=";WizrdMCF;ImportTextFileParamsWizard;ColumnDefsTuning;grdSettings;grd-1;tbl;celleditor"][data-tid$=";txt"]',
+      // The definition grid is omitted above; its active text input has no data-tid.
+      '[data-tid*=";WizrdMCF;ImportTextFileParamsWizard;ColumnDefsTuning;grdSettings;grd-1;tbl;celleditor"][data-tid$=";txt"] input',
       '[data-tid*=";WizrdMCF;ImportTextFileParamsWizard;ColumnDefsTuning;grdSettings;grd-1;tbl;celleditor"][data-tid$=";cbx;trg_picker"]',
       ...['edtName','edtDisplayName','cbxDataType','cbxDataKind','cbxUsageType','cntMain;cbxCachingMethod'].flatMap(name=>{const owner='[data-tid$=";WizrdMCF;EditReformColumnDefForm;'+name+'"]';return [owner,owner+' input'];}),
       '[data-tid$=";WizrdMCF;EditReformColumnDefForm;cntMain;chbExcluded"]','[data-tid$=";WizrdMCF;EditReformColumnDefForm;cntMain;chbExcluded;DisplayEl"]',

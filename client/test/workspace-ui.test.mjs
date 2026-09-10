@@ -15,7 +15,7 @@ function matches(element, selector) {
   selector = selector.trim();
   const breadcrumbLabel=/^(\[data-tid\*=";cnrNaviMode;b\.s"\]) (\.x-btn-inner-default-toolbar-small)$/.exec(selector);
   if(breadcrumbLabel)return matches(element,breadcrumbLabel[2]) && !!element.parentElement?.closest(breadcrumbLabel[1]);
-  const ownedInput=/^(\[data-tid\$="[^"]+"\]) (input|textarea|\.x-form-error-msg)$/.exec(selector);
+  const ownedInput=/^((?:\[data-tid[$^*]?="[^"]+"\])+) (input|textarea|\.x-form-error-msg)$/.exec(selector);
   if(ownedInput)return matches(element,ownedInput[2]) && !!element.parentElement?.closest(ownedInput[1]);
   const not = [...selector.matchAll(/:not\(([^)]+)\)/g)];
   if (not.some(([, inner]) => matches(element, inner))) return false;
@@ -3997,16 +3997,21 @@ for(const fault of ['foreign_record','name_mismatch','filtered_store','incomplet
   assert.equal(r.output.wizard.output_columns.page.status,'unverified_definition_page');
  });
 
-for(const property of ['name','label'])test('import text editor separates the hidden original from the uncommitted draft: '+property,async()=>{
+for(const property of ['name','label'])for(const scoped of [false,true])test('import text editor separates the hidden original from the uncommitted draft: '+property+' (scoped='+scoped+')',async()=>{
  const page=new Page(),c=importCoverageFixture(page,3),row=property==='name'?0:1,cell=c.cols[0].cells[row];
  const original=cell.ownText;cell.ownText='';cell.attrs.class='x-grid-cell-selected';
  const old=page.add('div',null,original,cell.box,cell);old.attrs.class='x-grid-cell-inner';old.style.visibility='hidden';
  const base='MF;TF-1;WizrdMCF;ImportTextFileParamsWizard;ColumnDefsTuning;grdSettings;grd-1;tbl;celleditor;txt';
- const editor=page.add('div',base,'',cell.box,c.form),input=page.add('input',null,'',cell.box,editor);input.value='DraftValue';
+ const editor=page.add('div',base,'',cell.box,c.body),input=page.add('input',null,'',cell.box,editor);input.value='DraftValue';
+ if(scoped){const rootRef=(await page.observe()).wizard.root_ref,evaluate=page.evaluate.bind(page);page.evaluate=(fn,arg)=>evaluate(fn,arg&&Object.hasOwn(arg,'mappingPage')?{...arg,definitionPrefix:'MF;TF-1',rootRef}:arg);}
  const first=await page.execute({mode:'observe',import_column_page:{offset:0,limit:8}});
  assert.equal(first.output.wizard.import_columns.page.status,'unverified');
  const e=first.output.wizard.import_column_editor;assert.equal(e.status,'observed');assert.equal(e.property,property);
  assert.equal(e.original_value,original);assert.equal(e.value,'DraftValue');assert.equal(e.settings_applied,false);
+ const control=first.output.ui.elements.find(c=>c.ref===e.input_ref);
+ assert.ok(control?.allowed_actions.includes('fill'),JSON.stringify({control,editor:e,scan:first.output.scan}));
+ assert.doesNotThrow(()=>validateUiAction({verb:'fill',ref:e.input_ref,text:'NewValue'},first.output));
+ assert.doesNotThrow(()=>validateUiAction({verb:'press',ref:e.input_ref,key:'Enter'},first.output));
  old.remove();const second=await page.execute({mode:'observe',import_column_page:{offset:0,limit:8}});
  assert.equal(second.output.wizard.import_column_editor.status,'unobserved_or_ambiguous');
 });
