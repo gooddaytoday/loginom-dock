@@ -46,7 +46,16 @@ async function readGraph(page, task) {
       const dom = graph.view.getState(n.FCell)?.shape?.node, tid = dom?.getAttribute('data-tid');
       if (!tid || !containers[0].contains(dom) || !n.FGuid || !n.FCell?.geometry) fail('Node identity is not rendered');
       const labelElements = exact(tid + ';Label;Label');
-      const label = labelElements.length === 1 ? labelElements[0].textContent.replaceAll('\u00a0',' ') : tid.split(';').at(-1);
+      // Loginom renders wrapping as <br> and spaces as &nbsp;. textContent
+      // concatenates those lines; joining them would also corrupt long words
+      // and literal whitespace. Read the original cached label of this GUID.
+      const nativeLabel = n.FLabel;
+      if (nativeLabel?.parent !== n || nativeLabel.FCell?.parent !== n.FCell
+        || typeof nativeLabel.FRawValue !== 'string') fail('Cached node label identity unavailable');
+      if (labelElements.length > 1 || (nativeLabel.FCell.visible === true
+        && (labelElements.length !== 1 || graph.view.getState(nativeLabel.FCell)?.text?.node !== labelElements[0]
+          || !containers[0].contains(labelElements[0]) || !visible(labelElements[0])))) fail('Node label is not bound to its rendered identity');
+      const label = nativeLabel.FRawValue;
       const type = nodeTypes.find(t => t.icon_class === n.FIconCls)?.type ?? n.FIconCls;
       const inputs = [], outputs = [], allPorts=[];
       for (const ports of n.FPorts ?? []) for (const p of ports.FCollection ?? []) {

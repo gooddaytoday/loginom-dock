@@ -3491,7 +3491,7 @@ async function inputPortFinishFixture(mode='valid') {
   if(mode==='missing_context')crumbs[7].remove();
   if(mode==='missing_mapping')nodes.get(base+'colSourceName_Region').remove();
   if(mode==='duplicate_done')page.add('button',done.attrs['data-tid'],'Готово',done.box,owner);
-  let graph,node,label,waits=0;
+  let graph,node,label,toast,waits=0;
   const click=page.mouse.click;page.mouse.click=async(...args)=>{
     await click(...args);if(mode==='still_open')return;
     owner.remove();for(const c of crumbs.slice(5))c.remove();
@@ -3500,9 +3500,10 @@ async function inputPortFinishFixture(mode='valid') {
     const key=mode==='wrong_node'?'Other':'Revenue';node=page.add('g','MF;TF-5;Graph;'+key,'',{x:100,y:200,width:150,height:80},graph);
     label=page.add('span','MF;TF-5;Graph;'+key+';Label;Label',key,{x:110,y:220,width:120,height:30},node);
     if(mode==='duplicate_node')page.add('g','MF;TF-5;Graph;'+key,'',node.box,graph);
+    if(['toast','foreign_toast','permanent_toast'].includes(mode)){toast=page.add('div',mode==='foreign_toast'?'foreign':'toast','Сохранено',{x:1000,y:800,width:300,height:75});toast.attrs.role='dialog';}
     if(mode==='mask')page.add('div','mask','Загрузка').attrs.class='x-mask-msg';
   };
-  page.waitForTimeout=async()=>{waits++;
+  page.waitForTimeout=async()=>{waits++;if(mode==='toast'&&waits===3)toast.remove();
     if(mode==='late_body'&&waits===2){node.remove();node=page.add('g','MF;TF-5;Graph;Revenue','',{x:100,y:200,width:150,height:80},graph);label=page.add('span','MF;TF-5;Graph;Revenue;Label;Label','Revenue',{x:110,y:220,width:120,height:30},node);}
     if(mode==='churn')page.mutationObserver.pending.push({type:'attributes',target:node,attributeName:'style'});
     if(mode==='late_tab'&&waits===2)page.tab.attrs['data-tid']='MF;cntMain;cntWorkspace;Workspace;t.br;tb-2';
@@ -4469,3 +4470,14 @@ test('a populated console scans nested cell wrappers without quadratic work',asy
  assert.equal(scoped.status,'SUCCEEDED');assert.equal(scoped.output.scan.complete,true);
  assert.equal(scoped.output.ui.table_cells.length,120);assert.equal(scoped.output.ui.table_cells[0].text,'value0');
 });
+
+ test('input-port finish waits for transient toast without repeating the gesture or accepting other dialogs',async()=>{
+  for(const mode of ['toast','foreign_toast','permanent_toast']){
+   const {page}=await inputPortFinishFixture(mode),snapshot=await page.observe();
+   const done=snapshot.ui.elements.find(e=>e.wizard_finish?.mode==='input_port');
+   const result=await page.act({verb:'finish_wizard',ref:done.ref},snapshot);
+   assert.equal(result.status,mode==='toast'?'SUCCEEDED':'AMBIGUOUS',mode+JSON.stringify(result.error));
+   assert.equal(page.events.filter(e=>e==='click').length,1);
+   if(mode==='toast')assert.equal(result.trace.filter(e=>e.event==='wizard_toast_wait').length,3);
+  }
+ });

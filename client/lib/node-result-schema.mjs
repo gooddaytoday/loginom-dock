@@ -44,7 +44,15 @@ const groupingConfigurationReadback=object({kind:values('grouping'),scope:values
  input_mapping:object({port:{type:'integer',const:0},autosync:bool,fields:boundedFields(readbackMappingField)}),
  output_mapping:object({port:{type:'integer',const:0},autosync:bool,fields:boundedFields(object({...readbackMappingField.properties,excluded:bool}))}),
  package_persistence_verified:{type:'boolean',const:false}});
-const configurationReadback={anyOf:[importConfigurationReadback,calculatorConfigurationReadback,groupingConfigurationReadback]};
+const sortingConfigurationReadback=object({kind:values('sorting'),scope:values('observed_before_verified_finish'),node:ref,
+ receipt_ids:{...array(str),minItems:5,maxItems:5},values_are:values('observed_ui_values'),mode:values('keys'),
+ keys:{...array(object({name:str,label:str,type:str,order:integer,direction:values('ASC','DESC'),case_sensitive:bool})),minItems:1,maxItems:128},
+ options:object({chkLocaleAware:object({value:bool,switch_pressed:bool}),chkBufferWhole:object({value:bool,switch_pressed:bool}),cbxMaxThreadCount:object({value:integer,switch_pressed:bool})}),
+ comparison:object({mode:values('binary','user_locale'),locale:nullable(str),locale_verified:bool,case_insensitivity:values('latin_only','locale_dependent')}),
+ input_mapping:object({port:{type:'integer',const:0},autosync:bool,fields:boundedFields(readbackMappingField)}),
+ output_mapping:object({port:{type:'integer',const:0},autosync:bool,fields:boundedFields(object({...readbackMappingField.properties,excluded:bool}))}),
+ package_persistence_verified:{type:'boolean',const:false}});
+const configurationReadback={anyOf:[importConfigurationReadback,calculatorConfigurationReadback,groupingConfigurationReadback,sortingConfigurationReadback]};
 export const nodeApplyResultSchema=object({operation_id:str,status:values('SUCCEEDED','FAILED','NOT_APPLIED','AMBIGUOUS'),
  effect_possible:bool,phases:array(receipt),node:nullable(ref),execution,output,
  package_saved:{type:'boolean',const:false},cleanup_complete:bool,warnings:array(str),

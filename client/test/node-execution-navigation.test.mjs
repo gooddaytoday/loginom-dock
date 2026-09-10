@@ -50,9 +50,20 @@ test('virtual process identity becomes available only after revealing its exact 
  const {revealExecutionControl}=await import('../lib/node-execution-procedure.mjs');
  const process={process_id:'20',record_id:'cached20'};let top=0;
  const state=()=>({prepared_node_context:{...node,verified:true},node_processes:{verified:true,root_id:'root',processes:[{...process,process_tid:top===87?'native20':null}]},
-  ui:{elements:[{tid:'ConsoleForm;ProgressForm;trpProgress;treepanel;tree',ref:'scroll',process_grid:{grid_id:'tree'},scroll:{ref:'scroll',top,max_top:87},allowed_actions:['scroll']},
+  ui:{elements:[{tid:null,ref:'unrelated1',allowed_actions:['click']},{tid:null,ref:'unrelated2',allowed_actions:['click']},{tid:'ConsoleForm;ProgressForm;trpProgress;treepanel;tree',ref:'scroll',process_grid:{grid_id:'tree'},scroll:{ref:'scroll',top,max_top:87},allowed_actions:['scroll']},
    ...(top===87?[{tid:'native20',ref:'row20',allowed_actions:['click']}]:[])]}});
  const calls=[],channel={perform:async o=>{assert.ok(o.ready(state()));const a=o.resolve(state());calls.push(a);top+=a.delta_y;},observe:async o=>{assert.ok(o.ready(state()));return state();}};
  const resolved=await revealExecutionControl(channel,node,state(),process,s=>s.node_processes.processes.find(p=>p.record_id===process.record_id)?.process_tid);
  assert.deepEqual(calls,[{verb:'scroll',ref:'scroll',delta_y:87}]);assert.equal(resolved.node_processes.processes[0].process_tid,'native20');
+});
+
+test('retention can renumber a rendered process during scrolling without changing its record',async()=>{
+ const {revealExecutionControl}=await import('../lib/node-execution-procedure.mjs');
+ const process={process_id:'40.1',record_id:'record40',process_tid:'row-20'};let top=0;
+ const state=()=>({prepared_node_context:{...node,verified:true},node_processes:{verified:true,root_id:'root',processes:[{...process,process_tid:top?'row-19':'row-20'}]},
+  ui:{elements:[{tid:'ConsoleForm;ProgressForm;trpProgress;treepanel;tree',ref:'scroll',process_grid:{grid_id:'tree'},scroll:{ref:'scroll',top,max_top:80},allowed_actions:['scroll']},
+   ...(top?[{tid:'row-19',ref:'exact',allowed_actions:['right_click']}]:[])]}});
+ const channel={perform:async o=>{assert.ok(o.ready(state()));top+=o.resolve(state()).delta_y;},observe:async o=>{assert.ok(o.ready(state()));return state();}};
+ const result=await revealExecutionControl(channel,node,state(),process,s=>s.node_processes.processes.find(p=>p.process_id===process.process_id&&p.record_id===process.record_id)?.process_tid,'right_click');
+ assert.equal(result.ui.elements.at(-1).ref,'exact');
 });

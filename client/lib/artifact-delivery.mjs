@@ -63,12 +63,12 @@ export function createArtifactDelivery({runtime,artifactStore,record,admit,admit
    }
    throw Error('Delivery readiness timeout: '+condition);
   };
-  const directory=()=>ready('storage navigation loaded',async()=>{
+  const directory=expected=>ready('storage navigation loaded',async()=>{
    const r=await roots(),prefix=r.workflow_ref?.prefix;
    const bars=r.ui.elements.filter(e=>e.tid===prefix+';NavigationBar;NavigationPanel');
    requireValue(bars.length<=1,'Storage navigation is ambiguous');
    return bars.length?detail(r,bars[0]):null;
-  },s=>s.file_storage?.status==='observed');
+  },s=>s.file_storage?.status==='observed'&&(expected===undefined||s.file_storage.directory===expected));
   const readRow=name=>ready('authorized storage entry '+name,async()=>{
    const r=await observe({scope:'roots',storageName:name});
    const rows=r.ui.elements.filter(e=>e.tid===r.workflow_ref.prefix+';FileStorageForm;colName_'+name);
@@ -104,7 +104,7 @@ export function createArtifactDelivery({runtime,artifactStore,record,admit,admit
     const prefix=s.workflow_ref.prefix;
     if(s.file_storage.directory!=='/'&&!artifact.upload.directory.startsWith(s.file_storage.directory+'/')) {
     const root=one(s.ui.elements.filter(e=>e.tid===prefix+';cnrNaviMode;b.s_Сервер>Файлы'&&e.allowed_actions.includes('click')),'Files root breadcrumb unavailable');
-    await click(s,root);s=await directory();
+    await click(s,root);s=await directory('/');
     }
     let current=s.file_storage.directory==='/'?'':s.file_storage.directory;
     requireValue(artifact.upload.directory.startsWith(current+'/'),'Files root did not open');
@@ -112,7 +112,7 @@ export function createArtifactDelivery({runtime,artifactStore,record,admit,admit
      check();const rowRead=await readRow(part),folder=one(rowRead.ui.elements.filter(e=>e.tid===rowRead.workflow_ref.prefix+';FileStorageForm;colName_'+part
        &&e.storage_entry?.kind==='folder'&&e.allowed_actions.includes('double_click')),'Destination segment is not a verified folder');
      requireValue(rowRead.file_storage?.directory===(current||'/'),'Storage parent changed');
-     await click(rowRead,folder,'double_click');current+='/'+part;s=await directory();
+     await click(rowRead,folder,'double_click');current+='/'+part;s=await directory(current);
      requireValue(s.file_storage?.directory===current,'Opened folder differs from authorized path');
     }
    }

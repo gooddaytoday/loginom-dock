@@ -73,3 +73,12 @@ for(const [name,mutate] of Object.entries({
  const s=dependencies(),e=identifyNewExecution(captureExecutionBaseline(initial,node),s);mutate(s);
  assert.throws(()=>selectExecutionChild(e,s));
 });
+
+test('one oldest completed eviction preserves the unique next execution identity',()=>{
+ const before=snapshot(process('8'),process('9')),after=snapshot(process('9'),process('10'));
+ assert.equal(identifyNewExecution(captureExecutionBaseline(before,node),after).group_id,'10');
+ for(const mutate of [s=>s.processes[0].record_id='changed',s=>s.processes[1].process_id='11',s=>s.processes[0].process_id='8']){
+  const wrong=structuredClone(after);mutate(wrong);assert.throws(()=>identifyNewExecution(captureExecutionBaseline(before,node),wrong));
+ }
+ before.processes[0].state='pending_or_failed';assert.throws(()=>identifyNewExecution(captureExecutionBaseline(before,node),after));
+});

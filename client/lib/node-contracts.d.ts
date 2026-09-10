@@ -35,7 +35,7 @@ export interface NodeHandler<T extends NodeType, P> {
   configure(context: NodeProcedureContext, parameters: P): Promise<VerifiedNodePhase>;
   /** Pure projection of accepted receipts; never executes or rereads the UI. */
   configurationReadback?(context: {node: NodeRef; operation_id: string;
-    phases: Array<PhaseReceipt & {value: VerifiedNodePhase}>}): TextImportConfigurationReadback | CalculatorConfigurationReadback | GroupingConfigurationReadback;
+    phases: Array<PhaseReceipt & {value: VerifiedNodePhase}>}): TextImportConfigurationReadback | CalculatorConfigurationReadback | GroupingConfigurationReadback | SortingConfigurationReadback;
 }
 export interface VerifiedNodePhase { verified: true; cleanup_complete: true; effect_possible: boolean }
 export interface NodeProcedureContext {
@@ -52,7 +52,7 @@ export interface NodeApplyResult {
   execution: NodeExecution; output: NodeOutput;
   /** A local node checkpoint never proves that the package was saved. */
   package_saved: false; cleanup_complete: boolean; warnings: string[];
-  configuration?: {status: 'applied' | 'discarded'; readback?: TextImportConfigurationReadback | CalculatorConfigurationReadback | GroupingConfigurationReadback};
+  configuration?: {status: 'applied' | 'discarded'; readback?: TextImportConfigurationReadback | CalculatorConfigurationReadback | GroupingConfigurationReadback | SortingConfigurationReadback};
   checkpoint_kind?: 'local_node_checkpoint' | 'local_node_cancellation' | 'local_node_stopped';
   persisted_package_verified?: false; pending_phase?: PhaseName | null; error?: NodeError;
 }
@@ -101,6 +101,20 @@ export interface GroupingConfigurationReadback {
     fields: Array<{index: number; name: string; label: string; type: string; data_kind: string; source_name: string}>};
   output_mapping: {port: 0; autosync: boolean;
     fields: Array<{index: number; name: string; label: string; type: string; data_kind: string; source_name: string; excluded: boolean}>};
+}
+export interface SortingParameters {
+  /** Full replacement, or omitted to preserve existing keys. */
+  keys?: Array<{field: {kind: 'input_field'; name: string}; direction: 'ASC' | 'DESC'; case_sensitive?: boolean}>;
+  compare_with_locale?: boolean;
+}
+export interface SortingConfigurationReadback {
+  kind: 'sorting'; scope: 'observed_before_verified_finish'; node: NodeRef;
+  receipt_ids: string[]; values_are: 'observed_ui_values'; package_persistence_verified: false; mode: 'keys';
+  keys: Array<{name: string; label: string; type: string; order: number; direction: 'ASC' | 'DESC'; case_sensitive: boolean}>;
+  options: {chkLocaleAware: {value: boolean; switch_pressed: boolean}; chkBufferWhole: {value: boolean; switch_pressed: boolean}; cbxMaxThreadCount: {value: number; switch_pressed: boolean}};
+  comparison: {mode: 'binary' | 'user_locale'; locale: string | null; locale_verified: boolean; case_insensitivity: 'latin_only' | 'locale_dependent'};
+  input_mapping: GroupingConfigurationReadback['input_mapping'];
+  output_mapping: GroupingConfigurationReadback['output_mapping'];
 }
 export interface NodeError {code: string; message: string; cause?: {code: string; message: string}}
 export interface NodeExecution {status: 'not_requested' | 'pending' | 'completed' | 'cancelled'; execution_id: string | null; stop_verified?: boolean}

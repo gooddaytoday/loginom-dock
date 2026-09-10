@@ -21,14 +21,21 @@ function inventory(snapshot,node,rootId) {
 export function captureExecutionBaseline(snapshot,node) {
   const ps=inventory(snapshot,node);
   return {root_id:snapshot.root_id,node:structuredClone(node),roots:ps.filter(p=>p.parent_id===null)
-    .map(p=>({process_id:p.process_id,record_id:p.record_id})),launch_verified:false};
+    .map(p=>({process_id:p.process_id,record_id:p.record_id,completed:p.state==='completed'&&p.error===false})),launch_verified:false};
 }
 
 export function identifyNewExecution(baseline,snapshot) {
   const roots=inventory(snapshot,baseline.node,baseline.root_id).filter(p=>p.parent_id===null);
-  requireValue(baseline.roots.every(old=>roots.some(p=>p.process_id===old.process_id&&p.record_id===old.record_id)),
-    'Previous process history disappeared or changed');
+  const missing=baseline.roots.filter(old=>!roots.some(p=>p.process_id===old.process_id&&p.record_id===old.record_id));
   const fresh=roots.filter(p=>!baseline.roots.some(old=>old.process_id===p.process_id));
+  // Loginom may evict the oldest completed history entry as a new group arrives.
+  // Accept only this narrow transition; never accept reset/reused IDs, loss of
+  // an active record, multiple launches, or a change of any retained record.
+  const ordered=[...baseline.roots].sort((a,b)=>BigInt(a.process_id)<BigInt(b.process_id)?-1:1);
+  const rolling=ordered.length>=2&&missing.length===1&&missing[0].process_id===ordered[0].process_id&&missing[0].completed===true
+    &&roots.length===ordered.length&&fresh.length===1&&BigInt(fresh[0].process_id)===BigInt(ordered.at(-1).process_id)+1n
+    &&ordered.slice(1).every(old=>roots.some(p=>p.process_id===old.process_id&&p.record_id===old.record_id));
+  requireValue(missing.length===0||rolling,'Previous process history disappeared or changed');
   requireValue(fresh.length===1,'Exactly one new execution group is required');
   requireValue(!baseline.roots.some(old=>old.record_id===fresh[0].record_id),'Execution record was reused');
   return {group_id:fresh[0].process_id,group_record_id:fresh[0].record_id,root_id:baseline.root_id,

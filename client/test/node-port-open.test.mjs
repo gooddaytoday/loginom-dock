@@ -39,7 +39,7 @@ function fixture(direction='output') {
  const context=vm.createContext({document,location:{origin:'http://example.test'},bg:{app},__loginomDockPreparationV1:prep,Ext:{getCmp:id=>nativeControls.get(id)??graph.FPortContextMenu}});
  const showWizard=()=>{menu.visible=false;dialog.visible=false;wizardDom.visible=true;card.Controller.FController=wizard;card.Controller.Node.data.node=wizardTree;if(flags.foreignWizard)portTree.FModelNodePort={};flags.loading=2;};
  const page={evaluate:(fn,arg)=>vm.runInContext('('+fn.toString()+')('+JSON.stringify(arg)+')',context),waitForTimeout:async()=>{},locator:selector=>{
-  const tid=JSON.parse(selector.slice(10,-1));return {waitFor:async()=>{},click:async options=>{
+  const tid=JSON.parse(selector.replace(/:visible$/, '').slice(10,-1));return {waitFor:async()=>{},click:async options=>{
    if(options?.trial){if(tid===confirmation.yes.tid)flags.beforeConfirm?.();return;}gestures.push(tid);
    if(tid===portDom.tid){menu.visible=true;graph.FCurrentPortMenu=flags.foreignMenu?{}:port;}
    else if(tid===button.tid){if(flags.deactivation){menu.visible=false;dialog.visible=true;}else showWizard();}
@@ -51,7 +51,7 @@ function fixture(direction='output') {
   direction,port:0,operation_id:'open',origin:'http://example.test',build:'7.4.2',deadline:Date.now()+20000};
  const readNode=async()=>({verified:true,surface:'graph',locked:false,node_id:'node'});
  const run=()=>openPreparedOutputPort(page,task,readNode);
- return {run,task,prep,flags,gestures,port,portDom,graph,node,wizard,card,menu,readNode,page,dialog,confirmation,nativeControls,document};
+ return {run,task,prep,flags,gestures,port,portDom,graph,node,wizard,card,menu,readNode,page,dialog,confirmation,nativeControls,document,el};
 }
 
 test('port opening binds menu and wizard native identities and replays without another gesture',async()=>{
@@ -131,4 +131,12 @@ test('unresolved opposite-direction port opening prevents a new gesture',async()
  const f=fixture('input');f.flags.foreignMenu=true;await f.run();
  f.task.direction='output';f.task.operation_id='another';f.flags.foreignMenu=false;
  const r=await f.run();assert.equal(r.status,'NOT_APPLIED');assert.equal(f.gestures.length,1);
+});
+
+for (const direction of ['input', 'output']) test(`${direction} port ignores hidden stale menus but rejects two visible menus`, async()=>{
+ const f=fixture(direction),old=f.el('mn'),button=f.el('mn;mniConfigurePort');button.parent=old;old.visible=false;button.visible=false;
+ assert.equal((await f.run()).status,'SUCCEEDED');assert.equal(f.gestures.length,2);
+ const g=fixture(direction),duplicate=g.el('mn');duplicate.visible=false;
+ const locate=g.page.locator;g.page.locator=s=>{const l=locate(s);return {...l,click:async o=>{await l.click(o);if(!o?.trial&&o?.button==='right')duplicate.visible=true;}};};
+ assert.equal((await g.run()).status,'AMBIGUOUS');assert.equal(g.gestures.length,1);
 });

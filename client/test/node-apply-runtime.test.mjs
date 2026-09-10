@@ -387,3 +387,95 @@ test('verified unchanged workflow followed by typed preflight refusal frees the 
  const refused=await f.runtime.runNodeApply(request());assert.equal(refused.status,'NOT_APPLIED');assert.equal(refused.effect_possible,false);assert.equal(refused.cleanup_complete,true);assert.equal(refused.output.node,null);assert.equal(f.graph.nodes.length,0);
  invalid=false;const corrected=await f.runtime.runNodeApply({...request(),operation_id:'corrected'});assert.equal(corrected.status,'SUCCEEDED');assert.equal(f.graph.nodes.length,1);
 });
+
+test('fresh reopened graph is bound before source schema preflight',async()=>{
+ let bound=false,preflightReads=0;
+ const f=fixture({wrapDrivers:(_context,drivers)=>({...drivers,beforeTarget:async()=>{assert.equal(bound,true);preflightReads++;}})});
+ f.adapter.verifyWorkflow=async()=>({status:'SUCCEEDED',verified:true,document_id:'doc',workflow_ref:workflow,effect_possible:false,cleanup_complete:true});
+ f.adapter.activateWorkflow=f.adapter.verifyWorkflow;
+ const observe=f.adapter.observe;f.adapter.observe=async(...args)=>{bound=true;return observe(...args);};
+ assert.equal((await f.runtime.runNodeApply(request())).status,'SUCCEEDED');assert.equal(preflightReads,1);
+});
+
+test('foreign graph cannot reach source preflight after workflow verification',async()=>{
+ let preflightReads=0;
+ const f=fixture({wrapDrivers:(_context,drivers)=>({...drivers,beforeTarget:async()=>{preflightReads++;}})});
+ f.adapter.verifyWorkflow=async()=>({status:'SUCCEEDED',verified:true,document_id:'doc',workflow_ref:workflow,effect_possible:false,cleanup_complete:true});
+ f.adapter.activateWorkflow=f.adapter.verifyWorkflow;
+ f.adapter.observe=async()=>({...f.graph,document_id:'foreign'});
+ assert.notEqual((await f.runtime.runNodeApply(request())).status,'SUCCEEDED');assert.equal(preflightReads,0);assert.equal(f.graph.nodes.length,0);
+});
+
+function targetRecoveryFixture({fault='rename',...options}={}){
+ const f=fixture(options),mutate=f.adapter.mutate;let lose=true;
+ const workflowReceipt={status:'SUCCEEDED',verified:true,cleanup_complete:true,effect_possible:false,document_id:'doc',workflow_ref:workflow};
+ f.adapter.activateWorkflow=async()=>structuredClone(workflowReceipt);
+ f.adapter.verifyWorkflow=async()=>structuredClone(workflowReceipt);
+ f.adapter.mutate=async e=>{
+  const result=await mutate(e);
+  if(e.kind==='create')f.graph.nodes[0].label='Imported';
+  if(e.kind==='rename')f.graph.nodes[0].label=e.parameters.label;
+  if(e.kind===fault&&lose){lose=false;throw Error('lost graph reply after effect');}
+  return result;
+ };
+ return f;
+}
+test('composite target inspect verifies create/rename receipts without repeating effects or releasing the gate',async()=>{
+ for(const fault of ['create','rename']){
+  const f=targetRecoveryFixture({fault});
+  const paused=await f.runtime.runNodeApply(request());assert.equal(paused.output.pending_phase,'target');
+  const count=f.calls.length;
+  const inspected=await f.runtime.inspect({operationId:'apply'});
+  assert.equal(inspected.output.internal_resume_available,true);assert.equal(f.calls.length,count);
+  assert.ok(!f.calls.includes('open'));assert.throws(()=>f.runtime.assertPreparationAllowed(),/uncertain/);
+  await assert.rejects(f.runtime.runNodeApply({...request(),operation_id:'other'}),/pending/);
+  await f.runtime.inspect({operationId:'apply'});assert.equal(f.calls.length,count);
+  const resumed=await f.runtime.runNodeApply(request(),{resume:true});assert.equal(resumed.status,'SUCCEEDED');
+  assert.equal(f.calls.filter(c=>c==='create').length,1);assert.equal(f.calls.filter(c=>c==='rename').length,1);
+  assert.equal(f.calls.filter(c=>c==='open').length,1);f.runtime.assertPreparationAllowed();
+  assert.equal(f.events.filter(e=>e.phase==='node_target_reconciled').length,1);
+ }
+});
+test('composite target recovery rejects unknown cleanup, wrong labels and foreign graph effects',async()=>{
+ for(const variant of ['unknown','unclean','label','epoch','foreign']){
+  const f=targetRecoveryFixture();f.graph.dom_epoch=1;
+  await f.runtime.runNodeApply(request());
+  if(variant==='unknown')f.adapter.reconcile=async()=>({verified:false,cleanup_complete:true});
+  if(variant==='unclean')f.adapter.reconcile=async()=>({verified:true,cleanup_complete:false});
+  if(variant==='label')f.graph.nodes[0].label='Wrong';
+  if(variant==='epoch')f.graph.dom_epoch=2;
+  if(variant==='foreign')f.graph.links.push({source:'other',output:0,target:'new',input:0});
+  const count=f.calls.length,inspected=await f.runtime.inspect({operationId:'apply'});
+  assert.equal(inspected.output.internal_resume_available,false);
+  await assert.rejects(f.runtime.runNodeApply(request(),{resume:true}),/unresolved phase/);
+  assert.equal(f.calls.length,count);assert.ok(!f.calls.includes('open'));
+ }
+});
+test('target graph and source are checked again before explicit composite resume',async()=>{
+ for(const variant of ['graph','source']){
+  const f=targetRecoveryFixture();let changed=false;
+  f.drivers.verifySource=async()=>({verified:true,cleanup_complete:true,source:changed?'changed':'original'});
+  await f.runtime.runNodeApply(request());await f.runtime.inspect({operationId:'apply'});
+  if(variant==='graph')f.graph.nodes[0].label='External edit';else changed=true;
+  const count=f.calls.length,result=await f.runtime.runNodeApply(request(),{resume:true});
+  assert.equal(result.status,'AMBIGUOUS');assert.equal(f.calls.length,count);assert.ok(!f.calls.includes('open'));
+ }
+});
+test('target recovery journal failure and concurrent inspection retain the original gate',async()=>{
+ const f=targetRecoveryFixture();await f.runtime.runNodeApply(request());f.failRecord('node_target_reconciled');
+ await assert.rejects(f.runtime.inspect({operationId:'apply'}),/disk unavailable/);
+ assert.throws(()=>f.runtime.assertPreparationAllowed(),/uncertain/);assert.ok(!f.calls.includes('open'));
+ f.failRecord(null);let release;const observe=f.adapter.observe;
+ f.adapter.observe=async()=>{await new Promise(r=>{release=r});return observe();};
+ const inspecting=f.runtime.inspect({operationId:'apply'});
+ for(let i=0;!release&&i<100;i++)await new Promise(r=>setImmediate(r));assert.ok(release);
+ await assert.rejects(f.runtime.runNodeApply({...request(),operation_id:'other'}),/running/);
+ release();await inspecting;assert.ok(!f.calls.includes('open'));
+});
+test('recovered target never extends the original configuration deadline',async()=>{
+ let time=1000;const f=targetRecoveryFixture({now:()=>time});
+ await f.runtime.runNodeApply(request());time=40000;
+ await f.runtime.inspect({operationId:'apply'});
+ const count=f.calls.length,result=await f.runtime.runNodeApply(request(),{resume:true});
+ assert.equal(result.status,'AMBIGUOUS');assert.equal(f.calls.length,count);assert.ok(!f.calls.includes('open'));
+});

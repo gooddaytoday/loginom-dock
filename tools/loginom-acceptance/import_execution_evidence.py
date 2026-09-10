@@ -32,6 +32,24 @@ def verify_process_scroll_observations(observations, mutations):
     return sorted(set(failures))
 
 
+def retained_history_matches(baseline, current):
+    old={r['process_id']:r for r in baseline['processes'] if r['parent_id'] is None}
+    roots={r['process_id']:r for r in current['processes'] if r['parent_id'] is None}
+    if current['root_id']!=baseline['root_id']:return False
+    missing=[key for key,value in old.items() if roots.get(key,{}).get('record_id')!=value['record_id']]
+    if not missing:return True
+    fresh=sorted((key for key in roots if key not in old),key=int)
+    ordered=sorted(old,key=int)
+    # Post-launch table reads can add another group. Every eviction must remain
+    # the oldest completed prefix, with all retained identities unchanged.
+    return (len(old)>=2 and len(roots)==len(old) and 0<len(missing)<len(old)
+            and len(missing)==len(fresh) and sorted(missing,key=int)==ordered[:len(missing)]
+            and all(old[k].get('state')=='completed' and old[k].get('error') is False for k in missing)
+            and [int(k) for k in fresh]==list(range(int(ordered[-1])+1,int(ordered[-1])+1+len(fresh)))
+            and all(roots.get(k,{}).get('record_id')==old[k]['record_id'] for k in ordered[len(missing):])
+            and not ({roots[k]['record_id'] for k in fresh}&{r['record_id'] for r in old.values()}))
+
+
 def verify_execution_observations(observations, mutations, node, *, launch_mode='wizard'):
     failures = []
     same_node = lambda n: n.get('verified') is True and all(n.get(k) == node[k] for k in ('document_id', 'workflow_id', 'node_id'))
@@ -88,7 +106,7 @@ def verify_execution_observations(observations, mutations, node, *, launch_mode=
     fresh_id = fresh_record = None
     for step, _, p in after:
         roots = {r['process_id']: r['record_id'] for r in p['processes'] if r['parent_id'] is None}
-        if p['root_id'] != baseline['root_id'] or any(roots.get(k) != v for k, v in old.items()):
+        if not retained_history_matches(baseline,p):
             failures.append('history_replaced')
         fresh = {k:v for k,v in roots.items() if k not in old}
         if step < go and (len(fresh) > 1 or fresh_id is not None and len(fresh) != 1):

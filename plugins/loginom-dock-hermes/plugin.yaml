@@ -1,5 +1,5 @@
 name: loginom-dock
-version: "0.1.0-rc.5"
+version: "0.1.0-dev.20260910.1"
 description: "Loginom Dock: общие знания, проверенный skill и локальный браузер Loginom."
 author: Loginom Dock
 provides_hooks:

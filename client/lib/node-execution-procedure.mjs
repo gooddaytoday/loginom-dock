@@ -7,6 +7,8 @@ const button='MF;cntMain;tlbMainToolbar;btnProgress';
 const grid='ConsoleForm;ProgressForm;trpProgress;grd;tbl';
 const filter='mnContextMenu;mniShowCompletedProcesses';
 const showNode='mnContextMenu;mniShowNodeToProcess';
+const processControl=(process,part='process_tid')=>s=>s.node_processes?.processes.find(p=>
+  p.process_id===process.process_id&&p.record_id===process.record_id)?.[part];
 
 export async function returnToExecutedWorkflow(channel,node) {
   const sameNode=s=>s.prepared_node_context?.verified===true&&s.prepared_node_context.surface==='graph'
@@ -32,7 +34,8 @@ export async function returnToExecutedWorkflow(channel,node) {
 export async function revealExecutionControl(channel,node,initial,process,tid,verb='click') {
   let state=initial,reset=false;
   const root=initial.node_processes?.root_id;
-  const matches=s=>s.ui.elements.filter(e=>e.tid===(typeof tid==='function'?tid(s):tid)&&e.allowed_actions.includes(verb));
+  const matches=s=>{const target=typeof tid==='function'?tid(s):tid;return typeof target==='string'&&target.length>0
+    ?s.ui.elements.filter(e=>e.tid===target&&e.allowed_actions.includes(verb)):[];};
   const valid=s=>s.prepared_node_context?.verified===true
     &&['document_id','workflow_id','node_id'].every(k=>s.prepared_node_context[k]===node[k])
     &&s.node_processes?.verified===true&&s.node_processes.root_id===root
@@ -63,7 +66,8 @@ export async function revealExecutionControl(channel,node,initial,process,tid,ve
 export function createNodeExecutionProcedure(channel,node) {
   let baseline,execution,stopPromise,launchAttempted=false;
   const observe=(condition,ready=()=>true,extra={})=>channel.observe({condition,readProcesses:true,ready,...extra});
-  const control=(s,tid,verb='click')=>s.ui.elements.filter(e=>e.tid===tid&&e.allowed_actions.includes(verb));
+  const control=(s,tid,verb='click')=>{const current=typeof tid==='function'?tid(s):tid;
+    return typeof current==='string'&&current.length?s.ui.elements.filter(e=>e.tid===current&&e.allowed_actions.includes(verb)):[];};
   const act=async(s,tid,verb='click',identity=()=>node,key)=>channel.perform({condition:'execution control '+tid,
     initialObservation:s,ready:s=>control(s,tid,verb).length===1,
     resolve:s=>({verb,ref:one(control(s,tid,verb),'Unique execution control required').ref,...(key?{key}:{})}),identity});
@@ -88,8 +92,9 @@ export function createNodeExecutionProcedure(channel,node) {
     }
     if(group.expanded!==true) {
       requireValue(group.expander_tid,'Execution group expander must be identified');
-      s=await revealExecutionControl(channel,node,s,group,group.expander_tid);
-      await act(s,group.expander_tid,'click',s=>{
+      const expander=processControl(group,'expander_tid');
+      s=await revealExecutionControl(channel,node,s,group,expander);
+      await act(s,expander,'click',s=>{
         const g=s.node_processes?.processes?.find(p=>p.process_id===group.process_id&&p.record_id===group.record_id);
         requireValue(g?.expanded!==true&&g.rendered===true,'Execution group changed before expansion');
         return {node,process_id:g.process_id,record_id:g.record_id};
@@ -162,11 +167,12 @@ export function createNodeExecutionProcedure(channel,node) {
         s=await revealChildren(s,group);
         const target=expectedExecutionStopProof(execution,s.node_processes);
         const child=one(s.node_processes.processes.filter(p=>p.record_id===target.record_id),'Stop child replaced');
-        s=await revealExecutionControl(channel,node,s,child,child.process_tid,'right_click');
+        const childTid=processControl(child);
+        s=await revealExecutionControl(channel,node,s,child,childTid,'right_click');
         const sameTarget=s=>JSON.stringify(expectedExecutionStopProof(execution,s.node_processes))===JSON.stringify(target);
         await channel.perform({condition:'open exact cancellable process menu',initialObservation:s,
-          ready:s=>sameTarget(s)&&control(s,child.process_tid,'right_click').length===1,
-          resolve:s=>({verb:'right_click',ref:one(control(s,child.process_tid,'right_click'),'Stop process row unavailable').ref}),
+          ready:s=>sameTarget(s)&&control(s,childTid,'right_click').length===1,
+          resolve:s=>({verb:'right_click',ref:one(control(s,childTid,'right_click'),'Stop process row unavailable').ref}),
           identity:()=>({node,...target})});
         const cancel=s=>control(s,'mnContextMenu;mniCancel','cancel_process').filter(e=>
           JSON.stringify(e.process_menu?.cancellation)===JSON.stringify(target));
@@ -227,8 +233,9 @@ export function createNodeExecutionProcedure(channel,node) {
       const group=one(s.node_processes.processes.filter(p=>p.process_id===execution.group_id&&p.record_id===execution.group_record_id),'Execution group replaced');
       s=await revealChildren(s,group);
       const child=selectExecutionChild(execution,s.node_processes);
-      s=await revealExecutionControl(channel,node,s,child,child.process_tid,'right_click');
-      await act(s,child.process_tid,'right_click',s=>{
+      const childTid=processControl(child);
+      s=await revealExecutionControl(channel,node,s,child,childTid,'right_click');
+      await act(s,childTid,'right_click',s=>{
         requireValue(s.node_processes.processes.some(p=>p.process_id===child.process_id&&p.record_id===child.record_id&&p.rendered),'Process row changed');
         return {node,process_id:child.process_id,record_id:child.record_id};
       });

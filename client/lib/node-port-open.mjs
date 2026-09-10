@@ -119,7 +119,8 @@ export async function openPreparedOutputPort(page,task,readNode=readPreparedNode
    r.portDom=dom;r.phase='menu_issued';return {phase:r.phase};
   }
   if(mode==='menu'||mode==='open_issued') {
-   const menus=exact('mn'),buttons=exact('mn;mniConfigurePort'),menu=r.graph.FPortContextMenu;
+   const visible=e=>e.checkVisibility({checkVisibilityCSS:true});
+   const menus=exact('mn').filter(visible),buttons=exact('mn;mniConfigurePort').filter(visible),menu=r.graph.FPortContextMenu;
    if(r.phase!=='menu_issued'||model!==r.graph||model.FCurrentPortMenu!==r.port||r.port.parent!==r.node
     ||menus.length!==1||menu?.el?.dom!==menus[0]||globalThis.Ext?.getCmp?.(menus[0].id)!==menu
     ||!menus[0].checkVisibility({checkVisibilityCSS:true})||buttons.length!==1||!menus[0].contains(buttons[0])
@@ -155,10 +156,10 @@ export async function openPreparedOutputPort(page,task,readNode=readPreparedNode
   if(JSON.stringify(await readNode(page,task.binding))!==JSON.stringify(before))throw Error('Prepared node changed before port opening');
   await inspect('menu_issued');effect=true;
   await at(target.port_tid).click({button:'right',timeout:remaining()});
-  await at('mn;mniConfigurePort').waitFor({state:'visible',timeout:remaining()});
+  await page.locator('[data-tid="mn;mniConfigurePort"]:visible').waitFor({state:'visible',timeout:remaining()});
   trace.push({event:direction+'_port_menu_verified',...await inspect('menu')});
-  await at('mn;mniConfigurePort').click({trial:true,timeout:remaining()});await inspect('open_issued');
-  await at('mn;mniConfigurePort').click({timeout:remaining()});
+  await page.locator('[data-tid="mn;mniConfigurePort"]:visible').click({trial:true,timeout:remaining()});await inspect('open_issued');
+  await page.locator('[data-tid="mn;mniConfigurePort"]:visible').click({timeout:remaining()});
   while(remaining()>0) {
    const transition=await inspect('await_open');
    if(transition.wizard)break;

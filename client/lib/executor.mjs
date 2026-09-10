@@ -1043,6 +1043,8 @@ function browserCapability(page, task) {
       return await tid('', closedTabTid).count() === 0;
     });
     record('saved_package_closed');
+    const previousTab=await resolve('workspace.active_tab', {}, {cardinality:'zeroOrOne',stable:false});
+    const previousTabTid=previousTab?await previousTab.getAttribute('data-tid'):null;
     // Closing the package can remove its tab before the old Packages menu
     // finishes hiding. Wait for that transition before one new menu click.
     await poll(async () => !(await resolve('packages.open', {}, { cardinality: 'zeroOrOne', stable: false })));
@@ -1057,7 +1059,15 @@ function browserCapability(page, task) {
     await poll(async () => {
       const errorMessage = await resolve('message.error', {}, { cardinality: 'zeroOrOne', stable: false });
       if (errorMessage) throw new Error((await errorMessage.innerText()).slice(0, 500));
-      try { return await resolve('workflow.graph', {}, { cardinality: 'zeroOrOne', stable: false }); }
+      try {
+        const graph=await resolve('workflow.graph', {}, { cardinality: 'zeroOrOne', stable: false });
+        if(!graph)return null;
+        // An older open package may remain visible while the requested file is
+        // loading. Do not pin that intermediate workspace as the reopened one.
+        const selectedTab=await resolve('workspace.active_tab', {}, {cardinality:'zeroOrOne',stable:false});
+        if(previousTabTid&&selectedTab&&await selectedTab.getAttribute('data-tid')===previousTabTid){workflow=null;graphBinding=null;return null;}
+        return graph;
+      }
       catch (error) {
         if (/selected Loginom workspace tab|unknown identity/.test(error.message)) return null;
         throw error;
@@ -1424,6 +1434,31 @@ export function createActionRuntime({ pinned, execute, artifactStore, allowCandi
             error:{code:'NODE_PHASE_RECOVERED',message:'Original workflow receipt verified; explicit resume required'}});
           operation.cleanupConfirmed=true;
           // The enclosing node is incomplete: retain its gate and original ID.
+          await remember(operation,'reconciled',operation.outcome);
+        }
+      }finally{running=false;}
+    }
+    if(operation.nodeApply?.pending?.phase==='target' && operation.targetPhase){
+      running=true;
+      try{
+        const state=operation.nodeApply;
+        const {graph}=validateNodeApplyRequest(state.request,nodeApplyHandlers);
+        const result=await inspectNodeTarget({request:graph,operation,adapter:operation.nodeTargetAdapter,
+          record:nodeTargetRecord,deadline:now()+15000});
+        if(result.cleanup_complete===true && !operation.targetPhase.pending
+          && (result.resume_available===true || result.status==='SUCCEEDED')){
+          // Only child effects have been reconciled. The node remains pending
+          // under its original ID; inspection must not finish the graph phase
+          // or open/configure a wizard. Resume rechecks this exact checkpoint.
+          const event={operation_id:operation.id,action_key:'node.apply',action_revision:state.request.contract_revision,
+            phase:'node_target_reconciled',signature:state.signature,result:structuredClone(result)};
+          const ack=await onRecord(event);
+          if(!ack || fingerprint('ack',Object.fromEntries(Object.keys(event).map(k=>[k,ack[k]])))!==fingerprint('ack',event))
+            throw Error('Node target recovery journal acknowledgement differs');
+          state.pending=null;state.cleanup_complete=true;state.target_reconciled=true;
+          operation.outcome=nodeApplyOutcome(operation,{...operation.outcome.output,pending_phase:null,cleanup_complete:true,
+            error:{code:'NODE_PHASE_RECOVERED',message:'Original graph effects and cleanup verified; explicit resume required'}});
+          operation.cleanupConfirmed=true;
           await remember(operation,'reconciled',operation.outcome);
         }
       }finally{running=false;}
@@ -1984,7 +2019,7 @@ export function createActionRuntime({ pinned, execute, artifactStore, allowCandi
       if(operation&&operation.signature!==signature)throw new Error('operation_id was already used with different parameters or handler');
       if(pending&&pending!==operation)throw new Error('Another Dock operation remains pending');
       if(operation&&!resume)return inspectApply(operation);
-      if(resume&&operation?.nodeApply?.pending?.phase==='workflow')await inspectApply(operation);
+      if(resume&&['workflow','target'].includes(operation?.nodeApply?.pending?.phase))await inspectApply(operation);
       if(resume&&(!operation||pending!==operation||operation.nodeApply?.pending||!operation.cleanupConfirmed))
         throw new Error('Resume requires the original inspected node checkpoint without an unresolved phase');
       running=true;
@@ -2015,6 +2050,11 @@ export function createActionRuntime({ pinned, execute, artifactStore, allowCandi
           const originalContinuation=operation.nodeApplyDrivers.verifyContinuation;
           operation.nodeApplyDrivers={...operation.nodeApplyDrivers,
             verifyContinuation:async(state,ctx)=>{
+              if(state.target_reconciled && !state.phases.some(p=>p.phase==='target')){
+                const {graph}=validateNodeApplyRequest(state.request,nodeApplyHandlers);
+                await inspectNodeTarget({request:graph,operation,adapter:operation.nodeTargetAdapter,
+                  record:nodeTargetRecord,deadline:Math.min(state.deadline,state.configure_deadline,now()+15000)});
+              }
               if(state.phases.at(-1)?.phase!=='workflow')return originalContinuation(state,ctx);
               if(state.pending||state.node||state.cleanup_complete!==true||state.phases.length!==2
                 ||state.phases[0].phase!=='source'||now()>=Math.min(state.deadline,state.configure_deadline)
@@ -2043,6 +2083,13 @@ export function createActionRuntime({ pinned, execute, artifactStore, allowCandi
                 if(current?.status!=='SUCCEEDED'||current.verified!==true||current.cleanup_complete!==true
                   ||current.effect_possible!==false||current.document_id!==graph.document_id
                   ||JSON.stringify(current.workflow_ref)!==JSON.stringify(graph.workflow_ref))throw Error('Workflow ownership changed before node preflight');
+                // Bind the freshly reopened native graph before a schema
+                // preflight reads its source port. Workflow activation alone
+                // does not establish the embedded node-context identity.
+                const sourceGraph=await operation.nodeTargetAdapter.observe(graph,ctx.deadline,ctx.signal);
+                if(sourceGraph?.complete!==true||sourceGraph.document_id!==graph.document_id
+                  ||JSON.stringify(sourceGraph.workflow_ref)!==JSON.stringify(graph.workflow_ref))
+                  throw Error('Complete owned graph required before node preflight');
                 await operation.nodeApplyDrivers.beforeTarget(ctx);
               }
               result=await prepareNodeTarget({request:graph,operation,adapter:operation.nodeTargetAdapter,

@@ -39,6 +39,26 @@ class SaveChainTests(unittest.TestCase):
         self.assertFalse(result['settings_persistence_verified'])
         self.assertFalse(result['hermes_acceptance_verified'])
 
+    def test_four_declared_stages_preserve_order_and_previous_package(self):
+        import json
+        draft=self.path+'.draft.lgp'
+        extra=[]
+        for name in ('branch-product','branch-region'):
+            pair=copy.deepcopy(self.events[1:3])
+            for event in pair:
+                event['operation_id']=name
+                if 'outcome' in event:event['outcome']['operation_id']=name
+                event['checkpoint']['package_identity']['path']=draft
+            extra.extend(pair)
+        events=self.events[:3]+extra+self.events[3:]
+        stages=[('package.save_checkpoint',draft,False)]*3+[('package.save_as',self.path,True)]
+        result=verify_save_chain(events,self.seed,self.path,self.revisions,stages=stages)
+        self.assertTrue(result['passed'],result)
+        for index in (3,5):
+            wrong=copy.deepcopy(events);wrong[index]['checkpoint']['package_identity']['path']=''
+            self.assertFalse(verify_save_chain(wrong,self.seed,self.path,self.revisions,stages=stages)['passed'])
+
+
     def test_missing_duplicate_and_reordered_saves_rejected(self):
         original = copy.deepcopy(self.events)
         for i in range(len(original)):
@@ -52,6 +72,38 @@ class SaveChainTests(unittest.TestCase):
                     self.assertFalse(self.audit()['passed'])
         self.events = [original[0], *original[3:5], *original[1:3]]
         self.assertFalse(self.audit()['passed'])
+
+    def test_replace_proven_draft_requires_exact_order_path_and_policy(self):
+        draft=self.path+'.draft.lgp'
+        pair=copy.deepcopy(self.events[1:3])
+        for e in pair:
+            e['operation_id']='branch';e['parameters']['conflict_policy']='replace'
+            e['checkpoint']['package_identity']['path']=draft
+            if 'outcome' in e:e['outcome']['operation_id']='branch'
+        trace=pair[1]['outcome']['trace']
+        at=next(i for i,t in enumerate(trace) if t['event']=='save_requested')+1
+        trace[at:at]=[dict(event='save_conflict_observed',path=draft),dict(event='overwrite_confirmed')]
+        events=self.events[:3]+pair+self.events[3:]
+        stages=[('package.save_checkpoint',draft,False)]*2+[('package.save_as',self.path,True)]
+        audit=lambda es:verify_save_chain(es,self.seed,self.path,self.revisions,stages=stages)
+        self.assertTrue(audit(events)['passed'],audit(events))
+        def policy(es):
+            for e in es[3:5]:e['parameters']['conflict_policy']='fail'
+        changes=[policy,
+            lambda es:es[4]['outcome']['trace'][at].update(path='/foreign.lgp'),
+            lambda es:es[4]['outcome']['trace'].pop(at),
+            lambda es:es[4]['outcome']['trace'].pop(at+1),
+            lambda es:es[4]['outcome']['trace'].insert(at+2,dict(event='overwrite_confirmed')),
+            lambda es:es[4]['outcome']['trace'].reverse(),
+            lambda es:es[4]['outcome']['trace'].append(dict(event='conflict_rejected')),
+            lambda es:es[3]['checkpoint']['package_identity'].update(path='/foreign.lgp')]
+        for change in changes:
+            wrong=copy.deepcopy(events);change(wrong);self.assertFalse(audit(wrong)['passed'])
+        # The first save is never allowed to replace an unproven preexisting file.
+        wrong=copy.deepcopy(events)
+        for e in wrong[1:3]:e['parameters']['conflict_policy']='replace'
+        wrong[2]['outcome']['trace'][at:at]=copy.deepcopy(trace[at:at+2])
+        self.assertFalse(audit(wrong)['passed'])
 
     def test_declared_replace_without_actual_conflict_is_valid(self):
         for event in self.events[1:]:

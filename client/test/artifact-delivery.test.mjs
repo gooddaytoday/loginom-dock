@@ -164,3 +164,13 @@ test('an unresolved started download is never dispatched again on resume',async(
  assert.equal(result.outcome.status,'AMBIGUOUS');assert.match(result.error.message,/no repeated download/);
  assert.equal(f.calls.filter(c=>c==='verify').length,1);assert.equal(f.calls.filter(c=>c==='upload').length,1);
 });
+
+test('folder navigation waits for the requested breadcrumb without repeating its gesture',async()=>{
+ const f=fixture(undefined,'/user/another-folder'),observe=f.runtime.observe,act=f.runtime.uiAct;
+ let stale,remaining=0;
+ f.runtime.observe=async(...args)=>remaining-->0?structuredClone(stale):observe(...args);
+ f.runtime.uiAct=async action=>{stale=await observe();const result=await act(action);remaining=4;return result;};
+ const result=await f.service.deliver(request);
+ assert.equal(result.outcome.status,'SUCCEEDED');
+ assert.deepEqual(f.calls,['click','double_click','double_click','upload','inspect','verify','inspect']);
+});

@@ -443,3 +443,14 @@ test('saved continuation refuses a different native package even at the same pat
  const result=await run(page,'package.save_checkpoint',{path:'/user/data/packages/continued.lgp',conflict_policy:'fail'});
  assert.equal(result.status,'AMBIGUOUS');assert.match(result.error.message,/native identity changed/);
 });
+
+test('save waits for requested reopened tab while another package remains visible',async()=>{
+ const page=linkPage(),click=page.click.bind(page),other={prefix:'MF;TF-9',tabTid:'MF;cntMain;cntWorkspace;Workspace;t.br;tb-9',packagePath:'/user/data/other.lgp'};
+ page.click=async item=>{await click(item);if(item.symbol==='packages.close')Object.assign(page,other,{active:true});};
+ let pending,waits=0;
+ page.onReopen=()=>{pending={prefix:page.prefix,tabTid:page.tabTid,packagePath:page.packagePath};Object.assign(page,other);};
+ const wait=page.waitForTimeout.bind(page);page.waitForTimeout=async ms=>{await wait(ms);if(pending&&++waits===2){Object.assign(page,pending);pending=null;}};
+ const outcome=await run(page,'package.save_as',{path:'/user/data/packages/multiple.lgp',conflict_policy:'fail'});
+ assert.equal(outcome.status,'SUCCEEDED',JSON.stringify(outcome.error));assert.equal(waits,2);
+ assert.equal(page.events.filter(e=>e==='package_reopened').length,1);
+});
