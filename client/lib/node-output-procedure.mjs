@@ -218,7 +218,21 @@ export async function restoreEmptyDateTimeFormats(channel,table,targets,original
 export async function restoreTablePrecision(channel,proof) {
   requireValue(proof?.table&&Array.isArray(proof.original_formats),'Original Table formatting is unavailable');
   const result=await configureTablePrecision(channel,proof.table,{restore:proof.original_formats});
-  return {table:proof.table,restored:result.restored,fields:result.fields,default_datetime_restoration:result.default_datetime_restoration};
+  let applied_format;
+  if(result.format_application_pending){
+    const table=proof.table;
+    const state=await channel.observe({condition:'single Table format restoration applied',
+      tablePage:{table,page:{row_offset:0,row_limit:0,column_offset:0,column_limit:1}},ready:s=>s.node_table?.verified===true});
+    applied_format=state.node_table.applied_format;
+    const original=proof.original_formats[0],field=applied_format?.fields?.[0];
+    requireValue(applied_format?.verified===true&&applied_format.source==='applied_table_format_ui_cache'
+      &&applied_format.result==='ok'&&JSON.stringify(applied_format.table)===JSON.stringify(table)
+      &&applied_format.modal_tid===table.table_tid+';ModalWindow_BrowseFormat'
+      &&applied_format.fields.length===1&&original&&field.index===original.index&&field.key===original.key
+      &&field.type===original.type&&field.mask===original.settings.format_string,'Applied single Table restoration differs');
+  }
+  return {table:proof.table,restored:result.restored,fields:result.fields,default_datetime_restoration:result.default_datetime_restoration,
+    ...(applied_format?{applied_format}:{})};
 }
 
 export async function prepareTableRead(channel,table) {

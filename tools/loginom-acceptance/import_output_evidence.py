@@ -163,9 +163,23 @@ def verify_table_format_restoration(observations, mutations, table, expected, fi
                 if prior and (n < first_apply and old[0][0] >= n or start < n < restore_apply and final[-1][0] <= n):
                     failures.append('table_format_restoration_settings_order')
         deferred = {f['source_index'] for f, _ in defaults}
+        single_applied = None
+        if len(initial_fields)==1 and initial_fields[0]['type'] in ('integer','real','datetime'):
+            target=initial_fields[0]
+            expected_applied=dict(verified=True,table=ref,source='applied_table_format_ui_cache',
+                modal_tid=modal,result='ok',fields=[dict(index=target['source_index'],key=target['name_key'],
+                type=target['type'],mask=target['format_string'])])
+            later=[(n,s) for n,s in observations if n>restore_apply and owned(s) and s.get('ui',{}).get('dialogs')==[]
+                and s.get('node_table',{}).get('verified') is True
+                and s.get('node_table_request',{}).get('page')==dict(row_offset=0,row_limit=0,column_offset=0,column_limit=1)]
+            if proof.get('applied_format') is not None:
+                if proof['applied_format']!=expected_applied or not any(s['node_table'].get('applied_format')==expected_applied for _,s in later):
+                    raise ValueError('table_single_restoration_applied')
+                single_applied=expected_applied
         for initial, final in zip(initial_fields, final_fields):
             expected_final = dict(initial, format_string='yyyy-mm-dd hh:nn:ss.zzz') if initial['source_index'] in deferred else initial
-            if final != expected_final: failures.append('table_format_restoration_fields')
+            if final != expected_final and not (single_applied and {k:v for k,v in final.items() if k!='format_string'}=={k:v for k,v in expected_final.items() if k!='format_string'}): failures.append('table_format_restoration_fields')
+        if single_applied:final_fields=[dict(final_fields[0],format_string=initial_fields[0]['format_string'])]
         projected = [dict(index=f['source_index'], definition_index=f['index'], key=f['name_key'], type=f['type'], label=f['label'],
                           **({'mask':f['format_string']} if f['type'] in ('integer','real','datetime') and f['source_index'] not in deferred else {})) for f in final_fields]
         if (not isinstance(proof, dict) or proof.get('table') != ref or proof.get('restored') is not True
@@ -185,7 +199,7 @@ def verify_table_format_restoration(observations, mutations, table, expected, fi
     return sorted(set(failures)), ({n for n, _ in segment} | tail_steps) if not failures else set()
 
 
-def verify_table_output_observations(observations, mutations, request, source_bytes, checkpoint, execution_id):
+def verify_table_output_observations(observations, mutations, request, source_bytes, checkpoint, execution_id, *, output_port_index=0):
     failures = []
     if not execution_id or checkpoint.get('execution', {}).get('execution_id') != execution_id:
         failures.append('output_checkpoint_execution_identity')
@@ -219,8 +233,8 @@ def verify_table_output_observations(observations, mutations, request, source_by
     graph_ports = [(step, s.get('node_outputs', {})) for step, s in observations if step < add_step
                    and s.get('node_outputs', {}).get('verified') is True and s['node_outputs'].get('surface') == 'graph']
     if (len(owners) != 1 or not graph_ports or not owners[0] < graph_ports[-1][0] < add_step
-            or [p.get('port_guid') for p in graph_ports[-1][1].get('ports', []) if p.get('index') == 0 and p.get('active') is True] != [add.get('port_guid')]):
-        failures.append('table_not_bound_to_executed_output_zero')
+            or [p.get('port_guid') for p in graph_ports[-1][1].get('ports', []) if p.get('index') == output_port_index and p.get('active') is True] != [add.get('port_guid')]):
+        failures.append('table_not_bound_to_executed_output_zero' if output_port_index == 0 else 'table_not_bound_to_executed_output_'+str(output_port_index))
     prior = before(add_step).get('node_outputs', {})
     if (not enter.get('view_guid') or enter.get('port_guid') != add.get('port_guid')
             or any(t.get('view_guid') == enter.get('view_guid') for t in prior.get('tables', []))
@@ -256,10 +270,11 @@ def verify_table_output_observations(observations, mutations, request, source_by
     numeric = [(i, c) for i, c in enumerate(expected) if c['type'] in ('integer', 'real')]
     fills = [step for step, action, _ in mutations if enter_step < step < fmt_step and action.get('verb') == 'fill']
     last_fill = max(fills, default=enter_step)
+    restore_boundary = apply_steps['Format'][1] if len(apply_steps['Format'])>1 else float('inf')
     def applied_single_format(column, mask):
         if len(expected) != 1:
             return False
-        pages = [state['node_table'] for step, state in bound if step > max(fmt_step, filter_step)
+        pages = [state['node_table'] for step, state in bound if max(fmt_step, filter_step)<step<restore_boundary
                  and state.get('node_table', {}).get('verified') is True]
         return bool(pages) and all(
             page.get('column_total') == 1 and page.get('applied_format', {}).get('verified') is True
@@ -296,7 +311,15 @@ def verify_table_output_observations(observations, mutations, request, source_by
         if not any(all(candidate.get(k, {}).get('status') == 'observed' and candidate[k].get('value') == value
                        for k, value in [('formatting', True), ('custom', True), ('format_string', mask)]) for candidate in candidates):
             failures.append('datetime_format_readback_'+str(i))
-    pages = [(n, s['node_table']) for n, s in bound if n > max(fmt_step, filter_step) and s.get('node_table', {}).get('verified') is True]
+    # A zero-row post-restoration read verifies the committed single-field mask;
+    # it cannot be used as fresh, precision-formatted output data.
+    restore_boundary = apply_steps['Format'][1] if len(apply_steps['Format'])>1 else float('inf')
+    pages = [(n, s['node_table']) for n, s in bound if max(fmt_step, filter_step)<n<restore_boundary and s.get('node_table', {}).get('verified') is True]
+    late_pages=[s for n,s in bound if n>restore_boundary and s.get('node_table',{}).get('verified') is True]
+    restored_applied=checkpoint.get('output',{}).get('format_restoration',{}).get('applied_format')
+    if any(not restored_applied or s.get('node_table_request',{}).get('page')!=dict(row_offset=0,row_limit=0,column_offset=0,column_limit=1)
+           or s['node_table'].get('applied_format')!=restored_applied or s['node_table'].get('rows')!=[] for s in late_pages):
+        failures.append('table_data_after_format_restoration')
     if not pages:
         return failures + ['verified_table_pages_missing']
     if any(not same_node(s, s['node_table'].get('node_context', {})) for n, s in bound if s.get('node_table', {}).get('verified') is True):
@@ -368,7 +391,7 @@ def verify_table_output_observations(observations, mutations, request, source_by
     if len(ports) != 1:
         return failures + ['typed_port_missing']
     port = ports[0]
-    if (port.get('port') != 0 or port.get('port_guid') != enter['port_guid'] or port.get('execution_id') != execution_id
+    if (port.get('port') != output_port_index or port.get('port_guid') != enter['port_guid'] or port.get('execution_id') != execution_id
             or port.get('row_count') != len(records) or port.get('sample_rows') != count
             or port.get('sample_complete') is not (count == len(records)) or len(port.get('sample', [])) != count):
         failures.append('typed_output_identity')

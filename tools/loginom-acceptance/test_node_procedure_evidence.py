@@ -153,6 +153,13 @@ class NodeProcedureRefreshEvidenceTests(unittest.TestCase):
     def test_strict_bound_refresh_preserves_roundtrip_audit(self):
         self.assertTrue(self.verify()['passed'], self.verify())
 
+    def test_detached_root_refresh_requires_pre_gesture_no_effect_evidence(self):
+        e = next(e for e in self.events if e['phase'] == 'node_step_completed')
+        e['outcome'].update(phase='observing',error={'code':'UI_ROOT_STALE'})
+        self.assertTrue(self.verify()['passed'],self.verify())
+        e['outcome']['trace']=[{'event':'ui_gesture_applied'}]
+        self.assertFalse(self.verify()['passed'])
+
     def test_unknown_effect_cannot_be_reclassified_as_a_refusal(self):
         e = next(e for e in self.events if e['phase'] == 'node_step_completed')
         e['outcome']['effect_possible'] = True

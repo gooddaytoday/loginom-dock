@@ -82,7 +82,7 @@ export function describeNodeTypes(types, pins = {}, actions = new Map(), candida
     return { ...card, catalog_add_available: admitted, platform_availability: 'requires_live_preflight',
       full_node_apply_available: false, cache_key: createHash('sha256').update(JSON.stringify(identity)).digest('hex'),
       candidate_node_apply_available:!!candidate,
-      ...(candidate?{configuration_handler:candidate.revision,configuration_status:'candidate_pending_autonomous_acceptance',candidate_apply_tool:'dock_node_apply'}:{}),
+      ...(candidate?{configuration_handler:candidate.revision,configuration_status:'candidate_pending_autonomous_acceptance',candidate_apply_tool:'dock_node_apply',candidate_modes:[...candidate.modes]}:{}),
       ...(candidate?.parameter_schema?{parameter_schema:structuredClone(candidate.parameter_schema)}:{}),
       session_manifest: structuredClone(pins) };
   });

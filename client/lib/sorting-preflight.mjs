@@ -19,13 +19,13 @@ export async function preflightTabularSource(options,ctx,config,{required,resolv
  const graph=s=>s.prepared_node_context?.surface==='graph'&&s.wizard?.status==='absent';
  let s=await channel.observe({condition:'upstream graph before '+label+' validation',readOutputs:true,ready:s=>graph(s)&&s.node_outputs?.verified===true});
  const ports=s.node_outputs.ports.filter(p=>p.index===input.output);need(ports.length===1,'Exact upstream '+label+' port required');const port=ports[0];
- if(port.index!==0||port.active!==true){const error=Error(label+' preflight requires an active source output zero');error.nodePhaseRefusal={phase:'target',status:'NOT_APPLIED',effect_possible:false,cleanup_complete:true};throw error;}
+ if(port.active!==true){const error=Error(label+' preflight requires an active source output');error.nodePhaseRefusal={phase:'target',status:'NOT_APPLIED',effect_possible:false,cleanup_complete:true};throw error;}
  const portControl=s=>s.ui.elements.filter(e=>e.tid===port.tid&&e.allowed_actions.includes('click'));
  need(portControl(s).length===1,'Upstream port is not interactable');
  await channel.perform({condition:'select upstream output for schema preview',initialObservation:s,ready:s=>graph(s)&&portControl(s).length===1,identity:()=>({node:input.source,port_guid:port.port_guid}),resolve:s=>({verb:'click',ref:portControl(s)[0].ref})});
  s=await channel.observe({condition:'selected upstream output preview command',ready:s=>graph(s)&&s.ui.elements.some(e=>e.tid===port.tid&&e.allowed_actions.includes('press'))});
  await channel.perform({condition:'open temporary upstream schema preview',initialObservation:s,ready:graph,identity:()=>({node:input.source,port_guid:port.port_guid}),resolve:s=>({verb:'press',ref:s.ui.elements.find(e=>e.tid===port.tid).ref,key:'F3'})});
- const preview=await channel.observe({condition:'complete owned upstream preview schema',readPreview:true,ready:s=>s.node_preview_schema?.verified===true&&s.node_preview_schema.port_guid===port.port_guid});
+ const preview=await channel.observe({condition:'complete owned upstream preview schema',readPreview:true,ready:s=>s.node_preview_schema?.verified===true&&s.node_preview_schema.port_guid===port.port_guid&&s.node_preview_schema.port===input.output});
  let error,fields=preview.node_preview_schema.fields;
  try{
   const mapping=request.mappings.find(m=>m.direction==='input');

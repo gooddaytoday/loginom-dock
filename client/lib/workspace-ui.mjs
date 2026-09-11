@@ -6,7 +6,7 @@ export const uiActionSchema = {
   type: 'object', additionalProperties: false, required: ['verb'],
   properties: {
     verb: { type: 'string', enum: ['click', 'double_click', 'right_click', 'fill', 'press', 'drag', 'scroll', 'scroll_horizontal', 'set_checked', 'replace_expression', 'set_wizard_field', 'wizard_step', 'select_wizard_option', 'apply_expression_parameters', 'cancel_expression_parameters', 'open_wizard', 'begin_wizard', 'confirm_wizard_deactivation', 'finish_wizard', 'execute_wizard', 'execute_graph_node', 'confirm_wizard_close', 'show_process_node', 'cancel_process', 'open_node_views', 'enter_table', 'apply_output_column', 'cancel_output_column', 'apply_reform_column', 'cancel_reform_column'] },
-    expected_stage: { oneOf:[{type:'string',enum:['text_import_file','text_import_format','input_mapping','output_mapping','calculator','grouping','sorting','field_parameters','done']},{const:['output_mapping','done']}],
+    expected_stage: { oneOf:[{type:'string',enum:['text_import_file','text_import_format','input_mapping','output_mapping','calculator','grouping','sorting','field_parameters','row_filter','done']},{const:['output_mapping','done']}],
       description: 'Required only for wizard_step: destination after the observed next/previous control, not the current stage. For delimited Text Import, next follows text_import_file → text_import_format → output_mapping → done; previous reverses this order. input_mapping means a separate INPUT PORT mapping wizard, never Text Import output columns. Calculator, Grouping and Sorting validation may use [output_mapping, done] for its conditional output page. Other wizard families may have different paths; inspect their current UI and sources instead of guessing. Do not pass this field to open_wizard or finish_wizard.' },
     checked: { type: 'boolean' },
     delta_y: { type: 'integer', minimum: -1000, maximum: 1000 },
@@ -34,7 +34,7 @@ export function validateUiAction(action, snapshot) {
   if (action.verb === 'scroll_horizontal' && (!Number.isInteger(action.delta_x) || !action.delta_x || Math.abs(action.delta_x)>1000)) throw new Error('Horizontal scroll requires a nonzero integer delta_x within -1000..1000');
   if (action.verb === 'set_checked' && typeof action.checked !== 'boolean') throw new Error('set_checked requires a boolean checked value');
   if (snapshot) {
-    if(action.verb==='wizard_step'&&Array.isArray(action.expected_stage)&&!['calculator','grouping','sorting','field_parameters'].includes(snapshot.wizard?.stage))throw new Error('Conditional destinations require a supported transform configuration');
+    if(action.verb==='wizard_step'&&Array.isArray(action.expected_stage)&&!['calculator','grouping','sorting','field_parameters','row_filter'].includes(snapshot.wizard?.stage))throw new Error('Conditional destinations require a supported transform configuration');
     if(action.verb==='wizard_step' && (snapshot.wizard?.status!=='observed' || snapshot.wizard.stage===action.expected_stage))throw new Error('wizard_step requires a different destination stage and an observed wizard');
     if (!Array.isArray(snapshot.ui?.elements)) throw new Error('UI action requires an observation snapshot');
     for (const ref of refs) {
@@ -230,13 +230,13 @@ export function workspaceUiCapability(page, task, readNodeContext) {
       input_mapping:[';TuneDataSourceInputPortWizard;btnAddMappingColumn',';TuneDataSourceMappingWizard;btnAddMappingColumn'],
       output_mapping:[';ColumnsMappingEngineOutputPortWizard;btnAddMappingColumn',';DerivedDataSourceOutputSocketWizard;btnAddMappingColumn',';DerivedDataSourceMappingEngineOutputPortWizard;btnAddMappingColumn'],
       calculator:';CalcDataWizard;btnAddExpr',grouping:';GroupDataWizard;grdUsedFields;tbl',sorting:';SortingWizard;SortingColumnCollection;grdSorting;tbl',
-      field_parameters:';ReformColumnsWizard;grdTargetColumns;tbl',done:';DoneWizard;edtDisplayName'};
+      row_filter:';FilterDataWizard;FilterDataPanel;tbl',field_parameters:';ReformColumnsWizard;grdTargetColumns;tbl',done:';DoneWizard;edtDisplayName'};
     const wizardButtons=['btnPrev','btnNext','btnDone','btnExecute','btnClose','btnError'];
     // Breadcrumb labels are fixed global context even for a narrow file row;
     // including buttons without their labels loses the observed directory.
     const wizardSelectors=[...(definitionPrefix?['[data-tid='+JSON.stringify(definitionPrefix+';ModelForm;btnToggleActivateCurrent')+']']:[]),'[data-tid$=";WizrdMCF;ImportTextFilePreviewWizard;edtFileName"] .x-form-error-msg', '[data-tid$=";ModelForm;cmpDiagram"]','[data-tid$=";NavigationBar;NavigationPanel"]','[data-tid*=";cnrNaviMode;b.s_"]','[data-tid*=";cnrNaviMode;b.s"] .x-btn-inner-default-toolbar-small','[data-tid$=";WizrdMCF"]','[data-tid$=";WizrdMCF;cardWizardPanel;p.h;p.t"]',
       ...Object.values(wizardMarkers).flat().map(suffix=>'[data-tid$=";WizrdMCF'+suffix+'"]'),
-      '[data-tid*=";WizrdMCF;CalcDataWizard;colExpressionName_"]','[data-tid*=";WizrdMCF;CalcDataWizard;colExpressionDisplayName_"]','[data-tid$=";WizrdMCF;CalcDataWizard;cmpExpression"]','[data-tid$=";WizrdMCF;CalcDataWizard;btnCalcMode"]','[data-tid$=";WizrdMCF;CalcDataWizard;btnReplaceField"]','span.bg-TBGCalcMode-cmExpression,span.bg-TBGCalcMode-cmJavaScript',
+      '[data-tid$=";WizrdMCF;FilterDataWizard;FilterDataPanel"]','[data-tid*=";WizrdMCF;FilterDataWizard;FilterDataPanel;tbl;celleditor"]','[data-tid*=";WizrdMCF;CalcDataWizard;colExpressionName_"]','[data-tid*=";WizrdMCF;CalcDataWizard;colExpressionDisplayName_"]','[data-tid$=";WizrdMCF;CalcDataWizard;cmpExpression"]','[data-tid$=";WizrdMCF;CalcDataWizard;btnCalcMode"]','[data-tid$=";WizrdMCF;CalcDataWizard;btnReplaceField"]','span.bg-TBGCalcMode-cmExpression,span.bg-TBGCalcMode-cmJavaScript',
       ...['edtDelimiterChar','edtTextQualifier','edtValueNull','edtDecimalSeparator'].flatMap(name=>{const owner='[data-tid$=";WizrdMCF;ImportTextFileParamsWizard;'+name+';ValueControl"]';return [owner,owner+' input',owner+' textarea'];}),
       ...['edtConnection','edtFileName;ValueControl','edtCodePage;ValueControl','edtRowsToSkip;ValueControl'].flatMap(name=>{
         const owner='[data-tid$=";WizrdMCF;ImportTextFilePreviewWizard;'+name+'"]';return [owner,owner+' input',owner+' textarea'];}),
@@ -1902,6 +1902,42 @@ function readRenderedInputMapping(observation) {
       }
       return null;
     };
+    // Filter rows and their child delete/check icons retain the native record
+    // identity in their signature, even when Loginom reuses a cell test ID.
+    const filterCells=new Map();
+    if(wizard.stage==='row_filter') {
+      const base=wizard.root_tid+';FilterDataWizard;FilterDataPanel',roots=tids.get(base)??[];
+      const grid=roots.length===1?globalThis.Ext?.getCmp?.(roots[0].id):null,store=grid?.getStore?.(),view=grid?.getView?.();
+      if(grid&&grid.el?.dom===roots[0]&&grid.Controller?.FFilterItemsStore===store&&store?.$className==='Ext.data.Store'&&!store.isLoading?.()&&!store.isSyncing) {
+        const records=store.getData?.()?.items;
+        if(Array.isArray(records)&&records.length<=128)for(const [index,r] of records.entries()) {
+          const row=view?.getNode?.(r),id=String(r?.internalId??'');
+          if(!r?.isModel||!row||row.getAttribute('data-recordid')!==id||row.getAttribute('data-boundview')!==view.id||!roots[0].contains(row))continue;
+          for(const cell of row.querySelectorAll('[data-tid]')) {
+            const tid=getTid(cell),part=tid?.startsWith(base+';')?/^col(Field|RelationType|Value|CaseSensitive|Delete)_/.exec(tid.slice(base.length+1))?.[1]:null;
+            if(!part)continue;
+            const metadata={record_id:id,index,part,name:r.data.Name,operator:r.data.RelationType,or:r.data.IsOperatorRecord===true,wizard_root_ref:wizard.root_ref};
+            for(const e of [cell,...cell.querySelectorAll('span,img,div')])filterCells.set(refOf(e),metadata);
+          }
+        }
+        const plugin=grid.editingPlugin,context=plugin?.context;
+        if(plugin?.editing===true&&records?.includes(context?.record)&&context.grid===grid) {
+          const editor=plugin.activeEditor,root=editor?.el?.dom;
+          if(root&&roots[0].contains(root)) {
+            const metadata={record_id:String(context.record.internalId),part:'editor',field:context.field,wizard_root_ref:wizard.root_ref};
+            for(const e of [root,...root.querySelectorAll('input,[data-tid]')])if(/trg_picker$/.test(getTid(e)??'')||e.matches('input')||getTid(e)?.endsWith(';BooleanPropEdit;ValueControl'))filterCells.set(refOf(e),metadata);
+            const combos=[...root.querySelectorAll('[data-tid]')].map(e=>globalThis.Ext?.getCmp?.(e.id)).filter(c=>c?.$className==='Ext.form.field.ComboBox');
+            if(combos.length===1) {
+              const c=combos[0],picker=c.picker,options=c.getStore?.().getData?.()?.items;
+              if(picker?.pickerField===c&&Array.isArray(options)&&(context.field!=='Name'||c.getStore()===grid.Controller.FColumnInfoStore))for(const e of picker.el?.dom?.querySelectorAll('[data-recordid]')??[]) {
+                const r=options.find(r=>String(r.internalId)===e.getAttribute('data-recordid'));
+                if(r)filterCells.set(refOf(e),{...metadata,part:'option',value:r.data.Value,label:r.data.DisplayText});
+              }
+            }
+          }
+        }
+      }
+    }
     const reformColumnCells=new Map();
     if(wizard.stage==='field_parameters'&&!wizard.reform_parameters) {
       const grids=tids.get(wizard.root_tid+';ReformColumnsWizard;grdTargetColumns;tbl')??[];
@@ -2001,14 +2037,18 @@ function readRenderedInputMapping(observation) {
         if(p.Type!==0)continue;
         const panel=p.Panel?.el?.dom,tid=workflow.prefix+';ViewsForm;cntPorts;'+portGuid;
         if(!panel || getTid(panel)!==tid || (tids.get(tid)??[]).length!==1)continue;
-        const add=(tids.get(workflow.prefix+';ViewsForm;ViewerAddCard')??[]).filter(e=>panel.contains(e));
+        const addBase=workflow.prefix+';ViewsForm;ViewerAddCard';
+        const add=[...panel.querySelectorAll('[data-tid]')].filter(e=>{
+          const key=getTid(e);return key?.startsWith(addBase)&&/^(-[0-9]+)?$/.test(key.slice(addBase.length));
+        });
         if(add.length===1 && visible(add[0]))viewerControls.set(refOf(add[0]),{kind:'add',port_guid:portGuid,port_panel_ref:refOf(panel)});
         for(const [guid,v] of Object.entries(nativeViews.FViewDescList)) {
           if(v.PortPanel!==p.Panel||v.Vendor?.constructor?.name!=='BrowseViewVendor')continue;
           const card=v.ViewerCard?.FView?.el?.dom,cardTid=card?getTid(card):null,cardBase=workflow.prefix+';ViewsForm;ViewerCard';
           if(!card||!panel.contains(card)||!cardTid?.startsWith(cardBase)||!/^(-[0-9]+)?$/.test(cardTid.slice(cardBase.length)))continue;
-          const enter=(tids.get(cardTid+';btnEnter')??[]).filter(e=>card.contains(e));
-          if(enter.length===1 && visible(enter[0]))viewerControls.set(refOf(enter[0]),{kind:'enter',port_guid:portGuid,view_guid:guid,port_panel_ref:refOf(panel),card_ref:refOf(card)});
+          // The hover-only Enter button disappears on pointer movement. Native
+          // cards also open on double-click and retain their GUID/port binding.
+          if((tids.get(cardTid)??[]).length===1 && visible(card))viewerControls.set(refOf(card),{kind:'enter',port_guid:portGuid,view_guid:guid,port_panel_ref:refOf(panel),card_ref:refOf(card)});
         }
       }
     }
@@ -2032,7 +2072,7 @@ function readRenderedInputMapping(observation) {
       &&visible(storageRootPanels[0])&&storageRootPanels[0].contains(storageRootCandidates[0])
       &&visible(storageRootCandidates[0])&&!sensitive(storageRootCandidates[0])
       &&textOf(storageRootCandidates[0],true)==='Файлы'?storageRootCandidates[0]:null;
-    const interesting = element => /^MF;TF(?:-\d+)?;ModelForm;PreviewWindow;p\.h;close$/.test(getTid(element)??'') || element===storageRoot || reformColumnCells.has(state.ids.get(element)) || outputColumnCells.has(state.ids.get(element)) || tableScrollers.has(state.ids.get(element)) || viewerControls.has(state.ids.get(element)) || /;ViewsForm;colVendors_Визуализаторы>[^;]+;TreeText$/.test(getTid(element)??'') || processGridControls.has(state.ids.get(element)) || processExpanders.has(state.ids.get(element)) || outputScroller(element) || importScroller(element) || processCells.has(state.ids.get(element)) || processMenuControls.has(state.ids.get(element)) || sortingCells.has(state.ids.get(element)) || groupingCells.has(state.ids.get(element)) || !!comboPart(element) || importColumnCellRefs.has(state.ids.get(element)) || element.matches('button,input,textarea,select,[contenteditable="true"],[role="button"],[role="checkbox"],[role="radio"],[role="combobox"],[role="menuitem"],[role="tab"],[role="treeitem"],[role="option"],[role="spinbutton"]')
+    const interesting = element => /^MF;TF(?:-\d+)?;ModelForm;PreviewWindow;p\.h;close$/.test(getTid(element)??'') || element===storageRoot || filterCells.has(state.ids.get(element)) || reformColumnCells.has(state.ids.get(element)) || outputColumnCells.has(state.ids.get(element)) || tableScrollers.has(state.ids.get(element)) || viewerControls.has(state.ids.get(element)) || /;ViewsForm;colVendors_Визуализаторы>[^;]+;TreeText$/.test(getTid(element)??'') || processGridControls.has(state.ids.get(element)) || processExpanders.has(state.ids.get(element)) || outputScroller(element) || importScroller(element) || processCells.has(state.ids.get(element)) || processMenuControls.has(state.ids.get(element)) || sortingCells.has(state.ids.get(element)) || groupingCells.has(state.ids.get(element)) || !!comboPart(element) || importColumnCellRefs.has(state.ids.get(element)) || element.matches('button,input,textarea,select,[contenteditable="true"],[role="button"],[role="checkbox"],[role="radio"],[role="combobox"],[role="menuitem"],[role="tab"],[role="treeitem"],[role="option"],[role="spinbutton"]')
       || /;(?:Input|Output)_[^;]+$|;Label;Label$|;Graph;[^;]+$|;btn[^;]+$|;edt[^;]+$|;mi[^;]+$|;tb(?:-\d+)?$/.test(getTid(element) ?? '')
       // Pinned E2E bg/selectors.ts:272,279,286: palette tree labels and
       // expanders are spans without button/treeitem roles in some UI builds.
@@ -2073,8 +2113,18 @@ function readRenderedInputMapping(observation) {
       return part?{node_label:label,part,...(part==='label'?{label_text:textOf(element,false,'')}: {})}:null;
     };
     const priority = { graph_editor: 0, dialog: 1, graph: 2, workflow: 3, global: 4 };
+    // A saved filter can contain 128 rows. Keep its visible controls ahead
+    // of clipped rows so the compact observation can drive bounded scrolling.
+    const filterPriority=memoRead(element=>{
+      const cell=filterCells.get(state.ids.get(element));if(!cell)return null;
+      const box=boxOf(element),x=box.x+box.width/2,y=box.y+box.height/2;
+      if(x<0||y<0||x>=globalThis.innerWidth||y>=globalThis.innerHeight)return 30;
+      charge();const hit=document.elementFromPoint(x,y);
+      return hit&&(hit===element||element.contains(hit))?-27:30;
+    });
     const controlPriority = element => {
       const tid=getTid(element)??'',base=workflow?.prefix+';WizrdMCF;';
+      const filterRank=filterPriority(element);if(filterRank!==null)return filterRank;
       if(/^mn;mni[^;]+$/.test(tid) || element.getAttribute('role')==='menuitem')return -30;
       if(comboPart(element)?.kind==='option')return -25;
       if(comboPart(element)?.kind==='picker' && comboPart(element).field.scope==='import_column')return -24;
@@ -2251,7 +2301,7 @@ function readRenderedInputMapping(observation) {
       const checkState=checkStateOf(element);
       const calculatorEditor=calculatorEditorOf(element);
       const combo=comboPart(element);
-      const outputColumn=outputColumnCells.get(state.ids.get(element)),reformColumnField=reformColumnCells.get(state.ids.get(element)),importDefinitionCell=importDefinitionCells.get(state.ids.get(element));
+      const filterCell=filterCells.get(state.ids.get(element)),outputColumn=outputColumnCells.get(state.ids.get(element)),reformColumnField=reformColumnCells.get(state.ids.get(element)),importDefinitionCell=importDefinitionCells.get(state.ids.get(element));
       const groupingField=groupingCells.get(state.ids.get(element));
       const sortingField=sortingCells.get(state.ids.get(element));
       const viewToggle=new RegExp('^'+workflow?.prefix+';ViewsForm;BrowseView(?:-[0-9]+)?;btnDataGrid(?:ShowNulls|DataTypeIcon)$').test(tid??'')
@@ -2355,11 +2405,12 @@ function readRenderedInputMapping(observation) {
         ...(expressionCancel ? {expression_cancel:expressionCancel} : {}),
         ...(wizardFields.has(element) ? {wizard_field:wizardFields.get(element)} : {}),
         ...(horizontalScroll?{horizontal_scroll:horizontalScroll}:{}),
-        signature: { tag, tid, role, type: element.getAttribute('type'), name: element.getAttribute('name'), label, ...fieldValue, dialog_ref: dialogRef(element), scroll, check_state:checkState, ...(horizontalScroll?{horizontal_scroll:horizontalScroll}:{}),...(groupingField?{grouping_field:groupingField}:{}),...(sortingField?{sorting_field:sortingField}:{}),...(viewToggle?{view_toggle:viewToggle}:{}),...(viewerVendor?{viewer_vendor:viewerVendor}:{}),...(viewerControl?{viewer_card:viewerControl}:{}),...(tableScroller?{table_scroller:tableScroller}:{}),...(processGrid?{process_grid:processGrid}:{}),...(processExpander?{process_expander:processExpander}:{}),...(processRow?{process_row:processRow}:{}),...(processMenu?{process_menu:processMenu}:{}),...(outputColumn?{output_column:outputColumn}:{}),...(reformColumnField?{reform_column:reformColumnField}:{}),...(importDefinitionCell?{import_definition_cell:importDefinitionCell}:{}) },
+        ...(filterCell?{filter_cell:filterCell}:{}),
+        signature: { ...(filterCell?{filter_cell:filterCell}:{}),tag, tid, role, type: element.getAttribute('type'), name: element.getAttribute('name'), label, ...fieldValue, dialog_ref: dialogRef(element), scroll, check_state:checkState, ...(horizontalScroll?{horizontal_scroll:horizontalScroll}:{}),...(groupingField?{grouping_field:groupingField}:{}),...(sortingField?{sorting_field:sortingField}:{}),...(viewToggle?{view_toggle:viewToggle}:{}),...(viewerVendor?{viewer_vendor:viewerVendor}:{}),...(viewerControl?{viewer_card:viewerControl}:{}),...(tableScroller?{table_scroller:tableScroller}:{}),...(processGrid?{process_grid:processGrid}:{}),...(processExpander?{process_expander:processExpander}:{}),...(processRow?{process_row:processRow}:{}),...(processMenu?{process_menu:processMenu}:{}),...(outputColumn?{output_column:outputColumn}:{}),...(reformColumnField?{reform_column:reformColumnField}:{}),...(importDefinitionCell?{import_definition_cell:importDefinitionCell}:{}) },
         enabled: isEnabled, visible: true, interaction, bounding_box: boxOf(element),
         // A bounded prefix is not a sufficient value precondition. A dedicated
         // large-field driver must establish its own complete read/write contract.
-        allowed_actions: tid===workflow?.prefix+';ModelForm;btnToggleActivateCurrent' ? (allowed&&graphExecution&&interaction.state==='point_observed'?['execute_graph_node']:[]) : element===storageRoot ? (allowed && interaction.state==='point_observed'?['click']:[]) : reformColumnField ? (allowed && interaction.state==='point_observed'?['click','double_click','press',...(scroll?['scroll']:[])]:[]) : outputColumn ? (allowed && interaction.state==='point_observed'?['click','double_click','press']:[]) : tableScroller ? (allowed && horizontalScroll?.ref===refOf(element) && interaction.state==='point_observed'?['scroll_horizontal']:[]) : viewerControl ? (allowed && interaction.state==='point_observed' ? [viewerControl.kind==='enter'?'enter_table':'click'] : []) : processGrid || processExpander ? (allowed && interaction.state==='point_observed' ? (processGrid?['right_click','press',...(scroll?.ref===refOf(element)?['scroll']:[])]:['click']) : []) : outputScroller(element) ? (allowed && scroll && scroll.ref===refOf(element) && interaction.state==='point_observed'?['scroll']:[]) : importScroller(element) ? (allowed && horizontalScroll && interaction.state==='point_observed'?['scroll_horizontal']:[]) : processRow || processMenu ? (allowed && interaction.state==='point_observed' ? (processRow?['click','right_click','press']:processMenu.action==='mniCancel'?['cancel_process']:['click','press',...(processMenu.action==='mniShowNodeToProcess'?['show_process_node']:[])]) : []) : sortingField ? (allowed && interaction.state==='point_observed' ? ['click',...(sortingField.part==='field'?['double_click','press']:[]),...(scroll?['scroll']:[])] : []) : groupingField ? (allowed && interaction.state==='point_observed' ? ['click','double_click','press',...(scroll?['scroll']:[])] : []) : expressionWritable ? ['replace_expression'] : allowed && !valueTruncated ? ['click', 'double_click', 'right_click', 'press', 'drag', ...(editable ? ['fill',...(wizardFields.has(element)?['set_wizard_field']:[])] : []), ...(checkState ? ['set_checked'] : []), ...(wizardStep?['wizard_step']:[]), ...(closeConfirmation?['confirm_wizard_close']:[]), ...(deactivationConfirmation?['confirm_wizard_deactivation']:[]), ...(openWizard?['open_wizard','begin_wizard']:[]),...(openNodeViews?['open_node_views']:[]),...(graphExecution?['execute_graph_node']:[]), ...(finishWizard?[finishWizard.mode==='execute'?'execute_wizard':'finish_wizard']:[]), ...(columnClose?[columnClose.mode+'_'+columnClose.scope+'_column']:[]), ...(expressionApply?['apply_expression_parameters']:[]), ...(expressionCancel?['cancel_expression_parameters']:[]), ...(combo?.kind==='option'?['select_wizard_option']:[]), ...(scroll && interaction.state === 'point_observed' ? ['scroll'] : []), ...(horizontalScroll && interaction.state==='point_observed'?['scroll_horizontal']:[])] : [] };
+        allowed_actions: filterCell ? (allowed&&interaction.state==='point_observed'?['click','double_click','press',...(editable?['fill']:[]),...(scroll?['scroll']:[])]:[]) : tid===workflow?.prefix+';ModelForm;btnToggleActivateCurrent' ? (allowed&&graphExecution&&interaction.state==='point_observed'?['execute_graph_node']:[]) : element===storageRoot ? (allowed && interaction.state==='point_observed'?['click']:[]) : reformColumnField ? (allowed && interaction.state==='point_observed'?['click','double_click','press',...(scroll?['scroll']:[])]:[]) : outputColumn ? (allowed && interaction.state==='point_observed'?['click','double_click','press']:[]) : tableScroller ? (allowed && horizontalScroll?.ref===refOf(element) && interaction.state==='point_observed'?['scroll_horizontal']:[]) : viewerControl ? (allowed && interaction.state==='point_observed' ? [viewerControl.kind==='enter'?'enter_table':'click'] : []) : processGrid || processExpander ? (allowed && interaction.state==='point_observed' ? (processGrid?['right_click','press',...(scroll?.ref===refOf(element)?['scroll']:[])]:['click']) : []) : outputScroller(element) ? (allowed && scroll && scroll.ref===refOf(element) && interaction.state==='point_observed'?['scroll']:[]) : importScroller(element) ? (allowed && horizontalScroll && interaction.state==='point_observed'?['scroll_horizontal']:[]) : processRow || processMenu ? (allowed && interaction.state==='point_observed' ? (processRow?['click','right_click','press']:processMenu.action==='mniCancel'?['cancel_process']:['click','press',...(processMenu.action==='mniShowNodeToProcess'?['show_process_node']:[])]) : []) : sortingField ? (allowed && interaction.state==='point_observed' ? ['click',...(sortingField.part==='field'?['double_click','press']:[]),...(scroll?['scroll']:[])] : []) : groupingField ? (allowed && interaction.state==='point_observed' ? ['click','double_click','press',...(scroll?['scroll']:[])] : []) : expressionWritable ? ['replace_expression'] : allowed && !valueTruncated ? ['click', 'double_click', 'right_click', 'press', 'drag', ...(editable ? ['fill',...(wizardFields.has(element)?['set_wizard_field']:[])] : []), ...(checkState ? ['set_checked'] : []), ...(wizardStep?['wizard_step']:[]), ...(closeConfirmation?['confirm_wizard_close']:[]), ...(deactivationConfirmation?['confirm_wizard_deactivation']:[]), ...(openWizard?['open_wizard','begin_wizard']:[]),...(openNodeViews?['open_node_views']:[]),...(graphExecution?['execute_graph_node']:[]), ...(finishWizard?[finishWizard.mode==='execute'?'execute_wizard':'finish_wizard']:[]), ...(columnClose?[columnClose.mode+'_'+columnClose.scope+'_column']:[]), ...(expressionApply?['apply_expression_parameters']:[]), ...(expressionCancel?['cancel_expression_parameters']:[]), ...(combo?.kind==='option'?['select_wizard_option']:[]), ...(scroll && interaction.state === 'point_observed' ? ['scroll'] : []), ...(horizontalScroll && interaction.state==='point_observed'?['scroll_horizontal']:[])] : [] };
     });
     scanStage='data_views';
     const nodes = labels.slice(0, 200).map(label => {
@@ -3020,8 +3071,8 @@ function readRenderedInputMapping(observation) {
           await page.mouse.click(targets[0].point.x, targets[0].point.y, { clickCount, button });
           mouseHeld = false;
         };
-        if (task.action.verb === 'click' || ['execute_graph_node','wizard_step','select_wizard_option','apply_expression_parameters','cancel_expression_parameters','open_wizard','begin_wizard','confirm_wizard_deactivation','finish_wizard','execute_wizard','confirm_wizard_close','show_process_node','cancel_process','open_node_views','enter_table','apply_output_column','cancel_output_column','apply_reform_column','cancel_reform_column'].includes(task.action.verb)) await clickTarget(1);
-        else if (task.action.verb === 'double_click') await clickTarget(2);
+        if (task.action.verb === 'click' || ['execute_graph_node','wizard_step','select_wizard_option','apply_expression_parameters','cancel_expression_parameters','open_wizard','begin_wizard','confirm_wizard_deactivation','finish_wizard','execute_wizard','confirm_wizard_close','show_process_node','cancel_process','open_node_views','apply_output_column','cancel_output_column','apply_reform_column','cancel_reform_column'].includes(task.action.verb)) await clickTarget(1);
+        else if (task.action.verb === 'double_click' || task.action.verb === 'enter_table') await clickTarget(2);
         else if (task.action.verb === 'right_click') await clickTarget(1, 'right');
         else if (task.action.verb === 'press') await first.press(task.action.key, { timeout: timeout() });
         else if (task.action.verb === 'set_checked') {

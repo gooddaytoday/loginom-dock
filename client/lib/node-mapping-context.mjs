@@ -65,7 +65,7 @@ export function readMappingBrowser(prefix) {
     }
     inventories.push(records);
   }
-  const [sources,targets]=inventories,linked=new Set(),excludedSources=new Map();
+  const [sources,targets]=inventories,linked=new Set(),excludedSources=new Map(),excludedTargets=new Set();
   const describe=r=>({record_id:String(r.internalId),field_id:String(r.data.ID),index:r.data.Index,
     name:r.data.Name,label:r.data.DisplayName,type:types[r.data.DataType],required:r.data.Required});
   for(const target of targets) {
@@ -77,9 +77,10 @@ export function readMappingBrowser(prefix) {
       const matches=sources.filter(s=>s.data.Name===target.data.Name&&s.data.DataType===target.data.DataType);
       if(source!=null||target.data.Required!==false||target.data.IsDerived!==false
         ||target.data.SourceDisplayName!==null||target.data.SourceDataType!==null||target.data.DataKind!==0
-        ||matches.length!==1||matches[0].data.Required!==false||matches[0].data.ConnectedRecord!=null)
+        ||(sources.length>0&&(matches.length!==1||matches[0].data.Required!==false||matches[0].data.ConnectedRecord!=null)))
         return fail('mapping_excluded_source');
-      excludedSources.set(target,matches[0]);
+      excludedTargets.add(target);
+      if(matches.length===1)excludedSources.set(target,matches[0]);
       continue;
     }
     if(source==null)continue;
@@ -108,12 +109,12 @@ export function readMappingBrowser(prefix) {
   const native=button&&globalThis.Ext?.getCmp?.(button.id);
   if(buttons.length!==1||!root.contains(button)||!button.checkVisibility({checkVisibilityCSS:true})||native?.el?.dom!==button
     ||typeof native.pressed!=='boolean'||native.pressed!==button.classList.contains('x-btn-pressed'))return fail('mapping_autosync');
-  return {verified:true,source_identity_verified:true,inventory_complete:true,
+  return {verified:true,source_identity_verified:sources.length>0||targets.length===0,inventory_complete:true,
     ...(grouped||input?{mapping_wizard:form}:{}),
     state_source:'cached_mapping_stores',autosync:native.pressed,
     source_fields:sources.map(describe),target_fields:targets.map((t,i)=>({...describe(t),
       ...(input?{usage_type:t.data.UsageType,default_usage_type:t.data.DefaultUsageType,origin_type:t.data.OriginType,inherited:t.data.IsDerived}:{}),
-      ...(grouped?{index:i,group_index:t.data.Index,excluded:excludedSources.has(t),inherited:t.data.IsDerived,
+      ...(grouped?{index:i,group_index:t.data.Index,excluded:excludedTargets.has(t),inherited:t.data.IsDerived,
         exclusion_source:excludedSources.has(t)?describe(excludedSources.get(t)):null}:{}),
       data_kind:{0:'Неопределенное',1:'Непрерывный',2:'Дискретный'}[t.data.DataKind],
       source:t.data.ConnectedRecord?describe(t.data.ConnectedRecord):null})),rendered_indices:[...rendered],

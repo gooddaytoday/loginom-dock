@@ -28,8 +28,10 @@ class GroupingEvidenceTest(unittest.TestCase):
         preview=dict(verified=True,inventory_complete=True,state_source='cached_preview_column_infos',port=0,node_id='upstream',node_context=owner,root_tid='MF;TF-1;ModelForm;PreviewWindow')
         state=dict(node_preview_schema=preview,prepared_node_context=owner,workflow_ref=dict(prefix='MF;TF-1'),ui=dict(masks=[],dialogs=[dict(identity=dict(anchor_tid=preview['root_tid']))]))
         self.assertTrue(bound_schema_preview(state))
-        for field,value in [('node_id','foreign'),('inventory_complete',False),('port',1),('root_tid','ForeignDialog')]:
+        for field,value in [('node_id','foreign'),('inventory_complete',False),('port',-1),('port',100),('port',True),('port','1'),('root_tid','ForeignDialog')]:
             changed=copy.deepcopy(state);changed['node_preview_schema'][field]=value;self.assertFalse(bound_schema_preview(changed))
+        second=copy.deepcopy(state);second['node_preview_schema']['port']=1
+        self.assertTrue(bound_schema_preview(second))
         self.assertFalse(bound_grouping_factor(state))
 
 if __name__=='__main__':unittest.main()

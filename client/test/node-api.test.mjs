@@ -75,3 +75,19 @@ test('Field Parameters dispatch uses the catalog scalar mode and rejects malform
  assert.equal(calls.length,1);
  assert.deepEqual(handler.modes,['scalar']);
 });
+
+test('Filter dispatch accepts ordered conditions and two explicit outputs, refusing unsupported requests',async()=>{
+ const {createCandidateNodeSupport}=await import('../lib/node-support.mjs');
+ const {runtime,calls}=fixture(),handler=createCandidateNodeSupport({targetOrigin:'http://example.test',targetBuild:'7.4.2'}).nodeApplyHandlers.get('transform.filter_data');
+ const request={operation_id:'filter',contract_revision:'1.0.0',document_id:'doc',
+  workflow_ref:{workflow_id:'wf',tab_tid:'tab',prefix:'prefix',navigation_path:[{tid:'path',label:'Scenario'}]},
+  target:{kind:'existing',type:'transform.filter_data',ref:{document_id:'doc',workflow_id:'wf',node_id:'n'}},inputs:[],mode:'conditions',
+  parameters:{groups:[[{field:{kind:'input_field',name:'Id'},operator:'between',type:'integer',lower:2,upper:4}]]},
+  mappings:[{direction:'input',port:0},{direction:'output',port:0},{direction:'output',port:1}],finish:'execute',
+  read:{ports:[0,1],sample_rows:10,require_exact_numbers:true},budgets:{configure_ms:10000,execute_ms:10000,total_ms:30000}};
+ runtime.startNodeApply=args=>{handler.validate(args.parameters,args.mode,args);calls.push(args);return {state:'running'};};
+ await dispatchNodeApi(runtime,'dock_node_apply',request);assert.equal(calls.length,1);assert.deepEqual(handler.modes,['conditions']);
+ for(const patch of [{parameters:{groups:[]}},{read:{...request.read,ports:[0]}},{mode:'scalar'},{mappings:[{direction:'input',port:1}]}])
+  await assert.rejects(dispatchNodeApi(runtime,'dock_node_apply',{...request,...patch}));
+ assert.equal(calls.length,1);
+});

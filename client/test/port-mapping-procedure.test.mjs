@@ -44,6 +44,16 @@ test('configured mapping resolves duplicate labels by source name with explicit 
  for(const required of [true,undefined]){const restricted=structuredClone(native);restricted.source_fields[0].required=required;assert.throws(()=>resolve(mapping,configured,restricted),/cannot be excluded/);}
  const bad=structuredClone(native);bad.source_fields[0].type='integer';assert.throws(()=>resolve(mapping,configured,bad));
 });
+test('second output mapping requires the verified exact native port owner',async()=>{
+ const {resolveConfiguredOutputMapping:resolve}=await import('../lib/port-mapping-procedure.mjs');
+ const configured=[{name:'Id',label:'Id',type:'integer',used:true}],native={verified:true,inventory_complete:true,source_identity_verified:true,autosync:true,
+  mapping_wizard:'DerivedDataSourceOutputSocketWizard',source_fields:configured,target_fields:[],
+  node_context:{verified:true,output_port:{port:1}}};
+ assert.equal(resolve({direction:'output',port:1},configured,native).autosync,true);
+ for(const context of [undefined,{verified:false,output_port:{port:1}},{verified:true,output_port:{port:0}},{verified:true,input_port:{port:1}}])
+  assert.throws(()=>resolve({direction:'output',port:1},configured,{...native,node_context:context}),/direction/);
+ assert.throws(()=>resolve({direction:'input',port:1},configured,native),/direction/);
+});
 
 function fieldFixture() {
  const original={record_id:'t',field_id:'0',index:0,name:'Amount',label:'Amount',type:'real',data_kind:'Непрерывный',

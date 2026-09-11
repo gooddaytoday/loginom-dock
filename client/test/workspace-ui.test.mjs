@@ -4045,15 +4045,16 @@ test('an empty native process console exposes only its bound context gesture and
 });
 
 test('Table add/enter controls are bound to native output panels, not repeated card labels',async()=>{
- for(const mode of ['valid','numbered','foreign_panel','foreign_card','wrong_vendor','duplicate_add']) {
+ for(const mode of ['valid','numbered','hidden_enter','foreign_panel','foreign_card','wrong_vendor','duplicate_add']) {
   const page=new Page();page.context.innerWidth=1000;page.context.innerHeight=800;
   class ViewsForm{};class BrowseViewVendor{};
   const root=page.add('div','MF;TF-1;ViewsForm','',{x:0,y:50,width:900,height:700});
   const panel=page.add('div','MF;TF-1;ViewsForm;cntPorts;11111111-1111-1111-1111-111111111111','',{x:50,y:100,width:600,height:400},root);
-  const add=page.add('div','MF;TF-1;ViewsForm;ViewerAddCard','Add',{x:70,y:120,width:150,height:120},panel);
+  const add=page.add('div','MF;TF-1;ViewsForm;ViewerAddCard'+(mode==='numbered'?'-1':''),'Add',{x:70,y:120,width:150,height:120},panel);
   const cardTid='MF;TF-1;ViewsForm;ViewerCard'+(mode==='numbered'?'-1':'');
   const card=page.add('div',cardTid,'Table',{x:240,y:120,width:150,height:120},panel);
-  page.add('button',cardTid+';btnEnter','Table',{x:250,y:130,width:100,height:30},card);
+  const hoverEnter=page.add('button',cardTid+';btnEnter','Table',{x:250,y:130,width:100,height:30},card);
+  if(mode==='hidden_enter')hoverEnter.box={x:250,y:130,width:0,height:0};
   const nativePanel={el:{dom:panel}},nativeCard={FView:{el:{dom:card}}};
   const model=Object.assign(new ViewsForm(),{FView:{el:{dom:root}},FPortList:{'11111111-1111-1111-1111-111111111111':{Type:0,Panel:nativePanel}},
     FViewDescList:{'22222222-2222-2222-2222-222222222222':{PortPanel:nativePanel,ViewerCard:nativeCard,Vendor:new BrowseViewVendor()}}});
@@ -4065,7 +4066,7 @@ test('Table add/enter controls are bound to native output panels, not repeated c
   const s=await page.observe(),adds=s.ui.elements.filter(e=>e.viewer_card?.kind==='add'),enters=s.ui.elements.filter(e=>e.viewer_card?.kind==='enter');
   assert.equal(adds.length,['foreign_panel','duplicate_add'].includes(mode)?0:1,mode);
   assert.equal(enters.length,['foreign_panel','foreign_card','wrong_vendor'].includes(mode)?0:1,mode);
-  if(enters.length){assert.deepEqual(enters[0].allowed_actions,['enter_table']);assert.equal(enters[0].viewer_card.view_guid,'22222222-2222-2222-2222-222222222222');}
+  if(enters.length){assert.equal(enters[0].tid,cardTid);assert.deepEqual(enters[0].allowed_actions,['enter_table']);assert.equal(enters[0].viewer_card.view_guid,'22222222-2222-2222-2222-222222222222');}
  }
 });
 
@@ -4553,4 +4554,27 @@ test('partly clipped import definition cells use a freshly verified visible poin
   assert.equal(r.status,fault==='visible'?'SUCCEEDED':'NOT_APPLIED',JSON.stringify(r.error));
   assert.equal(r.effect_possible,fault==='visible');
  }
+});
+
+test('compact filter observation retains visible final rows ahead of clipped saved rows',async()=>{
+ const page=new Page(),base='MF;TF-1;WizrdMCF;FilterDataWizard;FilterDataPanel';
+ page.context.innerWidth=1000;page.context.innerHeight=800;
+ const wizard=page.add('div','MF;TF-1;WizrdMCF','',{x:20,y:50,width:900,height:700});
+ const grid=page.add('div',base,'',{x:30,y:100,width:850,height:600},wizard);grid.id='filter-grid';grid.attrs.id=grid.id;
+ const viewDom=page.add('div',base+';tbl','',{x:30,y:100,width:850,height:600},grid);
+ const records=[],doms=new Map();
+ for(let index=0;index<100;index++){
+  const r={isModel:true,internalId:'r'+index,data:{Name:'Id',RelationType:3,IsOperatorRecord:false}};records.push(r);
+  const y=index<90?-3000+index*24:100+(index-90)*24;
+  const row=page.add('table',null,'',{x:30,y,width:850,height:24},viewDom);
+  Object.assign(row.attrs,{'data-recordid':r.internalId,'data-boundview':'filter-view'});doms.set(r,row);
+  for(const [i,part] of ['Field','RelationType','Value','CaseSensitive','Delete'].entries())page.add('td',base+';col'+part+'_Id-'+index,part==='Field'?'Id':'',{x:30+i*150,y,width:150,height:24},row);
+ }
+ const store={$className:'Ext.data.Store',getData:()=>({items:records})},view={id:'filter-view',getNode:r=>doms.get(r)};
+ const native={el:{dom:grid},getStore:()=>store,getView:()=>view,Controller:{FFilterItemsStore:store}};
+ page.context.Ext={getCmp:id=>id===grid.id?native:null};
+ const observed=await page.observe();assert.equal(observed.wizard.stage,'row_filter');
+ const target=observed.ui.elements.find(e=>e.tid===base+';colDelete_Id-99');
+ assert.ok(target);assert.ok(target.allowed_actions.includes('click'));assert.equal(target.filter_cell.record_id,'r99');
+ assert.ok(observed.ui.elements.length<=240);
 });

@@ -43,7 +43,7 @@ export function createTabularTransformNodeSupport({targetOrigin,targetBuild},imp
   validate:implementation.validate,configure:(ctx,p,drivers)=>drivers.configureCalculator(ctx,p)});}
  const nodeApplyDriverFactory=options=>{
   const {operation,execute,onRecord,now,receiptOptions}=options;
-  let channel,activeSignal,configured,mapping,columns,executionDriver,executionReceipt;
+  let channel,activeSignal,configured,mapping,columns,executionDriver,executionReceipt,multipleOutputs;
   const enter=ctx=>{activeSignal=ctx.signal;operation.deadline=ctx.deadline;
    channel??=createNodeProcedure({operation,execute,record:onRecord,now,maxSteps:4096,targetOrigin,targetBuild,
     signal:{throwIfAborted:()=>activeSignal?.throwIfAborted(),get aborted(){return activeSignal?.aborted;},get reason(){return activeSignal?.reason;}},preparedNodeContext:{document_id:ctx.document_id,workflow_ref:ctx.workflow_ref,node:ctx.node},
@@ -126,7 +126,9 @@ export function createTabularTransformNodeSupport({targetOrigin,targetBuild},imp
      const finish=await finishWizard('done',true);
      return verified({effect_possible:true,native_mapping,definition,changes,finish,source_identity_verified:true});
     }
-    enter(ctx);requireValue(configured,'Configured calculator missing');await channel.openOutputPort(0);
+    enter(ctx);requireValue(configured,'Configured calculator missing');
+    if(implementation?.configureAllOutputs){multipleOutputs=await implementation.configureAllOutputs(channel,configured,operation.nodeApply.request.parameters,mappings,finishWizard);return multipleOutputs;}
+    await channel.openOutputPort(0);
     const ready=s=>s.wizard?.stage==='output_mapping'&&s.node_mapping?.verified===true;
     if(implementation){
      const result=await implementation.configureOutput(channel,configured,operation.nodeApply.request.parameters,mappings[0]??{});
@@ -185,6 +187,7 @@ export function createTabularTransformNodeSupport({targetOrigin,targetBuild},imp
    async readOutput(read,ctx) {
     enter(ctx);requireValue(executionReceipt?.verified&&executionReceipt.owner_verified&&executionReceipt.execution_id===ctx.execution.execution_id,'Calculator execution proof missing');
     if(!read.ports.length)return verified({status:'complete',ports:[],execution_id:ctx.execution.execution_id,evidence_ref:ctx.receipt_id});
+    if(implementation?.readOutputs){requireValue(multipleOutputs?.verified,'Verified output schemas missing');return implementation.readOutputs(channel,read,ctx,multipleOutputs);}
     const table=await openNewOutputTable(channel,0),formatProof=read.require_exact_numbers?await configureTablePrecision(channel,table.table):null;
     let readSettings,data,formatRestoration;
     try {

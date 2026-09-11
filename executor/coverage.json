@@ -1252,7 +1252,7 @@
         "save_reopen"
       ],
       "contract": "component_pipeline",
-      "status": "planned",
+      "status": "live_verified",
       "source_dependencies": [
         {
           "source": "e2e-labels",
@@ -1265,14 +1265,76 @@
           "document_title": "Фильтр строк"
         }
       ],
-      "supported_profiles": [],
-      "unit_evidence": [],
-      "live_evidence": [],
-      "known_gaps": [
-        "Нет принятого сквозного контракта",
-        "Разделы Help найдены; детальные режимы и live доступность требуют проверки"
+      "supported_profiles": [
+        "loginom-7.4.2-macos-chromium"
       ],
-      "next_step": "Source review мастера и отдельная цепочка с настройкой, данными и save/reopen",
+      "unit_evidence": [
+        {
+          "path": ".dock/row-filter-review/python-tests.log",
+          "sha256": "cf3568b1bb25798e3201cc3fab8e732cadd20fb30d63383f6e384f5be684c165",
+          "passed": 475
+        },
+        {
+          "path": ".dock/row-filter-review/client-tests-final.log",
+          "sha256": "a81d89489b28e83ab5395a004bad3d9b4a7bf4e69dbf676f6804f9689bf51f32",
+          "passed": 1287,
+          "skipped": 1
+        },
+        {
+          "path": ".dock/row-filter/all-client-tests-final-candidate.log",
+          "sha256": "ae335f64c60ebef3954528a791566d79f55629fc84118c9896f6aa025f2082a9",
+          "passed": 1279,
+          "skipped": 1
+        },
+        {
+          "path": ".dock/row-filter/python-tests-final-source-name.log",
+          "sha256": "7313792bc95b5f664ba0a53e50a345015940ec9b9154e6ce5f40e220eb26db28",
+          "passed": 475
+        }
+      ],
+      "live_evidence": [
+        {
+          "path": ".dock/row-filter-review/hermes-runs/20260911-181616-1338ee3f/filter-node-audit.json",
+          "sha256": "cd863cad675f06f8e2b597c93bbd13defe6b4e7dd912178f9ec97294ca5d9062",
+          "report_path": "docs/loginom-dock/row-filter-review-live-2026-09-11.md",
+          "runtime_revision": "fd2999ce9f87a878882a20962eda56b69941d15dcedd8d7a70852579c5819e53",
+          "manifest_uri": "viking://resources/loginom-dock/catalogs/executor-preview/releases/2026.09.08-node-apply.1-candidate/manifest.json",
+          "manifest_sha256": "936ef73d933e85bfd8429b8b0f2b515c543ca415a2b22ba57e108232c54ddf44",
+          "native_skill_sha256": "714104445d37265943ab5e7d55a7c505c00fe38a62bc38a0c3c8ea24f7764b39",
+          "target": "Loginom 7.4.2 Linux / macOS Chromium",
+          "proof_scope": "post-review conditions node.apply; both exact outputs; save/reopen/reexecute without reassignment; 49 frozen checks and 10 negative substitutions",
+          "checks_passed": 49
+        },
+        {
+          "path": ".dock/row-filter/hermes-runs/20260911-154023-843300b0/filter-node-audit.json",
+          "sha256": "8fad61fa1cd80daf4d5e923efe6ee1548f496658cb11e20cfde40a8aee07d2d8",
+          "report_path": "docs/plans/loginom-dock/06-completion-audit.md",
+          "runtime_revision": "5c945f3e189e6588acf036ca7139e35c62bf055b30b7ce78bd1fa7b2c548756d",
+          "manifest_uri": "viking://resources/loginom-dock/catalogs/executor-preview/releases/2026.09.08-node-apply.1-candidate/manifest.json",
+          "manifest_sha256": "936ef73d933e85bfd8429b8b0f2b515c543ca415a2b22ba57e108232c54ddf44",
+          "native_skill_sha256": "714104445d37265943ab5e7d55a7c505c00fe38a62bc38a0c3c8ea24f7764b39",
+          "target": "Loginom 7.4.2 Linux / macOS Chromium",
+          "proof_scope": "conditions node.apply; new/existing; both exact outputs; save/reopen/reexecute without reassignment",
+          "checks_passed": 49
+        },
+        {
+          "path": ".dock/row-filter/complete-matrix-audit.json",
+          "sha256": "9a0783b212927664b08cb18cef52521c80a91034a934ab688d76b7ca87c74932",
+          "report_path": "docs/plans/loginom-dock/06-completion-audit.md",
+          "target": "Loginom 7.4.2 Linux / macOS Chromium",
+          "proof_scope": "90 operator/type cases; independent raw configuration and both fixture partitions; source revisions recorded per case",
+          "checks_passed": 90
+        }
+      ],
+      "known_gaps": [
+        "Проверен source runtime; установленный клиент и публичный выпуск не обновлены",
+        "Только scalar conditions; управляющие переменные и variant не поддержаны",
+        "До 64 групп, 128 строк условий/ИЛИ, 128 элементов списка; полноточная выборка до 10 строк",
+        "Имена полей ограничены идентификаторным контрактом аналитических обработчиков; локальные даты без timezone",
+        "Общие безопасные отказы при невидимых портах графа и недоступной прокрутке отдельного импорта сохранены в отчёте; Loginom 7.5 и весь V4/V5 не приняты",
+        "Полный публичный preflight нового узла при preview 1000 полей ограничен общим UI_SCAN_LIMIT; широкие проверки фильтра выполнены диагностическим UI-драйвером, не полной публичной node.apply приёмкой"
+      ],
+      "next_step": "Продолжить подпланы09/10; сборку на VPS, установку и публичный выпуск выполнить отдельной принятой поставкой",
       "documented_sections": [
         {
           "section": "Мастер настройки",

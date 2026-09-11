@@ -39,11 +39,11 @@ try {
  let prep=await execute(makeWorkspacePrepareCode({loginomUrl,compatibility:{profile_id:'loginom-7.4.2-macos-chromium',loginom_build:'7.4.2',platform:'macos',browser:'chromium'},
   sessionId:session.metadata.sessionId,operationId:'prepare',intent:'open_package',packagePath,timeoutMs:15000}));
  await fs.writeFile(dir+'/preparation.json',JSON.stringify(prep,null,2));if(prep.status!=='READY')throw Error('Saved package preparation failed');
- if(prep.workflow_ref.navigation_path.some(c=>c.label.endsWith('(только чтение)'))){
+ if(process.argv.includes('--copy-to')||prep.workflow_ref.navigation_path.some(c=>c.label.endsWith('(только чтение)'))){
   if(!process.argv.includes('--copy-to'))throw Error('Diagnostic package is read-only; use a separate writable copy');
   const copy=option('--copy-to');
   if(!copy.startsWith(storage+'/')||!/^\/[A-Za-z0-9_./-]+\.lgp$/.test(copy)||copy.includes('..')||copy===packagePath)throw Error('Explicit distinct diagnostic copy required');
-  await execute(`async page=>{await page.locator('[data-tid="MF;cntMain;tlbMainToolbar;btnPackagesMenu"]').click();await page.locator('[data-tid="MF;MainMenuForm;btnSaveAsPackage"]').click();await page.locator('[data-tid="SaveDialogForm;edtFileName"] input').fill(${JSON.stringify(copy)});await page.locator('[data-tid="SaveDialogForm;btnOpen"]').click();await page.locator('[data-tid="SaveDialogForm"]').waitFor({state:'hidden'});return await page.locator('[data-tid*="cnrNaviMode;b.s_Сервер>Пакеты>"]').evaluateAll(es=>es.filter(e=>e.getBoundingClientRect().width>0).map(e=>({tid:e.getAttribute('data-tid'),label:e.textContent.trim()})))}`);
+  await execute(`async page=>{await page.locator('[data-tid="MF;cntMain;tlbMainToolbar;btnPackagesMenu"]').click();await page.locator('[data-tid="MF;MainMenuForm;btnSaveAsPackage"]').click();await page.locator('[data-tid="SaveDialogForm;edtFileName"] input').fill(${JSON.stringify(copy)});await page.locator('[data-tid="SaveDialogForm;btnOpen"]').click();await page.locator('[data-tid="SaveDialogForm"]').waitFor({state:'hidden'});await page.locator('[data-tid="MF;MainMenuForm;btnSaveAsPackage"]').waitFor({state:'hidden'});return await page.locator('[data-tid*="cnrNaviMode;b.s_Сервер>Пакеты>"]').evaluateAll(es=>es.filter(e=>e.getBoundingClientRect().width>0).map(e=>({tid:e.getAttribute('data-tid'),label:e.textContent.trim()})))}`);
   prep=await execute(makeWorkspacePrepareCode({loginomUrl,compatibility:{profile_id:'loginom-7.4.2-macos-chromium',loginom_build:'7.4.2',platform:'macos',browser:'chromium'},sessionId:session.metadata.sessionId,operationId:'prepare-copy',intent:'open_package',packagePath:copy,timeoutMs:15000}));
   if(prep.status!=='READY'||prep.workflow_ref.navigation_path.some(c=>c.label.endsWith('(только чтение)')))throw Error('Diagnostic copy not writable');
   // Save As updates the package label before navigation tids. Complete a
@@ -53,6 +53,9 @@ try {
   prep=await execute(makeWorkspacePrepareCode({loginomUrl,compatibility:{profile_id:'loginom-7.4.2-macos-chromium',loginom_build:'7.4.2',platform:'macos',browser:'chromium'},sessionId:session.metadata.sessionId,operationId:'prepare-copy-reopened',intent:'open_package',packagePath:copy,timeoutMs:15000}));
   if(prep.status!=='READY'||prep.workflow_ref.navigation_path.some(c=>c.label.endsWith('(только чтение)')))throw Error('Diagnostic copy reopen not writable');
   await fs.writeFile(dir+'/copy-preparation.json',JSON.stringify({path:copy,preparation:prep},null,2));
+  // Dismiss only the now-resolved warning for the original read-only seed.
+  // Other notifications remain visible and continue to block node operations.
+  await execute(`async page=>{const warnings=page.locator('[data-tid="toast"]');for(const toast of await warnings.all()){const text=await toast.innerText();if(text.includes(${JSON.stringify('Пакет "'+packagePath+'" открыт только на чтение')})&&text.includes('Сохранение возможно только под другим именем.'))await toast.locator('[data-tid="toast;p.h;close"]').click();}return true;}`);
  }
  const actions=JSON.parse(await fs.readFile('executor/catalog/actions.json')).actions,selectors=JSON.parse(await fs.readFile('executor/catalog/selectors.json')).selectors;
  for(const a of actions)if(['package.save_as','package.save_checkpoint'].includes(a.action_key))a.effect.allowed_roots=[storage];
@@ -68,4 +71,4 @@ try {
    await fs.writeFile(dir+'/'+command.id+'.json',JSON.stringify(result,null,2));console.log(JSON.stringify({id:command.id,result}));
   }catch(e){console.log(JSON.stringify({id:command.id,error:e.message}));}
  }
-}finally{await wire?.close();await client.callTool({name:'browser_close',arguments:{}}).catch(()=>{});await client.close();}
+}finally{await wire?.close();await client.callTool({name:'browser_close',arguments:{}}).catch(()=>{});await client.close();process.stdin.pause();process.stdin.unref?.();}

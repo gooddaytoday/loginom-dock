@@ -68,6 +68,14 @@ test('separate output wizard distinguishes excluded source identity from an acti
  assert.equal(r.target_fields[0].excluded,false);assert.equal(r.target_fields[0].source.record_id,'s0');
  assert.equal(r.target_fields[0].inherited,false);
 });
+test('unloaded derived sources retain excluded inventory but cannot prove source identity',()=>{
+ const f=excludedFixture();f.source.splice(0);
+ for(const t of f.target)Object.assign(t.data,{ConnectedRecord:null,SourceDisplayName:null,SourceDataType:null});
+ for(const e of f.all)if(e.tid?.includes(';colSourceDisplayName_'))e.textContent='';
+ const result=f.read();assert.equal(result.verified,true);assert.equal(result.inventory_complete,true);assert.equal(result.source_identity_verified,false);
+ assert.equal(result.target_fields[1].excluded,true);assert.equal(result.target_fields[1].exclusion_source,null);
+ f.target[1].data.DataKind=2;assert.equal(f.read().verified,false);
+});
 
 test('exclusion refuses unknown groups, false identities, mandatory and inherited fields',()=>{
  const changes=[

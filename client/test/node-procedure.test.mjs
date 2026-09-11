@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { createNodeProcedure } from '../lib/node-procedure.mjs';
 import { validateTextImportRequest } from '../lib/text-import-procedure.mjs';
 
-function fixture({ recordFailure, executeFailure, changedDocument, foreignReceipt, movingEpoch, dialogsAtRead, staleReads = 0, staleEffect = false, loadingSamples = 0, maxSteps = 8, signal, sharedOperation } = {}) {
+function fixture({ recordFailure, executeFailure, changedDocument, foreignReceipt, movingEpoch, dialogsAtRead, staleReads = 0, staleEffect = false, loadingSamples = 0, maxSteps = 8, signal, sharedOperation, now = () => 1, monotonicNow } = {}) {
   const events = [], records = []; let reads = 0;
   const operation = sharedOperation ?? { id: 'parent', action: { action_key: 'node.import.configure', revision: '1' },
     deadline: 10000, checkpoint: { workflow_ref: { prefix: 'MF;TF-1', tab_tid: 'tab' }, document_id: 'doc' } };
@@ -11,7 +11,7 @@ function fixture({ recordFailure, executeFailure, changedDocument, foreignReceip
     dom_epoch: { document: changedDocument ? 'foreign' : 'doc', revision: 1 }, scan: { complete: true }, wizard: staleReads ? {status:'observed',root_ref:'ui-root',root_tid:'Wizard'} : { status: 'absent' },
     ui: { masks: [], dialogs: [], truncated: { elements: false, masks: false, dialogs: false },
       elements: [{ ref: 'ui-button', allowed_actions: ['click'] }] } };
-  const channel = createNodeProcedure({ operation, maxSteps, signal, now: () => 1, wait: async () => {},
+  const channel = createNodeProcedure({ operation, maxSteps, signal, now, monotonicNow, wait: async () => {},
     targetOrigin: 'http://example.test', targetBuild: '7.4.2',
     record: async entry => { events.push(entry.phase); if (recordFailure && entry.phase === recordFailure) throw new Error('disk failure'); records.push(entry); return structuredClone(entry); },
     wrapMutation: (code, options) => { events.push('wrapped'); return { code, options }; },
@@ -24,7 +24,7 @@ function fixture({ recordFailure, executeFailure, changedDocument, foreignReceip
       events.push('mutated'); if (executeFailure) throw new Error('transport');
       return { status: 'SUCCEEDED', operation_id: foreignReceipt ? 'foreign' : code.options.id, action_key: 'ui.act', cleanup_complete: true, effect_possible: true, output: state };
     } });
-  return { channel, operation, events, records };
+  return { channel, operation, events, records, state };
 }
 test('a disappearing read root permits at most two rediscoveries without gestures',async()=>{
   for(const staleReads of [1,2,3]) {
@@ -417,3 +417,46 @@ test('reform global editor and its dropdown use bounded roots with strict owner 
   if(['bound','dropdown'].includes(mode)){await read();assert.deepEqual(roots,[mode==='dropdown'?'choices':'editor']);}else await assert.rejects(read());
  }
 });
+
+test('detached root before a gesture refreshes only the unchanged bound action',async()=>{
+ const receipt={phase:'observing',error:{code:'UI_ROOT_STALE'}};
+ const good=recoveryFixture({receipt});await good.perform();assert.equal(good.mutations,2);
+ for(const patch of [{effect_possible:true},{cleanup_complete:false},{phase:'applying'},{trace:[{event:'ui_gesture_applied'}]}]){
+  const bad=recoveryFixture({receipt:{...receipt,...patch}});await assert.rejects(bad.perform());assert.equal(bad.mutations,1);
+ }
+ for(const changed of ['changedIdentity','changedIntent']){
+  const bad=recoveryFixture({receipt,[changed]:true});await assert.rejects(bad.perform(),/target or intent changed/);assert.equal(bad.mutations,1);
+ }
+ const limit=recoveryFixture({receipt,refusals:10});await assert.rejects(limit.perform());assert.equal(limit.mutations,3);
+});
+
+test('readiness elapsed time and timeout survive a backward wall-clock correction', async () => {
+  let wall = 1000, monotonic = 0;
+  const f = fixture({ now: () => (wall -= 100), monotonicNow: () => (monotonic += 5) });
+  await f.channel.observe({ condition: 'button usable', ready: () => true });
+  const completed = f.records.find(r => r.phase === 'node_observation_completed');
+  assert.ok(completed.readiness.elapsed_ms > 0);
+  await assert.rejects(f.channel.observe({ condition: 'missing editor', ready: () => false, timeoutMs: 30 }), /readiness timeout/);
+  assert.ok(f.records.find(r => r.phase === 'node_observation_timeout').elapsed_ms >= 30);
+  assert.ok(!f.events.includes('mutated'));
+});
+
+for(const mode of ['ready_after_load','still_loading','foreign_dialog','wrong_operator'])
+ test('filter modal loading is wait-only: '+mode,async()=>{
+  let clock=0;
+  const f=fixture({now:()=>++clock});
+  const root='MF;TF-1;WizrdMCF',tid=root+';ModalWindow_BetweenValuesEditor';
+  f.state.wizard={status:'observed',stage:'row_filter',root_tid:root,root_ref:'wizard'};
+  f.state.node_filter={verified:true,rows:[{record_id:'row',operator_code:mode==='wrong_operator'?4:8}],selection:['row'],dialogs:[]};
+  f.state.ui.dialogs=[{ref:'range',identity:{anchor_tid:mode==='foreign_dialog'?'foreign':tid}}];
+  f.state.ui.masks=[{kind:'busy',ref:'range',dialog_ref:'range',target_tid:tid}];
+  const read=f.channel.observe({condition:'owned filter range',timeoutMs:30,ready:()=>true});
+  if(mode==='ready_after_load'){
+   // Initial asynchronous observation sees loading; the next one sees a bound editor.
+   await Promise.resolve();await Promise.resolve();await Promise.resolve();
+   f.state.ui.masks=[];f.state.node_filter.dialogs=[{root_tid:tid,record_id:'row'}];
+   await read;
+   assert.equal(f.records.find(r=>r.phase==='node_observation_sample').readiness.satisfied,false);
+  }else await assert.rejects(read,mode==='still_loading'?/readiness timeout/:/blocked/);
+  assert.ok(!f.events.includes('mutated'));
+ });

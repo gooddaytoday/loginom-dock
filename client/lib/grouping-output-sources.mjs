@@ -1,12 +1,14 @@
 const need=(v,m)=>{if(!v)throw Error(m);};
 const same=(a,b)=>JSON.stringify(a)===JSON.stringify(b);
 export function verifyGroupingSourceFetch(before,after){
- const project=f=>{const {record_id,source,...rest}=f;return rest;};
- need(before.source_fields.length===0&&after.source_fields.length>0&&after.inventory_complete===true
+ // Loginom recreates excluded placeholders (including their synthetic field
+ // IDs) when sources are fetched. Active output field IDs remain persistent.
+ const project=f=>{const {record_id,source,exclusion_source,...rest}=f;if(f.excluded===true)delete rest.field_id;return rest;};
+ need(before.source_fields.length===0&&after.source_fields.length>0&&after.inventory_complete===true&&after.source_identity_verified===true
   &&same(before.node_context,after.node_context)&&before.autosync===after.autosync
   &&same(before.target_fields.map(project),after.target_fields.map(project)),
   'Fetching grouping sources changed the output definition');
- need(after.target_fields.every(f=>f.source!==null),'Grouping output has an unbound source after schema retrieval');
+ need(after.target_fields.every(f=>f.excluded===true?f.source===null&&f.exclusion_source!=null:f.source!=null),'Grouping output has an unbound source after schema retrieval');
  return true;
 }
 // Native "Get source columns" retrieves the schema without executing the node.

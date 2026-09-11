@@ -1,6 +1,10 @@
 # 06. Обработчик «Фильтр строк»
 
-Статус: **planned**. Реализация и самостоятельная приёмка ещё не завершены.
+[Ревью и повторная приёмка 11 сентября: четыре дефекта исправлены, 49/49 frozen PASS](../../loginom-dock/row-filter-review-live-2026-09-11.md).
+
+Статус: **implemented / live_verified (source runtime)**, не released.
+[Полный аудит: матрица90/90, Hermes49/49 и границы](06-completion-audit.md).
+[История реализации](../../loginom-dock/row-filter-progress-2026-09-11.md).
 
 Навигация: [реестр подпланов](README.md),
 [действующий план](../2026-09-02-loginom-dock-implementation-plan.md).
@@ -35,8 +39,8 @@
   `conditions_boolean.ts`, `conditions_date_time.ts`, `conditions_line_num.ts`,
   `filterdata_list.ts`, `empty_input.ts`, `err_msgs.ts`.
 
-Сейчас полный handler фильтра отсутствует; перечень распознаваемых страниц
-в `client/lib/workspace-ui.mjs` не содержит этапа настройки «Фильтра строк».
+На исходной точке плана полный handler фильтра отсутствовал; перечень страниц
+в `client/lib/workspace-ui.mjs` не содержал этапа настройки «Фильтра строк».
 Общие жесты и мастер не заменяют типизированное чтение/применение условий.
 E2E различает фильтр узла, БД и визуализатора: здесь использовать только мастер узла.
 

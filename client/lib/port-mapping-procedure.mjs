@@ -45,7 +45,7 @@ export async function configureOutputAutosync(channel,value) {
 // A fields list is the full ordered layout; exclusions are explicit entries.
 export function resolveConfiguredOutputMapping(mapping,configured,native) {
   const requireValue=(v,m)=>{if(!v)throw new Error(m);};
-  requireValue(mapping?.port===0&&(mapping.direction==='input'?native?.mapping_wizard==='TuneDataSourceMappingWizard':mapping.direction==='output'&&native?.mapping_wizard!=='TuneDataSourceMappingWizard'),'Port mapping direction differs from native wizard');
+  requireValue((mapping?.port===0||Number.isInteger(mapping?.port)&&mapping.port>0&&mapping.direction==='output'&&native?.node_context?.verified===true&&native.node_context.output_port?.port===mapping.port)&&(mapping.direction==='input'?native?.mapping_wizard==='TuneDataSourceMappingWizard':mapping.direction==='output'&&native?.mapping_wizard!=='TuneDataSourceMappingWizard'),'Port mapping direction differs from native wizard');
   requireValue(native?.verified===true&&native.inventory_complete===true&&native.source_identity_verified===true,
     'Complete native mapping source identity required');
   const used=configured.filter(c=>c.used),sources=native.source_fields,targets=native.target_fields;

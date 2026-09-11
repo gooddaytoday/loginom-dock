@@ -4,12 +4,12 @@ Input must come from the authenticated session journal. This verifier does not
 admit a catalog, authenticate a journal file, or establish Hermes acceptance.
 It never uses the handler's settings_readback_verified summary as evidence.
 """
-import hashlib
 import json
+from json_digest import javascript_digest
 
 
 def digest(value):
-    return hashlib.sha256(json.dumps(value, ensure_ascii=False, separators=(',', ':')).encode()).hexdigest()
+    return javascript_digest(value)
 
 
 def bound_wizard_close_confirmation(state):
@@ -144,6 +144,31 @@ def bound_reform_dialog(state):
         and type(fields['excluded'].get('value')) is bool)
 
 
+def bound_filter_dialog(state):
+    wizard, native = state.get('wizard', {}), state.get('node_filter', {})
+    owner, cached_owner = state.get('prepared_node_context', {}), native.get('node_context', {})
+    dialogs, masks = state.get('ui', {}).get('dialogs'), state.get('ui', {}).get('masks')
+    bound = native.get('dialogs', [])
+    if (wizard.get('status') != 'observed' or wizard.get('stage') != 'row_filter'
+            or native.get('verified') is not True or native.get('inventory_complete') is not True
+            or owner.get('verified') is not True or cached_owner != owner or owner.get('surface') != 'wizard'
+            or owner.get('input_port') or owner.get('output_port') or owner.get('tid') != wizard.get('root_tid')
+            or len(bound) != 1 or not isinstance(dialogs, list) or len(dialogs) != 1
+            or not isinstance(masks, list)):
+        return False
+    kind = bound[0].get('kind')
+    suffix = {'range': 'BetweenValuesEditor', 'list': 'ValueListEditor'}.get(kind)
+    if suffix is None:
+        return False
+    root = wizard['root_tid'] + ';ModalWindow_' + suffix
+    records = [r for r in native.get('rows', []) if r.get('record_id') == bound[0].get('record_id')]
+    return (bound[0].get('root_tid') == root and dialogs[0].get('identity', {}).get('anchor_tid') == root
+            and len(records) == 1 and records[0].get('kind') == 'condition'
+            and records[0].get('operator_code') in ([8, 9] if kind == 'range' else [10, 11])
+            and all(m.get('kind') == 'modal_background' and m.get('ref') == wizard.get('root_ref')
+                    and m.get('target_tid') == wizard['root_tid'] for m in masks))
+
+
 def bound_grouping_factor(state):
     wizard=state.get('wizard',{});factor=wizard.get('factor_editor',{})
     native=state.get('node_grouping',{});owner=state.get('prepared_node_context',{})
@@ -167,7 +192,7 @@ def bound_schema_preview(state):
     preview=state.get('node_preview_schema',{});owner=state.get('prepared_node_context',{})
     dialogs=state.get('ui',{}).get('dialogs',[])
     return (preview.get('verified') is True and preview.get('inventory_complete') is True
-        and preview.get('state_source')=='cached_preview_column_infos' and preview.get('port')==0
+        and preview.get('state_source')=='cached_preview_column_infos' and type(preview.get('port')) is int and 0<=preview['port']<100
         and preview.get('node_id')==owner.get('node_id') and owner.get('verified') is True
         and preview.get('node_context')==owner and owner.get('surface')=='graph'
         and preview.get('root_tid')==state.get('workflow_ref',{}).get('prefix','')+';ModelForm;PreviewWindow'
@@ -267,7 +292,7 @@ def verify_internal_sequence(events, operation_id, *, max_steps=96):
             if outcome.get('status') != 'SUCCEEDED' or not samples or samples[-1].get('outcome') != outcome:
                 failures.append('observation_not_backed_by_sample')
             recent = [s.get('outcome', {}).get('output', {}) for s in samples[-required_samples:]]
-            if len(recent) != required_samples or any((not semantic and s.get('dom_epoch') != state.get('dom_epoch')) or s.get('ui', {}).get('masks') and not (bound_wizard_confirmation(s) or bound_expression_dialog(s) or bound_reform_dialog(s) or bound_grouping_factor(s) or bound_schema_preview(s)) for s in recent):
+            if len(recent) != required_samples or any((not semantic and s.get('dom_epoch') != state.get('dom_epoch')) or s.get('ui', {}).get('masks') and not (bound_wizard_confirmation(s) or bound_expression_dialog(s) or bound_reform_dialog(s) or bound_filter_dialog(s) or bound_grouping_factor(s) or bound_schema_preview(s)) for s in recent):
                 failures.append('observation_not_settled')
             doc = state.get('dom_epoch', {}).get('document')
             if document is None:
@@ -275,7 +300,7 @@ def verify_internal_sequence(events, operation_id, *, max_steps=96):
             if not doc or (doc, state.get('workflow_ref'), state.get('origin'), state.get('loginom_build')) != (document, workflow, origin, build):
                 failures.append('document_context_mismatch')
             ui = state.get('ui', {})
-            if state.get('scan', {}).get('complete') is not True or (ui.get('masks') != [] or not (bound_table_dialogs(state) or bound_output_column_dialog(state) or bound_reform_dialog(state))) and not (bound_wizard_confirmation(state) or bound_expression_dialog(state) or bound_grouping_factor(state) or bound_schema_preview(state)):
+            if state.get('scan', {}).get('complete') is not True or (ui.get('masks') != [] or not (bound_table_dialogs(state) or bound_output_column_dialog(state) or bound_reform_dialog(state))) and not (bound_wizard_confirmation(state) or bound_expression_dialog(state) or bound_filter_dialog(state) or bound_grouping_factor(state) or bound_schema_preview(state)):
                 failures.append('observation_blocked')
             current = state
             observations.append((step, state))
@@ -333,11 +358,11 @@ def verify_internal_sequence(events, operation_id, *, max_steps=96):
                 failures.append('unbound_port_open')
             if outcome.get('operation_id') != row.get('internal_operation_id') or outcome.get('action_key') != key:
                 failures.append('receipt_identity_mismatch')
-            strict_refusal = (outcome.get('status') == 'NOT_APPLIED' and outcome.get('phase') == 'preconditions'
+            strict_refusal = (outcome.get('status') == 'NOT_APPLIED'
+                and (outcome.get('phase'),outcome.get('error',{}).get('code')) in [('preconditions','UI_EPOCH_CHANGED'),('observing','UI_ROOT_STALE')]
                 and outcome.get('effect_possible') is False and outcome.get('cleanup_complete') is True
-                and outcome.get('error', {}).get('code') == 'UI_EPOCH_CHANGED'
                 and isinstance(outcome.get('trace'), list)
-                and not any(e.get('event') == 'ui_preconditions_verified' for e in outcome['trace']))
+                and not any(e.get('event') in ('ui_preconditions_verified','ui_gesture_applied') for e in outcome['trace']))
             if not strict_refusal and (outcome.get('status') != 'SUCCEEDED' or outcome.get('cleanup_complete') is not True):
                 failures.append('incomplete_mutation')
             if pending and strict_refusal:
@@ -349,9 +374,9 @@ def verify_internal_sequence(events, operation_id, *, max_steps=96):
             previous_step = step
         elif phase == 'node_step_refresh_authorized':
             retry_count += 1
-            expected_intent = hashlib.sha256(json.dumps(
+            expected_intent = digest(json.loads(json.dumps(
                 {k: v for k, v in (rejected[0] if rejected else {}).items() if k not in ('ref', 'source_ref', 'target_ref')},
-                ensure_ascii=False, sort_keys=True, separators=(',', ':')).encode()).hexdigest()
+                ensure_ascii=False, sort_keys=True, separators=(',', ':'))))
             if (not rejected or pending or samples or step != previous_step or retry_count > 2
                     or refresh_authorized or row.get('retry') != retry_count
                     or row.get('rejected_operation_id') != rejected[2].get('operation_id')
