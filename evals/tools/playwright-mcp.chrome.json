@@ -1,0 +1,17 @@
+{
+  "browser": {
+    "browserName": "chromium",
+    "isolated": true,
+    "launchOptions": {
+      "executablePath": "/usr/bin/google-chrome",
+      "headless": false,
+      "chromiumSandbox": true,
+      "args": ["--start-maximized"]
+    },
+    "contextOptions": { "viewport": null }
+  },
+  "capabilities": ["core", "vision"],
+  "outputDir": "/home/george/git/loginom-dock/evals/.state/playwright-mcp/artifacts",
+  "saveSession": false,
+  "timeouts": { "action": 15000, "navigation": 60000 }
+}
