@@ -10,6 +10,7 @@ export const userResultSchema = {
     effect_possible: { type: 'boolean' }, cleanup_complete: { type: 'boolean' },
     node: { anyOf: [{ type: 'null' }, { type: 'object', required: ['document_id', 'workflow_id', 'node_id'], additionalProperties: false,
       properties: { document_id: { type: 'string' }, workflow_id: { type: 'string' }, node_id: { type: 'string' } } }] },
+    configuration: { type: 'object' },
     execution: { type: ['object', 'null'] }, package_saved: { type: 'boolean' }, output: { type: 'object' },
     error: { type: ['object', 'null'] }, limitations: { type: 'array', items: { type: 'string' } },
   },
@@ -21,7 +22,7 @@ export function compactNodeResult(result) {
   if (data?.ports) output.ports = data.ports.map(port => {
     const value = pick(port, ['port', 'port_guid', 'fresh', 'execution_id', 'schema', 'row_count', 'sample', 'sample_rows', 'sample_complete', 'precision', 'table']);
     value.schema = value.schema.map(column => pick(column, ['index', 'name', 'label', 'type', 'data_kind']));
-    value.sample = value.sample.slice(0, 3).map(row => row.map(cell => {
+    value.sample = value.sample.map(row => row.map(cell => {
       const compact = pick(cell, ['value', 'display_text', 'precision', 'is_null', 'timezone']);
       if (compact.value === compact.display_text) delete compact.display_text;
       return compact;
@@ -38,7 +39,7 @@ export function compactNodeResult(result) {
     result_version: 'user-v1', ...pick(result, ['operation_id', 'attempt', 'state', 'cancel_requested', 'server_stop_requested']),
     ...(result.state === 'running' ? { progress: result.progress } : {}),
     ...pick(outcome, ['status', 'action_key', 'phase', 'effect_possible', 'cleanup_complete']),
-    ...pick(node, ['node', 'execution', 'package_saved']), output,
+    ...pick(node, ['node', 'execution', 'package_saved', 'configuration']), output,
     error: result.error ?? outcome?.error ?? null,
     limitations: node?.warnings ?? [],
   };
@@ -64,6 +65,10 @@ export const userWorkflowInstructions = `Используй закреплённ
 В dock_node_apply/resume передавай workflow_ref только как {workflow_id}, используя
 выданные document_id и workflow_id. Длинный путь навигации клиент хранит локально;
 не копируй и не восстанавливай tab_tid, prefix, navigation_path в запросе узла.
+В компактном ответе configuration.readback содержит наблюдённые настройки и
+привязку к узлу и квитанциям; сравни их с задачей. Выборка output.ports сохраняет
+запрошенные строки в пределах бюджета операции. Для проверки этих же настроек
+не открывай мастер повторно; сохранение подтверждай отдельной квитанцией пакета.
 Не повторяй уже подтверждённые проверки. При running жди тот же operation_id;
 при неопределённом результате сначала восстанови его, не начинай заменяющую операцию.
 Ошибку параметров исправляй по установленной схеме. Дополнительные знания ищи,

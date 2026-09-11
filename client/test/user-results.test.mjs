@@ -8,7 +8,7 @@ test('compact node result keeps references, precision and errors without configu
   const raw = { operation_id: 'job', attempt: 1, state: 'settled', progress: null, error: null,
     outcome: { status: 'SUCCEEDED', cleanup_complete: true, effect_possible: true, trace: [{ large: 'trace' }],
       output: { node: { document_id: 'doc', workflow_id: 'wf', node_id: 'node' }, package_saved: false,
-        configuration: { readback: { huge: 'details' } }, output: { status: 'partial', evidence_ref: 'receipt', ports: [
+        configuration: { readback: { node: { document_id: 'doc', workflow_id: 'wf', node_id: 'node' }, receipt_ids: ['job:configure'], source: { source_path: '/test/data.csv' }, values_are: 'observed_ui_values' } }, output: { status: 'partial', evidence_ref: 'receipt', ports: [
           { port: 0, port_guid: 'port', fresh: true, row_count: 12, schema: [{ index: 0, name: 'amount', label: 'Amount', type: 'real', header_tid: 'internal' }],
             sample: [[{ display_text: '1.2', precision: 'unverified' }]], sample_rows: 1, sample_complete: false,
             precision: { numbers_verified: false, limitations: ['numeric_display_precision'] } },
@@ -19,7 +19,13 @@ test('compact node result keeps references, precision and errors without configu
   assert.equal(result.node.node_id, 'node');assert.equal(result.package_saved, false);
   assert.equal(result.output.ports[0].precision.numbers_verified, false);
   assert.equal(result.output.ports[0].row_count, 12);
-  assert.ok(!JSON.stringify(result).includes('huge') && !JSON.stringify(result).includes('internal'));
+  assert.deepEqual(result.configuration, raw.outcome.output.configuration);
+  assert.ok(!JSON.stringify(result).includes('internal'));
+  const port = raw.outcome.output.output.ports[0];
+  port.sample = Array.from({length:6},(_,i)=>[{value:String(i),precision:'exact_integer',is_null:false}]);
+  port.sample_complete = true;
+  const complete = compactNodeResult(raw).output.ports[0];
+  assert.equal(complete.sample.length,6); assert.equal(complete.sample_complete,true);
   raw.outcome.status = 'AMBIGUOUS';raw.outcome.error = { code: 'UNCERTAIN', message: 'inspect same ID' };
   assert.equal(compactNodeResult(raw).error.code, 'UNCERTAIN');
 });

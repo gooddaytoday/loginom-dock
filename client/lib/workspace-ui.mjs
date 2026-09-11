@@ -1,4 +1,5 @@
 import {readPreparedNodeContext, validatePreparedNodeContext} from './node-context.mjs';
+import {captureProcessNodeFocus,restoreProcessNodeFocus} from './process-node-focus.mjs';
 
 // The model receives opaque observed references, never executable selectors or
 // browser code. All browser-side inspection and gestures below are client-pinned.
@@ -48,7 +49,7 @@ export function validateUiAction(action, snapshot) {
   return action;
 }
 
-export function workspaceUiCapability(page, task, readNodeContext) {
+export function workspaceUiCapability(page, task, readNodeContext, captureProcessFocus, restoreProcessFocus) {
   const started = Date.now(), deadline = started + 15000;
   const trace = [], handles = [];
   let postActionRoot;
@@ -56,6 +57,7 @@ export function workspaceUiCapability(page, task, readNodeContext) {
   let finishSurfaceReads=0;
   let openingSurfaceReads=0;
   let navigationSurfaceReads=0;
+  let processFocusTicket,processShowCompleted=false,processFocusAttempted=false;
   let graphLockReads=0;
   let phase = 'observing', effectPossible = false, mouseHeld = false, mouseButton = 'left';
   const record = (event, details = {}) => trace.push({ at_ms: Date.now() - started, event, ...details });
@@ -76,6 +78,12 @@ export function workspaceUiCapability(page, task, readNodeContext) {
       record('node_surface_wait',{condition:'prepared_node_surface_ready',sample});
       await page.waitForTimeout(Math.min(50,timeout()));
       binding=await readNodeContext(page,task.prepared_node_context);
+    }
+    if(binding?.reason==='tab'&&processShowCompleted&&!processFocusAttempted&&processFocusTicket&&restoreProcessFocus){
+      processFocusAttempted=true;timeout();mouseHeld=true;mouseButton='left';
+      const restored=await restoreProcessFocus(page,processFocusTicket);
+      mouseHeld=false;
+      if(restored.restored){record('process_node_focus_restored',restored.proof);timeout();binding=await readNodeContext(page,task.prepared_node_context);}
     }
     if(binding?.verified!==true)fail('PREPARED_NODE_CONTEXT_CHANGED','The prepared package, workflow or node changed: '+(binding?.reason??'surface_unavailable'));
     return binding;
@@ -3056,6 +3064,10 @@ function readRenderedInputMapping(observation) {
           if(!before?.graph_execution||!after?.allowed_actions.includes('execute_graph_node')||!same(before.graph_execution,after.graph_execution))
             fail('GRAPH_EXECUTION_CONTEXT_CHANGED','The selected node or launch button changed before execution');
         }
+        if(task.action.verb==='show_process_node'&&task.prepared_node_context&&captureProcessFocus){
+          const process=current.ui.elements.find(e=>e.ref===task.action.ref)?.process_menu?.process;
+          if(process){processFocusTicket=await captureProcessFocus(page,{binding:task.prepared_node_context,process,origin:task.expected_origin,build:task.expected_build});handles.push(processFocusTicket);}
+        }
         const epochBeforeGesture = await page.evaluate(() => {
           const state=globalThis[Symbol.for('loginom-dock.workspace-ui.identity.v1')];
           if (!state?.observer) return null;
@@ -3070,6 +3082,7 @@ function readRenderedInputMapping(observation) {
           timeout(); mouseHeld = true; mouseButton = button;
           await page.mouse.click(targets[0].point.x, targets[0].point.y, { clickCount, button });
           mouseHeld = false;
+          if(task.action.verb==='show_process_node')processShowCompleted=true;
         };
         if (task.action.verb === 'click' || ['execute_graph_node','wizard_step','select_wizard_option','apply_expression_parameters','cancel_expression_parameters','open_wizard','begin_wizard','confirm_wizard_deactivation','finish_wizard','execute_wizard','confirm_wizard_close','show_process_node','cancel_process','open_node_views','apply_output_column','cancel_output_column','apply_reform_column','cancel_reform_column'].includes(task.action.verb)) await clickTarget(1);
         else if (task.action.verb === 'double_click' || task.action.verb === 'enter_table') await clickTarget(2);
@@ -3583,6 +3596,6 @@ export function makeWorkspaceUiCode(options, { snapshotArgument = false } = {}) 
   const task = { ...structuredClone(options), kind: 'workspace-ui' };
   // Trusted composite operations may supply their own fresh native read after
   // a bounded preparatory gesture. This is not a public tool parameter.
-  if(snapshotArgument)return `async (page, snapshot) => (${workspaceUiCapability.toString()})(page, {...${JSON.stringify(task)},snapshot}, ${readPreparedNodeContext.toString()})`;
-  return `async (page) => (${workspaceUiCapability.toString()})(page, ${JSON.stringify(task)}, ${readPreparedNodeContext.toString()})`;
+  if(snapshotArgument)return `async (page, snapshot) => (${workspaceUiCapability.toString()})(page, {...${JSON.stringify(task)},snapshot}, ${readPreparedNodeContext.toString()}, ${captureProcessNodeFocus.toString()}, ${restoreProcessNodeFocus.toString()})`;
+  return `async (page) => (${workspaceUiCapability.toString()})(page, ${JSON.stringify(task)}, ${readPreparedNodeContext.toString()}, ${captureProcessNodeFocus.toString()}, ${restoreProcessNodeFocus.toString()})`;
 }

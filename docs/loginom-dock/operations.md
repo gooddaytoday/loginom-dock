@@ -1,3 +1,21 @@
+# Каталог для тестовых аккаунтов размещён — 11 сентября 2026
+
+На VPS собран и staged/readback `2026.09.11-parallel-pilot.1-candidate`:
+manifest SHA `4ac827fc9e0cefa609bf2cb8fd7d3d79318dd3fe92999decc7e385fae51fc6e2`,
+URI `viking://resources/loginom-dock/catalogs/executor-preview/releases/2026.09.11-parallel-pilot.1-candidate/manifest.json`.
+Обе операции сохранения revision2 допускают `/test-1`, `/test-2`, `/test-3`;
+каталоги подтверждены через живой UI созданных пользователем аккаунтов.
+Профиль Loginom7.4.2, E2E `2cad5602158fd2e4836d821d644a2b8d92f571a2`;
+`stale_actions=[]`, `activated=false`. Manifest прочитан также через Dock MCP.
+Чистые исходники `7da6f1f8`, сборка в
+`/opt/loginom-dock/releases/20260911-catalog-parallel-pilot1-7da6f1f8`.
+Production current и контейнеры не переключались; перед сборкой проверены
+health/auth/MCP и фактические образы. Клиент и глобальные профили не обновлялись.
+Пилот впоследствии остановлен пользователем; каталог остаётся кандидатом
+для последовательной проверки, успешная приёмка новых узлов не заявляется.
+
+---
+
 # Клиент с «Фильтром строк» установлен — 11 сентября 2026
 
 Код отправлен в main: `79f072dc`. Клиент на Mac:

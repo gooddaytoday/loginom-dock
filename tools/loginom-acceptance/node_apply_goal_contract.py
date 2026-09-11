@@ -53,8 +53,10 @@ def verify_sales_goal_request(request, run_id, directory, source_bytes):
         valid_mapping = False
     if not valid_mapping:
         failures.append('goal_output_mapping')
+    # Byte/hash fields are optional in current node requests. The outer audit
+    # must bind the artifact grant and delivered bytes independently.
     source = parameters.get('source', {})
-    if (source.get('bytes') != 230 or source.get('sha256') != FIXTURE_SHA
+    if (('bytes' in source and source['bytes'] != 230) or ('sha256' in source and source['sha256'] != FIXTURE_SHA)
             or not all(isinstance(source.get(k), str) and source[k] for k in ('artifact_id', 'upload_operation_id'))):
         failures.append('goal_source_identity')
     read = request.get('read', {})

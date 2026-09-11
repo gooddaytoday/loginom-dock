@@ -45,6 +45,15 @@
 
 ## Implementation boundaries
 
+- The user ended the parallel node-development pilot on 2026-09-11 and returned
+  to sequential work. Work on one node at a time; do not resume concurrent
+  developer/reviewer agents without a new explicit user request. Preserve the
+  pilot worktrees and consult `docs/loginom-dock/parallel-node-pilot.md` for the
+  unaccepted work and resumption checkpoints. Implementation is paused by the
+  user's instruction except for explicitly requested follow-ups. On 2026-09-11
+  the shared process-panel return fix and user-v1 readback/auditor follow-up
+  were completed with 31/31 autonomous audit checks and 11/11 negative cases.
+  This does not resume node09 or the pilot; wait for a new implementation request.
 - Preserve OpenViking APIs, MCP tools, ingestion, search, sessions, storage schema,
   `viking://` URIs, internal package names and upstream attribution. Prefer small
   adapters over forks of existing subsystems; never add a second repository importer.

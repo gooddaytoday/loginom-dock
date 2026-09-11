@@ -243,6 +243,9 @@ export function createNodeExecutionProcedure(channel,node) {
         &&s.node_processes.processes.filter(p=>p.selected).length===1&&s.node_processes.processes.some(p=>p.selected&&p.record_id===child.record_id));
       await act(s,showNode,'show_process_node',s=>({node,process_id:child.process_id,record_id:child.record_id,
         selected:s.node_processes.processes.filter(p=>p.selected).map(p=>p.record_id)}));
+      // Switching back from Files can hide the process panel. Reopen it for
+      // a fresh check of the same execution; this never launches the node.
+      await openConsole();
       s=await observe('new process selects the prepared graph node',s=>processes(s)&&s.node_outputs?.verified===true
         &&s.node_outputs.node_selected===true&&s.prepared_node_context.surface==='graph',{readOutputs:true});
       const receipt=verifyCompletedExecution(execution,s.node_processes,{verified:true,process_id:child.process_id,record_id:child.record_id,

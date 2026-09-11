@@ -15,12 +15,17 @@ from node_apply_persistence_evidence import verify_sales_persistence
 from artifact_delivery_evidence import verify_delivered_import_output
 from workflow_activation_evidence import verify_workflow_activation
 from node_efficiency import node_efficiency
+from user_result_evidence import normalize_user_evidence
 from node_configuration_evidence import verify_configuration_readback
 
 WORK = Path(__file__).resolve().parent
 ROOT = WORK.parents[1]
 MANIFEST_URI = 'viking://resources/loginom-dock/catalogs/executor-preview/releases/2026.09.08-node-apply.1-candidate/manifest.json'
 MANIFEST_SHA = '936ef73d933e85bfd8429b8b0f2b515c543ca415a2b22ba57e108232c54ddf44'
+# Independently reviewed test-account catalog; production catalog stays unchanged.
+PROCESS_FOCUS_CATALOG = (
+    'viking://resources/loginom-dock/catalogs/executor-preview/releases/2026.09.11-parallel-pilot.1-candidate/manifest.json',
+    '4ac827fc9e0cefa609bf2cb8fd7d3d79318dd3fe92999decc7e385fae51fc6e2')
 SAVE_REVISIONS = {'package.save_checkpoint': '2', 'package.save_as': '2'}
 
 
@@ -32,7 +37,10 @@ def model_completed(request, evidence):
 
 
 def audit(request, evidence, prompt, source_bytes):
-    checks = {}
+    evidence, projection = normalize_user_evidence(evidence)
+    checks = {'user_result_projection': projection}
+    if not projection['passed']:
+        return report(checks)
     def check(name, value):
         checks[name] = dict(passed=bool(value))
     try:
@@ -55,7 +63,9 @@ def audit(request, evidence, prompt, source_bytes):
         native = request.get('native_skill', {})
         check('native_skill', evidence.get('native_skill_unchanged') is True and native.get('source') == 'plugins/loginom-dock-hermes/skills/loginom/SKILL.md'
               and native.get('sha256') == request['runtime_source_pin']['inputs'].get(native.get('source')))
-        check('catalog', request.get('manifest_uri') == MANIFEST_URI and request.get('manifest_sha256') == MANIFEST_SHA)
+        catalog = (request.get('manifest_uri'), request.get('manifest_sha256'))
+        check('catalog', catalog in ((MANIFEST_URI, MANIFEST_SHA), PROCESS_FOCUS_CATALOG))
+        expected_manifest = catalog[1]
         allowed = KNOWLEDGE_TOOLS | {PREFIX+n for n in ('dock_prepare', 'dock_action_describe', 'dock_workspace_observe',
             'dock_diagnostics', 'dock_node_apply', 'dock_node_status', 'dock_node_wait', 'dock_artifact_deliver',
             'dock_artifact_delivery_status', 'dock_action_run')}
@@ -87,10 +97,10 @@ def audit(request, evidence, prompt, source_bytes):
         if prepared is None:
             return report(checks)
         pins = prepared.get('executor', {}).get('session_manifest', {})
-        check('actual_catalog', pins.get('actionManifestDigest') == MANIFEST_SHA)
+        check('actual_catalog', pins.get('actionManifestDigest') == expected_manifest or prepared.get('result_version') == 'user-v1' and any(e.get('event') == 'workspace_prepared' and e.get('state') == prepared['workspace'] and e.get('session_id') == prepared['sessionId'] and e.get('manifest_sha256') == expected_manifest for e in evidence['events']))
         check('journal_pins', all(e.get('session_id') == prepared['sessionId']
               and e.get('runtime_revision') == request['runtime_source_pin']['client_revision']
-              and e.get('manifest_sha256') == MANIFEST_SHA for e in evidence['events']))
+              and e.get('manifest_sha256') == expected_manifest for e in evidence['events']))
         check('seed_workspace', seed.get('document_id') == prepared['workspace'].get('document_id')
               and seed.get('workflow_ref') == prepared['workspace'].get('workflow_ref'))
         saves = [e for e in evidence['events'] if e.get('phase') == 'completed' and e.get('action_key') in SAVE_REVISIONS]
