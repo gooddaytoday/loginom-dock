@@ -1294,6 +1294,15 @@
       ],
       "live_evidence": [
         {
+          "path": ".dock/client-update-row-filter-20260911/live-1789141466433/installed-independent-audit.json",
+          "sha256": "24ecc7fb547bd1864fca2811146a164ceb6f7b9d719bfc0dd2e122c85b30a278",
+          "report_path": "docs/loginom-dock/client-update-row-filter-2026-09-11.md",
+          "runtime_revision": "f14d6452ef74c43fd75730f87bae2db8bb3d4e7faca2aeb5604a47af96d0f61e",
+          "target": "Loginom 7.4.2 Linux / installed macOS Chromium client",
+          "proof_scope": "installed bundle; saved diagnostic copy reopened; existing filter rerun without reconfiguration; exact 5+5 rows and 50 values; preserved mappings and graph; not a separate Hermes acceptance",
+          "checks_passed": 11
+        },
+        {
           "path": ".dock/row-filter-review/hermes-runs/20260911-181616-1338ee3f/filter-node-audit.json",
           "sha256": "cd863cad675f06f8e2b597c93bbd13defe6b4e7dd912178f9ec97294ca5d9062",
           "report_path": "docs/loginom-dock/row-filter-review-live-2026-09-11.md",
