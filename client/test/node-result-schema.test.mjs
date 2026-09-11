@@ -39,3 +39,18 @@ test('calculator readback has its own public shape and cannot masquerade as text
   const invalid=structuredClone(r);change(invalid.configuration.readback);assert.equal(validate(invalid).valid,false);
  }
 });
+
+test('reform readback has a registered shape with input identities and preservation evidence',()=>{
+ const r=result(),field={index:0,field_id:'0',name:'Amount',label:'Same',type:'real',data_kind:'Непрерывный',usage_type:7,caching_method:0,excluded:false,
+  input_field:{index:0,field_id:'0',name:'Raw',label:'Same',type:'string',source_name:'Raw',source_field_id:'0'}};
+ r.configuration={status:'applied',readback:{kind:'field_parameters',scope:'observed_before_verified_finish',node:{document_id:'d',workflow_id:'w',node_id:'n'},
+ receipt_ids:['op:input_mapping','op:configure','op:node_finish','op:output_mapping','op:finish'],values_are:'observed_ui_values',fields:[field],
+ caching:{value:0,display:'Отключено',variable:false},preservation:{unrequested_fields:true,unrequested_properties:true,caching:true},
+ input_mapping:{port:0,autosync:true,fields:[{index:0,field_id:'0',name:'Raw',label:'Same',type:'string',data_kind:'Дискретный',source_name:'Raw'}]},
+ output_mapping:{port:0,autosync:true,fields:[{index:0,name:'Amount',label:'Same',type:'real',data_kind:'Непрерывный',excluded:false,source_name:'Amount'}]},package_persistence_verified:false}};
+ assert.equal(validate(r).valid,true);
+ for(const change of [v=>v.kind='calculator',v=>delete v.fields[0].input_field,v=>v.fields[0].usage_type=1,v=>v.caching.value=4,
+  v=>v.receipt_ids.pop(),v=>v.package_persistence_verified=true,v=>delete v.preservation]){
+  const bad=structuredClone(r);change(bad.configuration.readback);assert.equal(validate(bad).valid,false);
+ }
+});

@@ -58,3 +58,20 @@ test('complete import and existing patch pass the public schema and installed ha
  await dispatchNodeApi(runtime,'dock_node_resume',short);
  assert.equal(calls.length,5);
 });
+
+test('Field Parameters dispatch uses the catalog scalar mode and rejects malformed changes',async()=>{
+ const {createCandidateNodeSupport}=await import('../lib/node-support.mjs');
+ const {runtime,calls}=fixture(),support=createCandidateNodeSupport({targetOrigin:'http://example.test',targetBuild:'7.4.2'});
+ const handler=support.nodeApplyHandlers.get('transform.reform_columns');
+ const request={operation_id:'reform',contract_revision:'1.0.0',document_id:'doc',
+  workflow_ref:{workflow_id:'wf',tab_tid:'tab',prefix:'prefix',navigation_path:[{tid:'path',label:'Scenario'}]},
+  target:{kind:'existing',type:'transform.reform_columns',ref:{document_id:'doc',workflow_id:'wf',node_id:'n'}},inputs:[],
+  mode:'scalar',parameters:{changes:[{field:{kind:'input_field',name:'Raw'},name:'Clean',type:'real',excluded:false}]},mappings:[],finish:'done',
+  read:{ports:[0],sample_rows:10,require_exact_numbers:true},budgets:{configure_ms:10000,execute_ms:10000,total_ms:30000}};
+ runtime.startNodeApply=args=>{handler.validate(args.parameters,args.mode,args);calls.push(args);return {state:'running'};};
+ await dispatchNodeApi(runtime,'dock_node_apply',request);assert.equal(calls.length,1);
+ for(const patch of [{field:{kind:'input_field',name:'Raw'},type:'variant'},{field:{kind:'input_field',name:'Raw'},label:''},{field:{kind:'configured_field',name:'Raw'},name:'Clean'},{field:{kind:'input_field',name:'Raw'}}])
+  await assert.rejects(dispatchNodeApi(runtime,'dock_node_apply',{...request,parameters:{changes:[patch]}}));
+ assert.equal(calls.length,1);
+ assert.deepEqual(handler.modes,['scalar']);
+});

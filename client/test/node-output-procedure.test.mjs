@@ -23,3 +23,36 @@ test('datetime readback requires its own field and explicit millisecond mask',as
   const altered=structuredClone(state);change(altered);assert.throws(()=>verifyTableDateTimeFormat(altered,target));
  }
 });
+
+test('empty default datetime masks are applied without selecting away and verified in a fresh cancelled dialog',async()=>{
+ const {restoreEmptyDateTimeFormats}=await import('../lib/node-output-procedure.mjs');
+ const table={table_tid:'table',view_guid:'view',port_guid:'port'},targets=[0,1].map(index=>({index,key:'D'+index,type:'datetime'}));
+ const originals=targets.map(t=>({...t,settings:{formatting:true,custom:false,format_string:''}}));
+ const stored=['exact','exact'],events=[];let open=false,selected=null,draft,dirty=false,epoch=0;
+ const control=(ref,extra={})=>({ref,tid:ref,allowed_actions:['click','set_checked','fill','press'],interaction:{state:'point_observed'},...extra});
+ const state=()=>{
+  const fields=targets.map(t=>({index:t.index,source_index:t.index,name_key:t.key,type:t.type,record_id:'r'+t.index,status:'observed',label:'Same',format_string:stored[t.index]}));
+  const values=draft&&Object.fromEntries(Object.entries(draft).map(([k,value])=>[k,{status:'observed',value,input_ref:k}]));
+  return {ui:{dialogs:open?['format']:[],elements:open?[
+   ...fields.map(f=>control('f'+f.index,{table_field:f})),...['formatting','custom','format_string'].map(ref=>control(ref)),
+   control('table;ModalWindow_BrowseFormat;btnApply'),control('table;ModalWindow_BrowseFormat;btnCancel')]:[control('table;btnDataGridFormat')]},
+   node_outputs:{tables:[{active:true,view_guid:'view'}]},table_settings:open?{status:'observed',kind:'format',format:{
+    page:{schema_id:'s'+epoch,status:'complete_definition_page',offset:0,limit:8,total_columns:2,next_offset:null},fields,metadata_fields:fields,
+    ...(selected===null?{}:{selected_datetime:{name_key:'D'+selected,source_index:selected,...values}})}}:null};
+ };
+ const channel={observe:async o=>{const s=state();assert.equal(o.ready(s),true,o.condition);return structuredClone(s);},
+  perform:async o=>{const s=state();assert.equal(o.ready(s),true,o.condition);const a=o.resolve(s);events.push(a);
+   if(a.ref==='table;btnDataGridFormat'){assert.equal(open,false);open=true;selected=null;dirty=false;epoch++;return;}
+   if(/^f[01]$/.test(a.ref)){assert.equal(dirty,false,'selecting away would replace the empty default');selected=Number(a.ref.slice(1));draft={formatting:true,custom:stored[selected]!=='',format_string:stored[selected]};return;}
+   if(a.verb==='fill'){draft.format_string=a.text;dirty=true;return;}
+   if(a.verb==='set_checked'){draft[a.ref]=a.checked;dirty=true;return;}
+   if(a.verb==='press'){assert.equal(a.key,'Tab');return;}
+   if(a.ref.endsWith('btnApply')){assert.equal(draft.custom,true);assert.equal(draft.format_string,'');stored[selected]='';open=false;dirty=false;return;}
+   if(a.ref.endsWith('btnCancel')){assert.equal(dirty,false,'verification must be read-only');open=false;return;}
+   assert.fail('Unexpected '+JSON.stringify(a));
+  }};
+ const result=await restoreEmptyDateTimeFormats(channel,table,targets,originals);
+ assert.deepEqual(stored,['','']);assert.equal(result.length,2);assert.ok(result.every(r=>r.verified_after_apply));
+ assert.equal(events.filter(a=>a.ref.endsWith('btnApply')).length,2);assert.equal(events.filter(a=>a.ref.endsWith('btnCancel')).length,2);
+ await assert.rejects(restoreEmptyDateTimeFormats(channel,table,targets,[{...originals[0],settings:{...originals[0].settings,format_string:'nonempty'}}]),/Only an observed/);
+});

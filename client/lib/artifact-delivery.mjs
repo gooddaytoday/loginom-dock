@@ -94,7 +94,10 @@ export function createArtifactDelivery({runtime,artifactStore,record,admit,admit
    job.phase='destination';
    let r=await roots();
    if(!r.ui.elements.some(e=>e.tid?.includes(';FileStorageForm;'))) {
-    const full=await observe({scope:'all'});
+    // Global all-scope scans can fall back to roots on a populated graph.
+    // Read the already observed toolbar directly to retain complete controls.
+    const toolbar=one(r.ui.elements.filter(e=>e.tid==='MF;cntMain;tlbMainToolbar'),'Main toolbar root unavailable');
+    const full=await detail(r,toolbar);
     const files=one(full.ui.elements.filter(e=>e.tid==='MF;cntMain;tlbMainToolbar;btnFilestorage'&&e.allowed_actions.includes('click')),'Files workspace control unavailable');
     await click(full,files);
    }

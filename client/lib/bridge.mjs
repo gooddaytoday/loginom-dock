@@ -216,7 +216,7 @@ export async function createBridge(config, session) {
             const ready = session.metadata.workspaceReady === true;
             const bundle = first ? compactKnowledgeBundle(actionRuntime.describe({
               action_keys: ['package.save_checkpoint', 'package.save_as'],
-              node_types: ['imports.text', 'transform.calculator', 'transform.group_data', 'transform.sorting'],
+              node_types: ['imports.text', 'transform.calculator', 'transform.group_data', 'transform.sorting', 'transform.reform_columns'],
             })) : null;
             const result = { prepared: ready, sessionId: session.metadata.sessionId, skillRevision: prepared.detail.revision,
               loginomUrl: config.loginomUrl, workspace, result_version: 'user-v1', input_artifacts: session.artifactStore.list(),

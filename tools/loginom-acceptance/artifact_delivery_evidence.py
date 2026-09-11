@@ -1,6 +1,7 @@
 """Independent audit of private delivery followed by the full text import."""
 import re
 from import_output_evidence import verify_text_import_output
+from import_source_binding import source_with_delivery_metadata
 
 
 def verify_integrated_delivery(events, request, source_bytes, delivery, replay, runtime_revision):
@@ -19,7 +20,7 @@ def verify_delivered_import_output(events, request, source_bytes, delivery, runt
 def _verify_delivered_import(events, request, source_bytes, delivery, runtime_revision, *, replay=None, require_replay=False):
     result = verify_text_import_output(events, request, source_bytes)
     failures = list(result['failures'])
-    source = request['parameters']['source']
+    source = source_with_delivery_metadata(events, request['parameters']['source'])
     path = request['parameters']['settings']['source']['source_path']
     name = path.rsplit('/', 1)[-1]
     upload_id = source['upload_operation_id']

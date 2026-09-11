@@ -217,3 +217,37 @@ class OutputColumnDialogTests(unittest.TestCase):
             lambda s:s['wizard']['column_parameters']['fields']['name'].update(truncated=True)]
         for change in changes:
             candidate=deepcopy(state);change(candidate);self.assertFalse(bound_output_column_dialog(candidate))
+
+class ReformDialogTests(unittest.TestCase):
+    def test_global_editor_requires_exact_owner_selected_row_and_complete_fields(self):
+        from copy import deepcopy
+        from node_procedure_evidence import bound_reform_dialog
+        row=dict(status='observed',selected=True,name='Amount',record_id='r1')
+        state=dict(prepared_node_context=dict(verified=True,surface='wizard',tid='Wizard'),
+            wizard=dict(stage='field_parameters',root_tid='Wizard',reform_columns=dict(fields=[row]),reform_parameters=dict(
+                status='observed',portal_bound=True,root_tid='EditReformColumnDefForm',root_ref='editor',selected_column=row,
+                fields={k:dict(status='observed',truncated=False,value=False if k=='excluded' else 'x')
+                        for k in ['name','label','type_label','data_kind','usage','caching','excluded']})),
+            ui=dict(dialogs=[dict(ref='editor',identity=dict(anchor_tid='EditReformColumnDefForm'))],masks=[]))
+        self.assertTrue(bound_reform_dialog(state))
+        for change in [lambda s:s['prepared_node_context'].update(tid='Other'),lambda s:s['wizard']['reform_parameters'].update(portal_bound=False),
+            lambda s:s['wizard']['reform_columns'].update(fields=[]),lambda s:s['ui']['masks'].append({}),
+            lambda s:s['ui']['dialogs'].append({}),lambda s:s['wizard']['reform_parameters']['fields']['caching'].update(truncated=True),
+            lambda s:s['wizard']['reform_parameters']['fields']['excluded'].update(value='false')]:
+            other=deepcopy(state);change(other);self.assertFalse(bound_reform_dialog(other))
+
+class PreparedSelectionRefreshTests(unittest.TestCase):
+    def test_body_and_label_rebind_only_within_same_native_node(self):
+        from node_procedure_evidence import refresh_control_binding
+        node=dict(verified=True,surface='graph',document_id='d',workflow_id='w',node_id='n',tid='MF;TF-1;Graph;Node')
+        state=dict(prepared_node_context=node)
+        def control(part):
+            tid=node['tid']+(';Label;Label' if part=='label' else '')
+            return dict(tid=tid,identity=dict(anchor_tid=tid,path=[]),graph_node=dict(part=part))
+        base=refresh_control_binding(state,dict(verb='click'),control('body'))
+        self.assertEqual(base,refresh_control_binding(state,dict(verb='click'),control('label')))
+        for mutate in [lambda s,c:s['prepared_node_context'].update(node_id='other'),
+                       lambda s,c:c.update(tid='other'),lambda s,c:c['graph_node'].update(part='settings'),
+                       lambda s,c:c['identity'].update(path=[0]),lambda s,c:s['prepared_node_context'].update(verified=False)]:
+            s=copy.deepcopy(state);c=control('label');mutate(s,c)
+            self.assertNotEqual(base,refresh_control_binding(s,dict(verb='click'),c))

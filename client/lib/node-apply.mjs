@@ -129,6 +129,7 @@ export async function applyNode({request, operation, handlers, drivers, record,
     // the same prepared package and every already accepted phase.
     requireValue(await drivers.verifyContinuation(state,{signal})===true, 'Live package or accepted phases differ from checkpoint');
     state.resumes++;
+    delete state.verified_refusal;
   } else {
     signal?.throwIfAborted();
     state={signature,handler_revision:handler.revision,request:structuredClone(request),phases:[],pending:null,
@@ -163,6 +164,12 @@ export async function applyNode({request, operation, handlers, drivers, record,
       // Explicit trusted-driver proof is required: a transport exception alone
       // never clears uncertainty, even in a nominally non-mutating phase.
       const refusal=error.nodePhaseRefusal;
+      if(name==='target'&&refusal?.phase===name&&refusal.status==='FAILED'
+        &&refusal.effect_possible===true&&refusal.cleanup_complete===true&&refusal.settings_unchanged===true
+        &&refusal.verification==='reform_mapped_preflight_completed'){
+        await acknowledge({phase:'node_phase_refused',signature,receipt:{...pending,...refusal}});
+        state.effect_possible=true;state.pending=null;state.cleanup_complete=true;state.verified_refusal=true;
+      }
       if((name==='target'||name==='source'&&state.phases.length===0&&!previousEffect)
         && refusal?.phase===name && refusal.status==='NOT_APPLIED'
         && refusal.effect_possible===false && refusal.cleanup_complete===true){
@@ -258,7 +265,7 @@ export async function applyNode({request, operation, handlers, drivers, record,
   } catch(error) {
     // No automatic rollback and no repetition of an unknown upload/run/save.
     // status/wait/inspect remain the responsibility of the owning runtime.
-    return {operation_id:operation.id,status:state.effect_possible?'AMBIGUOUS':'NOT_APPLIED',effect_possible:state.effect_possible,
+    return {operation_id:operation.id,status:state.verified_refusal?'FAILED':state.effect_possible?'AMBIGUOUS':'NOT_APPLIED',effect_possible:state.effect_possible,
       phases:state.phases.map(({value,...p})=>p),node:state.node,execution:state.execution,output:state.output,
       package_saved:false,cleanup_complete:state.cleanup_complete,warnings:[],
       pending_phase:state.pending?.phase??null,error:{code:'NODE_APPLY_STOPPED',message:String(error.message).slice(0,1000),

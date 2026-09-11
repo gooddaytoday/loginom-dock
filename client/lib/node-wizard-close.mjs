@@ -3,17 +3,18 @@ const requireValue=(value,message)=>{if(!value)throw Error(message);};
 
 export function wizardCloseBinding(state) {
  const w=state.wizard,n=state.prepared_node_context;
- requireValue(w?.status==='observed' && w.owner_context?.status==='observed'
+ const input=n?.input_port?.direction==='input'&&n.input_port.port===0&&w?.stage==='input_mapping';
+ requireValue(w?.status==='observed' && (w.owner_context?.status==='observed'||input)
   && n?.verified===true && n.surface==='wizard','A prepared wizard is required for cancellation');
  return {kind:'close',root_ref:w.root_ref,root_tid:w.root_tid,stage:w.stage,
-  owner:structuredClone(w.owner_context),node:{document_id:n.document_id,workflow_id:n.workflow_id,node_id:n.node_id}};
+  owner:structuredClone(input?{input_port:n.input_port}:w.owner_context),node:{document_id:n.document_id,workflow_id:n.workflow_id,node_id:n.node_id}};
 }
 
 export function wizardCloseDialogOwner(state,binding) {
  if(binding?.kind!=='close')return false;
  const w=state.wizard,n=state.prepared_node_context,ui=state.ui;
  if(w?.status!=='observed'||w.root_ref!==binding.root_ref||w.root_tid!==binding.root_tid
-  ||w.stage!==binding.stage||!same(w.owner_context,binding.owner)||n?.verified!==true
+  ||w.stage!==binding.stage||!same(binding.owner?.input_port?{input_port:n?.input_port}:w.owner_context,binding.owner)||n?.verified!==true
   ||!['document_id','workflow_id','node_id'].every(k=>n[k]===binding.node?.[k]))return false;
  if(!Array.isArray(ui?.dialogs)||ui.dialogs.length!==1||!Array.isArray(ui.masks)
   ||ui.masks.some(m=>m.kind!=='modal_background'||m.ref!==binding.root_ref))return false;

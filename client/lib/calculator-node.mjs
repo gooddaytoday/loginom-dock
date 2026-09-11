@@ -1,3 +1,4 @@
+import {selectPreparedGraphNode} from './node-graph-selection.mjs';
 import {verifyCalculatorInlineSync} from './calculator-inline-mapping.mjs';
 import {createNodeProcedure} from './node-procedure.mjs';
 import {withBrowserReceipt} from './executor.mjs';
@@ -61,15 +62,14 @@ export function createTabularTransformNodeSupport({targetOrigin,targetBuild},imp
    async openWizard(ctx) {
     enter(ctx);executionDriver=createNodeExecutionProcedure(channel,ctx.node);await executionDriver.prepare();
     const s=await channel.observe({condition:'calculator graph before opening',ready:s=>s.prepared_node_context?.surface==='graph'});
-    await channel.perform({condition:'select calculator graph node',initialObservation:s,ready:s=>s.prepared_node_context?.surface==='graph',identity:()=>ctx.node,
-     resolve:s=>{const e=s.ui.elements.find(e=>e.tid===s.prepared_node_context.tid&&e.graph_node?.part==='body');requireValue(e,'Calculator graph body unavailable');return {verb:'click',ref:e.ref};}});
+    await selectPreparedGraphNode(channel,s,'select calculator graph node');
     await openPreparedWizard(channel);
     const opened=await channel.observe(implementation?.configurationObservation??{condition:'calculator expression page',readCalculator:true,ready:s=>s.wizard?.stage==='calculator'&&s.node_calculator?.verified===true});
     return verified({effect_possible:true,node_context:opened.prepared_node_context});
    },
    async configureCalculator(ctx,p) {
     enter(ctx);
-    if(implementation){const changed=await implementation.configure(channel,p,{request:operation.nodeApply.request});configured=changed.configuration;return changed;}
+    if(implementation){const changed=await implementation.configure(channel,p,{request:operation.nodeApply.request,inputMapping:operation.nodeApply.phases.find(p=>p.phase==='input_mapping')?.value?.native_mapping});configured=changed.configuration;return changed;}
     const changed=await configureCalculator(channel,p,{newNode:operation.nodeApply.request.target.kind==='new'});configured=changed.configuration;
     // Close discards this editor draft directly. Next can validate a formula or
     // synchronize a derived port, neither of which is needed for cancellation.
@@ -162,10 +162,7 @@ export function createTabularTransformNodeSupport({targetOrigin,targetBuild},imp
     const graph=await channel.observe({condition:'calculator graph ready after port commit',ready:s=>s.prepared_node_context?.surface==='graph'&&s.wizard?.status==='absent'});
     // Loginom can leave a visible port without an SVG shape after port Done.
     // The normal node selection redraws it before the next graph checkpoint.
-    await channel.perform({condition:'select configured calculator after port commit',initialObservation:graph,
-     ready:s=>s.prepared_node_context?.surface==='graph',identity:()=>ctx.node,
-     resolve:s=>{const matches=s.ui.elements.filter(e=>e.tid===s.prepared_node_context.tid&&e.graph_node?.part==='body'&&e.allowed_actions.includes('click'));
-      requireValue(matches.length===1,'Configured calculator body unavailable');return {verb:'click',ref:matches[0].ref};}});
+    await selectPreparedGraphNode(channel,graph,'select configured calculator after port commit');
     const finish=await finishConfiguredGraph(channel,executionDriver,mode,ctx.node);
     if(mode==='execute')finish.continuation_surface=finishedImportSurface(await channel.observe({
      condition:'calculator graph execution continuity checkpoint',readProcesses:true,readOutputs:true,

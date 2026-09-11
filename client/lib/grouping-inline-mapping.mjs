@@ -33,7 +33,7 @@ export function configureGroupingInlineMapping(channel,configuration){
 }
 // Both grouping and sorting expose this same conditional native output page
 // after their input-derived schema changes. Each supplies its source contract.
-export async function configureDerivedInlineMapping(channel,configuration,validateSources){
+export async function configureDerivedInlineMapping(channel,configuration,validateSources,verifySync=verifyCalculatorInlineSync){
  const ready=s=>s.wizard?.stage==='output_mapping'&&s.node_mapping?.verified===true
   &&s.node_mapping.mapping_wizard==='DerivedDataSourceMappingEngineOutputPortWizard';
  let state=await channel.observe({condition:'grouping conditional output inventory',readMappings:true,ready});
@@ -66,7 +66,7 @@ export async function configureDerivedInlineMapping(channel,configuration,valida
   await channel.perform({condition:'synchronize requested grouping fields',initialObservation:state,ready,identity:()=>baseline.node_context,
    resolve:s=>{const es=s.ui.elements.filter(e=>e.tid===s.wizard.root_tid+';DerivedDataSourceMappingEngineOutputPortWizard;btnSyncThroughColumns'&&e.allowed_actions.includes('click'));need(es.length===1,'Grouping synchronization unavailable');return {verb:'click',ref:es[0].ref};}});
   state=await channel.observe({condition:'requested grouping fields synchronized',readMappings:true,ready});
-  verifyCalculatorInlineSync(baseline,state.node_mapping,missing);
+  verifySync(baseline,state.node_mapping,missing);
  }
  const changed=state.node_mapping;
  if(changed.autosync!==before.autosync){

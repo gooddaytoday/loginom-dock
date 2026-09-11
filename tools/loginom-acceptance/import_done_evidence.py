@@ -4,7 +4,7 @@ from import_fields_evidence import verify_import_field_observations
 from node_procedure_evidence import verify_internal_sequence
 from import_limits import import_step_budget
 from execution_wait_evidence import verify_execution_wait_pauses
-from import_source_binding import source_ordered_settings
+from import_source_binding import source_ordered_settings, source_with_delivery_metadata
 
 
 def _verify_text_import(events, request, source_bytes, finish, *, settings_override=None, output_columns_override=None, target_label_override=None):
@@ -48,7 +48,7 @@ def _verify_text_import(events, request, source_bytes, finish, *, settings_overr
         failures.append('phase_order_or_incomplete')
     if request.get('finish') != finish or request.get('inputs'):
         failures.append('unsupported_done_audit_request')
-    p = request['parameters']; source = p['source']; settings = settings_override if settings_override is not None else p['settings']
+    p = request['parameters']; source = source_with_delivery_metadata(events, p['source']); settings = settings_override if settings_override is not None else p['settings']
     if settings_override is None and request.get('target', {}).get('kind') == 'new':
         try:
             settings = source_ordered_settings(settings, source_bytes)

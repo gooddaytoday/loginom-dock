@@ -78,3 +78,16 @@ class ReopenBindingTests(unittest.TestCase):
 
 if __name__ == '__main__':
     unittest.main()
+
+class ReformReopenBindingTests(unittest.TestCase):
+    setUp = ReopenBindingTests.setUp
+    def test_reform_reopen_cannot_reapply_a_change(self):
+        self.seed['parameters']={'changes':[{'field':{'kind':'input_field','name':'X'},'type':'real'}]}
+        self.request['parameters']={'changes':[]}
+        def audit():
+            self.evidence['events'][2]['request']=copy.deepcopy(self.request)
+            self.evidence['calls'][1]['arguments']=copy.deepcopy(self.request)
+            return verify_reopen_binding(self.evidence,self.seed,self.request,'save',self.path,reform=True)
+        self.assertTrue(audit()['passed'])
+        self.request['parameters']=copy.deepcopy(self.seed['parameters'])
+        self.assertIn('reopen_unchanged_request',audit()['failures'])

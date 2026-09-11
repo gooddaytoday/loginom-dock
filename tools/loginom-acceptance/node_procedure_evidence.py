@@ -17,11 +17,18 @@ def bound_wizard_close_confirmation(state):
     wizard = state.get('wizard', {})
     node = state.get('prepared_node_context', {})
     ui = state.get('ui', {})
+    port = binding.get('owner', {}).get('input_port')
+    owner = wizard.get('owner_context')
+    if port:
+        if (port.get('direction') != 'input' or port.get('port') != 0 or wizard.get('stage') != 'input_mapping'
+                or node.get('surface') != 'wizard'):
+            return False
+        owner = dict(input_port=node.get('input_port'))
     if (binding.get('kind') != 'close' or wizard.get('status') != 'observed'
             or node.get('verified') is not True
             or any(node.get(k) != binding.get('node', {}).get(k) for k in ('document_id', 'workflow_id', 'node_id'))
             or any(wizard.get(k) != binding.get(k) for k in ('root_ref', 'root_tid', 'stage'))
-            or wizard.get('owner_context') != binding.get('owner')):
+            or owner != binding.get('owner')):
         return False
     dialogs, masks = ui.get('dialogs'), ui.get('masks')
     if (not isinstance(dialogs, list) or len(dialogs) != 1 or not isinstance(masks, list)
@@ -117,6 +124,24 @@ def bound_expression_dialog(state):
     fields=params.get('fields',{})
     return set(fields)=={'name','label','type_label'} and all(
         f.get('status')=='observed' and f.get('truncated') is False for f in fields.values())
+
+
+def bound_reform_dialog(state):
+    wizard=state.get('wizard',{});params=wizard.get('reform_parameters',{})
+    selected=params.get('selected_column',{});owner=state.get('prepared_node_context',{})
+    dialogs=state.get('ui',{}).get('dialogs');masks=state.get('ui',{}).get('masks')
+    if (wizard.get('stage')!='field_parameters' or params.get('status')!='observed'
+            or params.get('portal_bound') is not True or params.get('root_tid')!='EditReformColumnDefForm'
+            or owner.get('verified') is not True or owner.get('surface')!='wizard' or owner.get('tid')!=wizard.get('root_tid')
+            or not isinstance(dialogs,list) or len(dialogs)!=1 or masks!=[]
+            or dialogs[0].get('ref')!=params.get('root_ref')
+            or dialogs[0].get('identity',{}).get('anchor_tid')!='EditReformColumnDefForm'
+            or selected.get('status')!='observed' or selected.get('selected') is not True):return False
+    fields=params.get('fields',{})
+    return (len([f for f in wizard.get('reform_columns',{}).get('fields',[]) if f==selected])==1
+        and set(fields)=={'name','label','type_label','data_kind','usage','caching','excluded'}
+        and all(f.get('status')=='observed' and f.get('truncated') is not True for f in fields.values())
+        and type(fields['excluded'].get('value')) is bool)
 
 
 def bound_grouping_factor(state):
@@ -242,7 +267,7 @@ def verify_internal_sequence(events, operation_id, *, max_steps=96):
             if outcome.get('status') != 'SUCCEEDED' or not samples or samples[-1].get('outcome') != outcome:
                 failures.append('observation_not_backed_by_sample')
             recent = [s.get('outcome', {}).get('output', {}) for s in samples[-required_samples:]]
-            if len(recent) != required_samples or any((not semantic and s.get('dom_epoch') != state.get('dom_epoch')) or s.get('ui', {}).get('masks') and not (bound_wizard_confirmation(s) or bound_expression_dialog(s) or bound_grouping_factor(s) or bound_schema_preview(s)) for s in recent):
+            if len(recent) != required_samples or any((not semantic and s.get('dom_epoch') != state.get('dom_epoch')) or s.get('ui', {}).get('masks') and not (bound_wizard_confirmation(s) or bound_expression_dialog(s) or bound_reform_dialog(s) or bound_grouping_factor(s) or bound_schema_preview(s)) for s in recent):
                 failures.append('observation_not_settled')
             doc = state.get('dom_epoch', {}).get('document')
             if document is None:
@@ -250,7 +275,7 @@ def verify_internal_sequence(events, operation_id, *, max_steps=96):
             if not doc or (doc, state.get('workflow_ref'), state.get('origin'), state.get('loginom_build')) != (document, workflow, origin, build):
                 failures.append('document_context_mismatch')
             ui = state.get('ui', {})
-            if state.get('scan', {}).get('complete') is not True or (ui.get('masks') != [] or not (bound_table_dialogs(state) or bound_output_column_dialog(state))) and not (bound_wizard_confirmation(state) or bound_expression_dialog(state) or bound_grouping_factor(state) or bound_schema_preview(state)):
+            if state.get('scan', {}).get('complete') is not True or (ui.get('masks') != [] or not (bound_table_dialogs(state) or bound_output_column_dialog(state) or bound_reform_dialog(state))) and not (bound_wizard_confirmation(state) or bound_expression_dialog(state) or bound_grouping_factor(state) or bound_schema_preview(state)):
                 failures.append('observation_blocked')
             current = state
             observations.append((step, state))
@@ -477,6 +502,13 @@ def refresh_control_binding(state, action, control):
     binding = {k: control.get(k) for k in ('tid', 'identity', 'label')}
     process = state.get('node_processes', {})
     node = state.get('prepared_node_context', {})
+    part = control.get('graph_node', {}).get('part')
+    if (action.get('verb') == 'click' and part in ('body', 'label') and node.get('verified') is True
+            and node.get('surface') == 'graph' and all(node.get(k) for k in ('document_id','workflow_id','node_id','tid'))
+            and control.get('tid') == node['tid'] + (';Label;Label' if part == 'label' else '')
+            and control.get('identity', {}).get('anchor_tid') == control['tid']
+            and control.get('identity', {}).get('path') == []):
+        return dict(prepared_graph_selection={k:node[k] for k in ('document_id','workflow_id','node_id','tid')})
     grid = control.get('process_grid', {})
     # Right-click opens the console menu on its native grid, whose text changes
     # as process rows load. Row/menu actions retain the ordinary label guard.

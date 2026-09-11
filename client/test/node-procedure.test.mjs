@@ -400,3 +400,20 @@ test('refresh authorization keeps the shared operation sequence after preflight'
  for(const e of f.records)assert.equal(e.internal_operation_id,'recovery:n'+e.step);
  const auth=f.records.find(e=>e.phase==='node_step_refresh_authorized');assert.ok(auth.step>7);
 });
+
+test('reform global editor and its dropdown use bounded roots with strict owner guards',async()=>{
+ for(const mode of ['bound','dropdown','unbound','foreign','busy','duplicate']){
+  const base='MF;TF-1;WizrdMCF',editor='EditReformColumnDefForm';
+  const state={origin:'http://example.test',loginom_build:'7.4.2',workflow_ref:{prefix:'MF;TF-1',tab_tid:'tab'},dom_epoch:{document:'doc'},scan:{complete:true},
+   wizard:{status:'observed',stage:'field_parameters',root_tid:base,root_ref:'wizard',reform_parameters:{status:'observed',portal_bound:mode!=='unbound',root_tid:editor,root_ref:'editor',selected_column:{status:'observed',name:'Amount'}}},
+   ui:{elements:[{tid:editor,ref:'editor'}],masks:[{kind:mode==='busy'?'loading':'modal_background',target_tid:base,ref:'wizard'}],
+    dialogs:[{ref:mode==='foreign'?'other':'editor',identity:{anchor_tid:editor}}],truncated:{dialogs:false,masks:false}}};
+  if(mode==='dropdown')state.ui.elements.push({tid:editor+';cbxDataType;boundlist',ref:'choices'});
+  if(mode==='duplicate')state.ui.elements.push({tid:base+';EditReformColumnDefForm',ref:'duplicate'});
+  let clock=1;const roots=[];
+  const channel=createNodeProcedure({operation:{id:'reform',action:{action_key:'node.apply',revision:'1'},deadline:10000,checkpoint:{document_id:'doc',workflow_ref:state.workflow_ref}},targetOrigin:state.origin,targetBuild:state.loginom_build,
+   now:()=>clock++,wait:async()=>{clock+=1000},record:async e=>structuredClone(e),execute:async code=>{if(!code.includes('"discover_roots":true'))roots.push(/"root_ref":"([^"]+)"/.exec(code)?.[1]);return {status:'SUCCEEDED',output:structuredClone(state)};}});
+  const read=()=>channel.observe({condition:'bound reform editor',ready:()=>true,timeoutMs:2000});
+  if(['bound','dropdown'].includes(mode)){await read();assert.deepEqual(roots,[mode==='dropdown'?'choices':'editor']);}else await assert.rejects(read());
+ }
+});

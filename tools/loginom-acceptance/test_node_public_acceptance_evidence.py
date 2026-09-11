@@ -100,7 +100,7 @@ class PublicDeliveryTests(unittest.TestCase):
             upload_operation_id='delivery:upload', bytes=230, sha256='digest'), settings=dict(source=dict(source_path='/user/sales.csv'))))
         self.prepared = dict(input_artifacts=[dict(artifact_id='artifact', bytes=230, sha256='digest',
                               upload=dict(grant_id='grant', destination='/user/sales.csv'))])
-        result = dict(status='SUCCEEDED', destination='/user/sales.csv')
+        result = dict(status='SUCCEEDED', destination='/user/sales.csv', bytes=230, sha256='digest')
         snapshot = dict(operation_id='delivery', upload_operation_id='delivery:upload', state='settled', phase='completed', outcome=result)
         self.evidence = dict(calls=[dict(tool=PREFIX+'dock_artifact_deliver', row=1, session_id='caller', tool_call_id='d',
             arguments=dict(operation_id='delivery', artifact_id='artifact', upload_grant_id='grant', budget_ms=1000)),
@@ -117,6 +117,17 @@ class PublicDeliveryTests(unittest.TestCase):
 
     def test_one_delivery_requires_no_replay(self):
         self.assertTrue(self.audit()['passed'], self.audit())
+
+    def test_optional_source_metadata_binds_to_prepared_artifact_and_final_receipt(self):
+        for request in (self.node, self.evidence['calls'][1]['arguments']):
+            for key in ('bytes', 'sha256'): request['parameters']['source'].pop(key)
+        self.assertTrue(self.audit()['passed'], self.audit())
+        self.prepared['input_artifacts'][0]['sha256']='other'
+        self.assertIn('public_delivery_artifact_bytes', self.audit()['failures'])
+        self.prepared['input_artifacts'][0]['sha256']='digest'
+        for request in (self.node, self.evidence['calls'][1]['arguments']):
+            request['parameters']['source']['bytes']=999
+        self.assertIn('public_delivery_grant_binding', self.audit()['failures'])
 
     def test_changed_grant_receipt_identity_and_order_fail(self):
         mutations = [lambda e: e['calls'][0]['arguments'].update(upload_grant_id='other'),

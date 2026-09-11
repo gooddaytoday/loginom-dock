@@ -43,9 +43,15 @@ try {
   if(!process.argv.includes('--copy-to'))throw Error('Diagnostic package is read-only; use a separate writable copy');
   const copy=option('--copy-to');
   if(!copy.startsWith(storage+'/')||!/^\/[A-Za-z0-9_./-]+\.lgp$/.test(copy)||copy.includes('..')||copy===packagePath)throw Error('Explicit distinct diagnostic copy required');
-  await execute(`async page=>{await page.locator('[data-tid="MF;cntMain;tlbMainToolbar;btnPackagesMenu"]').click();await page.locator('[data-tid="MF;MainMenuForm;btnSaveAsPackage"]').click();await page.locator('[data-tid="SaveDialogForm;edtFileName"] input').fill(${JSON.stringify(copy)});await page.locator('[data-tid="SaveDialogForm;btnOpen"]').click();await page.locator('[data-tid="SaveDialogForm"]').waitFor({state:'hidden'});const close=page.locator('[data-tid="MF;MainMenuForm;btnClosePackage"]');if(!await close.isVisible())await page.locator('[data-tid="MF;cntMain;tlbMainToolbar;btnPackagesMenu"]').click();await close.click();return true}`);
+  await execute(`async page=>{await page.locator('[data-tid="MF;cntMain;tlbMainToolbar;btnPackagesMenu"]').click();await page.locator('[data-tid="MF;MainMenuForm;btnSaveAsPackage"]').click();await page.locator('[data-tid="SaveDialogForm;edtFileName"] input').fill(${JSON.stringify(copy)});await page.locator('[data-tid="SaveDialogForm;btnOpen"]').click();await page.locator('[data-tid="SaveDialogForm"]').waitFor({state:'hidden'});return await page.locator('[data-tid*="cnrNaviMode;b.s_Сервер>Пакеты>"]').evaluateAll(es=>es.filter(e=>e.getBoundingClientRect().width>0).map(e=>({tid:e.getAttribute('data-tid'),label:e.textContent.trim()})))}`);
   prep=await execute(makeWorkspacePrepareCode({loginomUrl,compatibility:{profile_id:'loginom-7.4.2-macos-chromium',loginom_build:'7.4.2',platform:'macos',browser:'chromium'},sessionId:session.metadata.sessionId,operationId:'prepare-copy',intent:'open_package',packagePath:copy,timeoutMs:15000}));
   if(prep.status!=='READY'||prep.workflow_ref.navigation_path.some(c=>c.label.endsWith('(только чтение)')))throw Error('Diagnostic copy not writable');
+  // Save As updates the package label before navigation tids. Complete a
+  // separately observed close/reopen before issuing a bound node request.
+  await execute(`async page=>{await page.locator('[data-tid="MF;cntMain;tlbMainToolbar;btnPackagesMenu"]').click();const header=page.locator('[data-tid="MF;MainMenuForm;pnlSaveClosePackage;p.h;p.t"]');await header.waitFor();if((await header.innerText()).trim()!==${JSON.stringify(prep.workflow_ref.navigation_path[2].label)})throw Error('Diagnostic copy menu ownership changed');return true}`);
+  await execute(`async page=>{await page.locator('[data-tid="MF;MainMenuForm;btnClosePackage"]').click();await page.locator('[data-tid="'+${JSON.stringify(prep.workflow_ref.tab_tid)}+'"]').waitFor({state:'hidden'});return true}`);
+  prep=await execute(makeWorkspacePrepareCode({loginomUrl,compatibility:{profile_id:'loginom-7.4.2-macos-chromium',loginom_build:'7.4.2',platform:'macos',browser:'chromium'},sessionId:session.metadata.sessionId,operationId:'prepare-copy-reopened',intent:'open_package',packagePath:copy,timeoutMs:15000}));
+  if(prep.status!=='READY'||prep.workflow_ref.navigation_path.some(c=>c.label.endsWith('(только чтение)')))throw Error('Diagnostic copy reopen not writable');
   await fs.writeFile(dir+'/copy-preparation.json',JSON.stringify({path:copy,preparation:prep},null,2));
  }
  const actions=JSON.parse(await fs.readFile('executor/catalog/actions.json')).actions,selectors=JSON.parse(await fs.readFile('executor/catalog/selectors.json')).selectors;
@@ -62,4 +68,4 @@ try {
    await fs.writeFile(dir+'/'+command.id+'.json',JSON.stringify(result,null,2));console.log(JSON.stringify({id:command.id,result}));
   }catch(e){console.log(JSON.stringify({id:command.id,error:e.message}));}
  }
-}finally{await wire?.close();await client.close();}
+}finally{await wire?.close();await client.callTool({name:'browser_close',arguments:{}}).catch(()=>{});await client.close();}

@@ -174,3 +174,17 @@ test('folder navigation waits for the requested breadcrumb without repeating its
  assert.equal(result.outcome.status,'SUCCEEDED');
  assert.deepEqual(f.calls,['click','double_click','double_click','upload','inspect','verify','inspect']);
 });
+
+test('delivery reads the observed toolbar when a populated graph only yields roots',async()=>{
+ const f=fixture(),observe=f.runtime.observe,act=f.runtime.uiAct;let opened=false;
+ f.runtime.observe=async options=>{
+  if(opened)return observe(options);
+  assert.notEqual(options?.scope,'all','a global scan can fall back to roots');
+  const root=options?.scope==='roots';
+  if(!root)assert.deepEqual(options,{rootRef:'toolbar',observationId:'graph-observation'});
+  return {status:'SUCCEEDED',output:{observation_id:root?'graph-observation':'toolbar-observation',dom_epoch:{document:'doc',revision:1},
+   ui:{elements:root?[{ref:'toolbar',tid:'MF;cntMain;tlbMainToolbar',allowed_actions:[]}]:[{ref:'files',tid:'MF;cntMain;tlbMainToolbar;btnFilestorage',allowed_actions:['click']}],dialogs:[],masks:[]}}};
+ };
+ f.runtime.uiAct=async(a,o)=>{if(a.ref==='files'){assert.equal(o.observationId,'toolbar-observation');opened=true;return {status:'SUCCEEDED',cleanup_complete:true};}return act(a,o);};
+ const result=await f.service.deliver(request);assert.equal(result.outcome.status,'SUCCEEDED');assert.equal(opened,true);
+});

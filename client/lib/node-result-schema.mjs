@@ -52,7 +52,17 @@ const sortingConfigurationReadback=object({kind:values('sorting'),scope:values('
  input_mapping:object({port:{type:'integer',const:0},autosync:bool,fields:boundedFields(readbackMappingField)}),
  output_mapping:object({port:{type:'integer',const:0},autosync:bool,fields:boundedFields(object({...readbackMappingField.properties,excluded:bool}))}),
  package_persistence_verified:{type:'boolean',const:false}});
-const configurationReadback={anyOf:[importConfigurationReadback,calculatorConfigurationReadback,groupingConfigurationReadback,sortingConfigurationReadback]};
+const reformConfigurationReadback=object({kind:values('field_parameters'),scope:values('observed_before_verified_finish'),node:ref,
+ receipt_ids:{...array(str),minItems:5,maxItems:5},values_are:values('observed_ui_values'),
+ fields:boundedFields(object({index:integer,field_id:str,name:str,label:str,type:str,data_kind:str,
+  usage_type:{type:'integer',enum:[0,3,4,6,7,8,9]},caching_method:{type:'integer',minimum:0,maximum:2},excluded:bool,
+  input_field:object({field_id:str,name:str,label:str,type:str,index:integer,source_name:str,source_field_id:str})})),
+ caching:object({value:{type:'integer',minimum:0,maximum:3},display:str,variable:bool}),
+ preservation:object({unrequested_fields:bool,unrequested_properties:bool,caching:bool}),
+ input_mapping:object({port:{type:'integer',const:0},autosync:bool,fields:boundedFields(object({...readbackMappingField.properties,field_id:str}))}),
+ output_mapping:object({port:{type:'integer',const:0},autosync:bool,fields:boundedFields(object({...readbackMappingField.properties,excluded:bool}))}),
+ package_persistence_verified:{type:'boolean',const:false}});
+const configurationReadback={anyOf:[importConfigurationReadback,calculatorConfigurationReadback,groupingConfigurationReadback,sortingConfigurationReadback,reformConfigurationReadback]};
 export const nodeApplyResultSchema=object({operation_id:str,status:values('SUCCEEDED','FAILED','NOT_APPLIED','AMBIGUOUS'),
  effect_possible:bool,phases:array(receipt),node:nullable(ref),execution,output,
  package_saved:{type:'boolean',const:false},cleanup_complete:bool,warnings:array(str),

@@ -4,6 +4,23 @@ import io
 import copy
 
 
+def source_with_delivery_metadata(events, source):
+    """Resolve omitted legacy metadata from the exact verified upload receipt.
+
+    Callers still audit the upload/download proofs and compare original bytes.
+    Explicit metadata is never overwritten, so mismatches remain detectable.
+    """
+    outputs = [e.get('outcome', {}).get('output', {}) for e in events
+               if e.get('operation_id') == source.get('upload_operation_id')
+               and e.get('outcome', {}).get('status') == 'SUCCEEDED'
+               and e.get('outcome', {}).get('output', {}).get('server_copy_verification')]
+    valid = bool(outputs) and all(o.get('artifact_id') == source.get('artifact_id')
+        and type(o.get('bytes')) is int and o['bytes'] >= 0
+        and isinstance(o.get('sha256'), str) and len(o['sha256']) == 64
+        and all(o.get(k) == outputs[0].get(k) for k in ('bytes', 'sha256')) for o in outputs)
+    return {**{k: outputs[0].get(k) if valid else None for k in ('bytes', 'sha256')}, **source}
+
+
 def source_ordered_settings(settings, source_bytes):
     groups = [('utf-8-sig', ['UTF-8', '65001', 'UTF-8 (65001)']),
               ('cp1251', ['Windows-1251', 'CP1251', '1251', 'Кириллическая (1251)']),

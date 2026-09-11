@@ -1473,8 +1473,8 @@ test('wizard step clicks once and verifies only the requested stage in the same 
   }
 });
 
-test('Calculator, Grouping and Sorting accept only owned conditional destinations after one click',async()=>{
- for(const marker of [';CalcDataWizard;btnAddExpr',';GroupDataWizard;grdUsedFields;tbl',';SortingWizard;SortingColumnCollection;grdSorting;tbl'])for(const destination of ['done','output_mapping','input_mapping']) {
+test('supported transforms accept only owned conditional destinations after one click',async()=>{
+ for(const marker of [';CalcDataWizard;btnAddExpr',';GroupDataWizard;grdUsedFields;tbl',';SortingWizard;SortingColumnCollection;grdSorting;tbl',';ReformColumnsWizard;grdTargetColumns;tbl'])for(const destination of ['done','output_mapping','input_mapping']) {
   const page=new Page(),c=wizardStepFixture(page);c.marker.attrs['data-tid']=c.base+marker;
   const snapshot=await page.observe(),button=snapshot.ui.elements.find(e=>e.wizard_step);
   page.waitForTimeout=async()=>{};const click=page.mouse.click;
@@ -1484,7 +1484,7 @@ test('Calculator, Grouping and Sorting accept only owned conditional destination
   assert.equal(page.events.filter(e=>e==='click').length,1);
  }
  const page=new Page();wizardStepFixture(page);const s=await page.observe(),b=s.ui.elements.find(e=>e.wizard_step);
- assert.throws(()=>validateUiAction({verb:'wizard_step',ref:b.ref,expected_stage:['output_mapping','done']},s),/Calculator/);
+ assert.throws(()=>validateUiAction({verb:'wizard_step',ref:b.ref,expected_stage:['output_mapping','done']},s),/supported transform/);
 });
 
 test('wizard transition waits through a transient mask without repeating its click',async()=>{
@@ -2264,7 +2264,7 @@ test('output column typed editing preserves the selected row and all other param
       const click=page.mouse.click;page.mouse.click=async(...args)=>{await click(...args);list.remove();inputs.cbxDataType.value='Вещественный';
         if(mode==='combo_kind_changed')inputs.cbxDataKind.value='Дискретный';};
       const result=await page.act({verb:'select_wizard_option',ref:option.ref},read.output);
-      assert.equal(result.status,mode==='combo'?'SUCCEEDED':mode==='combo_busy'?'NOT_APPLIED':'AMBIGUOUS',mode+JSON.stringify(result.error));
+      assert.equal(result.status,['combo','combo_enable_kind'].includes(mode)?'SUCCEEDED':mode==='combo_busy'?'NOT_APPLIED':'AMBIGUOUS',mode+JSON.stringify(result.error));
       assert.equal(page.events.filter(e=>e==='click').length,mode==='combo_busy'?0:1);
       continue;
     }
@@ -2393,7 +2393,7 @@ test('field parameters read row types caching and exclusion separately from port
 });
 
 test('reform editor reads seven native parameters including disabled cache and owner checkbox state',async()=>{
-  for(const mode of ['global','global_duplicate','global_impostor','global_foreign_wizard','valid','checked','missing_display','duplicate_display','duplicate_form','long_name','combo','combo_excluded','combo_cache','combo_busy','combo_lost']) {
+  for(const mode of ['global','global_duplicate','global_impostor','global_foreign_wizard','valid','checked','missing_display','duplicate_display','duplicate_form','long_name','combo','combo_enable_kind','combo_wrong_kind','combo_excluded','combo_cache','combo_busy','combo_lost']) {
     const page=new Page(),base='MF;TF-1;WizrdMCF;',form=page.add('div',base.slice(0,-1)),stem=base+'ReformColumnsWizard;';
     page.add('div',stem+'grdTargetColumns;tbl','',undefined,form);
     const row=page.add('table',null,'',undefined,form);row.attrs.class='x-grid-item-selected';
@@ -2413,6 +2413,7 @@ test('reform editor reads seven native parameters including disabled cache and o
     if(mode!=='missing_display')page.add('span',root+'cntMain;chbExcluded;DisplayEl','',undefined,owner).attrs.class='x-form-checkbox';
     if(mode==='duplicate_display')page.add('span',root+'cntMain;chbExcluded;DisplayEl','',undefined,owner).attrs.class='x-form-checkbox';
     if(mode==='duplicate_form' || mode==='global_duplicate')page.add('div',base+'EditReformColumnDefForm');
+    if(mode==='combo_enable_kind'){inputs.cbxDataType.value='Строковый';inputs.cbxDataKind.disabled=true;}
     if(mode.startsWith('combo')) {
       const list=page.add('div',root+'cbxDataType;boundlist','',{x:600,y:300,width:140,height:40});
       page.add('div',root+'cbxDataType;boundlist;Вещественный','Вещественный',{x:605,y:305,width:130,height:25},list);
@@ -2423,12 +2424,14 @@ test('reform editor reads seven native parameters including disabled cache and o
       const option=read.output.ui.elements.find(e=>e.wizard_combo?.kind==='option');assert.ok(option);
       const click=page.mouse.click;page.mouse.click=async(...args)=>{await click(...args);list.remove();
         inputs.cbxDataType.value='Вещественный';
+        if(mode==='combo_enable_kind')inputs.cbxDataKind.disabled=false;
+        if(mode==='combo_wrong_kind')inputs.cbxDataKind.value='Дискретный';
         if(mode==='combo_excluded')owner.attrs.class='x-form-cb-checked';
         if(mode==='combo_cache')inputs['cntMain;cbxCachingMethod'].value='При активации';
         if(mode==='combo_lost')throw new Error('lost reply');
       };
       const result=await page.act({verb:'select_wizard_option',ref:option.ref},read.output);
-      assert.equal(result.status,mode==='combo'?'SUCCEEDED':mode==='combo_busy'?'NOT_APPLIED':'AMBIGUOUS',mode+JSON.stringify(result.error));
+      assert.equal(result.status,['combo','combo_enable_kind'].includes(mode)?'SUCCEEDED':mode==='combo_busy'?'NOT_APPLIED':'AMBIGUOUS',mode+JSON.stringify(result.error));
       assert.equal(page.events.filter(e=>e==='click').length,mode==='combo_busy'?0:1);continue;
     }
     const full=await page.observe(),params=full.wizard.reform_parameters;
@@ -4486,3 +4489,68 @@ test('a populated console scans nested cell wrappers without quadratic work',asy
    if(mode==='toast')assert.equal(result.trace.filter(e=>e.event==='wizard_toast_wait').length,3);
   }
  });
+
+test('reform row actions bind untidied native table records and refuse recycled or foreign rows',async()=>{
+ for(const fault of ['valid','record','index','name','label','view','loading','foreign_store']){
+  const page=new Page(),c=mappingCoverageFixture(page),old=c.base;
+  c.base=old.replace('ColumnsMappingEngineOutputPortWizard','ReformColumnsWizard');
+  for(const e of page.document.all())if(e.attrs['data-tid']?.startsWith(old))e.attrs['data-tid']=e.attrs['data-tid'].replace(old,c.base);
+  page.document.querySelectorAll('[data-tid="'+c.base+'btnAddMappingColumn"]')[0].remove();
+  c.tableMode.remove();c.linksMode.remove();c.auto.remove();c.body.id='bound-grid';
+  const records=c.rows.map((row,i)=>{row.attrs['data-recordid']=String(100+i);return {isModel:true,internalId:100+i,data:{ID:i,Name:'Field'+i,DisplayName:'Field'+i}};});
+  const store={$className:fault==='foreign_store'?'Foreign':'Ext.data.Store',isLoading:()=>fault==='loading',getAt:i=>records[i]};
+  page.context.Ext={getCmp:()=>({el:{dom:c.body},getStore:()=>store})};
+  if(fault==='record')c.rows[0].attrs['data-recordid']='999';
+  if(fault==='index')c.rows[0].attrs['data-recordindex']='1';
+  if(fault==='view')c.rows[0].attrs['data-boundview']='other';
+  if(fault==='name')records[0].data.Name='Other';
+  if(fault==='label')records[0].data.DisplayName='Other';
+  const s=await page.observe(),field=s.wizard.reform_columns.fields[0],control=s.ui.elements.find(e=>e.ref===field.name_ref);
+  assert.equal(!!control?.allowed_actions.includes('double_click'),fault==='valid',fault);
+  if(fault==='valid'){
+   assert.equal(control.reform_column.record_id,'100');assert.equal(control.reform_column.field_id,'0');
+   const narrow=await page.execute({mode:'observe',root_ref:s.wizard.root_ref});
+   assert.deepEqual(narrow.output.ui.elements.find(e=>e.ref===field.name_ref).reform_column,control.reform_column);
+   c.rows[0].attrs['data-recordid']='999';
+   const r=await page.execute({mode:'act',snapshot:s,action:{verb:'double_click',ref:field.name_ref}});
+   assert.equal(r.status,'NOT_APPLIED');assert.equal(r.effect_possible,false);assert.equal(page.events.length,0);
+  }
+ }
+});
+
+test('reform writable names require the selected native record and active wizard owner',async()=>{
+ for(const mode of ['bound','foreign_record','foreign_wizard','wrong_index','loading']){
+  const page=new Page(),base='MF;TF-1;WizrdMCF',wizard=page.add('div',base),stem=base+';ReformColumnsWizard;';
+  const grid=page.add('div',stem+'grdTargetColumns;tbl','',undefined,wizard);grid.id='reform-grid';
+  const row=page.add('table',null,'',undefined,grid);row.attrs={class:'x-grid-item-selected','data-recordindex':mode==='wrong_index'?'1':'0','data-recordid':'r1','data-boundview':grid.id};
+  page.add('td',stem+'colName_A','A',undefined,row);const label=page.add('td',stem+'colDisplayName_A','Same',undefined,row);
+  page.add('span',null,'',undefined,label).attrs.class='bg-TBGDataType-dtInteger';
+  const form=page.add('div','EditReformColumnDefForm');form.id='reform-editor';form.attrs.class='x-window';
+  for(const [key,value] of [['edtName','A'],['edtDisplayName','Same'],['cbxDataType','Целый'],['cbxDataKind','Дискретный'],['cbxUsageType','Не задано'],['cntMain;cbxCachingMethod','Отключено']]){
+   const owner=page.add('div','EditReformColumnDefForm;'+key,'',undefined,form);page.add('input',null,'',undefined,owner).value=value;
+  }
+  const excluded=page.add('div','EditReformColumnDefForm;cntMain;chbExcluded','',undefined,form);
+  page.add('span','EditReformColumnDefForm;cntMain;chbExcluded;DisplayEl','',undefined,excluded).attrs.class='x-form-checkbox';
+  const record={isModel:true,internalId:'r1'},store={$className:'Ext.data.Store',isLoading:()=>mode==='loading',getAt:i=>i===0?record:null};
+  const native={FView:{el:{dom:form}},FAddMode:false,Records:[mode==='foreign_record'?{...record}:record]};
+  page.context.Ext={getCmp:id=>id===form.id?{Controller:native}:id===grid.id?{el:{dom:grid},getStore:()=>store}:null};
+  page.app.Application={FInstance:{FMainForm:{Items:{Workspace:{getActiveTab:()=>({Controller:{FController:{FView:{el:{dom:mode==='foreign_wizard'?form:wizard}}}}})}}}}};
+  const s=await page.observe();assert.equal(s.wizard.reform_parameters.portal_bound,mode==='bound',mode);
+  assert.equal(s.ui.elements.some(e=>e.wizard_field?.scope==='reform_column'),mode==='bound',mode);
+ }
+});
+
+test('partly clipped import definition cells use a freshly verified visible point',async()=>{
+ for(const fault of ['visible','covered_after_read','renamed_after_read']){
+  const page=new Page(),f=importCoverageFixture(page),cell=f.cols[2].cells[2],b=cell.box;
+  const hit=page.document.elementFromPoint.bind(page.document);let covered=false;
+  page.document.elementFromPoint=(x,y)=>y>=b.y&&y<=b.y+b.height&&x>=b.x&&x<=b.x+b.width&&(covered||x>b.x+b.width*.4)?f.body:hit(x,y);
+  const s=await page.observe(),field=s.wizard.import_columns.fields.find(f=>f.index===2),e=s.ui.elements.find(e=>e.ref===field.cell_refs.type);
+  assert.equal(e.interaction.state,'point_observed');assert.equal(e.import_definition_cell.name,'Field2');assert.ok(e.interaction.point.x<b.x+b.width*.4);
+  if(fault==='covered_after_read')covered=true;
+  if(fault==='renamed_after_read')f.cols[2].cells[0].ownText='Different';
+  const r=await page.act({verb:'double_click',ref:e.ref},s);
+  assert.equal(r.status,fault==='visible'?'SUCCEEDED':'NOT_APPLIED',JSON.stringify(r.error));
+  assert.equal(r.effect_possible,fault==='visible');
+ }
+});

@@ -8,6 +8,24 @@ const kinds = ['Неопределенное', 'Непрерывный', 'Дис
 function requireValue(condition, message) { if (!condition) throw new Error(message); }
 function one(values, message) { requireValue(values.length === 1, message); return values[0]; }
 
+// Inline editors occupy the entire column, including a picker at its right edge.
+// A clickable sliver is sufficient for a cell gesture, but not for its editor.
+export function importFieldRevealDelta(target, scroller) {
+  const cell=target?.bounding_box, view=scroller?.bounding_box;
+  requireValue(cell && view && [cell.x,cell.width,view.x,view.width].every(Number.isFinite)
+    && cell.width>0 && view.width>0, 'Import field geometry is unobserved');
+  requireValue(cell.width<=view.width, 'Import field is wider than its viewport');
+  const delta=cell.x<view.x ? cell.x-view.x : Math.max(0,cell.x+cell.width-view.x-view.width);
+  return Math.sign(delta)*Math.min(1000,Math.ceil(Math.abs(delta)));
+}
+
+export function importFieldHasCompleteLayout(state,target) {
+  const columns=state.wizard?.import_columns,coverage=columns?.definition_coverage;
+  return coverage?.status==='complete_configured_columns'&&coverage.count===columns.fields?.length
+    &&coverage.count>0&&coverage.count<=8&&target?.interaction?.state==='point_observed'
+    &&columns.fields.some(c=>c.status==='observed'&&Object.values(c.cell_refs??{}).includes(target.ref));
+}
+
 export function isTextImportSourceReady(state) {
   const fields=state.wizard?.import_source?.fields;
   if(state.wizard?.stage!=='text_import_file' || !fields
@@ -288,12 +306,12 @@ async function configureImport(channel, parameters, owner,fieldsOnly,patch) {
         // Each bounded move gets a fresh page before selecting a field.
         for(let moves=0;moves<200;moves++) {
           const target=s.ui.elements.find(e=>e.ref===c.cell_refs[property]);
-          if(target?.interaction?.state==='point_observed')break;
+          if(importFieldHasCompleteLayout(s,target))break;
           const scroller=one(s.ui.elements.filter(e=>e.tid===s.wizard.root_tid+';ImportTextFileParamsWizard;ColumnDefsTuning;grdData;grd-1;tbl'
             &&e.allowed_actions.includes('scroll_horizontal')),'Import field has no observed horizontal scroller');
-          requireValue(target?.bounding_box,'Import field position is unobserved');
-          const direction=target.bounding_box.x<scroller.bounding_box.x?-1:1;
-          await scrollField(s,c,scroller,direction*1000);
+          const delta=importFieldRevealDelta(target,scroller);
+          if(delta===0){requireValue(target?.interaction?.state==='point_observed','Import field is covered');break;}
+          await scrollField(s,c,scroller,delta);
           s=await read('text_import_format','requested column revealed',definitionReady);c=columns(s).find(f=>f.index===i);
           requireValue(c.name===wanted.name&&c.label===wanted.label&&c.used===wanted.used,'Import field changed while scrolling');
         }
@@ -303,7 +321,8 @@ async function configureImport(channel, parameters, owner,fieldsOnly,patch) {
       const editing = await read('text_import_format', 'column editor: ' + i + '/' + property, state => {
         const e = state.wizard.import_column_editor;
         return e?.status === 'observed' && e.index === i && e.property === property
-          && e.name === wanted.name && e.picker_status === 'observed';
+          && e.name === wanted.name && e.picker_status === 'observed'
+          && state.ui.elements.some(item=>item.ref===e.picker_ref&&item.allowed_actions?.includes('click'));
       });
       let editor = editing.wizard.import_column_editor;
       requireValue(editor?.status === 'observed' && editor.index === i && editor.property === property
@@ -349,11 +368,12 @@ async function configureImport(channel, parameters, owner,fieldsOnly,patch) {
       const associated=c.label_associated===true;
       for(let moves=0;moves<200;moves++) {
         const target=s.ui.elements.find(e=>e.ref===c.cell_refs[property]);
-        if(target?.interaction?.state==='point_observed')break;
+        if(importFieldHasCompleteLayout(s,target))break;
         const scroller=one(s.ui.elements.filter(e=>e.tid===s.wizard.root_tid+';ImportTextFileParamsWizard;ColumnDefsTuning;grdData;grd-1;tbl'
           &&e.allowed_actions.includes('scroll_horizontal')),'Import field has no observed horizontal scroller');
-        requireValue(target?.bounding_box,'Import metadata cell position is unobserved');
-        await scrollField(s,c,scroller,(target.bounding_box.x<scroller.bounding_box.x?-1:1)*1000);
+        const delta=importFieldRevealDelta(target,scroller);
+        if(delta===0){requireValue(target?.interaction?.state==='point_observed','Import metadata cell is covered');break;}
+        await scrollField(s,c,scroller,delta);
         s=await read('text_import_format','metadata cell revealed',ready);c=columns(s).find(f=>f.index===i);
         requireValue(Object.keys(before).every(k=>c[k]===before[k]),'Import metadata changed while scrolling');
       }

@@ -163,3 +163,25 @@ test('failed separate port mapping cannot launch the graph or repeat intermediat
 test('separate output wizard without graph finish is rejected before any phase',async()=>{
  const f=separateFixture();delete f.drivers.finishGraph;await assert.rejects(f.run(),/graph finish driver/);assert.deepEqual(f.calls,[]);assert.deepEqual(f.records,[]);
 });
+
+test('completed read-only reform validation rejects with clean settings and requires explicit resume',async()=>{
+ const f=fixture();f.drivers.prepareTarget=async()=>{
+  f.calls.push('target');const e=Error('Reform output name collision');
+  e.nodePhaseRefusal={phase:'target',status:'FAILED',effect_possible:true,cleanup_complete:true,
+   settings_unchanged:true,verification:'reform_mapped_preflight_completed'};throw e;
+ };
+ const r=await f.run();assert.equal(r.status,'FAILED');assert.equal(r.cleanup_complete,true);assert.equal(r.pending_phase,null);
+ assert.equal(r.effect_possible,true);assert.deepEqual(f.calls,['source','target']);
+ const count=f.calls.length;await assert.rejects(f.run(),/Explicit inspected resume/);assert.equal(f.calls.length,count);
+ assert.equal(f.records.filter(e=>e.phase==='node_phase_refused').length,1);
+});
+test('incomplete or unacknowledged reform refusal retains uncertainty',async()=>{
+ for(const fail of ['cleanup_complete','settings_unchanged','verification','journal']){
+  const f=fixture({failJournal:fail==='journal'?'node_phase_refused':undefined});f.drivers.prepareTarget=async()=>{
+   const e=Error('Invalid patch');e.nodePhaseRefusal={phase:'target',status:'FAILED',effect_possible:true,cleanup_complete:true,
+    settings_unchanged:true,verification:'reform_mapped_preflight_completed'};
+   if(fail!=='journal')delete e.nodePhaseRefusal[fail];throw e;
+  };
+  const r=await f.run();assert.equal(r.status,'AMBIGUOUS');assert.equal(r.pending_phase,'target');assert.equal(r.cleanup_complete,false);
+ }
+});

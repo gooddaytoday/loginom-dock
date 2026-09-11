@@ -136,8 +136,6 @@ def verify_table_format_restoration(observations, mutations, table, expected, fi
         return result
     try:
         initial_fields, final_fields = definitions(original, False), definitions(restored, True)
-        if initial_fields != final_fields:
-            failures.append('table_format_restoration_fields')
         setting_names = ('formatting', 'custom', 'format_string', 'thousands', 'scientific', 'decimal_digits', 'currency')
         def selected(states, field):
             found = []
@@ -151,9 +149,12 @@ def verify_table_format_restoration(observations, mutations, table, expected, fi
                         raise ValueError('table_format_restoration_settings')
                     found.append((n, values))
             return found
+        defaults = []
         for field in initial_fields:
             if field['type'] not in ('integer', 'real', 'datetime'): continue
             old, final = selected(original, field), selected(restored, field)
+            if old and field['type'] == 'datetime' and all(old[0][1].get(k) == v for k, v in [('format_string',''),('custom',False),('formatting',True)]):
+                defaults.append((field, old[0][1])); continue
             if not old or not final or old[0][1] != final[-1][1] or old[0][1]['format_string'] != field['format_string']:
                 failures.append('table_format_restoration_settings'); continue
             for n, action, _ in mutations:
@@ -161,17 +162,27 @@ def verify_table_format_restoration(observations, mutations, table, expected, fi
                 prior = selected([(n, before(n))], field) if dialog(before(n)) else []
                 if prior and (n < first_apply and old[0][0] >= n or start < n < restore_apply and final[-1][0] <= n):
                     failures.append('table_format_restoration_settings_order')
+        deferred = {f['source_index'] for f, _ in defaults}
+        for initial, final in zip(initial_fields, final_fields):
+            expected_final = dict(initial, format_string='yyyy-mm-dd hh:nn:ss.zzz') if initial['source_index'] in deferred else initial
+            if final != expected_final: failures.append('table_format_restoration_fields')
         projected = [dict(index=f['source_index'], definition_index=f['index'], key=f['name_key'], type=f['type'], label=f['label'],
-                          **({'mask':f['format_string']} if f['type'] in ('integer','real','datetime') else {})) for f in final_fields]
+                          **({'mask':f['format_string']} if f['type'] in ('integer','real','datetime') and f['source_index'] not in deferred else {})) for f in final_fields]
         if (not isinstance(proof, dict) or proof.get('table') != ref or proof.get('restored') is not True
                 or proof.get('fields') != projected or any(type(f.get('index')) is not int or type(f.get('definition_index')) is not int for f in proof.get('fields', []))):
             failures.append('table_format_restoration_checkpoint')
+        from table_datetime_restoration_evidence import verify_default_datetime_restoration
+        tail_failures, tail_steps = verify_default_datetime_restoration(observations, mutations, table, restore_apply,
+            initial_fields, defaults, proof.get('default_datetime_restoration'), before=before, control=control,
+            owned=owned, dialog=dialog, definitions=definitions, selected=selected)
+        failures += tail_failures
     except (KeyError, TypeError, ValueError) as error:
+        tail_steps = set()
         failures.append(str(error) if isinstance(error, ValueError) else 'table_format_restoration_malformed')
     closed = [s for n, s in observations if n > restore_apply and owned(s) and s.get('ui', {}).get('dialogs') == []]
     if not closed:
         failures.append('table_format_restoration_not_closed')
-    return sorted(set(failures)), {n for n, _ in segment} if not failures else set()
+    return sorted(set(failures)), ({n for n, _ in segment} | tail_steps) if not failures else set()
 
 
 def verify_table_output_observations(observations, mutations, request, source_bytes, checkpoint, execution_id):
@@ -236,7 +247,7 @@ def verify_table_output_observations(observations, mutations, request, source_by
             for kind in ('Format', 'Filter'):
                 if es[0].get('tid') == key+';ModalWindow_Browse'+kind+';btnApply':
                     apply_steps.setdefault(kind, []).append(step)
-    if len(apply_steps.get('Format', [])) not in (1, 2) or len(apply_steps.get('Filter', [])) != 1:
+    if not 1 <= len(apply_steps.get('Format', [])) <= 2 + sum(c['type'] == 'datetime' for c in expected) or len(apply_steps.get('Filter', [])) != 1:
         return failures + ['one_format_and_filter_apply_required']
     fmt_step, filter_step = apply_steps['Format'][0], apply_steps['Filter'][0]
     filter_state = before(filter_step).get('table_settings', {}).get('filter', {}).get('enabled', {})
@@ -291,12 +302,12 @@ def verify_table_output_observations(observations, mutations, request, source_by
     if any(not same_node(s, s['node_table'].get('node_context', {})) for n, s in bound if s.get('node_table', {}).get('verified') is True):
         failures.append('native_data_node_owner')
     restoration_steps = set(); return_after = max(n for n, _ in pages)
-    if len(apply_steps['Format']) == 2:
+    if len(apply_steps['Format']) >= 2:
         restore_step = apply_steps['Format'][1]
         restoration_failures, restoration_steps = verify_table_format_restoration(observations, mutations, table, expected,
             fmt_step, return_after, restore_step, checkpoint.get('output', {}).get('format_restoration'))
         failures += restoration_failures
-        if not restoration_failures: return_after = restore_step
+        if not restoration_failures: return_after = max(restoration_steps)
     extra = [(n, a, r) for n, a, r in mutations if n > filter_step and n not in restoration_steps and a.get('verb') not in ('scroll', 'scroll_horizontal')]
     proof = checkpoint.get('output', {}).get('workflow_return')
     if extra or proof is not None:

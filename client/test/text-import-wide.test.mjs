@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {configureTextImportFields} from '../lib/text-import-procedure.mjs';
+import {configureTextImportFields,importFieldRevealDelta} from '../lib/text-import-procedure.mjs';
 import {textImportStepBudget} from '../lib/text-import-limits.mjs';
 
 function fixture(count,{editLabels=false,drift=false}={}) {
@@ -20,7 +20,7 @@ function fixture(count,{editLabels=false,drift=false}={}) {
   ...(editor?{import_column_editor:{...editor}}:{}),
   import_columns:{initial_layout:{status:'rendered_definition_layout'},fields:columns.slice(offset,offset+8),
    page:{status:'complete_definition_page',schema_id:'wide',offset,limit:8,returned:Math.min(8,count-offset),total_columns:count,next_offset:offset+8<count?offset+8:null}}},
-  ui:{elements:[{tid:'wizard;btnNext',ref:'next',allowed_actions:['wizard_step']},...columns.slice(offset,offset+8).flatMap(c=>Object.values(c.cell_refs).map(ref=>({ref,interaction:{state:'point_observed'}})))]}});
+  ui:{elements:[{tid:'wizard;ImportTextFileParamsWizard;ColumnDefsTuning;grdData;grd-1;tbl',ref:'scroll',allowed_actions:['scroll_horizontal'],bounding_box:{x:0,width:800}}, {tid:'wizard;btnNext',ref:'next',allowed_actions:['wizard_step']},...columns.slice(offset,offset+8).flatMap(c=>Object.values(c.cell_refs).map(ref=>({ref,bounding_box:{x:0,width:135},interaction:{state:'point_observed'}})))]}});
  const channel={observe:async options=>{
   check();const offset=options.importColumnPage?.offset??0;reads.push({condition:options.condition,offset});
   if(options.condition==='complete import definition page at 0'&&initialSweep&&drift)columns.at(-1).used=false;
@@ -58,4 +58,29 @@ test('an empty existing patch budgets its entire retained schema and mapping reo
  const reordered={...full,mappings:[{direction:'output',fields:Array(1000).fill({})}]};
  assert.ok(textImportStepBudget(reordered)>textImportStepBudget(full));
  assert.throws(()=>textImportStepBudget({...full,parameters:{settings:{columns:Array(1001).fill({})}}}));
+});
+
+test('inline import editor reveal uses the entire cell and a bounded precise scroll',()=>{
+ const view={bounding_box:{x:479,width:719}};
+ const cell=(x,width=135)=>({bounding_box:{x,width},interaction:{state:'point_observed'}});
+ assert.equal(importFieldRevealDelta(cell(1154),view),91);
+ assert.equal(importFieldRevealDelta(cell(400),view),-79);
+ assert.equal(importFieldRevealDelta(cell(479),view),0);
+ assert.equal(importFieldRevealDelta(cell(1063),view),0);
+ assert.equal(importFieldRevealDelta(cell(5000),view),1000);
+ assert.equal(importFieldRevealDelta(cell(-5000),view),-1000);
+ assert.throws(()=>importFieldRevealDelta(cell(479,720),view),/wider/);
+ assert.throws(()=>importFieldRevealDelta({},view),/unobserved/);
+});
+
+test('complete narrow definitions do not require a data scroller on empty input',async()=>{
+ const {importFieldHasCompleteLayout}=await import('../lib/text-import-procedure.mjs');
+ const target={ref:'type-cell',interaction:{state:'point_observed'}};
+ const state={wizard:{import_columns:{definition_coverage:{status:'complete_configured_columns',count:1},fields:[{status:'observed',cell_refs:{type:'type-cell'}}]}}};
+ assert.equal(importFieldHasCompleteLayout(state,target),true);
+ for(const change of [s=>s.wizard.import_columns.definition_coverage.status='partial',s=>s.wizard.import_columns.definition_coverage.count=2,
+  s=>s.wizard.import_columns.fields[0].cell_refs.type='other']){
+  const copy=structuredClone(state);change(copy);assert.equal(importFieldHasCompleteLayout(copy,target),false);
+ }
+ assert.equal(importFieldHasCompleteLayout(state,{...target,interaction:{state:'point_not_observed'}}),false);
 });

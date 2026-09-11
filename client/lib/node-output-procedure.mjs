@@ -94,7 +94,9 @@ export async function configureTablePrecision(channel,table,{alreadyOpen=false,r
   definition=await readTableFormatDefinitions(channel,table);
   let s;
   const fields=definition.fields.map(f=>({index:f.source_index,definition_index:f.index,key:f.name_key,type:f.type,label:f.label}));
-  const numeric=fields.filter(f=>['integer','real'].includes(f.type)),datetime=fields.filter(f=>f.type==='datetime'),targets=[...numeric,...datetime];
+  const numeric=fields.filter(f=>['integer','real'].includes(f.type)),datetime=fields.filter(f=>f.type==='datetime');
+  const deferred=restore?datetime.filter(t=>{const original=restore.find(f=>f.index===t.index&&f.key===t.key&&f.type===t.type);return original?.settings.format_string===''&&original.settings.custom===false&&original.settings.formatting===true;}):[];
+  const targets=[...numeric,...datetime.filter(t=>!deferred.includes(t))];
   const originals=[];
   const select=async target=>{
     const native=definition.fields.find(f=>f.index===target.definition_index);
@@ -155,14 +157,68 @@ export async function configureTablePrecision(channel,table,{alreadyOpen=false,r
   if(!s)s=await read('Table format ready to apply');
   await action(s,'apply bound Table format',s=>({verb:'click',ref:one(s.ui.elements.filter(e=>e.tid===table.table_tid+';ModalWindow_BrowseFormat;btnApply'),'Unique Table format Apply missing').ref}),()=>({fields:targets}));
   await channel.observe({condition:'Table format dialog closed',tableDialog:dialog,readOutputs:true,ready:s=>s.ui.dialogs.length===0&&s.node_outputs?.tables?.some(t=>t.active&&t.view_guid===table.view_guid)});
-  return {table,fields,numeric_formats:numeric,datetime_formats:datetime,original_formats:originals,restored:restore!==null,
+  const default_datetime_restoration=deferred.length?await restoreEmptyDateTimeFormats(channel,table,deferred,restore):[];
+  return {table,fields,numeric_formats:numeric,datetime_formats:datetime,original_formats:originals,restored:restore!==null,default_datetime_restoration,
     dialog_readback_verified:fields.length!==1||targets.length===0,format_application_pending:fields.length===1&&targets.length===1,values_verified:false};
+}
+
+// Loginom chooses its first standard date preset when an empty custom mask
+// loses its field selection. Apply each empty default directly, then reopen and
+// verify it. Cancelling the verification dialog avoids committing that UI preset.
+export async function restoreEmptyDateTimeFormats(channel,table,targets,originals) {
+  const proofs=[];
+  const dialog={table,kind:'format'};
+  for(const target of targets) {
+    const original=originals.find(f=>f.index===target.index&&f.key===target.key&&f.type==='datetime');
+    requireValue(original?.settings.format_string===''&&original.settings.custom===false&&original.settings.formatting===true,
+      'Only an observed empty default datetime format can use direct restoration');
+    const open=async()=>{
+      const opening=await channel.observe({condition:'Table available for empty datetime restoration',readOutputs:true,ready:s=>s.ui.elements.some(e=>e.tid===table.table_tid+';btnDataGridFormat')});
+      await channel.perform({condition:'open Table for empty datetime default',initialObservation:opening,
+        ready:s=>s.ui.elements.some(e=>e.tid===table.table_tid+';btnDataGridFormat'),identity:()=>({table,target}),
+        resolve:s=>({verb:'click',ref:one(s.ui.elements.filter(e=>e.tid===table.table_tid+';btnDataGridFormat'),'Table Format missing').ref})});
+      const definition=await readTableFormatDefinitions(channel,table),native=definition.fields.find(f=>f.source_index===target.index&&f.name_key===target.key&&f.type==='datetime');
+      requireValue(native,'Restored datetime field identity disappeared');
+      const s=await revealTableFormatField(channel,table,definition,native);
+      await channel.perform({condition:'select exact empty-default datetime',initialObservation:s,ready:s=>s.table_settings?.format?.page?.schema_id===definition.schema_id,
+        identity:()=>({table,target}),resolve:s=>({verb:'click',ref:one(s.ui.elements.filter(e=>e.table_field?.source_index===target.index&&e.table_field.name_key===target.key&&e.table_field.type==='datetime'),'Datetime format field unavailable').ref})});
+      return Math.floor(native.index/8)*8;
+    };
+    let offset=await open();
+    const read=condition=>channel.observe({condition,tableDialog:dialog,tableFormatPage:{offset,limit:8},ready:s=>s.table_settings?.format?.selected_datetime?.source_index===target.index&&s.table_settings.format.selected_datetime.name_key===target.key});
+    const act=async(s,condition,resolve)=>channel.perform({condition,initialObservation:s,
+      ready:s=>s.table_settings?.format?.selected_datetime?.source_index===target.index&&s.table_settings.format.selected_datetime.name_key===target.key,
+      identity:()=>({table,target}),resolve});
+    let state=await read('bound datetime before direct restoration');
+    for(const name of ['formatting','custom'])if(state.table_settings.format.selected_datetime[name]?.value!==true){
+      await act(state,'enable direct datetime '+name,s=>{const f=s.table_settings.format.selected_datetime[name];return {verb:'set_checked',checked:true,
+        ref:one(s.ui.elements.filter(e=>[f.input_ref,f.display_ref].includes(e.ref)&&e.allowed_actions.includes('set_checked')&&e.interaction?.state==='point_observed').slice(0,1),'Datetime checkbox unavailable').ref};});
+      state=await read('direct datetime '+name+' enabled');
+      requireValue(state.table_settings.format.selected_datetime[name]?.value===true,'Datetime control did not enable');
+    }
+    await act(state,'restore empty datetime mask',s=>({verb:'fill',ref:s.table_settings.format.selected_datetime.format_string.input_ref,text:''}));
+    state=await read('empty datetime draft entered');
+    requireValue(state.table_settings.format.selected_datetime.format_string.value==='','Datetime mask was not cleared');
+    await act(state,'commit empty datetime input',s=>({verb:'press',ref:s.table_settings.format.selected_datetime.format_string.input_ref,key:'Tab'}));
+    state=await read('empty datetime ready for direct Apply');
+    requireValue(state.table_settings.format.selected_datetime.format_string.value==='','Datetime mask changed before Apply');
+    await act(state,'apply empty datetime without changing selection',s=>({verb:'click',ref:one(s.ui.elements.filter(e=>e.tid===table.table_tid+';ModalWindow_BrowseFormat;btnApply'),'Table Apply missing').ref}));
+    await channel.observe({condition:'direct datetime format applied',tableDialog:dialog,readOutputs:true,ready:s=>s.ui.dialogs.length===0&&s.node_outputs?.tables?.some(t=>t.active&&t.view_guid===table.view_guid)});
+    offset=await open();state=await read('verify persisted empty datetime format');
+    const observed=state.table_settings.format.selected_datetime;
+    requireValue(Object.entries(original.settings).every(([name,value])=>observed[name]?.status==='observed'&&observed[name].value===value),
+      'Applied empty datetime format differs from original');
+    proofs.push({index:target.index,key:target.key,type:target.type,settings:original.settings,verified_after_apply:true});
+    await act(state,'discard datetime verification dialog',s=>({verb:'click',ref:one(s.ui.elements.filter(e=>e.tid===table.table_tid+';ModalWindow_BrowseFormat;btnCancel'),'Table Cancel missing').ref}));
+    await channel.observe({condition:'datetime verification dialog closed',tableDialog:dialog,readOutputs:true,ready:s=>s.ui.dialogs.length===0&&s.node_outputs?.tables?.some(t=>t.active&&t.view_guid===table.view_guid)});
+  }
+  return proofs;
 }
 
 export async function restoreTablePrecision(channel,proof) {
   requireValue(proof?.table&&Array.isArray(proof.original_formats),'Original Table formatting is unavailable');
   const result=await configureTablePrecision(channel,proof.table,{restore:proof.original_formats});
-  return {table:proof.table,restored:result.restored,fields:result.fields};
+  return {table:proof.table,restored:result.restored,fields:result.fields,default_datetime_restoration:result.default_datetime_restoration};
 }
 
 export async function prepareTableRead(channel,table) {

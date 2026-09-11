@@ -142,7 +142,7 @@ def verify_public_delivery(evidence, node_request, prepared):
     if (not operation_id or args.get('artifact_id') != artifact.get('artifact_id')
             or not grant.get('grant_id') or args.get('upload_grant_id') != grant.get('grant_id')
             or grant.get('destination') != destination
-            or any(artifact.get(k) != source.get(k) for k in ('bytes', 'sha256'))
+            or any(k in source and artifact.get(k) != source.get(k) for k in ('bytes', 'sha256'))
             or source.get('upload_operation_id') != str(operation_id)+':upload'
             or any(c.get('arguments') != args for c, _ in starts)):
         failures.append('public_delivery_grant_binding')
@@ -173,6 +173,8 @@ def verify_public_delivery(evidence, node_request, prepared):
             failures.append('public_delivery_regressed')
     if settled is None:
         failures.append('public_delivery_result_not_delivered')
+    elif any(settled.get('outcome', {}).get(k) != artifact.get(k) for k in ('bytes', 'sha256')):
+        failures.append('public_delivery_artifact_bytes')
     node_calls = [c for c in evidence['calls'] if c.get('tool') == PREFIX+'dock_node_apply'
                   and c.get('arguments') == node_request]
     if not node_calls or not settled_rows or min(settled_rows) >= min(c['row'] for c in node_calls):
