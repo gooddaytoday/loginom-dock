@@ -25,16 +25,16 @@ manifest, формулам и порядку действий одной ист�
 
 | Источник | Доступность / прочитанная ревизия | Что действительно установлено |
 | --- | --- | --- |
-| `/home/george/git/loginom-dock` | Рабочая ветка `rl-bench`, HEAD `dee1d210f91818b6f8d7fb5cfd0454eddcc5044c` | Исходники и актуальные начала handoff/status/README прочитаны. Первоначальный `git status --short` содержал только незакоммиченные `rl-benchmark.md`, `docs/loginom-dock/local-openviking-check.md`, `scripts/openviking-workspace-mcp.mjs`; они не менялись. HEAD не заменяет runtime hash. |
-| `/home/george/git/testing/e2e-tests` | Доступен, HEAD `7a41b5adbb9c45dca8d756a8220615554301c2e0` | TestCafe selectors/helpers и тесты мастеров импорта/Калькулятора доступны; в рамках исследования не выполнялись. |
-| `/home/george/git/testing/integration` | Доступен, HEAD `c81703ad7a5e077e6ec2417a83192753edbe8400` | Jest/TypeScript запуск пакетов через BatchLauncher и сравнение result/expected файлов; готовые тесты форматов дат и округлений. Развёрнутый BatchLauncher/его конфигурация не проверены. |
-| `/home/george/git/testing/agent` | Доступен; `infra/evals` = `b7060d7fe93ed9c64b4bfe7f890985d3a1f8a4d1` | Чужая ветка изучалась командами `git show`/`git ls-tree`, без checkout и изменений. Её рабочее дерево уже находилось на `infra/evals`. |
-| `/home/george/git/testing/agent-validation` | Доступен; working branch `master`, `simple-packages` = `8620891564a63d7cf9d9ff513481496bf127a851` | Общий README прочитан из рабочего дерева; маленькие fixtures `sources/simple` изучены через `git show simple-packages:...`, без переключения. |
+| `/home/kiselev/git/loginom-dock` | Рабочая ветка `rl-bench`, HEAD `18b7249f54667f31752e5accb42ab559c929af4d` | Исходники и актуальные начала handoff/status/README прочитаны. HEAD не заменяет runtime hash. |
+| `/home/kiselev/git/e2e-tests` | Доступен, HEAD `16ecc52781c668f9b718b1cecac5c7d3da27567f` | TestCafe selectors/helpers и тесты мастеров импорта/Калькулятора доступны; в рамках исследования не выполнялись. |
+| `/home/kiselev/git/integration` | Доступен, HEAD `f8c31c1375d9706fdd1745245f3e5a7babdc2df9` | Jest/TypeScript запуск пакетов через BatchLauncher и сравнение result/expected файлов; готовые тесты форматов дат и округлений. Развёрнутый BatchLauncher/его конфигурация не проверены. |
+| `/home/kiselev/git/agent` | Доступен; `infra/evals` = `49584eaa2488ce1279a294931a5c7715753a8011` | Ветку можно изучать командами `git show`/`git ls-tree` без checkout и изменений. |
+| `/home/kiselev/git/agent-validation` | Доступен; working branch и `simple-packages` = `23959823e419ff34fa08daaa7d2c98c61cae58fa` | Общий README и маленькие fixtures `sources/simple` доступны для чтения через `git show simple-packages:...`. |
 
-Актуальный [README подпланов](/home/george/git/loginom-dock/docs/plans/loginom-dock/README.md:3)
+Актуальный [README подпланов](/home/kiselev/git/loginom-dock/docs/plans/loginom-dock/README.md:3)
 различает 01–04 и planned 05–10. Начала
-[handoff](/home/george/git/loginom-dock/docs/loginom-dock/agent-handoff.md:3) и
-[implementation-status](/home/george/git/loginom-dock/docs/loginom-dock/implementation-status.md:3)
+[handoff](/home/kiselev/git/loginom-dock/docs/loginom-dock/agent-handoff.md:3) и
+[implementation-status](/home/kiselev/git/loginom-dock/docs/loginom-dock/implementation-status.md:3)
 сообщают о Loginom 7.4.2, source runtime и Hermes 45/45 после исправлений ревью.
 Production и установленный клиент не обновлялись. Эти сведения являются
 зафиксированной исторической приёмкой, а не инвентаризацией текущего стенда.
@@ -42,7 +42,7 @@ Production и установленный клиент не обновлялис�
 Известное ограничение: переименование существующего выражения в свободное новое
 имя при настроенном выходном mapping может разорвать источник старого поля;
 операция честно отказывает. Это не закрытый дефект:
-[04-review-followup](/home/george/git/loginom-dock/docs/plans/loginom-dock/04-review-followup.md:58).
+[04-review-followup](/home/kiselev/git/loginom-dock/docs/plans/loginom-dock/04-review-followup.md:58).
 Для первого набора разумнее изменение формулы без переименования; edge-case
 переименования можно позднее сохранить отдельным ожидаемо провальным regression case.
 
@@ -50,20 +50,20 @@ Production и установленный клиент не обновлялис�
 
 | Компонент / источник | Полезный контракт | Граница использования |
 | --- | --- | --- |
-| [preflight.py](/home/george/git/loginom-dock/tools/loginom-acceptance/preflight.py:16) | Самостоятельно вычисляет SHA каждого runtime input и общий digest, включая новые lib-модули; читает literal список, не исполняет SUT. `inventory()` сверяет с точным Git commit. | Читать вызовом из внешнего `evals/` без изменений SUT; не включать `__pycache__` вне `evals/` (`PYTHONDONTWRITEBYTECODE=1`). Этот preflight доказывает только source state. |
-| [runtime-pin.mjs](/home/george/git/loginom-dock/client/lib/runtime-pin.mjs:4), [session.mjs](/home/george/git/loginom-dock/client/lib/session.mjs:47) | Пофайловые pins, lockfiles, plugin/skill/adapter inputs; сессионная метаинформация о Node, MCP, браузере. | Закреплять фактическую доставленную копию, не только HEAD. Дополнительно нужны hashes задания, данных, verifier и знания Dock. |
-| [run.py: manifest](/home/george/git/loginom-dock/tools/loginom-acceptance/run.py:166) | До модели фиксирует исходники harness, task SHA, fixture SHA, budgets, provider/model/reasoning, source inventory, manifest URI/SHA. | Текущая schema фиксирует один специфический goal. Для benchmark — отдельная schema в `evals/`, а не изменение launcher. |
-| [run.py: isolation](/home/george/git/loginom-dock/tools/loginom-acceptance/run.py:206) | Свежие private Hermes home/Dock state; отдельный skill, явно выбранные `--toolsets loginom-dock`, `--skills loginom`, память отключена, plugins пусты; процесс имеет отдельную session. | Это полезные hygiene seams, но не OS isolation. Наследуется настоящий `HOME`/`PATH`; один Unix-user потенциально видит соседние каталоги, network/MCP boundaries отдельно не доказаны. |
-| [run.py: launch](/home/george/git/loginom-dock/tools/loginom-acceptance/run.py:238) | Явные provider/model/reasoning, `fallback_providers: []`, tool precheck, runtime/harness неизменность перед запуском; экспорт usage/events. | Не запускать в исследовании. Его Mac-only guard нельзя обходить правкой SUT/harness за пределами `evals/`. |
-| [calculator_output_evidence.py](/home/george/git/loginom-dock/tools/loginom-acceptance/calculator_output_evidence.py:1) | Ожидания передаются независимо от результата node; проверяются внутренний journal, fresh execution, native table/cells/format. | Сам файл явно не доказывает identity исходных байтов и сохранённого пакета. Не считать API-result или checkpoint эквивалентом доказательства. |
-| [import_output_evidence.py](/home/george/git/loginom-dock/tools/loginom-acceptance/import_output_evidence.py:194) | Независимый CSV parse; проверяет node/view/port/schema ownership, row/column totals, Null display, полные cells. | Количество строк проверяемого sample ограничено запрошенным `sample_rows`. Для MVP fixture <= 10 строк и запрос всего fixture обязательны; большой preview не станет полной сверкой. |
-| [import_execution_evidence.py](/home/george/git/loginom-dock/tools/loginom-acceptance/import_execution_evidence.py:33) | До/после execution history, новый process id/record, completed child, переход к владельцу и связь с node. | Не доказывает данные/сохранение. Raw-журнал всё ещё собирает клиент SUT: нужен отдельный post-run observer для главного verdict. |
-| [calculator_node_acceptance.py](/home/george/git/loginom-dock/tools/loginom-acceptance/calculator_node_acceptance.py:40) | Композитный fail-closed audit task/profile/tool scope, source pins, public calls, graph, delivery, save/reopen, output. | Hardcode `calculator-node-complete`, имя/путь, manifest, четыре node operations, две saves, exact formulas/task fixture. Нельзя импортировать его целиком как бизнес-verifier произвольного решения. |
-| [calculator_node_acceptance.py: persistence](/home/george/git/loginom-dock/tools/loginom-acceptance/calculator_node_acceptance.py:124) | Проверяет reopen identity, сохранность semantics, отличный execution id, пустые patch/mappings/inputs при повторе, отсутствие неожиданных мутаций. | Audit читает завершённый trace той же SUT-попытки, не создаёт отдельную verifier session. Требование benchmark строже: постфактум открыть сохранённый артефакт и выполнить его отдельно без исправления. |
-| [node_efficiency.py](/home/george/git/loginom-dock/tools/loginom-acceptance/node_efficiency.py:10) | Из существующих events/usage считает public calls, API calls, времена локальных фаз, nullable token counters. | Фазы включают транспорт/ожидание, не равны model latency. Cache/reasoning счётчики могут пересекаться с другими токенами; unknown не заменять нулём. |
+| [preflight.py](/home/kiselev/git/loginom-dock/tools/loginom-acceptance/preflight.py:16) | Самостоятельно вычисляет SHA каждого runtime input и общий digest, включая новые lib-модули; читает literal список, не исполняет SUT. `inventory()` сверяет с точным Git commit. | Читать вызовом из внешнего `evals/` без изменений SUT; не включать `__pycache__` вне `evals/` (`PYTHONDONTWRITEBYTECODE=1`). Этот preflight доказывает только source state. |
+| [runtime-pin.mjs](/home/kiselev/git/loginom-dock/client/lib/runtime-pin.mjs:4), [session.mjs](/home/kiselev/git/loginom-dock/client/lib/session.mjs:47) | Пофайловые pins, lockfiles, plugin/skill/adapter inputs; сессионная метаинформация о Node, MCP, браузере. | Закреплять фактическую доставленную копию, не только HEAD. Дополнительно нужны hashes задания, данных, verifier и знания Dock. |
+| [run.py: manifest](/home/kiselev/git/loginom-dock/tools/loginom-acceptance/run.py:166) | До модели фиксирует исходники harness, task SHA, fixture SHA, budgets, provider/model/reasoning, source inventory, manifest URI/SHA. | Текущая schema фиксирует один специфический goal. Для benchmark — отдельная schema в `evals/`, а не изменение launcher. |
+| [run.py: isolation](/home/kiselev/git/loginom-dock/tools/loginom-acceptance/run.py:206) | Свежие private Hermes home/Dock state; отдельный skill, явно выбранные `--toolsets loginom-dock`, `--skills loginom`, память отключена, plugins пусты; процесс имеет отдельную session. | Это полезные hygiene seams, но не OS isolation. Наследуется настоящий `HOME`/`PATH`; один Unix-user потенциально видит соседние каталоги, network/MCP boundaries отдельно не доказаны. |
+| [run.py: launch](/home/kiselev/git/loginom-dock/tools/loginom-acceptance/run.py:238) | Явные provider/model/reasoning, `fallback_providers: []`, tool precheck, runtime/harness неизменность перед запуском; экспорт usage/events. | Не запускать в исследовании. Его Mac-only guard нельзя обходить правкой SUT/harness за пределами `evals/`. |
+| [calculator_output_evidence.py](/home/kiselev/git/loginom-dock/tools/loginom-acceptance/calculator_output_evidence.py:1) | Ожидания передаются независимо от результата node; проверяются внутренний journal, fresh execution, native table/cells/format. | Сам файл явно не доказывает identity исходных байтов и сохранённого пакета. Не считать API-result или checkpoint эквивалентом доказательства. |
+| [import_output_evidence.py](/home/kiselev/git/loginom-dock/tools/loginom-acceptance/import_output_evidence.py:194) | Независимый CSV parse; проверяет node/view/port/schema ownership, row/column totals, Null display, полные cells. | Количество строк проверяемого sample ограничено запрошенным `sample_rows`. Для MVP fixture <= 10 строк и запрос всего fixture обязательны; большой preview не станет полной сверкой. |
+| [import_execution_evidence.py](/home/kiselev/git/loginom-dock/tools/loginom-acceptance/import_execution_evidence.py:33) | До/после execution history, новый process id/record, completed child, переход к владельцу и связь с node. | Не доказывает данные/сохранение. Raw-журнал всё ещё собирает клиент SUT: нужен отдельный post-run observer для главного verdict. |
+| [calculator_node_acceptance.py](/home/kiselev/git/loginom-dock/tools/loginom-acceptance/calculator_node_acceptance.py:40) | Композитный fail-closed audit task/profile/tool scope, source pins, public calls, graph, delivery, save/reopen, output. | Hardcode `calculator-node-complete`, имя/путь, manifest, четыре node operations, две saves, exact formulas/task fixture. Нельзя импортировать его целиком как бизнес-verifier произвольного решения. |
+| [calculator_node_acceptance.py: persistence](/home/kiselev/git/loginom-dock/tools/loginom-acceptance/calculator_node_acceptance.py:124) | Проверяет reopen identity, сохранность semantics, отличный execution id, пустые patch/mappings/inputs при повторе, отсутствие неожиданных мутаций. | Audit читает завершённый trace той же SUT-попытки, не создаёт отдельную verifier session. Требование benchmark строже: постфактум открыть сохранённый артефакт и выполнить его отдельно без исправления. |
+| [node_efficiency.py](/home/kiselev/git/loginom-dock/tools/loginom-acceptance/node_efficiency.py:10) | Из существующих events/usage считает public calls, API calls, времена локальных фаз, nullable token counters. | Фазы включают транспорт/ожидание, не равны model latency. Cache/reasoning счётчики могут пересекаться с другими токенами; unknown не заменять нулём. |
 
 Вычисление ожидаемых значений существующего теста отделено от runtime:
-[calculator_goal_contract.py](/home/george/git/loginom-dock/tools/loginom-acceptance/calculator_goal_contract.py:27)
+[calculator_goal_contract.py](/home/kiselev/git/loginom-dock/tools/loginom-acceptance/calculator_goal_contract.py:27)
 читает зафиксированный CSV средствами Python и вычисляет арифметику/Null.
 Но цель дополнительно сравнивает написание формулы по токенам и структуру запросов;
 для пользовательских benchmark-задач это чрезмерно сильный контракт, если конкретный
@@ -76,25 +76,26 @@ Production и установленный клиент не обновлялис�
 
 На 2026-09-10 точечные read-only проверки установили:
 
-- `uname -s` = Linux. `command -v` нашёл Node в `~/.nvm/versions/node/v20.19.2/bin/node`,
+- `uname -s` = Linux. `command -v` нашёл Node в `/home/kiselev/.nvm/versions/node/v22.16.0/bin/node`,
   `/usr/bin/python3`, `/usr/bin/docker`, `/usr/bin/google-chrome`,
-  `/home/george/.local/bin/codex`; `hermes` в текущем PATH не найден.
-- По точным стандартным путям не обнаружены `client/node_modules`, `~/.hermes`,
-  `~/.loginom-dock/config.json`. Это не полный поиск нестандартных установок.
-- Dock требует [Node 24.19.0](/home/george/git/loginom-dock/client/.node-version:1),
-  [MCP 1.30.0 и @playwright/mcp 0.0.80](/home/george/git/loginom-dock/client/package.json:8).
+  `/home/kiselev/.local/bin/codex`; `/home/kiselev/.local/bin/hermes` доступен в PATH.
+- По точным стандартным путям не обнаружены `client/node_modules` и `~/.hermes`;
+  `~/.loginom-dock/config.json` существует. Это не полный поиск нестандартных
+  установок и не проверка содержимого конфигурации.
+- Dock требует [Node 24.19.0](/home/kiselev/git/loginom-dock/client/.node-version:1),
+  [MCP 1.30.0 и @playwright/mcp 0.0.80](/home/kiselev/git/loginom-dock/client/package.json:8).
   Наличие системного Chrome не доказывает установку pinned Chromium.
-- Существующий [launcher run.py](/home/george/git/loginom-dock/tools/loginom-acceptance/run.py:116)
+- Существующий [launcher run.py](/home/kiselev/git/loginom-dock/tools/loginom-acceptance/run.py:116)
   явно отказывает на `sys.platform != "darwin"`; это конкретный блокер прямого
   использования launcher здесь. Core
-  [session.mjs](/home/george/git/loginom-dock/client/lib/session.mjs:17) поддерживает
+  [session.mjs](/home/kiselev/git/loginom-dock/client/lib/session.mjs:17) поддерживает
   Linux при наличии display; невозможность Linux для самого клиента не доказана.
 - Видимый браузер в source уже получает
-  [--start-maximized и viewport:null](/home/george/git/loginom-dock/client/lib/session.mjs:58).
+  [--start-maximized и viewport:null](/home/kiselev/git/loginom-dock/client/lib/session.mjs:58).
   Фактические window/viewport в исследовании этим субагентом не проверялись.
-- Документ [operations](/home/george/git/loginom-dock/docs/loginom-dock/operations.md:73)
+- Документ [operations](/home/kiselev/git/loginom-dock/docs/loginom-dock/operations.md:73)
   содержит исторический Mac checkout `/Users/kartamyshev/Git/loginom-dock` и
-  [macOS compatibility profile](/home/george/git/loginom-dock/docs/loginom-dock/operations.md:450).
+  [macOS compatibility profile](/home/kiselev/git/loginom-dock/docs/loginom-dock/operations.md:450).
   Эти пути/manifest нельзя переносить на Linux как подтверждённые.
 
 Здесь не подтверждены: работоспособность Docker daemon, готовность sandbox image,
@@ -107,11 +108,11 @@ fresh-session persistence verifier, allowlisted Dock knowledge, отсутств
 
 Из E2E:
 
-- [format_settings.ts](/home/george/git/testing/e2e-tests/tests/acceptance/wizards/imports/txt/format_settings.ts:32)
+- [format_settings.ts](/home/kiselev/git/e2e-tests/tests/acceptance/wizards/imports/txt/format_settings.ts:32)
   показывает последовательность открытия мастера, настройки UTF-8/заголовков,
   перехода к форматам; строки 83–97 — Execute и сравнение preview. Строки 101–134
   перечисляют delimiters, Null, decimal и другие независимые форматные fixtures.
-- [calculator_helpers.ts](/home/george/git/testing/e2e-tests/bg/helpers/wizards/transform/calculator_helpers.ts:384)
+- [calculator_helpers.ts](/home/kiselev/git/e2e-tests/bg/helpers/wizards/transform/calculator_helpers.ts:384)
   содержит проверки открытого редактора и фактических параметров; строки 463–472
   — reopen/readback выражения, 518 — replacement, 543 — порядок. Это источник
   selector semantics для отдельного Playwright verifier, не готовый drop-in:
@@ -119,16 +120,16 @@ fresh-session persistence verifier, allowlisted Dock knowledge, отсутств
 
 Из integration:
 
-- [packageRunners.ts](/home/george/git/testing/integration/bg/lib/packageRunners.ts:61)
+- [packageRunners.ts](/home/kiselev/git/integration/bg/lib/packageRunners.ts:61)
   принимает точный пакет, endpoint/account/node/variables, запускает установленный
   `Conf.BatchLauncherPath`; параметры подключения могут включать пароль, поэтому
   переносить сырые argv/logs в отчёты нельзя.
-- [testPackage.ts](/home/george/git/testing/integration/bg/lib/testPackage.ts:22)
-  делает execution, затем [сравнивает result/expected файлы](/home/george/git/testing/integration/bg/lib/testPackage.ts:70).
+- [testPackage.ts](/home/kiselev/git/integration/bg/lib/testPackage.ts:22)
+  делает execution, затем [сравнивает result/expected файлы](/home/kiselev/git/integration/bg/lib/testPackage.ts:70).
   Это полезная архитектура независимого oracle, но testdata/export и launcher
   должны существовать. Он сам по себе не подтверждает saved package в Web UI.
-- [round.ts](/home/george/git/testing/integration/__tests__/transform/calculator/round.ts:39)
-  содержит параметризованные rounding cases; [dates_import.ts](/home/george/git/testing/integration/__tests__/Import/TextFile/Date/dates_import.ts:13)
+- [round.ts](/home/kiselev/git/integration/__tests__/transform/calculator/round.ts:39)
+  содержит параметризованные rounding cases; [dates_import.ts](/home/kiselev/git/integration/__tests__/Import/TextFile/Date/dates_import.ts:13)
   явно фиксирует форматы дат и предупреждает о неоднозначном MDY default. Для
   простого MVP разумно оставить явные decimal/Null и не расширять набор датами.
 
@@ -136,7 +137,7 @@ fresh-session persistence verifier, allowlisted Dock knowledge, отсутств
 
 Все ссылки этого раздела относятся к Git blob ревизии
 `b7060d7fe93ed9c64b4bfe7f890985d3a1f8a4d1` ветки `infra/evals`; прочитано через
-`git -C /home/george/git/testing/agent show infra/evals:<path>`.
+`git -C /home/kiselev/git/agent show infra/evals:<path>`.
 
 1. `evals/README.md:3–28`: старый SUT — Hermes skill `build-loginom-packages`;
    Promptfoo вызывает provider, затем controller удерживает artifact SHA и
@@ -177,10 +178,10 @@ fresh-session persistence verifier, allowlisted Dock knowledge, отсутств
 ## Данные и три рекомендуемых сценария
 
 Подтверждённый уже принятыми source-тестами Dock input:
-[sales.csv](/home/george/git/loginom-dock/tools/loginom-acceptance/fixtures/data-pipeline/sales.csv:1)
+[sales.csv](/home/kiselev/git/loginom-dock/tools/loginom-acceptance/fixtures/data-pipeline/sales.csv:1)
 содержит 6 строк, `Id/Region/Quantity/UnitPrice/Comment`, quoted `;`, пустую строку,
 `\\N`, ноль и отрицательное количество. Independent
-[goal oracle](/home/george/git/loginom-dock/tools/loginom-acceptance/calculator_goal_contract.py:27)
+[goal oracle](/home/kiselev/git/loginom-dock/tools/loginom-acceptance/calculator_goal_contract.py:27)
 вычисляет Revenue, Adjusted, price replacement, Note и Moment. Это хороший
 материал для разработки verifier, но задача исторического acceptance публична
 и может быть известна SUT через Dock; для измерения нужен новый маленький fixture

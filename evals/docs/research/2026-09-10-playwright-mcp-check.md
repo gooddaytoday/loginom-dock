@@ -17,7 +17,7 @@ benchmark. Это диагностика выбранных UI-переходо�
 | MCP package | `@playwright/mcp` `0.0.80` |
 | MCP client SDK | `@modelcontextprotocol/sdk` `1.30.0` |
 | Transitive Playwright / playwright-core | `1.63.0-alpha-2026-08-31`, закреплены package-lock |
-| Node диагностического MCP | `20.19.2`, `/home/george/.nvm/versions/node/v20.19.2/bin/node` |
+| Node диагностического MCP | `22.16.0`, `/home/kiselev/.nvm/versions/node/v22.16.0/bin/node` |
 | Браузер диагностики | Google Chrome `131.0.6778.204`, `/usr/bin/google-chrome` |
 | Dependency manifest | `evals/.tools/playwright-mcp/package.json` |
 | Lockfile | `evals/.tools/playwright-mcp/package-lock.json`, lockfileVersion 3 |

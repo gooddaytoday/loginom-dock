@@ -28,14 +28,14 @@ Desktop с исследовательским контекстом и досту
 | --- | --- | --- |
 | ОС | Linux 7.0.0-28-generic, x86_64, UID 1000 | Это не Mac исторической Hermes-приёмки |
 | `codex --version`, `codex exec --help` через PATH | Wrapper прекращает работу с сообщением, что Happ VPN не активен | До CLI дело не дошло; это не ограничение CLI |
-| Offline `--version` и `exec --help` настоящего бинарника | `/home/george/.local/libexec/codex-happ/codex`, `codex-cli 0.153.4` | Проверены только справка/версия; модель и auth не использовались |
+| Offline `--version` и `exec --help` настоящего бинарника | `/home/kiselev/.local/bin/codex`, `codex-cli 0.153.4` | Проверены только справка/версия; модель и auth не использовались |
 | Поддержка CLI | `exec`, `--json`, `--ephemeral`, `--ignore-user-config`, `--ignore-rules`, `--strict-config`, `--skip-git-repo-check`, `--sandbox`, `--output-schema`, `--output-last-message`, `--model`, `--config` | Тонкий внешний адаптер возможен; `--ignore-user-config` оставляет auth в `CODEX_HOME` |
 | Локальные Codex model defaults | Из `~/.codex/config.toml` выведены только model-related поля: `model = gpt-6-astra`, `model_reasoning_effort = ultra`; `model_provider` и `profile` отсутствуют | Это локальный default, не effective profile будущего запуска: CLI/managed overrides и фактический usage не проверены. Переносить профиль надо явно; незаметно заменить на Sol/low нельзя |
 | Docker | 27.4.1; `docker info` вернул `seccomp` builtin, `rootless`, `cgroupns` | Rootless daemon работает. Только read-only daemon query; образы, volumes и контейнеры не изменялись |
 | Sandbox-инструменты | `/usr/bin/bwrap`, `/usr/bin/unshare` присутствуют | Наличие проверено; проба конфигурации будущей песочницы ещё не проводилась |
 | Podman | executable присутствует; даже info/version wrapper получил ошибку создания `/run/user/1000/libpod` в read-only окружении | Работоспособность Podman не подтверждена; он не нужен при доступном Docker |
-| Hermes | `hermes` отсутствует в PATH; `~/.hermes` и `~/.hermes/hermes-agent` отсутствуют | Эффективный live Hermes profile/подписка на этом Linux-хосте не проверены |
-| Dock client | `~/.loginom-dock` отсутствует | Нельзя считать репозиторий установленным и готовым runtime |
+| Hermes | `/home/kiselev/.local/bin/hermes` доступен в PATH; состояние `~/.hermes` и live profile не проверялись | Наличие бинарника не доказывает подписку, effective profile или готовность к запуску |
+| Dock client | `~/.loginom-dock` существует | Наличие state directory не доказывает, что клиент установлен, настроен или готов к runtime |
 
 Сначала daemon socket был недоступен из sandbox текущей задачи. Повторный
 read-only `docker info --format '{{json .SecurityOptions}}'` с разрешённым
