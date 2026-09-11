@@ -45,6 +45,9 @@
 
 ## Implementation boundaries
 
+- Never put secret keys, passwords, tokens, API credentials or similar secrets
+  in source code, tests or fixtures. Read them from the environment or from
+  Dock-owned secret files that stay outside Git.
 - Preserve OpenViking APIs, MCP tools, ingestion, search, sessions, storage schema,
   `viking://` URIs, internal package names and upstream attribution. Prefer small
   adapters over forks of existing subsystems; never add a second repository importer.
@@ -140,5 +143,6 @@
 - Extend the existing suites for behavior changes. Branding changes need build
   and visual checks; avoid tests that only repeat display strings.
 - Use real Loginom for drag, clipboard, execution and package-saving acceptance.
-- Keep credentials out of Git, Docker build contexts, documentation and logs.
+- Keep credentials out of source code, Git, Docker build contexts, documentation
+  and logs.
 - Commit reports must be in Russian and past tense.
