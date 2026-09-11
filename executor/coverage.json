@@ -826,7 +826,7 @@
         "save_reopen"
       ],
       "contract": "component_pipeline",
-      "status": "planned",
+      "status": "live_verified",
       "source_dependencies": [
         {
           "source": "e2e-labels",
@@ -839,14 +839,75 @@
           "document_title": "Параметры полей"
         }
       ],
-      "supported_profiles": [],
-      "unit_evidence": [],
-      "live_evidence": [],
-      "known_gaps": [
-        "Нет принятого сквозного контракта",
-        "Разделы Help найдены; детальные режимы и live доступность требуют проверки"
+      "supported_profiles": [
+        "loginom-7.4.2-macos-chromium"
       ],
-      "next_step": "Source review мастера и отдельная цепочка с настройкой, данными и save/reopen",
+      "unit_evidence": [
+        {
+          "path": ".dock/field-parameters/client-suite-4.log",
+          "sha256": "c0bb6b330a192d59e766c42f2713c50886e9aa68501b1b3bc3090d483af90b8b",
+          "passed": 1235,
+          "skipped": 1
+        },
+        {
+          "path": ".dock/field-parameters/python-suite-6.log",
+          "sha256": "4a1c8f90eec2dd38d2efbd7e3ec9c01814772292a7c8c63b55e09fd82e835c0f",
+          "passed": 458
+        },
+        {
+          "path": ".dock/reform-review-20260911/client-tests.log",
+          "sha256": "d848f3e51d7fd2d42313fea865232987721e53f26871dcdf7db58f932f2033dd",
+          "passed": 1244,
+          "skipped": 1
+        },
+        {
+          "path": ".dock/reform-review-20260911/python-tests.log",
+          "sha256": "4539f16ecb7c9b05c835f8634fbe98e66029cc6bbdd3bba203428cbc47d2d220",
+          "passed": 461
+        }
+      ],
+      "live_evidence": [
+        {
+          "path": ".dock/field-parameters/hermes-runs/20260911-083239-ed5ccd06/reform-node-audit.json",
+          "sha256": "3d9441a6bbedf408271a20836cb4d44996dadcce612514991e9ce7766f6fd810",
+          "report_path": "docs/plans/loginom-dock/05-completion-audit.md",
+          "runtime_revision": "df1071d2606bbfe355084010ef14c1d1d8aa1adf074d71f8f445c7864d1770db",
+          "manifest_uri": "viking://resources/loginom-dock/catalogs/executor-preview/releases/2026.09.08-node-apply.1-candidate/manifest.json",
+          "manifest_sha256": "936ef73d933e85bfd8429b8b0f2b515c543ca415a2b22ba57e108232c54ddf44",
+          "native_skill_sha256": "2940ccd01337a3b9fc6d394e803ed50df295dfb41b4f4cf3c1484da961c44e53",
+          "target": "Loginom 7.4.2 Linux / macOS Chromium",
+          "proof_scope": "scalar node.apply; new/existing; exact output; save/reopen/reexecute",
+          "checks_passed": 49
+        },
+        {
+          "path": ".dock/reform-review-20260911/hermes-runs/20260911-110726-82fa90aa/reform-node-audit.json",
+          "sha256": "35a9604caf6a7f5d778c9638d62c2a5560a08f00b1427569b6edf504d135f96f",
+          "report_path": "docs/loginom-dock/field-parameters-review-2026-09-11.md",
+          "runtime_revision": "ab4702e56bbe6dac75a7df75f99919e5f6152324bf3d0633eae11cdf4bf03313",
+          "manifest_uri": "viking://resources/loginom-dock/catalogs/executor-preview/releases/2026.09.08-node-apply.1-candidate/manifest.json",
+          "manifest_sha256": "936ef73d933e85bfd8429b8b0f2b515c543ca415a2b22ba57e108232c54ddf44",
+          "native_skill_sha256": "2940ccd01337a3b9fc6d394e803ed50df295dfb41b4f4cf3c1484da961c44e53",
+          "target": "Loginom 7.4.2 Linux / macOS Chromium",
+          "proof_scope": "scalar node.apply; new/existing; exact output; save/reopen/reexecute",
+          "checks_passed": 49
+        },
+        {
+          "path": ".dock/client-update-field-parameters-20260911/live-1789115736748/installed-independent-audit.json",
+          "sha256": "626b24122b403e242556614dde2ab158d397b4dc9b45db62bd0ed7cd105999fd",
+          "report_path": "docs/loginom-dock/client-update-field-parameters-2026-09-11.md",
+          "runtime_revision": "1161c1c8f8d82bd3742d4d49bf84ab69f98bf348dcdcb487f4fcb4257881ddfa",
+          "target": "Loginom 7.4.2 Linux / macOS Chromium",
+          "proof_scope": "installed client; existing saved reform configuration; fresh 6x4 output; no new Hermes run or save after rerun",
+          "checks_passed": 11
+        }
+      ],
+      "known_gaps": [
+        "Установлен локальный клиент для macOS; публичный выпуск и новая автономная приёмка объединённого комплекта не выполнялись",
+        "Пять scalar-типов; не более 128 изменений и 1000 полей в полной инвентаризации",
+        "Полноточный sample ограничен 10 строками; Loginom 7.5 и весь V4/V5 не приняты",
+        "Live отмена проверена до браузерной работы, не во время серверного вычисления"
+      ],
+      "next_step": "Продолжить подпланы06/09/10; публичный выпуск выполнить отдельной принятой поставкой V5",
       "documented_sections": [
         {
           "section": "Мастер настройки",
