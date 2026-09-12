@@ -108,11 +108,12 @@
   do not infer permission to push main, deploy or update the shared plugin.
   Preserve pending branches; start new nodes from a recorded accepted main base.
   Follow docs/plans/loginom-dock/automatic-node-workflow.md. The latest user
-  clarification disables periodic polling: automation loginom-dock is PAUSED.
+  clarification disables periodic polling; the user then deleted automation
+  loginom-dock. Its configuration absence was verified.
   Developers send one completion message per phase to the coordinator, plus
   actionable blockers only. Advance on these events with idempotent phase
   dispatch and the local registry; verify the old turn completed before sending
-  the next phase. Do not reactivate the heartbeat without a new user request.
+  the next phase. Do not recreate periodic monitoring without a new user request.
   The full queue is maintained in
   [the four-stream roadmap](docs/plans/loginom-dock/four-stream-node-roadmap.md)
   and [its JSON registry](docs/plans/loginom-dock/four-stream-node-roadmap.json).
