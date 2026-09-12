@@ -5,12 +5,26 @@ import {preflightTabularSource} from './sorting-preflight.mjs';
 import {configureSortingOutput} from './sorting-output.mjs';
 import {duplicatesConfigurationReadback} from './duplicates-readback.mjs';
 import {duplicatesParametersSchema} from './node-api.mjs';
+import {closePreparedWizard} from './node-wizard-close.mjs';
 const need=(v,m)=>{if(!v)throw Error('Duplicates: '+m);};
 export function createDuplicatesNodeSupport(config){return createTabularTransformNodeSupport(config,{
  type:'research.duplicates',mode:'mark',revision:'duplicates-v1-internal-1',readback:duplicatesConfigurationReadback,parameterSchema:duplicatesParametersSchema,
  validate:validateDuplicatesParameters,
  preflight:(options,ctx,config)=>preflightTabularSource(options,ctx,config,{required:true,resolve:resolveDuplicatesParameters,label:'duplicates'}),
- validateInput:(p,resolved,native)=>resolveDuplicatesParameters(p,native.target_fields),
+ async validateInput(p,resolved,native,{channel,record,operationId}){
+  try{return resolveDuplicatesParameters(p,native.target_fields);}catch(error){
+   // This hook runs before the first input-mapping edit or Done. Closing the
+   // unchanged draft proves a conclusive refusal, while opening it may have
+   // deactivated the node and must remain an acknowledged possible effect.
+   const closed=await closePreparedWizard(channel);
+   const proof={verified:true,settings_unchanged:true,cleanup_complete:true,input:native,closed};
+   const phase='duplicates_input_validation_refused';
+   const saved=await record({phase,operation_id:operationId,proof});
+   need(saved?.phase===phase&&JSON.stringify(saved.proof)===JSON.stringify(proof),'Input refusal was not durably acknowledged');
+   error.nodePhaseRefusal={phase:'input_mapping',status:'FAILED',effect_possible:true,cleanup_complete:true,
+    settings_unchanged:true,verification:phase};throw error;
+  }
+ },
  configurationObservation:{condition:'duplicate roles page',readDuplicates:true,ready:s=>s.wizard?.stage==='input_mapping'&&s.node_duplicates?.verified===true},
  async configure(channel,p,{request,inputMapping}){
   if(request.finish==='close'){

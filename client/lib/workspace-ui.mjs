@@ -94,7 +94,7 @@ export function workspaceUiCapability(page, task, readNodeContext, captureProces
   // The state is document-bound; navigation invalidates every previous reference.
   const readUi = async (rediscover = false) => {
     const nodeContext=await boundNode();
-    const observed = await page.evaluate(({rootRef,discoverRoots,storageName,columnPage,mappingPage,tableFormatPage,cacheReadPredicates,definitionPrefix,preparedWorkflowPath,preparedNodeId,preparedOutputPort,preparedInputPort}) => {
+    const observed = await page.evaluate(({rootRef,discoverRoots,storageName,columnPage,mappingPage,tableFormatPage,cacheReadPredicates,definitionPrefix,preparedWorkflowPath,preparedNodeId,preparedGraphTid,preparedOutputPort,preparedInputPort}) => {
     try {
     const scanStarted = Date.now(), maxElements = 6000, maxWork = 250000;
     let maxMs = 500;
@@ -545,8 +545,10 @@ export function workspaceUiCapability(page, task, readNodeContext, captureProces
           const chain=items.every((i,n)=>i.tid.slice(prefix.length).split('>').length===n+1&&(!n||i.tid.startsWith(items[n-1].tid+'>')));
           const format=s=>s.replace(/\s/g,'_').replace(/,/g,'');
           const node=items[5];
+          const graphPrefix=workflow.prefix+';Graph;';
+          const nativeKey=preparedNodeId&&preparedGraphTid?.startsWith(graphPrefix)?preparedGraphTid.slice(graphPrefix.length):null;
           const exact=items[0].tid===prefix+'Сервер'&&items[1].label==='Пакеты'&&items.slice(2).every(i=>i.label)
-            &&node.tid===items[4].tid+'>'+format(node.label);
+            &&node.tid===items[4].tid+'>'+(nativeKey??format(node.label));
           const icon=(e,selector)=>{const found=e.querySelectorAll(selector);charge();return found.length===1&&inside(found[0],e);};
           const icons=icon(crumbs[4],'.maptree-icon-workflow')&&icon(crumbs[5],'[class*="bg-vendor-icon-"]');
           if(!bounded)nodeContext.status='bounded';
@@ -2125,7 +2127,7 @@ function readRenderedInputMapping(observation) {
       &&visible(storageRootPanels[0])&&storageRootPanels[0].contains(storageRootCandidates[0])
       &&visible(storageRootCandidates[0])&&!sensitive(storageRootCandidates[0])
       &&textOf(storageRootCandidates[0],true)==='Файлы'?storageRootCandidates[0]:null;
-    const interesting = element => unionCells.has(state.ids.get(element)) || joinCells.has(state.ids.get(element)) || /^MF;TF(?:-\d+)?;ModelForm;PreviewWindow;p\.h;close$/.test(getTid(element)??'') || element===storageRoot || filterCells.has(state.ids.get(element)) || reformColumnCells.has(state.ids.get(element)) || outputColumnCells.has(state.ids.get(element)) || tableScrollers.has(state.ids.get(element)) || viewerControls.has(state.ids.get(element)) || /;ViewsForm;colVendors_Визуализаторы>[^;]+;TreeText$/.test(getTid(element)??'') || processGridControls.has(state.ids.get(element)) || processExpanders.has(state.ids.get(element)) || outputScroller(element) || importScroller(element) || processCells.has(state.ids.get(element)) || processMenuControls.has(state.ids.get(element)) || sortingCells.has(state.ids.get(element)) || groupingCells.has(state.ids.get(element)) || !!comboPart(element) || importColumnCellRefs.has(state.ids.get(element)) || element.matches('button,input,textarea,select,[contenteditable="true"],[role="button"],[role="checkbox"],[role="radio"],[role="combobox"],[role="menuitem"],[role="tab"],[role="treeitem"],[role="option"],[role="spinbutton"]')
+    const interesting = element => !!graphNodeOf(element) || unionCells.has(state.ids.get(element)) || joinCells.has(state.ids.get(element)) || /^MF;TF(?:-\d+)?;ModelForm;PreviewWindow;p\.h;close$/.test(getTid(element)??'') || element===storageRoot || filterCells.has(state.ids.get(element)) || reformColumnCells.has(state.ids.get(element)) || outputColumnCells.has(state.ids.get(element)) || tableScrollers.has(state.ids.get(element)) || viewerControls.has(state.ids.get(element)) || /;ViewsForm;colVendors_Визуализаторы>[^;]+;TreeText$/.test(getTid(element)??'') || processGridControls.has(state.ids.get(element)) || processExpanders.has(state.ids.get(element)) || outputScroller(element) || importScroller(element) || processCells.has(state.ids.get(element)) || processMenuControls.has(state.ids.get(element)) || sortingCells.has(state.ids.get(element)) || groupingCells.has(state.ids.get(element)) || !!comboPart(element) || importColumnCellRefs.has(state.ids.get(element)) || element.matches('button,input,textarea,select,[contenteditable="true"],[role="button"],[role="checkbox"],[role="radio"],[role="combobox"],[role="menuitem"],[role="tab"],[role="treeitem"],[role="option"],[role="spinbutton"]')
       || /;(?:Input|Output)_[^;]+$|;Label;Label$|;Graph;[^;]+$|;btn[^;]+$|;edt[^;]+$|;mi[^;]+$|;tb(?:-\d+)?$/.test(getTid(element) ?? '')
       // Pinned E2E bg/selectors.ts:272,279,286: palette tree labels and
       // expanders are spans without button/treeitem roles in some UI builds.
@@ -2160,9 +2162,14 @@ function readRenderedInputMapping(observation) {
     const graphNodeOf=element=>{
       const tid=getTid(element)??'';
       if(!ownedGraph(element))return null;
-      const body=tid.slice(graphPrefix.length),parts=body.split(';'),label=parts[0];
-      if(!graphLabels.has(label) || graphElements.filter(e=>getTid(e)===graphPrefix+label).length!==1)return null;
-      const part=parts.length===1?'body':parts.slice(1).join(';')==='Label;Label'?'label':parts.length===2 && parts[1]==='Setting'?'settings':parts.length===2 && parts[1]==='Visualizers'?'visualizers':null;
+      const body=tid.slice(graphPrefix.length);
+      // Native automatic labels may themselves contain semicolons. Resolve
+      // against complete observed label keys, never the first split token.
+      const matches=[...graphLabels].filter(label=>['',';Label;Label',';Setting',';Visualizers'].some(suffix=>body===label+suffix));
+      if(matches.length!==1)return null;
+      const label=matches[0],suffix=body.slice(label.length);
+      if(graphElements.filter(e=>getTid(e)===graphPrefix+label).length!==1)return null;
+      const part=suffix===''?'body':suffix===';Label;Label'?'label':suffix===';Setting'?'settings':suffix===';Visualizers'?'visualizers':null;
       return part?{node_label:label,part,...(part==='label'?{label_text:textOf(element,false,'')}: {})}:null;
     };
     const priority = { graph_editor: 0, dialog: 1, graph: 2, workflow: 3, global: 4 };
@@ -2473,7 +2480,7 @@ function readRenderedInputMapping(observation) {
         ports: graphElements.filter(element => (getTid(element) ?? '').startsWith(nodeTid + ';') && /;(?:Input|Output)_[^;]+$/.test(getTid(element)))
           .slice(0, 100).map(element => ({ tid: getTid(element), bounding_box: boxOf(element), ui_ref: refOf(element) })) };
     });
-    const links = [...new Set(graphElements.map(getTid).filter(tid => { const body = tid.slice(graphPrefix.length); return body.split('|').length === 4 && !body.includes(';'); }))].sort();
+    const links = [...new Set(graphElements.map(getTid).filter(tid => { const body = tid.slice(graphPrefix.length); return /^[^|]+\|Output_[^;|]+\|[^|]+\|Input_[^;|]+$/.test(body); }))].sort();
     let packageIdentity = null;
     try {
       const app = globalThis.bg?.app;
@@ -2897,6 +2904,7 @@ function readRenderedInputMapping(observation) {
     tableFormatPage:task.table_format_page??(task.snapshot?.table_settings?.format?.page?{offset:task.snapshot.table_settings.format.page.offset,limit:task.snapshot.table_settings.format.page.limit}:null),
     preparedWorkflowPath:task.prepared_node_context?.workflow_ref.navigation_path??null,
     preparedNodeId:task.prepared_node_context?.node.node_id??null,
+    preparedGraphTid:nodeContext?.surface==='graph'?nodeContext.tid:null,
     preparedOutputPort:nodeContext?.output_port??null,preparedInputPort:nodeContext?.input_port??null,
     cacheReadPredicates:!!task.prepared_node_context,definitionPrefix:task.prepared_node_context?.workflow_ref.prefix??null});
     if (observed?.ui_read_failure) {
@@ -2985,7 +2993,7 @@ function readRenderedInputMapping(observation) {
     handles.push(handle);
     const graphPrefix = task.snapshot.graph_identity?.status==='observed'?task.snapshot.graph_identity.native_prefix:null;
     const graphBody = graphPrefix && current.scope==='graph' && current.tid?.startsWith(graphPrefix) ? current.tid.slice(graphPrefix.length) : null;
-    const isGraphLink = graphBody !== null && graphBody.split('|').length === 4 && !graphBody.includes(';');
+    const isGraphLink = graphBody !== null && /^[^|]+\|Output_[^;|]+\|[^|]+\|Input_[^;|]+$/.test(graphBody);
     const valid = await handle.evaluate((element, ref) => element.isConnected && globalThis[Symbol.for('loginom-dock.workspace-ui.identity.v1')]?.ids.get(element) === ref, current.ref);
     // Playwright treats zero-height/width SVG geometry as invisible even when
     // the stroke is painted. Links use the same style check as observation and
@@ -3332,9 +3340,17 @@ function readRenderedInputMapping(observation) {
             // Retain the exact node key from the already bound breadcrumb;
             // deriving it from display text loses multiline automatic labels.
             const nodePrefix=workflowPath.at(-1)?.tid+'>';
-            const key=port&&finishOwner.node.tid?.startsWith(nodePrefix)
+            const bound=fresh.prepared_node_context,graphPrefix=fresh.workflow_ref?.prefix+';Graph;';
+            // Automatic labels can contain newlines stripped by the Done
+            // input. The prepared GUID reader binds the exact current graph
+            // body, including its newly generated key; rendered text must
+            // still match the completion label below.
+            const boundKey=!port&&bound?.verified===true&&bound.surface==='graph'
+              &&bound.node_id===task.prepared_node_context?.node.node_id&&bound.tid?.startsWith(graphPrefix)
+              ?bound.tid.slice(graphPrefix.length):null;
+            const key=boundKey??(port&&finishOwner.node.tid?.startsWith(nodePrefix)
               ?finishOwner.node.tid.slice(nodePrefix.length)
-              :expected.replace(/\s/g,'_').replace(/,/g,'');
+              :expected.replace(/\s/g,'_').replace(/,/g,''));
             const labels=fresh.ui.elements.filter(e=>e.graph_node?.part==='label'
               && e.graph_node.node_label===key && typeof e.graph_node.label_text==='string'
               && e.graph_node.label_text.replace(/\s/g,'')===expected.replace(/\s/g,''));

@@ -164,6 +164,12 @@ export async function applyNode({request, operation, handlers, drivers, record,
       // Explicit trusted-driver proof is required: a transport exception alone
       // never clears uncertainty, even in a nominally non-mutating phase.
       const refusal=error.nodePhaseRefusal;
+      if(name==='input_mapping'&&request.target.type==='research.duplicates'&&refusal?.phase===name
+        &&refusal.status==='FAILED'&&refusal.effect_possible===true&&refusal.cleanup_complete===true
+        &&refusal.settings_unchanged===true&&refusal.verification==='duplicates_input_validation_refused'){
+        await acknowledge({phase:'node_phase_refused',signature,receipt:{...pending,...refusal}});
+        state.effect_possible=true;state.pending=null;state.cleanup_complete=true;state.verified_refusal=true;
+      }
       if(name==='target'&&refusal?.phase===name&&refusal.status==='FAILED'
         &&refusal.effect_possible===true&&refusal.cleanup_complete===true&&refusal.settings_unchanged===true
         &&refusal.verification==='reform_mapped_preflight_completed'){

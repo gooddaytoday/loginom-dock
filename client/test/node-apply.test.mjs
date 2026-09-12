@@ -185,3 +185,15 @@ test('incomplete or unacknowledged reform refusal retains uncertainty',async()=>
   const r=await f.run();assert.equal(r.status,'AMBIGUOUS');assert.equal(r.pending_phase,'target');assert.equal(r.cleanup_complete,false);
  }
 });
+
+test('invalid Duplicates input ends conclusively only with durable unchanged-draft cleanup proof',async()=>{
+ for(const failure of ['none','cleanup_complete','settings_unchanged','verification','phase','journal','foreign_type']){
+  const f=fixture({failJournal:failure==='journal'?'node_phase_refused':undefined}),p=request();
+  p.target={kind:'existing',type:failure==='foreign_type'?'imports.text':'research.duplicates',ref:{document_id:'doc',workflow_id:'workflow',node_id:'node1'}};
+  p.mode='mark';f.handlers.set(p.target.type,{...f.handlers.get('imports.text'),modes:['mark']});
+  f.drivers.mapPorts=async()=>{const e=Error('Unknown field');e.nodePhaseRefusal={phase:'input_mapping',status:'FAILED',effect_possible:true,cleanup_complete:true,settings_unchanged:true,verification:'duplicates_input_validation_refused'};if(!['none','journal','foreign_type'].includes(failure))delete e.nodePhaseRefusal[failure];throw e;};
+  const r=await f.run(p);assert.equal(r.status,failure==='none'?'FAILED':'AMBIGUOUS',failure);
+  assert.equal(r.cleanup_complete,failure==='none',failure);assert.equal(r.pending_phase,failure==='none'?null:'input_mapping',failure);
+  assert.ok(!f.calls.includes('configure')&&!f.calls.includes('execute'));
+ }
+});

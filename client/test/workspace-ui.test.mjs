@@ -2017,8 +2017,8 @@ test('wizard cancellation confirms the original graph after one exact affirmativ
 });
 
 for(const completion of ['done','execute'])test('wizard '+completion+' waits for the expected graph node without claiming execution completion',async()=>{
-  for(const mode of ['success','bound_surface','bound_foreign','bound_graph_unlock','bound_graph_lock_churn','wrapped_label','wrapped_filename','wrapped_grouping','different_key','comma_collision','duplicate_label','duplicate_body','actual_space','wrong_label','dialog','still_open','lost_reply','empty_label','stale_region','late_body','late_epoch','epoch_churn','late_mask','late_tab','late_duplicate']) {
-    const expected=mode==='wrapped_filename'?'sales 2026.csv':mode==='wrapped_grouping'?'Quantity, Revenue, Id по Region':mode==='comma_collision'?'A, B':mode==='empty_label'?'':'Сумма';
+  for(const mode of ['success','bound_surface','bound_multiline','bound_multiline_wrong_text','bound_foreign','bound_graph_unlock','bound_graph_lock_churn','wrapped_label','wrapped_filename','wrapped_grouping','different_key','comma_collision','duplicate_label','duplicate_body','actual_space','wrong_label','dialog','still_open','lost_reply','empty_label','stale_region','late_body','late_epoch','epoch_churn','late_mask','late_tab','late_duplicate']) {
+    const expected=mode.startsWith('bound_multiline')?'Дубликаты: out: Value, Amount; in: Key (+1)':mode==='wrapped_filename'?'sales 2026.csv':mode==='wrapped_grouping'?'Quantity, Revenue, Id по Region':mode==='comma_collision'?'A, B':mode==='empty_label'?'':'Сумма';
     const page=new Page(),base='MF;TF-1;',panel=page.add('div',base+'NavigationBar;NavigationPanel');
     let path='';const breadcrumbs=[];
     for(const label of ['Сервер','Пакеты','Package1','Модуль1','Сценарий','Old','Настройка']) {
@@ -2038,7 +2038,7 @@ for(const completion of ['done','execute'])test('wizard '+completion+' waits for
       let postClickReads=0;
       const readNode=async()=>{const graph=page.events.includes('click')&&++postClickReads>1;
         return {verified:true,document_id:'doc',workflow_id:'workflow',node_id:graph&&mode==='bound_foreign'?'foreign':'node',
-          surface:graph?'graph':'wizard',tid:base+(graph?'Graph;Сумма':'WizrdMCF'),
+          surface:graph?'graph':'wizard',tid:base+(graph?'Graph;'+(mode.startsWith('bound_multiline')?'Дубликаты:__out:_Value_Amount;_in:_Key_(+1)':'Сумма'):'WizrdMCF'),
           ...(graph&&['bound_graph_unlock','bound_graph_lock_churn'].includes(mode)?{locked:mode==='bound_graph_unlock'?postClickReads<4:postClickReads%2===1}:{})};};
       page.execute=async options=>clone(await vm.runInContext('('+workspaceUiCapability.toString()+')',page.context)(page,
         {expected_build:build,expected_origin:origin,kind:'workspace-ui',prepared_node_context:{node:{node_id:'node'},workflow_ref:{prefix:'MF;TF-1',navigation_path:[]}},...options},readNode));
@@ -2050,10 +2050,10 @@ for(const completion of ['done','execute'])test('wizard '+completion+' waits for
     const transition=()=>{
       if(mode==='still_open')return;
       wizard.remove();breadcrumbs.at(-1).remove();breadcrumbs.at(-2).remove();
-      const graph=page.add('div',base+'ModelForm;cmpDiagram'),name=mode==='wrong_label' || mode==='different_key'?'Other':mode==='actual_space'?'Сум_ма':expected.replace(/\s/g,'_').replace(/,/g,'');
+      const graph=page.add('div',base+'ModelForm;cmpDiagram'),name=mode.startsWith('bound_multiline')?'Дубликаты:__out:_Value_Amount;_in:_Key_(+1)':mode==='wrong_label' || mode==='different_key'?'Other':mode==='actual_space'?'Сум_ма':expected.replace(/\s/g,'_').replace(/,/g,'');
       const node=page.add('g',base+'Graph;'+name,'',undefined,graph);
       const wrapped=['wrapped_label','actual_space','wrapped_filename','wrapped_grouping'].includes(mode);
-      const label=page.add('span',base+'Graph;'+name+';Label;Label',wrapped?'':mode==='wrong_label'?'Other':mode==='comma_collision'?'A B':expected,undefined,node);
+      const label=page.add('span',base+'Graph;'+name+';Label;Label',wrapped?'':mode==='bound_multiline_wrong_text'?'Дубликаты: Other':mode==='wrong_label'?'Other':mode==='comma_collision'?'A B':expected,undefined,node);
       finishedNode=node;finishedLabel=label;finishedGraph=graph;
       if(['wrapped_label','actual_space'].includes(mode)){page.add('span',null,mode==='actual_space'?'Сум ':'Сум',undefined,label);page.add('br',null,'',undefined,label);page.add('span',null,'ма',undefined,label);}
       if(mode==='wrapped_filename' || mode==='wrapped_grouping') {
@@ -2089,7 +2089,7 @@ for(const completion of ['done','execute'])test('wizard '+completion+' waits for
       if(mode==='late_duplicate' && waits===2)page.add('span',base+'Graph;Сумма;Label;Label','Сумма',undefined,finishedNode);
     };
     const result=await page.act({verb:completion==='done'?'finish_wizard':'execute_wizard',ref:button.ref},snapshot);
-    const success=['success','bound_surface','bound_graph_unlock','wrapped_label','wrapped_filename','wrapped_grouping','stale_region','late_body','late_epoch'].includes(mode);
+    const success=['success','bound_surface','bound_multiline','bound_graph_unlock','wrapped_label','wrapped_filename','wrapped_grouping','stale_region','late_body','late_epoch'].includes(mode);
     assert.equal(result.status,success?'SUCCEEDED':'AMBIGUOUS',mode+JSON.stringify(result.error));
     assert.equal(page.events.filter(e=>e==='click').length,1);
     if(completion==='execute' && success) {
@@ -3591,6 +3591,19 @@ test('node overview rejects incomplete foreign clipped and unowned icon breadcru
     const {page}=await nodeOverviewContextFixture(mode);assert.notEqual((await page.observe()).node_context.status,'observed',mode);
   }
 });
+test('prepared node overview binds a multiline automatic key without trusting collapsed label text',async()=>{
+ for(const mode of ['bound','unbound','foreign_key']) {
+  const {page,panel}=await nodeOverviewContextFixture(),crumb=panel.children.at(-1);
+  const key='Дубликаты:__out:_Value_Amount;_in:_Key_(+1)';
+  crumb.attrs['data-tid']=crumb.attrs['data-tid'].replace(/Изменение$/,key);
+  crumb.ownText='Дубликаты: out: Value, Amount; in: Key (+1)';
+  const binding={node:{node_id:'node'},workflow_ref:{prefix:'MF;TF-5',navigation_path:[]}};
+  const reader=async()=>({verified:true,document_id:'doc',workflow_id:'wf',node_id:'node',surface:'graph',tid:'MF;TF-5;Graph;'+(mode==='foreign_key'?'Other':key)});
+  const result=await vm.runInContext('('+workspaceUiCapability.toString()+')',page.context)(page,
+   {mode:'observe',expected_build:build,expected_origin:origin,...(mode==='unbound'?{}:{prepared_node_context:binding})},reader);
+  assert.equal(result.output.node_context.status==='observed',mode==='bound',mode);
+ }
+});
 
 function smallTableCoverageFixture() {
  const page=new Page(),key='MF;TF-1;ViewsForm;BrowseView';page.context.innerWidth=1000;page.context.innerHeight=800;
@@ -4632,4 +4645,12 @@ test('global duplicate role selection retains its dialog and rejects unrelated f
   const result=await page.act({verb:'select_wizard_option',ref:option.ref},read.output);
   assert.equal(result.status,fault?'AMBIGUOUS':'SUCCEEDED',JSON.stringify(result.error));assert.equal(page.events.filter(e=>e==='click').length,1);
  }
+});
+
+test('graph observation retains automatic-label links and excludes their child decorations',async()=>{
+ const page=new Page();
+ const link='MF;TF-1;Graph;Source;_one|Output_Data-0|Дубликаты;_in:_Key|Input_Data-0';
+ page.add('g',link,'',{x:300,y:140,width:100,height:1});
+ page.add('g',link+';Decoration','',{x:300,y:140,width:100,height:1});
+ const s=await page.observe();assert.deepEqual(s.links.map(e=>e.tid??e),[link]);
 });

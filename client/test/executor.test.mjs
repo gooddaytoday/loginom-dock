@@ -454,3 +454,15 @@ test('save waits for requested reopened tab while another package remains visibl
  assert.equal(outcome.status,'SUCCEEDED',JSON.stringify(outcome.error));assert.equal(waits,2);
  assert.equal(page.events.filter(e=>e==='package_reopened').length,1);
 });
+
+test('save/reopen graph proof retains links with semicolons in automatic node labels',async()=>{
+  const page=linkPage();page.nodes[1].label='Дубликаты;_in:_Key';
+  page.edges=['Источник|Output_Data-0|Дубликаты;_in:_Key|Input_Data-0'];
+  const saved=await run(page,'package.save_as',{path:'/user/data/packages/semicolon.lgp',conflict_policy:'fail'});
+  assert.equal(saved.status,'SUCCEEDED',JSON.stringify(saved.error));
+  const proof=saved.trace.find(e=>e.event==='postcondition_verified');
+  assert.equal(proof.graph.links.length,1);
+  const changed=linkPage();changed.nodes[1].label='Дубликаты;_in:_Key';changed.edges=[...page.edges];changed.onReopen=p=>{p.edges=[];};
+  const lost=await run(changed,'package.save_as',{path:'/user/data/packages/lost-link.lgp',conflict_policy:'fail'});
+  assert.equal(lost.status,'AMBIGUOUS');
+});
