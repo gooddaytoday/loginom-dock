@@ -97,6 +97,26 @@ prepare. Workflow ID изменился с `1789246038001-dsjstdk5dc-2` на
 `loginom.duckdns.org:443`. Последняя версия флагов ещё не проверена вживую;
 никакого успешного полного node.apply или принятого аудита пока нет.
 
+## Блокировка продолжения — 13 сентября 2026, МСК
+
+Исходники и проверяющие модули сохранены локальным WIP-коммитом `13884b5c`.
+Два последовательных свежих preflight завершились `UND_ERR_CONNECT_TIMEOUT`
+к `loginom.duckdns.org:443`. Независимый curl подтвердил TCP-соединение с
+`82.22.23.10` за 0.020 секунды, затем TLS handshake timeout через 10 секунд
+(HTTP 000). HTTPS Dock нужен для настоящего prepare и remote pinning;
+кеш вместо него не подставлялся. Диагностика передана координатору.
+
+Последние harness завершены. Продолжить после восстановления HTTPS:
+запустить свежий `date-time-live.mjs` с теми же config/state/pins, дождаться
+READY, затем `.dock/start-case.mjs`, `.dock/graph.mjs`,
+`.dock/activate-source.mjs`, `.dock/apply-new.mjs`. При диалоге восстановления
+сессии сначала штатно восстановить соединение, заново prepare и graph refs;
+не повторять запуск вслепую. Новый запрос сейчас использует Done, все 24
+преобразования, одинаковые входные метки, выходной порядок и исключение DateB.
+После успешного Done нужен execute/read с достаточным бюджетом и независимый
+аудит, затем оставшиеся случаи и persistence. Hermes по-прежнему не запускать
+без отдельной выдачи координатора.
+
 Fresh source harness: `tools/loginom-acceptance/date-time-live.mjs`.
 Приватные команды и результаты находятся в `.dock/`; каждый запуск сохраняет
 session metadata, remote pins, browser receipts и public node API evidence.
