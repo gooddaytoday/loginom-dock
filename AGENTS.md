@@ -53,7 +53,17 @@
   user's instruction except for explicitly requested follow-ups. On 2026-09-11
   the shared process-panel return fix and user-v1 readback/auditor follow-up
   were completed with 31/31 autonomous audit checks and 11/11 negative cases.
-  This does not resume node09 or the pilot; wait for a new implementation request.
+  Nodes09/10 were subsequently completed through separate sequential requests.
+  On 2026-09-12 the user requested a plan for three separate app-task streams
+  controlled through the coordinator chat. The plan is
+  `docs/plans/loginom-dock/three-stream-workflow.md`: planning does not launch
+  development or resume the old pilot. Start only the streams explicitly requested
+  by the user; review and the next node are dispatched on request, merging later.
+  The user subsequently authorized implementation of the first three streams
+  (11 Replacement, 12 Duplicates, 13 Date/time) in this coordinator chat.
+  Prepare and verify isolated environments, then run one ordinary app task,
+  worktree and named branch per node on gpt-6-astra / medium. This is a new run;
+  the old pilot stays parked. Reviews and subsequent nodes still require dispatch.
 - Preserve OpenViking APIs, MCP tools, ingestion, search, sessions, storage schema,
   `viking://` URIs, internal package names and upstream attribution. Prefer small
   adapters over forks of existing subsystems; never add a second repository importer.
