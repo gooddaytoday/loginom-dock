@@ -3,13 +3,30 @@ const canonical=v=>Array.isArray(v)?v.map(canonical):v&&typeof v==='object'?Obje
 const need=(v,m)=>{if(!v)throw Error(m);},same=(a,b)=>JSON.stringify(canonical(a))===JSON.stringify(canonical(b));
 const normalized=r=>({field:{kind:'input_field',name:r.selected},type:r.input_fields.find(f=>f.name===r.selected).type,pairs:r.pairs.map(({from,to})=>({from,to})),other:r.other,...(r.input_fields.find(f=>f.name===r.selected).type==='string'?{case_sensitive:r.case_sensitive}:{precision:r.precision})});
 const pairKeys=ps=>ps.map(p=>[replacementValueKey(p.from),replacementValueKey(p.to)]);
+export async function revealReplacementAdd(channel,observe,ready){
+ let s=await observe('replacement add header');
+ for(let attempt=0;attempt<130;attempt++){
+  const tid=s.wizard.root_tid+';ReplaceColumnsWizard;grdReplaceItems;tbl;GroupHeader;0;AddButton';
+  if(s.ui.elements.some(e=>e.tid===tid&&e.allowed_actions.includes('click')))return s;
+  const field=s.node_replacement.selected;
+  const anchors=s.ui.elements.filter(e=>e.replacement_field?.role==='pair'&&e.replacement_field.field_key===field&&e.scroll?.top>0&&e.allowed_actions.includes('scroll'));
+  need(anchors.length&&new Set(anchors.map(e=>e.scroll.ref)).size===1&&!s.node_replacement.editor_open,'Replacement add header cannot be revealed');
+  const anchor=anchors[0],before=anchor.scroll;
+  await channel.perform({condition:'reveal replacement add header',initialObservation:s,ready,
+   identity:()=>({field,grid:before.ref}),resolve:()=>({verb:'scroll',ref:anchor.ref,delta_y:-400})});
+  s=await observe('replacement add header scroll');
+  const after=s.ui.elements.find(e=>e.scroll?.ref===before.ref)?.scroll;
+  need(s.node_replacement.selected===field&&after&&after.top<before.top,'Replacement add header scroll did not move');
+ }
+ throw Error('Replacement add header scroll limit');
+}
 export async function configureReplacement(channel,p,{newNode=false}={}){
  const ready=s=>s.wizard?.stage==='replacement'&&s.node_replacement?.verified===true;
  const observe=(condition,extra=()=>true)=>channel.observe({condition,readReplacement:true,ready:s=>ready(s)&&extra(s.node_replacement)});
  let state=await observe('replacement input inventory');const baseline=state.node_replacement;
  resolveReplacementParameters(p,baseline.input_fields);
  const control=(s,suffix,verb='click')=>{const tid=s.wizard.root_tid+';ReplaceColumnsWizard;'+suffix,es=s.ui.elements.filter(e=>(e.tid===tid||['fill','press'].includes(verb)&&e.identity?.anchor_tid===tid)&&e.allowed_actions.includes(verb));need(es.length===1,'Replacement control unavailable: '+suffix);return es[0];};
- const act=async(suffix,verb='click',args={})=>{const s=await observe('replacement control '+suffix);return channel.perform({condition:'replacement '+suffix,initialObservation:s,ready,identity:()=>({field:s.node_replacement.selected,suffix}),resolve:s=>({verb,ref:control(s,suffix,verb).ref,...args})});};
+ const act=async(suffix,verb='click',args={})=>{const s=suffix==='grdReplaceItems;tbl;GroupHeader;0;AddButton'?await revealReplacementAdd(channel,observe,ready):await observe('replacement control '+suffix);return channel.perform({condition:'replacement '+suffix,initialObservation:s,ready,identity:()=>({field:s.node_replacement.selected,suffix}),resolve:s=>({verb,ref:control(s,suffix,verb).ref,...args})});};
  const cell=(s,name,role,part,id)=>{const es=s.ui.elements.filter(e=>e.replacement_field?.field_key===name&&e.replacement_field.role===role&&e.replacement_field.part===part&&(id===undefined||e.replacement_field.record_id===id)&&e.allowed_actions.includes('click'));need(es.length===1,'Replacement bound cell unavailable: '+name+'/'+part);return es[0];};
  const reveal=async(name,role,part,id)=>{
   let s=await observe('replacement row readiness');

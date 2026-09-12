@@ -35,11 +35,16 @@ def verify_replacement_configuration(events, request):
     failures = []
     try:
         op = request['operation_id']
+        declared = [e.get('request') for e in events if e.get('operation_id') == op and e.get('phase') == 'node_apply_prepared']
+        if declared != [request] or request['target']['type'] != 'transform.replace_columns' or request['mode'] != 'exact':
+            raise ValueError('replacement_request_binding')
         sequence = verify_internal_sequence(events, op, max_steps=8192)
         failures.extend(sequence['failures'])
         checkpoints = [e['result'] for e in events if e.get('operation_id') == op and e.get('phase') == 'node_checkpoint']
         if len(checkpoints) != 1 or checkpoints[0].get('status') != 'SUCCEEDED': raise ValueError('replacement_checkpoint')
         result, node = checkpoints[0], checkpoints[0]['node']
+        if request['target']['kind'] == 'existing' and request['target']['ref'] != node:
+            raise ValueError('replacement_requested_node')
         def owned(c): return c.get('verified') is True and all(c.get(k) == node[k] for k in ('document_id', 'workflow_id', 'node_id'))
         phases = [e['receipt'] for e in events if e.get('operation_id') == op and e.get('phase') == 'node_phase_completed']
         def phase(name):

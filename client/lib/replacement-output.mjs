@@ -45,7 +45,7 @@ async function setMode(channel,configuration){
 }
 export async function configureReplacementInlineMapping(channel,configuration){
  await setMode(channel,configuration);
- return configureDerivedInlineMapping(channel,configuration,validateReplacementSources);
+ return configureDerivedInlineMapping(channel,configuration,validateReplacementSources,undefined,{sourceOf:f=>f.source??f.exclusion_source});
 }
 export async function configureReplacementOutput(channel,configuration,parameters,mapping={}){
  const ready=s=>s.wizard?.stage==='output_mapping'&&s.node_mapping?.verified===true;

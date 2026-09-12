@@ -234,3 +234,162 @@ full source/import proof, оставшаяся live-матрица и отдел
 добавления Replacement в тест условного Next: `workspace-ui` 261/261 PASS.
 `git diff --check` и компиляция трёх Python-аудиторов прошли. Исходная
 bootstrap-правка `.gitignore` сохранена отдельно и не включается в commit узла.
+
+### Возобновление 13 сентября: публичный MCP и расширенная матрица
+
+HEAD при возобновлении `e4ae106842293d65fa10399284fe0deab2762898`, ветка и
+изолированный cwd подтверждены; исходная `.gitignore` сохранена отдельно.
+OpenViking healthy. Первая новая подготовка получила skill HTTP409; отдельная
+read-only загрузка manifest и всех восьми entries прошла, затем полноценная
+подготовка session `961f9801-0b4f-4eae-bde1-156bf3a1224e` прошла.
+Source client revision `ad2074a2cc3f7b32be9a1194ccf14bc65d36933c06a68c90ce855cfbe480a4d4`,
+Node24.19.0/Chromium1243 и прежний immutable candidate catalog закреплены.
+Dock connection.ok; свой профиль, account test-2, окно1508×949/viewport1508×862,
+viewport:null и --start-maximized проверены. Архив inactive, что не доказывает
+общую изоляцию hooks. Новый пакет или действия в других аккаунтах не выполнялись.
+
+`node11-complete-multi-1` теперь успешно вернул публичный MCP результат.
+Independent configuration/output/schema audit PASS: 6×11 и точный Int64 max.
+Повтор operation ID: result идентичен, browser sequence1518→1518.
+Публичный `node11-save-multi` package.save_checkpoint SUCCEEDED; содержимое
+после reopening этим ещё не подтверждено.
+
+CSV доставлен под `/test-2/Node11-input-961f9801.csv`, 124 байта/SHA256 совпали.
+Исходный import обновлён через публичную операцию. Создан отдельный
+`Node11 QA Input` GUID309f2e5a-666e-4d4b-b7dd-b16b2f483012, затем новый
+`Node11 QA Replace` GUIDb765d170-af84-4c14-8b8f-90dbdc9330d7.
+`node11-qa-new` и independent audit PASS: replace, casefalse North/north,
+integer2→Null, unmatched→Int64 min, input Code→Key и одинаковые метки Category/Keep,
+output aliases/order/Id exclusion; весь результат6×6 совпал с заранее сохранённым
+expected-qa.json. Это Codex QA, не Hermes acceptance.
+
+Полный аудитор import обнаружил ошибку приватной обвязки: journal metadata
+`targetIdentity` был null (в classic metadata не обновляется от ручной workspace
+подготовки). Исходные отчёты source-audit/qa-source-audit оставлены FAIL;
+не переписывались и не подменялись. Для следующих операций после отдельной
+проверки live origin/build закреплены targetIdentity и actionManifestDigest.
+Команда prepare-handler исправлена для будущих сессий. На этой точке запущен
+новый `node11-import-verified` для полного source-byte audit без ослабления
+существующих проверяющих функций. Далее partial update/Done/Close, широкие правила,
+пустой вход, сохранение/reopen/reexecute и outer audit. Readiness пока не объявлена.
+
+`node11-import-verified` создал Node11 Verified Input
+GUID5ad19625-aaaa-4170-9315-d70b651c593e; integrated delivery/source/output и
+configuration audits теперь PASS. Partial update `node11-qa-update-done`
+остановился AMBIGUOUS на conditional output: `Grouping output must have unique
+source links`. Живой UI сохранил excluded Id с `exclusion_source`; Replacement
+передавал общий default sourceOf, который учитывал только source. Исправлена
+передача sourceOf=source??exclusion_source; профильные7/7 PASS, в том числе
+сохранение aliases/exclusion и отказ дублированной связи.
+
+Pending operation проинспектирована; internal resume недоступен. Мастер закрыт
+штатным Close с подтверждённым диалогом «Вы действительно хотите закрыть мастер
+настройки?» → Да, rollback подтверждён закрытием мастера. UI Save сохранён,
+пакет закрыт; отдельный snapshot подтвердил Home и отсутствие Graph/Wizard.
+Session961f9801 затем штатно закрывается. Неуспешная операция не переименована
+в успех. Wide/partial/Close/refusal команды и независимые expected готовы,
+ещё не исполнены. После свежей подготовки восстановить GUID refs из живого графа;
+не использовать прежние document/workflow IDs. Следующий full public прогон
+должен использовать исправленный replacement-output и новые runtime pins.
+
+### Исправленная свежая сессия и lifecycle
+
+Session7809ab9a-c36e-44cf-b5b7-bf8f38de7347 закрепила исправленный source;
+prepare заранее задаёт journal targetIdentity/manifest. Подтверждены собственные
+GUID в новом document1789251509304-hwra6lqdrq4/workflow-1 и окно1508×862.
+Node11 QA Input и Verified Input активированы только после чтения inactive
+значка собственного порта; после жеста прочитан active. Прямой repeat
+`node11-qa-reopen-unchanged` с parameters={} дал прежний6×6, independent PASS.
+Это подтвердило rollback неудачной настройки и сохранение output aliases/exclusion.
+
+`node11-qa-update-done` исправленного source SUCCEEDED: Category полностью
+заменена на North→Changed/casefalse/otherRest, Key не изменён, output mapping
+сохранён. Configuration audit PASS; execution not_requested/output not_refreshed.
+`node11-qa-updated-execute` с parameters={} — independent6×6 PASS.
+
+`node11-qa-close` ввёл заведомо отличающийся черновик Other→MUST_NOT_PERSIST,
+case=true/otherNull и завершился Close: configuration discarded, no execution.
+Два публичных dock_node_apply одного ID во время running и дальнейший status/wait
+дали ровно один node_apply_prepared и один checkpoint. Затем
+`node11-qa-after-close` с parameters={} дал unchanged6×6 PASS; отдельный
+replacement_lifecycle_evidence сверил наблюдавшийся изменённый черновик,
+Close, принадлежность узла и полное совпадение сохранённых settings до/после.
+
+Четыре public API отказа прошли до браузера (sequence1911→1911 каждый):
+конфликт North/north в casefalse, nonASCII casefalse, precision1,
+remaining real-5.125. Source tests после исправления27/27 PASS.
+Negative multi после усиления точной request→journal привязки12/12 PASS.
+На этой точке запущен новый Node11 Wide с24 строковыми парами и заранее
+заданным expected-wide; результата ещё нет. Пустой вход и final save/reopen
+ещё впереди. Автономную приёмку и review не запускать внутри разработки.
+
+Wide остановился после13 пар: AddButton оставался в DOM, но находился выше
+scroll viewport (button y343, grid y373..714). Raw pair grid scroll.top=35,
+max_top75. Прямая физическая wheel(-400) вернула button y378 внутрь области.
+Исправлен revealReplacementAdd: перед Add bounded scroll только по привязанной
+таблице пар, неизменный selected field, обязательное уменьшение top; 2/2 tests
+проверили несколько прокруток, no-op, чужую таблицу/поле и отсутствие прогресса.
+Старый AMBIGUOUS не переисполнялся вслепую. После inspection и live диагноза
+мастер Node11 Wide закрыт Close/Да с подтверждённым rollback. Узел остаётся в
+графе для следующего existing-target прогона; новый дубль не создавать.
+Session7809 затем сохраняется и закрывается для новых source pins.
+
+### Заключительная исправленная ревизия, пустой вход и persistence
+
+Sessione1368ffd-31b0-4766-968a-076b121d1e6c, source revision
+`8ff2de3c4e5e35dc4a2f02af1b2e1d6608ef7448e91ce72a9a67653a9005690f`.
+Проверены155 файлов source manifest: расхождений нет. Node11 Wide найден по
+GUIDde5f7509-4671-4240-bc55-68f477bfb4da в новом document/workflow. Повтор
+`node11-wide-existing` успешно настроил24 строки Category и числовые Code/Amount;
+independent raw/config/output/schema6×11 PASS. Затем тот же CSV заново доставлен
+под `/test-2/Node11-input-e1368ffd.csv`, existing Verified Input обновлён полными
+settings и точным target label; full source/config audit PASS без ослабления
+общего аудитора. `node11-wide-source-refreshed` parameters={} —6×11 PASS.
+
+Пустой CSV `/test-2/Node11-empty-e1368ffd.csv`:29 байт,
+SHA2564df9ac77b4092d75e010a5b4e430023549fd2428d76110382cb73fbaf8377cf3.
+Node11 Empty Input GUID1e1b589a-0969-43a7-8ebe-084de59384b4 и Empty Replace
+GUID923a1793-5127-4bbc-9c90-0c893529b32f созданы в этом пакете. Полный source
+аудит и replacement0×7 PASS, включая полную выходную схему при отсутствии строк.
+
+`node11-final-save` package.save_checkpoint и `node11-final-reopen` package.save_as
+прошли публичный MCP. Граф точно совпал с заранее заданным expected:
+9 обычных узлов/5 связей (системные переменные исключены из стандартного snapshot).
+Сохранён прежний собственный путь `/test-2/Node11-Handler-90de4e18.lgp`.
+После настоящего закрытия/открытия prepare-persisted вернул тот же document,
+новые MF;TF-5/tab5/workflow-2. Все GUID заново прочитаны из живого графа.
+`node11-import-persisted` с пустым settings и прежним источником дал fresh6×5;
+общий existing-import аудитор с ранее проверенным seed —PASS. Затем
+`node11-wide-persisted` с parameters={}/mappings=[] дал fresh6×11, правила и
+все mappings идентичны до/после reopening. Persistence audit v2 PASS; первый
+отчёт сохранён FAIL, потому что аудитор ошибочно ожидал revision1 сохранения
+из локального базового каталога. Проверенные по хешу в source harness pinned actions
+имеют revision2 для обеих операций; v2 принимает явные проверенные revisions,
+не выводит их из проверяемых events. Все6 подмен path/graph/close/session/settings/
+reconfiguration отклонены.
+
+Дополнительная отдельная диагностика `node11-dropped-response`: локальный
+InMemoryTransport действительно отбросил JSON-RPC ответ dock_node_apply после
+старта worker. MCP клиент получил timeout-32001; status/wait восстановили
+SUCCEEDED без повторного запуска. Это fault-injection диагностика Codex,
+не автономная приёмка. Изменения параметры={} на прежнем QA Replace завершены
+Done без выполнения. Итоговый UI Save сохранён перед закрытием сессии.
+
+Полный client suite на текущем source:1402 PASS/1 SKIP,0 FAIL (1403 tests),
+с разрешёнными локальными сокетами. Python-аудиторы скомпилированы,
+git diff --check прошёл. Ни Hermes, ни review, ни следующий узел, ни push/merge,
+ни build/deploy/обновление общего плагина не запускались. Дальнейший процесс
+ведёт координатор: одно ревью в этом же чате Astra/medium, затем при необходимости
+один раунд подтверждённых живым UI доработок; повторного review после него нет.
+Hermes Sol/low — только после выдачи единственного слота координатором.
+
+Итоговый статус этапа: **разработка завершена, готов к отдельному ревью**.
+Проверка потерянного ответа PASS, все3 её подмены обнаружены; суммарно26/26
+negative evidence. Итоговая сводка содержит19 PASS-групп. Последний snapshot
+подтвердил Home без Graph/Wizard, harness e1368ffd завершился exit0.
+Ограничения и дальнейшие требования находятся в
+`docs/plans/loginom-dock/11-development-audit.md`, машинные результаты —
+`docs/loginom-dock/replacement-development-2026-09-13.json`.
+Автономная приёмка не подменена этими проверками. Настройки, модели, production
+и общий плагин не изменялись. Передано на локальный commit в текущей ветке;
+bootstrap `.gitignore` не включается.

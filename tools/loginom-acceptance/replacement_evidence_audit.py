@@ -11,10 +11,11 @@ from calculator_output_evidence import verify_calculator_output
 
 def audit(events, request, expected):
     columns = []
-    for name, kind in zip(expected['names'], expected['types']):
+    for index, (name, kind) in enumerate(zip(expected['names'], expected['types'])):
         label = name
         if name.endswith('_Replace'): label = name[:-8] + ' Замена'
         if name.endswith('_Replaced'): label = name[:-9] + ' Заменен'
+        if 'labels' in expected: label = expected['labels'][index]
         columns.append(dict(name=name, label=label, type=kind,
                             data_kind='Непрерывный' if kind == 'real' else 'Дискретный'))
     checks = dict(configuration=verify_replacement_configuration(events, request),
