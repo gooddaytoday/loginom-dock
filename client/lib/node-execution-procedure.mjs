@@ -7,6 +7,8 @@ const button='MF;cntMain;tlbMainToolbar;btnProgress';
 const grid='ConsoleForm;ProgressForm;trpProgress;grd;tbl';
 const filter='mnContextMenu;mniShowCompletedProcesses';
 const showNode='mnContextMenu;mniShowNodeToProcess';
+const consoleMenuIdentity=s=>({epoch:s.dom_epoch,root:s.node_processes?.root_id,
+  grid:s.ui.elements.find(e=>e.tid===grid)?.signature});
 const processControl=(process,part='process_tid')=>s=>s.node_processes?.processes.find(p=>
   p.process_id===process.process_id&&p.record_id===process.record_id)?.[part];
 
@@ -48,7 +50,16 @@ export async function revealExecutionControl(channel,node,initial,process,tid,ve
       &&e.process_grid&&e.scroll?.ref===e.ref&&e.allowed_actions.includes('scroll'));
     const owner=one(owners,'Bound process scroll owner unavailable');
     if(!reset&&owner.scroll.top===0)reset=true;
-    const delta=reset?Math.min(1000,owner.scroll.max_top-owner.scroll.top):-Math.min(1000,owner.scroll.top);
+    // The complete native tree supplies order even when the target row is
+    // outside the rendered viewport. Move toward that row instead of first
+    // jumping to the beginning of a long buffered list.
+    const ordered=state.node_processes.processes;
+    const targetIndex=ordered.findIndex(p=>p.process_id===process.process_id&&p.record_id===process.record_id);
+    const visibleIndices=ordered.flatMap((p,i)=>typeof p.process_tid==='string'&&state.ui.elements.some(e=>
+      e.tid===p.process_tid&&e.allowed_actions.some(a=>a==='click'||a==='right_click'))?[i]:[]);
+    const direction=visibleIndices.length&&targetIndex>Math.max(...visibleIndices)?1
+      :visibleIndices.length&&targetIndex<Math.min(...visibleIndices)?-1:reset?1:-1;
+    const delta=direction>0?Math.min(1000,owner.scroll.max_top-owner.scroll.top):-Math.min(1000,owner.scroll.top);
     requireValue(delta!==0,'Process control unavailable within complete scroll range');
     const previousTop=owner.scroll.top,gridId=owner.process_grid.grid_id;
     await channel.perform({condition:'reveal exact process control',initialObservation:state,
@@ -70,6 +81,7 @@ export function createNodeExecutionProcedure(channel,node) {
     return typeof current==='string'&&current.length?s.ui.elements.filter(e=>e.tid===current&&e.allowed_actions.includes(verb)):[];};
   const act=async(s,tid,verb='click',identity=()=>node,key)=>channel.perform({condition:'execution control '+tid,
     initialObservation:s,ready:s=>control(s,tid,verb).length===1,
+    ...(tid===grid?{confirmIdentity:consoleMenuIdentity}:{}),
     resolve:s=>({verb,ref:one(control(s,tid,verb),'Unique execution control required').ref,...(key?{key}:{})}),identity});
   const consoleVisible=s=>s.ui.elements.some(e=>e.tid===grid);
   async function openConsole() {
@@ -107,6 +119,11 @@ export function createNodeExecutionProcedure(channel,node) {
     async prepare() {
       requireValue(!baseline,'Execution baseline has already been captured');
       let s=await openConsole();
+      // A long buffered process list can repaint after the panel becomes
+      // visible. Require two matching epochs before its menu gesture, and
+      // retain this readiness check on strictly pre-gesture recovery.
+      s=await observe('process console menu settled',s=>consoleVisible(s)&&control(s,grid,'right_click').length===1,
+        {confirmIdentity:consoleMenuIdentity});
       // Opening the native menu establishes the filter's actual cached state,
       // including an empty history. Never clear or delete earlier processes.
       await act(s,grid,'right_click');
@@ -114,7 +131,23 @@ export function createNodeExecutionProcedure(channel,node) {
       if(!s.node_processes.show_completed) {
         await act(s,filter);s=await observe('completed process history loaded',processes);
       } else {
-        await act(s,filter,'press',()=>node,'Escape');s=await observe('completed process menu closed',processes);
+        if(s.node_processes.processes.length>=30&&s.node_processes.processes.every(p=>p.state==='completed'&&p.error===false)) {
+          // Loginom's buffered view can duplicate a painted record after a
+          // long sequence of insertions. Refresh the native history BEFORE
+          // capturing a baseline: the filter recreates local record IDs, so
+          // it must never be toggled while tracking an execution.
+          const history=p=>p.processes.map(({process_id,parent_id,caption,state,error})=>({process_id,parent_id,caption,state,error}));
+          const previous=JSON.stringify(history(s.node_processes));
+          await act(s,filter);
+          s=await observe('completed history temporarily hidden',s=>s.node_processes?.verified===true&&s.node_processes.show_completed===false);
+          s=await observe('history refresh menu settled',s=>consoleVisible(s)&&control(s,grid,'right_click').length===1,{confirmIdentity:consoleMenuIdentity});
+          await act(s,grid,'right_click');
+          s=await observe('completed history filter disabled',s=>control(s,filter).length===1&&s.node_processes?.show_completed===false);
+          await act(s,filter);
+          s=await observe('complete history refreshed before execution baseline',s=>processes(s)&&JSON.stringify(history(s.node_processes))===previous);
+        } else {
+          await act(s,filter,'press',()=>node,'Escape');s=await observe('completed process menu closed',processes);
+        }
       }
       baseline=captureExecutionBaseline(s.node_processes,node);
       await closeConsole(s);

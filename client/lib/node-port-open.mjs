@@ -93,17 +93,25 @@ export async function openPreparedOutputPort(page,task,readNode=readPreparedNode
     const index=Number(suffix),box=dom.getBoundingClientRect();
     if(!roots[0].contains(dom)||box.width<=0||box.height<=0||exact(ptid).length!==1)fail('Port DOM unavailable');
     const cell=d.FmxGraph.getCellAt(box.x-graphBox.x+roots[0].scrollLeft+box.width/2,box.y-graphBox.y+roots[0].scrollTop+box.height/2);
-    const matches=candidates.filter(port=>port.FCell===cell&&port.parent===node&&(port.FPortIndex===undefined||port.FPortIndex===index)&&port.data);
+    const matches=candidates.filter(port=>port.FCell===cell&&port.parent===node&&port.data);
     if(matches.length!==1)fail('Port native hit identity unavailable');
     ports.push({port:matches[0],dom,tid:ptid,index});
    }
    ports.sort((a,b)=>a.index-b.index);
+   // Union's dynamic tabular inputs retain an SVG creation index that includes
+   // the hidden variable socket. Their native tree indexes are tabular ordinals.
+   // Rebind on every opening; the exact cell, GUID and tree owner remain required.
+   const dynamicUnion=input&&node.FIconCls==='bg-vendor-icon-uniondata';
+   for(const [ordinal,p] of ports.entries()){
+    p.nativeIndex=dynamicUnion?ordinal:p.index;
+    if(p.port.FPortIndex!==undefined&&p.port.FPortIndex!==p.nativeIndex)fail('Port native hit identity unavailable');
+   }
    if(new Set(ports.map(v=>v.index)).size!==ports.length||new Set(ports.map(v=>v.port.FGuid)).size!==ports.length)fail('Duplicate output ports');
    const target=ports[task.port];if(!target)fail('Requested output port absent');
    if(exact('mn').some(e=>e.checkVisibility({checkVisibilityCSS:true})))fail('An existing context menu is open');
    const rec={direction,request:JSON.stringify(b)+':'+task.port,phase:'reserved',graph:model,node,nodeData:node.data,
     port:target.port,portData:target.port.data,portGuid:target.port.FGuid,portDom:target.dom,
-    portTid:target.tid,nativeIndex:target.index,portIndex:task.port,workflow:prepared.nodeTargetWorkflowNode,packageNode:prepared.packageNode,
+    portTid:target.tid,nativeIndex:target.nativeIndex,portIndex:task.port,workflow:prepared.nodeTargetWorkflowNode,packageNode:prepared.packageNode,
     document_id:b.document_id,workflow_id:b.workflow_ref.workflow_id,node_id:b.node.node_id,operation_id:task.operation_id};
    receipts.set(task.operation_id,rec);return {phase:rec.phase,port_tid:rec.portTid,port_guid:rec.port.FGuid,native_index:rec.nativeIndex};
   }

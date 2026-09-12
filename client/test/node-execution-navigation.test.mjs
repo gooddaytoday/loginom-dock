@@ -67,3 +67,14 @@ test('retention can renumber a rendered process during scrolling without changin
  const result=await revealExecutionControl(channel,node,state(),process,s=>s.node_processes.processes.find(p=>p.process_id===process.process_id&&p.record_id===process.record_id)?.process_tid,'right_click');
  assert.equal(result.ui.elements.at(-1).ref,'exact');
 });
+
+test('a new process below the viewport is revealed directly without resetting buffered history',async()=>{
+ const {revealExecutionControl}=await import('../lib/node-execution-procedure.mjs');
+ const target={process_id:'21',record_id:'new21'},old={process_id:'20',record_id:'old20',process_tid:'visible20'};let top=782;
+ const state=()=>({prepared_node_context:{...node,verified:true},node_processes:{verified:true,root_id:'root',processes:[old,{...target,process_tid:top===830?'visible21':null}]},ui:{elements:[
+  {tid:'ConsoleForm;ProgressForm;trpProgress;treepanel;tree',ref:'scroll',process_grid:{grid_id:'tree'},scroll:{ref:'scroll',top,max_top:830},allowed_actions:['scroll']},
+  {tid:'visible20',ref:'old',allowed_actions:['click']},...(top===830?[{tid:'visible21',ref:'new',allowed_actions:['click']}]:[])]}});
+ const actions=[],channel={perform:async o=>{assert.ok(o.ready(state()));const a=o.resolve(state());actions.push(a);top+=a.delta_y;},observe:async o=>{assert.ok(o.ready(state()));return state();}};
+ await revealExecutionControl(channel,node,state(),target,s=>s.node_processes.processes[1].process_tid);
+ assert.deepEqual(actions,[{verb:'scroll',ref:'scroll',delta_y:48}]);
+});

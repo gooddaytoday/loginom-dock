@@ -16,6 +16,7 @@ try {
     mode: { type: 'string' },
     'action-manifest-uri': { type: 'string' }, 'action-manifest-sha256': { type: 'string' },
     'replay-login-user': { type: 'string' },
+    'replay-loginom-url': { type: 'string' },
     'replay-bootstrap': { type: 'boolean', default: false },
     'input-artifact': { type: 'string', multiple: true },
     headless: { type: 'boolean', default: false },
@@ -26,6 +27,7 @@ try {
     mode: values.mode || process.env.LOGINOM_DOCK_MODE,
     actionManifestUri: values['action-manifest-uri'], actionManifestSha256: values['action-manifest-sha256'],
     replayBootstrap: values['replay-bootstrap'], replayLoginUser: values['replay-login-user'] ?? null,
+    replayLoginomUrl: values['replay-loginom-url'] ?? null,
   });
   const session = await createSession(config, { headless: values.headless });
   if (values['input-artifact']?.length && !['executor-preview','executor-replay'].includes(config.mode)) {

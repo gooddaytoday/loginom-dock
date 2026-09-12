@@ -27,7 +27,16 @@ def unchanged_patch(baseline, patch):
     return True
 
 
-def verify_reopen_binding(evidence, seed_request, request, save_operation_id, path, *, calculator=False, grouping=False, sorting=False, reform=False, row_filter=False, join=False):
+def union_unchanged_parameters(a,b):
+    try:
+        def normalize(p):
+            if set(p)!={'prefixes','tables'}:raise ValueError('Union parameters')
+            return dict(prefixes=p['prefixes'],tables=[dict(port=t['port'],fields=sorted(t['fields'],key=lambda f:f['source'])) for t in p['tables']])
+        return normalize(a)==normalize(b)
+    except (KeyError,TypeError,ValueError):return False
+
+
+def verify_reopen_binding(evidence, seed_request, request, save_operation_id, path, *, calculator=False, grouping=False, sorting=False, reform=False, row_filter=False, join=False, union=False):
     failures = []
     events = evidence['events']
     saves = [(i, e) for i, e in enumerate(events) if e.get('operation_id') == save_operation_id and e.get('phase') == 'completed']
@@ -77,7 +86,7 @@ def verify_reopen_binding(evidence, seed_request, request, save_operation_id, pa
         failures.append('reopen_mapping_reapplication')
     if (request.get('target', {}).get('kind') != 'existing'
             or request.get('parameters', {}).get('source') != seed_request.get('parameters', {}).get('source')
-            or not (request.get('parameters')=={'changes':[]} if reform else request.get('parameters')=={} if grouping or sorting or row_filter or join else request.get('parameters')=={'expressions':[]} if calculator else unchanged_patch(seed_request.get('parameters', {}).get('settings', {}), request.get('parameters', {}).get('settings')))):
+            or not (union_unchanged_parameters(seed_request.get('parameters'),request.get('parameters')) if union else request.get('parameters')=={'changes':[]} if reform else request.get('parameters')=={} if grouping or sorting or row_filter or join else request.get('parameters')=={'expressions':[]} if calculator else unchanged_patch(seed_request.get('parameters', {}).get('settings', {}), request.get('parameters', {}).get('settings')))):
         failures.append('reopen_unchanged_request')
     return dict(passed=not failures, failures=failures, scope='real_prepare_binding_only',
                 settings_persistence_verified=False, hermes_acceptance_verified=False)

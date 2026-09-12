@@ -51,7 +51,7 @@ function fixture(direction='output') {
   direction,port:0,operation_id:'open',origin:'http://example.test',build:'7.4.2',deadline:Date.now()+20000};
  const readNode=async()=>({verified:true,surface:'graph',locked:false,node_id:'node'});
  const run=()=>openPreparedOutputPort(page,task,readNode);
- return {run,task,prep,flags,gestures,port,portDom,graph,node,wizard,card,menu,readNode,page,dialog,confirmation,nativeControls,document,el};
+ return {run,task,prep,flags,gestures,port,portDom,graph,node,wizard,card,menu,readNode,page,dialog,confirmation,nativeControls,document,el,portTree};
 }
 
 test('port opening binds menu and wizard native identities and replays without another gesture',async()=>{
@@ -139,4 +139,19 @@ for (const direction of ['input', 'output']) test(`${direction} port ignores hid
  const g=fixture(direction),duplicate=g.el('mn');duplicate.visible=false;
  const locate=g.page.locator;g.page.locator=s=>{const l=locate(s);return {...l,click:async o=>{await l.click(o);if(!o?.trial&&o?.button==='right')duplicate.visible=true;}};};
  assert.equal((await g.run()).status,'AMBIGUOUS');assert.equal(g.gestures.length,1);
+});
+
+test('Union dynamic SVG creation index is rebound to the native tabular ordinal',async()=>{
+ const f=fixture('input');f.node.FIconCls='bg-vendor-icon-uniondata';f.portDom.tid='MF;TF;Graph;Node;Input_Data-3';f.portDom.getAttribute=()=>f.portDom.tid;
+ const r=await f.run();assert.equal(r.status,'SUCCEEDED',r.error);assert.equal(r.native_index,0);assert.equal(r.port,0);assert.equal(r.port_guid,'port');
+ const bad=fixture('input');bad.node.FIconCls='bg-vendor-icon-uniondata';bad.port.FPortIndex=1;assert.equal((await bad.run()).status,'NOT_APPLIED');assert.equal(bad.gestures.length,0);
+});
+
+test('Union third port keeps logical 2, SVG 3 and native tree 2 distinct',async()=>{
+ const f=fixture('input');f.node.FIconCls='bg-vendor-icon-uniondata';f.task.port=2;f.port.FPortIndex=2;f.portTree.FIndex=2;
+ f.portDom.tid='MF;TF;Graph;Node;Input_Data-3';f.portDom.getAttribute=()=>f.portDom.tid;
+ const ports=[0,1].map(i=>{const p={FGuid:'prior-'+i,FCell:{},FPortIndex:i,data:{},parent:f.node};const dom=f.el('MF;TF;Graph;Node;Input_Data-'+i);dom.parent=f.portDom.parent;dom.getBoundingClientRect=()=>({x:i*30,y:0,width:20,height:20});return {p,dom};});
+ f.portDom.getBoundingClientRect=()=>({x:60,y:0,width:20,height:20});f.node.FPorts[0].FCollection.unshift(...ports.map(x=>x.p));
+ f.graph.FDiagram.FmxGraph.getCellAt=x=>x<30?ports[0].p.FCell:x<60?ports[1].p.FCell:f.port.FCell;
+ const r=await f.run();assert.equal(r.status,'SUCCEEDED',r.error);assert.equal(r.port,2);assert.equal(r.native_index,2);assert.equal(r.trace[0].port_tid,'MF;TF;Graph;Node;Input_Data-3');
 });

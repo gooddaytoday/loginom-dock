@@ -39,3 +39,16 @@ test('unknown Show result never triggers another gesture',async()=>{
  const f=await fixture({lost:true});await assert.rejects(f.driver.waitCompleted(),/lost Show reply/);
  assert.deepEqual(f.actions.map(a=>a.verb),['right_click','show_process_node']);
 });
+
+test('long completed history refreshes before baseline and retains every server process',async()=>{
+ let opened=true,checked=true,menu=false,generation=0;
+ const old=Array.from({length:30},(_,i)=>({process_id:String(i+1),parent_id:null,caption:'Activation',state:'completed',error:false}));
+ const actions=[],el=(tid,allowed_actions=['click'])=>({tid,ref:tid,allowed_actions});
+ const state=()=>({prepared_node_context:{...node,verified:true},node_processes:{verified:true,inventory_complete:true,show_completed:checked,root_id:'root-'+generation,node_context:{...node,verified:true},processes:checked?old.map((p,i)=>({...p,record_id:generation+':'+i})):[]},ui:{elements:[el(button),...(opened?[el(grid,['right_click']),el('ConsoleForm;btnClose')]:[]),...(menu?[el('mnContextMenu;mniShowCompletedProcesses',['click','press'])]:[])]}});
+ const channel={observe:async o=>{const s=state();assert.ok(o.ready(s),o.condition);return structuredClone(s);},perform:async o=>{const s=state();assert.ok(o.ready(s));const a=o.resolve(s);actions.push(a);if(a.verb==='right_click')menu=true;if(a.ref==='mnContextMenu;mniShowCompletedProcesses'){assert.equal(a.verb,'click');checked=!checked;menu=false;generation++;}if(a.ref==='ConsoleForm;btnClose')opened=false;}};
+ const driver=createNodeExecutionProcedure(channel,node),baseline=await driver.prepare();
+ assert.equal(baseline.root_id,'root-2');assert.equal(baseline.roots.length,30);
+ assert.ok(baseline.roots.every(p=>p.record_id.startsWith('2:')));
+ assert.equal(actions.filter(a=>a.ref==='mnContextMenu;mniShowCompletedProcesses').length,2);
+ assert.equal(actions.some(a=>a.verb==='execute_graph_node'),false);
+});

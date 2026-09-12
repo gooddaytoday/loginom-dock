@@ -71,3 +71,15 @@ test('restricts credential files, endpoint and identity before connecting', asyn
   await writeFile(path, JSON.stringify({ ...valid, loginom_url: 'https://loginom.example/app?token=private' }));
   await assert.rejects(loadConfig(options), /contain credentials/);
 });
+
+test('replay target override keeps Dock connection and disk config intact',async t=>{
+ const directory=await mkdtemp(join(tmpdir(),'dock-replay-target-'));t.after(()=>rm(directory,{recursive:true,force:true}));const path=join(directory,'client.json');
+ const original=JSON.stringify({...valid,loginom_url:'https://original.example/app'});await writeFile(path,original,{mode:0o600});
+ const options={...actor,configPath:path,mode:'executor-replay',actionManifestUri:'viking://resources/loginom-dock/catalogs/executor-preview/releases/test/manifest.json',actionManifestSha256:'a'.repeat(64)};
+ const changed=await loadConfig({...options,replayLoginomUrl:'http://target.example/app?testable=true'});
+ assert.equal(changed.loginomUrl,'http://target.example/app?testable=true');assert.equal(changed.apiKey,valid.api_key);assert.equal(changed.endpoint,valid.endpoint);
+ assert.equal((await loadConfig(options)).loginomUrl,'https://original.example/app');
+ const {readFile}=await import('node:fs/promises');assert.equal(await readFile(path,'utf8'),original);
+ for(const replayLoginomUrl of ['http://user:secret@target.example/app','http://target.example/app?api_key=x','file:///tmp/app',''])await assert.rejects(loadConfig({...options,replayLoginomUrl}));
+ await assert.rejects(loadConfig({...actor,configPath:path,replayLoginomUrl:changed.loginomUrl}),/only allowed/);
+});

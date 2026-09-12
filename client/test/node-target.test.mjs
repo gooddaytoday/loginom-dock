@@ -109,3 +109,12 @@ test('native adapter never retries a foreign-workflow read error',async()=>{
  const adapter=createNodeTargetBrowserAdapter({origin:'http://example.test',build:'7.4.2',execute:async()=>{calls++;throw new Error('Prepared workflow changed');}});
  await assert.rejects(adapter.observe(request(),Date.now()+1000),/workflow changed/);assert.equal(calls,1);
 });
+test('Union lost Input_Add or connection reply cannot create a duplicate on retry',async()=>{
+ for(const kind of ['add_input','connect']){
+  const f=fixture(),mutate=f.adapter.mutate;let lost=false;
+  f.adapter.mutate=async e=>{const r=await mutate(e);if(e.kind===kind&&!lost){lost=true;throw Error('lost '+kind);}return r;};
+  assert.equal((await f.run()).status,'AMBIGUOUS');const before=[...f.calls];assert.equal((await f.run()).status,'AMBIGUOUS');assert.deepEqual(f.calls,before);
+  f.adapter.reconcile=async()=>({verified:true,cleanup_complete:true});assert.equal((await f.run()).status,'SUCCEEDED');
+  assert.equal(f.calls.filter(x=>x==='add_input').length,1);assert.equal(f.graph.links.length,3);
+ }
+});

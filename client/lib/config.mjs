@@ -8,7 +8,7 @@ import { ACTION_CATALOG_ROOT } from './action-catalog.mjs';
 const SHA256 = /^[a-f0-9]{64}$/;
 
 export async function loadConfig({ configPath, stateDir, agent, adapterRevision, mode,
-  actionManifestUri = null, actionManifestSha256 = null, replayBootstrap = false, replayLoginUser = null }) {
+  actionManifestUri = null, actionManifestSha256 = null, replayBootstrap = false, replayLoginUser = null, replayLoginomUrl = null }) {
   if (!configPath) throw new Error('An explicit Dock config path is required');
   if (!['codex', 'hermes'].includes(agent) || !adapterRevision?.trim()) {
     throw new Error('Explicit agent and adapter revision are required');
@@ -48,6 +48,7 @@ export async function loadConfig({ configPath, stateDir, agent, adapterRevision,
   if (replayBootstrap && mode !== 'executor-replay') throw new Error('Replay bootstrap is only allowed in executor-replay');
   if (replayBootstrap && (typeof replayLoginUser !== 'string' || !replayLoginUser.trim() || replayLoginUser.length>200 || /[\x00-\x1f\x7f]/.test(replayLoginUser))) throw new Error('Replay bootstrap requires an explicit Loginom account');
   if (!replayBootstrap && replayLoginUser !== null) throw new Error('Replay login account requires replay bootstrap');
+  if (replayLoginomUrl !== null && mode !== 'executor-replay') throw new Error('Replay Loginom address is only allowed in executor-replay');
   const endpoint = new URL(data.endpoint);
   if (endpoint.protocol !== 'https:' || endpoint.username || endpoint.password
       || endpoint.search || endpoint.hash || endpoint.pathname !== '/mcp') {
@@ -58,8 +59,8 @@ export async function loadConfig({ configPath, stateDir, agent, adapterRevision,
     throw new Error('The ordinary loginom-dock client identity and key are required');
   }
   let loginomUrl = null;
-  if (data.loginom_url) {
-    const target = new URL(data.loginom_url);
+  if (replayLoginomUrl !== null || data.loginom_url) {
+    const target = new URL(replayLoginomUrl ?? data.loginom_url);
     if (!['http:', 'https:'].includes(target.protocol) || target.username || target.password || target.hash
         || [...target.searchParams.keys()].some(key => /token|password|secret|auth|api.?key/i.test(key))) {
       throw new Error('The Loginom address must not contain credentials');

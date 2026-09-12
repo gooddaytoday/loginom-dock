@@ -150,7 +150,7 @@ test('target incarnation confirmation waits for the same identity twice', async 
   assert.equal(f.records.at(-1).readiness.required_samples, 2);
 });
 
-function recoveryFixture({ initialSequence = 0, refusals = 1, receipt = {}, changedIdentity = false, changedIntent = false, recordFailure = false } = {}) {
+function recoveryFixture({ initialSequence = 0, refusals = 1, receipt = {}, changedIdentity = false, changedIntent = false, recordFailure = false, confirmIdentity } = {}) {
   let reads = 0, mutations = 0; const records = [];
   const operation = {nodeStepSequence:initialSequence,id:'recovery',action:{action_key:'node.apply',revision:'1'},deadline:10000,
     checkpoint:{document_id:'doc',workflow_ref:{prefix:'MF;TF-1',tab_tid:'tab'}}};
@@ -166,7 +166,7 @@ function recoveryFixture({ initialSequence = 0, refusals = 1, receipt = {}, chan
         status:mutations>refusals?'SUCCEEDED':'NOT_APPLIED',phase:mutations>refusals?'completed':'preconditions',
         error:{code:'UI_EPOCH_CHANGED'},trace:[],...receipt};
     }});
-  const perform=()=>channel.perform({condition:'same field editor',ready:()=>true,identity:s=>s.binding,
+  const perform=()=>channel.perform({condition:'same field editor',ready:()=>true,identity:s=>s.binding,confirmIdentity,
     resolve:s=>({verb:'fill',ref:s.ui.elements[0].ref,text:s.desired})});
   return {perform,records,get mutations(){return mutations}};
 }
@@ -477,3 +477,5 @@ test('Join link menu uses a unique bounded portal only during Join observation',
  await channel.observe({condition:'ordinary wizard',ready:()=>true});assert.equal(roots.at(-1),'wizard');
  state.ui.elements.push({tid:'mn',ref:'other'});await assert.rejects(channel.observe({condition:'ambiguous menu',readJoin:true,ready:()=>true}),/menu is ambiguous/);
 });
+
+test('pre-gesture recovery retains the handler stability condition',async()=>{const f=recoveryFixture({confirmIdentity:s=>s.binding});await f.perform();const observations=f.records.filter(e=>e.phase==='node_observation_completed');assert.equal(observations.length,2);assert.ok(observations.every(e=>e.readiness.required_samples===2));assert.equal(f.records.filter(e=>e.phase==='node_observation_sample').length,4);assert.equal(f.mutations,2);});

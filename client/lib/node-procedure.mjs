@@ -4,6 +4,7 @@ import {validatePreparedNodeContext} from './node-context.mjs';
 import {makeNodeMappingContextCode} from './node-mapping-context.mjs';
 import {makeNodePreviewSchemaCode} from './node-preview-schema.mjs';
 import {makeSortingContextCode} from './sorting-context.mjs';
+import {makeUnionContextCode} from './union-context.mjs';
 import {makeJoinContextCode} from './join-context.mjs';
 import {makeFilterContextCode} from './filter-context.mjs';
 import {makeReformContextCode} from './reform-context.mjs';
@@ -160,7 +161,7 @@ export function createNodeProcedure({ operation, execute, record, wrapMutation,
         throw new NodeProcedureStepError(result);
       return structuredClone(result);
     },
-    async observe({ condition, ready, confirmIdentity, timeoutMs = 15000, importColumnPage, outputColumnPage, readProcesses = false, readOutputs = false, readMappings = false, readCalculator = false, readGrouping = false, readSorting = false, readReform = false, readFilter = false, readJoin = false, readPreview = false, readNavigation = false, tablePage, tableDialog, tableFormatPage, wizardConfirmation } = {}) {
+    async observe({ condition, ready, confirmIdentity, timeoutMs = 15000, importColumnPage, outputColumnPage, readProcesses = false, readOutputs = false, readMappings = false, readCalculator = false, readGrouping = false, readSorting = false, readReform = false, readFilter = false, readJoin = false, readUnion = false, readPreview = false, readNavigation = false, tablePage, tableDialog, tableFormatPage, wizardConfirmation } = {}) {
       checkBudget();
       if (typeof condition !== 'string' || !condition.trim() || typeof ready !== 'function'
         || !Number.isFinite(timeoutMs) || timeoutMs <= 0 || timeoutMs > 15000) {
@@ -171,7 +172,7 @@ export function createNodeProcedure({ operation, execute, record, wrapMutation,
       if(tableDialog && (!['format','filter'].includes(tableDialog.kind)||!tableDialog.table))throw new Error('A typed Table dialog binding is required');
       if(tablePage)makeNodeTableContextCode(preparedNodeContext,tablePage.table,tablePage.page);
       if(tableDialog)makeNodeTableContextCode(preparedNodeContext,tableDialog.table,{row_offset:0,row_limit:0,column_offset:0,column_limit:1});
-      if ((readProcesses || readOutputs || readMappings || readCalculator || readGrouping || readSorting || readReform || readFilter || readJoin || readPreview) && !preparedNodeContext) throw new Error('Native process/output reads require a prepared node');
+      if ((readProcesses || readOutputs || readMappings || readCalculator || readGrouping || readSorting || readReform || readFilter || readJoin || readUnion || readPreview) && !preparedNodeContext) throw new Error('Native process/output reads require a prepared node');
       // A failed wait must invalidate even a previously usable observation.
       snapshot = null;
       evidenceSnapshot = null;
@@ -270,7 +271,7 @@ export function createNodeProcedure({ operation, execute, record, wrapMutation,
         // observation; they are not an execution or data-freshness claim.
         for (const [requested,key,makeCode] of [[readProcesses,'node_processes',makeNodeProcessContextCode],
           [readOutputs,'node_outputs',makeNodeOutputContextCode], [readMappings,'node_mapping',makeNodeMappingContextCode],
-          [readJoin,'node_join',makeJoinContextCode], [readCalculator,'node_calculator',makeCalculatorContextCode], [readGrouping,'node_grouping',makeGroupingContextCode], [readSorting,'node_sorting',makeSortingContextCode], [readReform,'node_reform',makeReformContextCode]]) {
+          [readUnion,'node_union',makeUnionContextCode], [readJoin,'node_join',makeJoinContextCode], [readCalculator,'node_calculator',makeCalculatorContextCode], [readGrouping,'node_grouping',makeGroupingContextCode], [readSorting,'node_sorting',makeSortingContextCode], [readReform,'node_reform',makeReformContextCode]]) {
           if (!requested) continue;
           if (observationNow() >= deadline) break;
           const native=await execute(makeCode(preparedNodeContext),{timeout:Math.min(35000,Math.max(1,deadline-observationNow()))});
@@ -379,7 +380,7 @@ export function createNodeProcedure({ operation, execute, record, wrapMutation,
     // Fixed handlers supply the readiness condition and domain identity. Caller
     // input never contains a resolver or a recipe. Only a durably recorded,
     // strictly pre-gesture epoch refusal permits a new local attempt.
-    async perform({ condition, ready, resolve, identity, timeoutMs = 15000, initialObservation }) {
+    async perform({ condition, ready, resolve, identity, confirmIdentity, timeoutMs = 15000, initialObservation }) {
       if (typeof resolve !== 'function' || typeof identity !== 'function') {
         throw new Error('A bound action resolver and domain identity are required');
       }
@@ -394,7 +395,7 @@ export function createNodeProcedure({ operation, execute, record, wrapMutation,
             throw new Error('Initial bound observation is no longer current or ready');
           }
           observed=structuredClone(snapshot);
-        } else observed = await channel.observe({ condition, ready, timeoutMs,
+        } else observed = await channel.observe({ condition, ready, confirmIdentity, timeoutMs,
           ...(initialPage?{importColumnPage:{offset:initialPage.offset,limit:initialPage.limit}}:{}),
           ...(initialOutputPage?{outputColumnPage:{offset:initialOutputPage.offset,limit:initialOutputPage.limit}}:{}),
           tablePage:initialObservation?.node_table_request,
@@ -407,6 +408,7 @@ export function createNodeProcedure({ operation, execute, record, wrapMutation,
           readReform:initialObservation?.node_reform!==undefined,
           readFilter:initialObservation?.node_filter!==undefined,
           readJoin:initialObservation?.node_join!==undefined,
+          readUnion:initialObservation?.node_union!==undefined,
           readPreview:initialObservation?.node_preview_schema!==undefined,
           readProcesses:initialObservation?.node_processes!==undefined,readOutputs:initialObservation?.node_outputs!==undefined,tableDialog:initialObservation?.node_table_dialog,
           tableFormatPage:initialObservation?.table_settings?.format?.page?{offset:initialObservation.table_settings.format.page.offset,limit:initialObservation.table_settings.format.page.limit}:undefined });
