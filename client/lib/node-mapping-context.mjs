@@ -109,7 +109,10 @@ export function readMappingBrowser(prefix) {
   const native=button&&globalThis.Ext?.getCmp?.(button.id);
   if(buttons.length!==1||!root.contains(button)||!button.checkVisibility({checkVisibilityCSS:true})||native?.el?.dom!==button
     ||typeof native.pressed!=='boolean'||native.pressed!==button.classList.contains('x-btn-pressed'))return fail('mapping_autosync');
-  return {verified:true,source_identity_verified:sources.length>0||targets.length===0,inventory_complete:true,
+  const produce=exact(base+'btnProduceType');
+  const produceNative=produce.length===1&&globalThis.Ext?.getCmp?.(produce[0].id);
+  const produceMode=produceNative?.el?.dom===produce[0]?{'bg-TBGDerivedProxyProduceType-dptSupplement':'supplement','bg-TBGDerivedProxyProduceType-dptReplace':'replace','bg-TBGDerivedProxyProduceType-dptDefault':'default'}[produceNative.iconCls]:null;
+  return {...(produceMode?{produce_mode:produceMode}:{}),verified:true,source_identity_verified:sources.length>0||targets.length===0,inventory_complete:true,
     ...(grouped||input?{mapping_wizard:form}:{}),
     state_source:'cached_mapping_stores',autosync:native.pressed,
     source_fields:sources.map(describe),target_fields:targets.map((t,i)=>({...describe(t),

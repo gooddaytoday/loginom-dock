@@ -54,3 +54,9 @@ test('reform readback has a registered shape with input identities and preservat
   const bad=structuredClone(r);change(bad.configuration.readback);assert.equal(validate(bad).valid,false);
  }
 });
+test('replacement public readback admits typed Null and exact Int64 without claiming package persistence',()=>{
+ const r=result(),field={index:0,name:'Code',label:'Code',type:'integer',data_kind:'Дискретный',source_name:'Code'};
+ r.configuration={status:'applied',readback:{kind:'replacement',scope:'observed_before_verified_finish',values_are:'observed_ui_values',node:{document_id:'d',workflow_id:'w',node_id:'n'},receipt_ids:['i','c','s','m','f'],mode:'exact',output_mode:'add',rules:[{field:{kind:'input_field',name:'Code'},type:'integer',precision:0,pairs:[{from:{type:'integer',value:null},to:{type:'integer',value:'9223372036854775807'}}],other:{mode:'keep'}}],input_mapping:{port:0,autosync:true,fields:[field]},output_mapping:{port:0,autosync:true,fields:[{...field,excluded:false}]},package_persistence_verified:false}};
+ assert.equal(validate(r).valid,true);
+ for(const patch of [{output_mode:'external'},{package_persistence_verified:true},{mode:'regex'}]){const bad=structuredClone(r);Object.assign(bad.configuration.readback,patch);assert.equal(validate(bad).valid,false);}
+});
