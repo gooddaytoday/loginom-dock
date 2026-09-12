@@ -214,7 +214,8 @@ export async function configureOutputFields(channel,mapping,configured) {
   const exclusions=resolved.fields.filter(f=>f.excluded),edits=[];
   if(exclusions.length&&before.node_mapping.mapping_wizard!=='DerivedDataSourceOutputSocketWizard')throw Error('Verified separate output wizard required for exclusions');
   // Validate the complete post-exclusion namespace before any mutation. Native
-  // exclusion replaces the output record and restores the source name/label.
+  // exclusion replaces the output record. Its service label defaults to the
+  // source name; the source's original label remains on exclusion_source.
   const planned=resolved.fields.map(f=>f.excluded?{...f,current:{...f.current,name:f.source.name,label:f.source.label}}:f);
   const steps=planOutputFieldEdits(planned);
   let expected=structuredClone(before.node_mapping);
@@ -277,7 +278,7 @@ export async function excludeOutputField(channel,sourceRecordId) {
   if(added.length!==1)throw Error('One new exclusion record required');
   const excluded=added[0];
   if(excluded.excluded!==true||excluded.inherited!==false||excluded.required!==false||excluded.source!==null
-    ||!same(excluded.exclusion_source,source[0])||excluded.name!==source[0].name||excluded.label!==source[0].label
+    ||!same(excluded.exclusion_source,source[0])||excluded.name!==source[0].name||excluded.label!==source[0].name
     ||excluded.type!==source[0].type||excluded.data_kind!=='Неопределенное'
     ||baseline.target_fields.some(f=>f.field_id===excluded.field_id)||after.target_fields.some(f=>f.record_id===field.record_id))
     throw Error('Excluded record identity differs from the selected optional source');

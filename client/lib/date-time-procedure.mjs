@@ -35,10 +35,13 @@ export async function configureDateTime(channel,p,{inputMapping}){
     for(let attempt=0;attempt<12;attempt++){
      const cell=s.ui.elements.find(e=>e.date_time_cell?.role==='flag'&&e.date_time_cell.record_id===native.record_id&&e.date_time_cell.flag===flag&&e.allowed_actions.includes('click'));
      if(cell){need(cell.date_time_cell.checked===native[key],'native flag differs from rendered checkbox');
-      const nextCount=s.node_date_time.selected.count+(checked?1:-1);
+      // Loginom can leave Count unchanged for an applied numeric flag. Verify
+      // the complete cached matrix instead, including absence of side effects.
+      const nextMatrix=structuredClone(s.node_date_time.matrix);
+      nextMatrix.find(r=>r.record_id===native.record_id)[key]=checked;
       await channel.perform({condition:'set date/time '+field.name+' '+row.func+' '+flag,initialObservation:s,ready:s=>ready(s)&&s.node_date_time.selected.name===field.name,
        identity:()=>({field:field.name,record_id:field.record_id,func:row.func,iso:row.iso,flag,checked}),resolve:()=>({verb:'click',ref:cell.ref})});
-      s=await channel.observe({condition:'date/time flag and count settled',readDateTime:true,ready:s=>ready(s)&&s.node_date_time.selected.name===field.name&&s.node_date_time.selected.count===nextCount&&s.node_date_time.matrix.find(r=>r.func===row.func&&r.iso===row.iso)?.[key]===checked});break;
+      s=await channel.observe({condition:'date/time exact matrix change settled',readDateTime:true,ready:s=>ready(s)&&s.node_date_time.selected.name===field.name&&s.node_date_time.selected.record_id===field.record_id&&same(s.node_date_time.matrix,nextMatrix)});break;
      }
      const es=s.ui.elements.filter(e=>e.date_time_cell?.role==='flag'&&e.scroll&&e.allowed_actions.includes('scroll'));need(es.length&&attempt<11,'date matrix checkbox cannot be revealed');
      const anchor=es[Math.floor(es.length/2)],first=s.node_date_time.matrix.find(r=>r.record_id===es[0].date_time_cell.record_id)?.index,direction=native.index<first?-1:1;

@@ -20,6 +20,7 @@ export function resolveDateTimeOutput(c,p,native,mapping={}){
  if(mapping.fields){need(mapping.fields.length===pairs.length,'explicit output mapping must account for all fields');const seen=new Set();ordered=mapping.fields.map(f=>{
   const candidates=pairs.filter(p=>p.name===f.source?.name);need(f.source?.kind==='configured_field'&&candidates.length===1&&!seen.has(candidates[0]),'unique configured output reference required');const p=candidates[0];seen.add(p);
   const excluded=f.excluded??p.excluded;need(!excluded||!p.source.required,'generated date fields cannot be excluded');
+  need(!excluded||((f.name??p.name)===p.source.name&&(f.label===undefined||f.label===p.source.label)),'excluded source cannot be renamed');
   return {...p,name:f.name??p.name,label:f.label??p.label,excluded};
  });}
  need(new Set(ordered.map(f=>f.name.toLowerCase())).size===ordered.length,'duplicate output names');return ordered;
@@ -29,14 +30,16 @@ export async function configureDateTimeOutput(channel,c,p,mapping={}){
  let initial=await channel.observe({condition:'date/time output mapping',readMappings:true,ready});initial=await ensureGroupingOutputSources(channel,initial);
  const planned=resolveDateTimeOutput(c,p,initial.node_mapping,mapping),changes=[];
  if(p.fields!==undefined||mapping.fields){
-  changes.push(await configureOutputFields(channel,{direction:'output',port:0,fields:planned.map(f=>({source:{kind:'configured_field',name:f.source.name},name:f.name,label:f.label,excluded:f.excluded}))},initial.node_mapping.source_fields.map(f=>({...f,used:true}))));
+  changes.push(await configureOutputFields(channel,{direction:'output',port:0,fields:planned.map(f=>({source:{kind:'configured_field',name:f.source.name},name:f.name,label:f.excluded?f.source.label:f.label,excluded:f.excluded}))},initial.node_mapping.source_fields.map(f=>({...f,used:true}))));
   const edited=(await channel.observe({condition:'date/time mapped source identities',readMappings:true,ready})).node_mapping;
   const ids=planned.map(f=>{const matches=edited.target_fields.filter(t=>(t.source??t.exclusion_source)?.record_id===f.source.record_id);need(matches.length===1,'mapped source changed');return matches[0].record_id;});
   changes.push(await reorderOutputFields(channel,ids));
  }
  if(mapping.autosync!==undefined)changes.push(await configureOutputAutosync(channel,mapping.autosync));
  const final=(await channel.observe({condition:'date/time final output mapping',readMappings:true,ready})).node_mapping;
- const project=f=>({name:f.name,label:f.label,type:f.source.type,excluded:f.excluded,source:f.source.name});
+ // Excluded records are service records, not output columns. Loginom gives
+ // them the source name as label; compare the retained source label instead.
+ const project=f=>({name:f.name,label:f.excluded?f.source.label:f.label,type:f.source.type,excluded:f.excluded,source:f.source.name});
  const actual=final.target_fields.map(f=>({...f,source:f.source??f.exclusion_source}));
  need(JSON.stringify(actual.map(project))===JSON.stringify([...planned.filter(f=>!f.excluded),...planned.filter(f=>f.excluded)].map(project)),'final output differs');
  return {verified:true,cleanup_complete:true,effect_possible:changes.length>0,native_mapping:final,changes};

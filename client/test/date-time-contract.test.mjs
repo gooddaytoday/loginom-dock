@@ -44,6 +44,7 @@ test('output mapping preserves exact origin while reordering and excluding only 
  const mapping={fields:[{source:{kind:'configured_field',name:'A'},excluded:true},{source:{kind:'configured_field',name:'Month'},name:'Start',label:'Начало'}]};
  const result=resolveDateTimeOutput(configuration,parameters,native,mapping);
  assert.deepEqual(result.map(r=>[r.name,r.source.name,r.excluded]),[['A','A',true],['Start','A_YM_1',false]]);
+ for(const override of [{name:'Other'},{label:'Other'}])assert.throws(()=>resolveDateTimeOutput(configuration,parameters,native,{fields:[{...mapping.fields[0],...override},mapping.fields[1]]}),/excluded source cannot be renamed/);
  const invalid=structuredClone(mapping);invalid.fields[1].excluded=true;
  assert.throws(()=>resolveDateTimeOutput(configuration,parameters,native,invalid));
  assert.throws(()=>resolveDateTimeOutput(configuration,parameters,native,{fields:mapping.fields.slice(1)}));
