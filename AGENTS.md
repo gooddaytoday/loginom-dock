@@ -64,6 +64,14 @@
   Prepare and verify isolated environments, then run one ordinary app task,
   worktree and named branch per node on gpt-6-astra / medium. This is a new run;
   the old pilot stays parked. Reviews and subsequent nodes still require dispatch.
+  The active tasks use permanent `.worktrees/node-{11,12,13}-*` folders as separate
+  saved app projects with local execution. Do not archive them to reload config:
+  archiving an app-managed temporary worktree deleted its directory during setup.
+  Each project config selects its own source MCP and sets the installed Dock
+  plugin disabled locally. Source native-archive integration remains unaccepted
+  (`archiveActive=false`); do not claim hook isolation from that flag alone.
+  Use fresh source harnesses for changed handlers; do not globally reload MCP or
+  reinstall the shared client while the node streams are active.
 - Preserve OpenViking APIs, MCP tools, ingestion, search, sessions, storage schema,
   `viking://` URIs, internal package names and upstream attribution. Prefer small
   adapters over forks of existing subsystems; never add a second repository importer.
