@@ -58,3 +58,10 @@ test('native input-port Close binds the port and rejects foreign confirmations',
   state.prepared_node_context.input_port=port;assert.throws(()=>wizardCloseBinding(state),/prepared wizard/);
  }
 });
+
+test('second input cancellation binds its own opening receipt',()=>{
+ const {state}=fixture();state.wizard.stage='input_mapping';state.wizard.owner_context={status:'unobserved'};
+ state.prepared_node_context.input_port={direction:'input',port:1,native_index:1,port_guid:'right',opening_operation_id:'right-open'};
+ const binding=wizardCloseBinding(state);assert.equal(boundWizardCloseConfirmation(state,binding),true);
+ state.prepared_node_context.input_port.port=0;assert.equal(boundWizardCloseConfirmation(state,binding),false);
+});

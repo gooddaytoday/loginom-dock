@@ -5,15 +5,15 @@ const need=(v,m)=>{if(!v)throw Error(m);};
 export async function preflightSortingSource(options,ctx,config){
  return preflightTabularSource(options,ctx,config,{required:options.operation.parameters.parameters.keys!==undefined,resolve:resolveSortingParameters,label:'sorting'});
 }
-export async function preflightTabularSource(options,ctx,config,{required,resolve,label}){
+export async function preflightTabularSource(options,ctx,config,{required,resolve,label,inputPort}){
  const {operation,execute,onRecord,now,receiptOptions}=options,request=operation.parameters;
  if(!required)return {verified:true,not_applicable:true};
  // Existing input mappings can retain names absent from the upstream output.
  // Validate their effective schema in the normal input wizard, before editing
  // or committing it. New nodes still reject bad keys before graph creation.
  if(request.target.kind==='existing')return {verified:true,not_applicable:true,validation_deferred:'input_mapping'};
- need(request.inputs.length===1,label+' preflight requires an explicit input');
- const input=request.inputs[0],binding={document_id:request.document_id,workflow_ref:request.workflow_ref,node:input.source};
+ need(inputPort===undefined?request.inputs.length===1:request.inputs.filter(i=>i.input===inputPort).length===1,label+' preflight requires an explicit input');
+ const input=inputPort===undefined?request.inputs[0]:request.inputs.find(i=>i.input===inputPort),binding={document_id:request.document_id,workflow_ref:request.workflow_ref,node:input.source};
  const channel=createNodeProcedure({operation,execute,record:onRecord,now,maxSteps:256,...config,signal:ctx.signal,preparedNodeContext:binding,
   wrapMutation:(code,r)=>withBrowserReceipt('('+code+')(page)',{...receiptOptions(r.id,r.action_key,r.signature),operation_id:r.id})});
  const graph=s=>s.prepared_node_context?.surface==='graph'&&s.wizard?.status==='absent';
@@ -28,7 +28,7 @@ export async function preflightTabularSource(options,ctx,config,{required,resolv
  const preview=await channel.observe({condition:'complete owned upstream preview schema',readPreview:true,ready:s=>s.node_preview_schema?.verified===true&&s.node_preview_schema.port_guid===port.port_guid&&s.node_preview_schema.port===input.output});
  let error,fields=preview.node_preview_schema.fields;
  try{
-  const mapping=request.mappings.find(m=>m.direction==='input');
+  const mapping=request.mappings.find(m=>m.direction==='input'&&(inputPort===undefined||m.port===inputPort));
   if(mapping?.fields){need(mapping.fields.length===fields.length,'Input mapping must account for every upstream field');const seen=new Set();fields=mapping.fields.map(f=>{const source=fields.find(c=>c.name===f.source?.name);need(source&&!seen.has(source.name)&&f.excluded!==true,'Invalid '+label+' input mapping');seen.add(source.name);return {...source,name:f.name??source.name,label:f.label??source.label};});}
   resolve(request.parameters,fields);
  }catch(e){error=e;}

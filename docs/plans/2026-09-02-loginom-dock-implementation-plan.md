@@ -414,7 +414,8 @@ live_verified (source runtime), Hermes30/30 PASS и полная компоне�
 Подпланы04,05,07,08 также приняты в source runtime; ссылки на независимые аудиты
 приведены в реестре. Для05: [49/49 frozen PASS и полная scalar-матрица](loginom-dock/05-completion-audit.md).
 Подплан06 принят: [90/90 matrix и49/49 frozen PASS](loginom-dock/06-completion-audit.md).
-Подпланы09 (Слияние),10 остаются planned.
+Подплан09 (Слияние) принят в source runtime 12 сентября: [56/56 frozen PASS и матрица](loginom-dock/09-completion-audit.md).
+Подплан10 остаётся planned; общий V4/V5 не завершён.
 Обычный Hermes и диагностика приняты отдельной доработкой
 [09-hermes-user-diagnostics](loginom-dock/09-hermes-user-diagnostics.md).
 Весь V1 не завершён; V4/V5 этими результатами не закрываются.

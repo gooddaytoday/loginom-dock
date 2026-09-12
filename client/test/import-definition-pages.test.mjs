@@ -54,3 +54,18 @@ test('output paging refuses an exhausted scroll boundary without a gesture',asyn
  const f=windowFixture({boundary:true});await assert.rejects(readOutputDefinitionPages(f.channel),/boundary reached/);
  assert.equal(f.actions.length,0);
 });
+
+test('an addressed but clipped output field is scrolled into view before interaction',async()=>{
+ const {observeOutputDefinitionPage}=await import('../lib/import-definition-pages.mjs');
+ for(const fault of ['none','stalled','schema','lost']){
+  let top=500,calls=0;
+  const make=()=>({wizard:{stage:'output_mapping',output_columns:{definition_scroll_ref:'grid',fields:[{index:0,name:'A',label:'A',name_ref:'cell'}],page:{status:'complete_definition_page',schema_id:fault==='schema'&&calls?'other':'schema',offset:0,total_columns:80}}},ui:{elements:[
+   {ref:'grid',scroll:{ref:'grid',top,max_top:1500},bounding_box:{y:200,height:600},allowed_actions:['scroll']},
+   {ref:'cell',bounding_box:{y:201-top,height:23},allowed_actions:top<=100?['click']:[]}
+  ]}});
+  const channel={observe:async()=>make(),perform:async o=>{assert.equal(o.ready(o.initialObservation),true);const a=o.resolve();assert.deepEqual(a,{verb:'scroll',ref:'grid',delta_y:-400});calls++;if(fault==='lost')throw Error('lost');if(fault!=='stalled')top=100;}};
+  const request=observeOutputDefinitionPage(channel,{offset:0,schemaId:'schema',total:80,field:{index:0,name:'A',label:'A'}});
+  if(fault==='none'){const s=await request;assert.ok(s.ui.elements[1].allowed_actions.includes('click'));}else await assert.rejects(request);
+  assert.equal(calls,1);
+ }
+});

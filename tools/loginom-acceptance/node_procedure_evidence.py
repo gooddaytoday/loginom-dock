@@ -20,7 +20,10 @@ def bound_wizard_close_confirmation(state):
     port = binding.get('owner', {}).get('input_port')
     owner = wizard.get('owner_context')
     if port:
-        if (port.get('direction') != 'input' or port.get('port') != 0 or wizard.get('stage') != 'input_mapping'
+        if (port.get('direction') != 'input' or type(port.get('port')) is not int or not 0 <= port['port'] < 100
+                or type(port.get('native_index')) is not int or port['native_index'] < 0
+                or not isinstance(port.get('port_guid'), str) or not port['port_guid']
+                or not isinstance(port.get('opening_operation_id'), str) or not port['opening_operation_id'] or wizard.get('stage') != 'input_mapping'
                 or node.get('surface') != 'wizard'):
             return False
         owner = dict(input_port=node.get('input_port'))

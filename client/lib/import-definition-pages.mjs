@@ -64,7 +64,7 @@ async function revealOutputPage(channel,state,{offset,schemaId,total,ready}) {
   return state;
 }
 
-export async function observeOutputDefinitionPage(channel,{offset,ready=()=>true,schemaId,total}={}) {
+export async function observeOutputDefinitionPage(channel,{offset,ready=()=>true,schemaId,total,field,fieldAction='click'}={}) {
   if(!Number.isInteger(offset)||offset<0||offset>=1000)throw new Error('Bounded output definition offset required');
   const accepts=s=>['output_mapping','input_mapping'].includes(s.wizard?.stage)
     &&['complete_definition_page','rendered_definition_window'].includes(s.wizard.output_columns?.page?.status)&&ready(s);
@@ -73,5 +73,27 @@ export async function observeOutputDefinitionPage(channel,{offset,ready=()=>true
   const p=state.wizard.output_columns.page;
   if(p.status!=='complete_definition_page'||p.offset!==offset||schemaId!==undefined&&p.schema_id!==schemaId
     ||total!==undefined&&p.total_columns!==total)throw new Error('Addressed output definition changed');
-  return state;
+  if(!field)return state;
+  const identity={offset,ready,schemaId:p.schema_id,total:p.total_columns};
+  const rowOf=s=>s.wizard?.output_columns?.fields?.find(f=>f.index===field.index&&f.name===field.name&&f.label===field.label);
+  const cellOf=s=>s.ui.elements.find(e=>e.ref===rowOf(s)?.name_ref);
+  for(let attempt=0;attempt<128;attempt++){
+    const row=rowOf(state),cell=cellOf(state);
+    if(!row||!cell)throw Error('Addressed output field disappeared');
+    if(cell.allowed_actions.includes(fieldAction))return state;
+    const grids=state.ui.elements.filter(e=>e.ref===state.wizard.output_columns.definition_scroll_ref&&e.scroll?.ref===e.ref&&e.allowed_actions.includes('scroll'));
+    if(grids.length!==1)throw Error('Output field scroll owner unavailable');
+    const grid=grids[0],center=cell.bounding_box.y+cell.bounding_box.height/2;
+    const direction=center<grid.bounding_box.y?-1:center>grid.bounding_box.y+grid.bounding_box.height?1:0;
+    if(!direction)throw Error('Output field is obscured');
+    const before=grid.scroll.top;
+    await channel.perform({condition:'reveal addressed output field for interaction',initialObservation:state,
+      ready:s=>ready(s)&&s.wizard?.output_columns?.page?.schema_id===identity.schemaId&&!!rowOf(s),
+      identity:()=>({schema_id:identity.schemaId,field,scroll_owner:grid.ref}),
+      resolve:()=>({verb:'scroll',ref:grid.ref,delta_y:direction*400})});
+    state=await observeOutputDefinitionPage(channel,identity);
+    const after=state.ui.elements.find(e=>e.ref===grid.ref)?.scroll;
+    if(!after||direction*(after.top-before)<=0)throw Error('Output field scroll made no progress');
+  }
+  throw Error('Output field scroll budget exceeded');
 }

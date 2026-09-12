@@ -27,7 +27,7 @@ export function calculatorOutputSources(configuration) {
 
 export function createCalculatorNodeSupport(config) {return createTabularTransformNodeSupport(config);}
 
-// Shared lifecycle for a single-input transformation with a separate output
+// Shared lifecycle for a tabular transformation with a separate output
 // wizard. Type-specific code supplies configuration and derived-output hooks;
 // graph ownership, execution, continuation and data reading remain shared.
 export function createTabularTransformNodeSupport({targetOrigin,targetBuild},implementation=null) {
@@ -38,7 +38,7 @@ export function createTabularTransformNodeSupport({targetOrigin,targetBuild},imp
     'Calculator mappings require configured field names; input exclusions are unsupported');},
   configure:(ctx,p,drivers)=>drivers.configureCalculator(ctx,p)}]]);
  if(implementation){nodeApplyHandlers.clear();nodeApplyHandlers.set(implementation.type,{
-  revision:implementation.revision,modes:[implementation.mode],output_wizard:'separate',
+  revision:implementation.revision,modes:implementation.modes??[implementation.mode],output_wizard:'separate',
   configurationReadback:implementation.readback,parameter_schema:implementation.parameterSchema,
   validate:implementation.validate,configure:(ctx,p,drivers)=>drivers.configureCalculator(ctx,p)});}
  const nodeApplyDriverFactory=options=>{
@@ -48,9 +48,11 @@ export function createTabularTransformNodeSupport({targetOrigin,targetBuild},imp
    channel??=createNodeProcedure({operation,execute,record:onRecord,now,maxSteps:4096,targetOrigin,targetBuild,
     signal:{throwIfAborted:()=>activeSignal?.throwIfAborted(),get aborted(){return activeSignal?.aborted;},get reason(){return activeSignal?.reason;}},preparedNodeContext:{document_id:ctx.document_id,workflow_ref:ctx.workflow_ref,node:ctx.node},
     wrapMutation:(code,r)=>withBrowserReceipt('('+code+')(page)',{...receiptOptions(r.id,r.action_key,r.signature),operation_id:r.id})});return channel;};
-  const finishWizard=async (mode,port=false)=>{
+  const finishWizard=async (mode,port=false,definition)=>{
    const verb=mode==='execute'?'execute_wizard':'finish_wizard',key=mode==='execute'?'btnExecute':'btnDone';
-   const s=await channel.observe({condition:'calculator '+mode+' available',...(port?{outputColumnPage:{offset:0,limit:8}}:{}),ready:s=>s.wizard?.status==='observed'&&s.ui.elements.some(e=>e.tid===s.wizard.root_tid+';'+key&&e.allowed_actions.includes(verb))});
+   // Complete definition paging leaves the grid on its last addressed page.
+   const offset=definition?Math.floor((definition.total_columns-1)/8)*8:0;
+   const s=await channel.observe({condition:'calculator '+mode+' available',...(port?{outputColumnPage:{offset,limit:8}}:{}),ready:s=>s.wizard?.status==='observed'&&s.ui.elements.some(e=>e.tid===s.wizard.root_tid+';'+key&&e.allowed_actions.includes(verb))});
    await channel.perform({condition:'calculator '+mode,initialObservation:s,ready:s=>s.wizard?.status==='observed',identity:s=>s.prepared_node_context,
     resolve:s=>({verb,ref:control(s,key,verb).ref})});
    const graph=await channel.observe({condition:'calculator returned to graph',ready:s=>s.wizard?.status==='absent'&&s.prepared_node_context?.surface==='graph'});
@@ -111,7 +113,9 @@ export function createTabularTransformNodeSupport({targetOrigin,targetBuild},imp
       requireValue(mappings.length===0,'Close cannot commit input mappings');
       return verified({not_applicable:true,mappings:[]});
      }
-     enter(ctx);await channel.openInputPort(0);
+     enter(ctx);
+     if(implementation?.configureInputs)return implementation.configureInputs(channel,mappings,ctx,operation.nodeApply.request,finishWizard);
+     await channel.openInputPort(0);
      const ready=s=>s.wizard?.stage==='input_mapping'&&s.node_mapping?.verified===true;
      let s=await channel.observe({condition:'calculator incoming port schema',readMappings:true,ready});
      const requested=mappings[0]??{direction:'input',port:0},sources=s.node_mapping.source_fields.map(f=>({...f,used:true}));
@@ -123,7 +127,7 @@ export function createTabularTransformNodeSupport({targetOrigin,targetBuild},imp
      s=await channel.observe({condition:'configured incoming port readback',readMappings:true,ready});
      const native_mapping=s.node_mapping,definition=await readOutputDefinitionPages(channel,{expectedCount:native_mapping.target_fields.length});
      requireValue(definition.fields.every((f,i)=>['name','label','type','data_kind'].every(k=>f[k]===native_mapping.target_fields[i][k])),'Incoming port definition differs');
-     const finish=await finishWizard('done',true);
+     const finish=await finishWizard('done',true,definition);
      return verified({effect_possible:true,native_mapping,definition,changes,finish,source_identity_verified:true});
     }
     enter(ctx);requireValue(configured,'Configured calculator missing');
@@ -135,7 +139,7 @@ export function createTabularTransformNodeSupport({targetOrigin,targetBuild},imp
      mapping=result.native_mapping;columns=mapping.target_fields.filter(f=>!f.excluded);
      const definition=await readOutputDefinitionPages(channel,{expectedCount:mapping.target_fields.length});
      requireValue(definition.fields.every((f,i)=>['name','label','type','data_kind'].every(k=>f[k]===mapping.target_fields[i][k])),'Derived output definition differs');
-     const finish=await finishWizard('done',true);return verified({...result,effect_possible:true,definition,finish,source_identity_verified:true});
+     const finish=await finishWizard('done',true,definition);return verified({...result,effect_possible:true,definition,finish,source_identity_verified:true});
     }
     const sources=calculatorOutputSources(configured);
     let s=await channel.observe({condition:'calculator native output mapping',readMappings:true,ready});
@@ -155,7 +159,7 @@ export function createTabularTransformNodeSupport({targetOrigin,targetBuild},imp
     const active=mapping.target_fields.filter(f=>!f.excluded),definition=await readOutputDefinitionPages(channel,{expectedCount:mapping.target_fields.length});
     requireValue(definition.fields.length===mapping.target_fields.length&&definition.fields.every((f,i)=>['name','label','type','data_kind'].every(k=>f[k]===mapping.target_fields[i][k])),
      'Rendered calculator output mapping differs from native fields');columns=active;
-    const finish=await finishWizard('done',true);
+    const finish=await finishWizard('done',true,definition);
     return verified({effect_possible:true,native_mapping:mapping,definition,changes,finish,source_identity_verified:true});
    },
    async finish(mode,ctx){enter(ctx);if(mode==='close')return closePreparedWizard(channel);requireValue(mode==='done','Separate calculator port requires intermediate Done');return finishWizard(mode);},

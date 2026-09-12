@@ -4397,10 +4397,26 @@ test('read-only graph unlock discards a mixed snapshot and preserves identity gu
  }
 });
 
-test('grouped mapping pages bind group-local indexes and permit only subpixel table rounding',async()=>{
- for(const fault of ['none','clipped','group','index']) {
+test('grouped definition pages accept stale local totals only with a complete idle cache',async()=>{
+ for(const fault of ['none','stale','remote','pending','filtered','no_source','foreign_proxy']) {
   const {page,c,records}=bufferedMappingFixture();
-  const rename=e=>{if(e.attrs['data-tid'])e.attrs['data-tid']=e.attrs['data-tid'].replace('ColumnsMappingEngineOutputPortWizard','DerivedDataSourceOutputSocketWizard');for(const child of e.children)rename(child);};rename(c.form);
+  const rename=e=>{if(e.attrs['data-tid'])e.attrs['data-tid']=e.attrs['data-tid'].replace('ColumnsMappingEngineOutputPortWizard','DerivedDataSourceMappingEngineOutputPortWizard');for(const child of e.children)rename(child);};rename(c.form);
+  records.forEach((r,i)=>{r.data.GroupField=i<19?'':'Исключенные';r.data.Index=i<19?i:0;});
+  const store=page.context.Ext.getCmp().getStore(),proxy={$className:'bg.ext.CollectionProxy',pendingOperations:{}};
+  store.getTotalCount=()=>fault==='stale'?21:19;store.currentPage=1;store.getRemoteFilter=()=>fault==='remote';store.getRemoteSort=()=>false;store.getProxy=()=>proxy;
+  if(fault==='pending')proxy.pendingOperations={one:{}};
+  if(fault==='foreign_proxy')proxy.$className='RemoteProxy';
+  if(fault==='filtered')store.getData().getSource().items=records.slice(1);
+  if(fault==='no_source')store.getData().getSource=()=>null;
+  const r=await page.execute({mode:'observe',output_column_page:{offset:0,limit:8}});
+  assert.equal(r.output.wizard.output_columns.page.status,['none','stale'].includes(fault)?'complete_definition_page':'unverified_definition_page',fault);
+ }
+});
+
+test('grouped mapping pages bind group-local indexes and permit only subpixel table rounding',async()=>{
+ for(const family of ['DerivedDataSourceOutputSocketWizard','DerivedDataSourceMappingEngineOutputPortWizard']) for(const fault of ['none','clipped','group','index']) {
+  const {page,c,records}=bufferedMappingFixture();
+  const rename=e=>{if(e.attrs['data-tid'])e.attrs['data-tid']=e.attrs['data-tid'].replace('ColumnsMappingEngineOutputPortWizard',family);for(const child of e.children)rename(child);};rename(c.form);
   records.forEach((r,i)=>{r.data.GroupField=i<10?'':'Исключенные';r.data.Index=i<10?i:i-10;});
   c.rows[11].box.width+=fault==='clipped'?0.5:1/128;
   if(fault==='group')records[19].data.GroupField='Unknown';

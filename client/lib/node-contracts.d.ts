@@ -35,7 +35,7 @@ export interface NodeHandler<T extends NodeType, P> {
   configure(context: NodeProcedureContext, parameters: P): Promise<VerifiedNodePhase>;
   /** Pure projection of accepted receipts; never executes or rereads the UI. */
   configurationReadback?(context: {node: NodeRef; operation_id: string;
-    phases: Array<PhaseReceipt & {value: VerifiedNodePhase}>}): TextImportConfigurationReadback | CalculatorConfigurationReadback | GroupingConfigurationReadback | SortingConfigurationReadback;
+    phases: Array<PhaseReceipt & {value: VerifiedNodePhase}>}): TextImportConfigurationReadback | CalculatorConfigurationReadback | GroupingConfigurationReadback | SortingConfigurationReadback | JoinConfigurationReadback;
 }
 export interface VerifiedNodePhase { verified: true; cleanup_complete: true; effect_possible: boolean }
 export interface NodeProcedureContext {
@@ -52,7 +52,7 @@ export interface NodeApplyResult {
   execution: NodeExecution; output: NodeOutput;
   /** A local node checkpoint never proves that the package was saved. */
   package_saved: false; cleanup_complete: boolean; warnings: string[];
-  configuration?: {status: 'applied' | 'discarded'; readback?: TextImportConfigurationReadback | CalculatorConfigurationReadback | GroupingConfigurationReadback | SortingConfigurationReadback};
+  configuration?: {status: 'applied' | 'discarded'; readback?: TextImportConfigurationReadback | CalculatorConfigurationReadback | GroupingConfigurationReadback | SortingConfigurationReadback | JoinConfigurationReadback};
   checkpoint_kind?: 'local_node_checkpoint' | 'local_node_cancellation' | 'local_node_stopped';
   persisted_package_verified?: false; pending_phase?: PhaseName | null; error?: NodeError;
 }
@@ -156,3 +156,15 @@ export const NODE_TYPES: Readonly<Record<NodeType, {type: NodeType; title: strin
 export function validateNodeReference(ref: unknown): void;
 export function validateNodeTargetRequest(request: unknown): NodeTargetRequest;
 export function describeNodeTypes(types: NodeType[], pins?: object, actions?: Map<string, object>, candidateHandlers?: Map<NodeType, {revision: string}>): object[];
+
+export type JoinParameters = {keys: Array<{left: string; right: string}>;
+  case_sensitive: boolean; include_joined_keys: boolean} | Record<string, never>;
+export interface JoinConfigurationReadback {
+  kind: 'join'; scope: 'observed_before_verified_finish'; node: NodeRef;
+  receipt_ids: string[]; values_are: 'observed_ui_values'; package_persistence_verified: false;
+  mode: 'inner' | 'left'; keys: Array<{left: string; right: string}>;
+  case_sensitive: boolean; include_joined_keys: boolean;
+  input_mappings: Array<{port: 0 | 1; autosync: boolean;
+    fields: Array<{index: number; name: string; label: string; type: string; data_kind: string; source_name: string}>}>;
+  output_mapping: GroupingConfigurationReadback['output_mapping'];
+}

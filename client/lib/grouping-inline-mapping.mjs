@@ -18,8 +18,9 @@ export function verifyGroupingStaleRemoval(before,after,field){
  need(same(before.source_fields,after.source_fields)&&after.autosync===false
   &&same(before.node_context,after.node_context),'Grouping removal changed port ownership or source');
  const remaining=before.target_fields.filter(f=>f.record_id!==field.record_id);
+ const groups=new Map();
  need(remaining.length===before.target_fields.length-1&&same(remaining.map(retained),after.target_fields.map(retained))
-  &&after.target_fields.every((f,i)=>f.index===i&&f.group_index===i),'Grouping removal changed unrelated output fields');
+  &&after.target_fields.every((f,i)=>{const group=f.excluded===true,next=groups.get(group)??0;groups.set(group,next+1);return f.index===i&&f.group_index===next;}),'Grouping removal changed unrelated output fields');
  return true;
 }
 export function verifyGroupingAutosyncRestore(before,after,value){
@@ -33,7 +34,7 @@ export function configureGroupingInlineMapping(channel,configuration){
 }
 // Both grouping and sorting expose this same conditional native output page
 // after their input-derived schema changes. Each supplies its source contract.
-export async function configureDerivedInlineMapping(channel,configuration,validateSources,verifySync=verifyCalculatorInlineSync){
+export async function configureDerivedInlineMapping(channel,configuration,validateSources,verifySync=verifyCalculatorInlineSync,{sourceOf=f=>f.source}={}){
  const ready=s=>s.wizard?.stage==='output_mapping'&&s.node_mapping?.verified===true
   &&s.node_mapping.mapping_wizard==='DerivedDataSourceMappingEngineOutputPortWizard';
  let state=await channel.observe({condition:'grouping conditional output inventory',readMappings:true,ready});
@@ -43,7 +44,7 @@ export async function configureDerivedInlineMapping(channel,configuration,valida
   const baseline=state.node_mapping,field=baseline.target_fields.find(f=>f.record_id===obsolete.record_id);
   need(field&&same(retained(field),retained(obsolete)),'Obsolete grouping field changed');
   const definitions=await readOutputDefinitionPages(channel,{expectedCount:baseline.target_fields.length});
-  state=await observeOutputDefinitionPage(channel,{offset:Math.floor(field.index/8)*8,schemaId:definitions.schema_id,total:definitions.total_columns});
+  state=await observeOutputDefinitionPage(channel,{offset:Math.floor(field.index/8)*8,schemaId:definitions.schema_id,total:definitions.total_columns,field});
   const rowOf=s=>s.wizard?.output_columns?.fields?.find(f=>f.index===field.index&&f.name===field.name&&f.label===field.label);
   const root=state.wizard.root_ref;
   await channel.perform({condition:'select obsolete grouping output',initialObservation:state,ready:s=>s.wizard?.root_ref===root&&!!rowOf(s),identity:()=>field,
@@ -59,7 +60,7 @@ export async function configureDerivedInlineMapping(channel,configuration,valida
  }
  state=await channel.observe({condition:'grouping output after pruning',readMappings:true,ready});
  validateSources(configuration,state.node_mapping);
- const baseline=state.node_mapping,linked=baseline.target_fields.map(f=>f.source?.record_id);
+ const baseline=state.node_mapping,linked=baseline.target_fields.map(f=>sourceOf(f)?.record_id);
  need(linked.every(Boolean)&&new Set(linked).size===linked.length,'Grouping output must have unique source links');
  const missing=baseline.source_fields.filter(f=>!linked.includes(f.record_id));
  if(missing.length){

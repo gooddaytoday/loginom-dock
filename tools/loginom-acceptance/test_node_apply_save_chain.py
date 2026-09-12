@@ -105,6 +105,18 @@ class SaveChainTests(unittest.TestCase):
         wrong[2]['outcome']['trace'][at:at]=copy.deepcopy(trace[at:at+2])
         self.assertFalse(audit(wrong)['passed'])
 
+    def test_save_reopen_replaces_only_its_preceding_verified_checkpoint(self):
+        import json
+        events=json.loads(json.dumps(self.events).replace(self.path+'.draft.lgp',self.path))
+        for e in events[3:]:e['parameters']['conflict_policy']='replace'
+        trace=events[4]['outcome']['trace'];at=next(i for i,t in enumerate(trace) if t['event']=='save_requested')+1
+        trace[at:at]=[dict(event='save_conflict_observed',path=self.path),dict(event='overwrite_confirmed')]
+        stages=[('package.save_checkpoint',self.path,False),('package.save_as',self.path,True)]
+        audit=lambda es:verify_save_chain(es,self.seed,self.path,self.revisions,stages=stages)
+        self.assertTrue(audit(events)['passed'],audit(events))
+        for change in [lambda es:es.pop(2),lambda es:es[2]['outcome'].update(status='FAILED'),lambda es:es[3]['checkpoint']['package_identity'].update(path='/foreign.lgp'),lambda es:es[4]['outcome']['trace'][at].update(path='/foreign.lgp'),lambda es:es[4]['outcome']['trace'].pop(at+1)]:
+            wrong=copy.deepcopy(events);change(wrong);self.assertFalse(audit(wrong)['passed'])
+
     def test_declared_replace_without_actual_conflict_is_valid(self):
         for event in self.events[1:]:
             event['parameters']['conflict_policy'] = 'replace'

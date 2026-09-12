@@ -52,9 +52,10 @@ def project_action(outcome):
 def normalize_user_evidence(evidence):
     if not any(t.get('result',{}).get('result_version')=='user-v1' for t in evidence.get('tools',[]) if isinstance(t.get('result'),dict)):
         return deepcopy(evidence),{'passed':True,'scope':'legacy_diagnostic_results'}
-    from node_public_acceptance_evidence import paired_public_calls
+    from node_public_acceptance_evidence import paired_public_calls,proven_validation_refusal
     result=deepcopy(evidence); pairs,failures=paired_public_calls(result)
     events=result['events']; active_preparation=None
+    accepted_ids={e['operation_id'] for e in events if e.get('phase')=='node_apply_prepared'}
     def one(values,label):
         if len(values)!=1:raise ValueError(label)
         return values[0]
@@ -62,6 +63,7 @@ def normalize_user_evidence(evidence):
         if failures:raise ValueError('user_public_pairing')
         for call,reply in sorted(pairs,key=lambda pair:pair[0]['row']):
             tool=call['tool'];args=call.get('arguments',{});value=reply.get('result',{})
+            if proven_validation_refusal(call,reply,events,accepted_ids,pairs):continue
             if tool==PREFIX+'dock_prepare':
                 if value.get('prepared') is True:
                     state=value['workspace']

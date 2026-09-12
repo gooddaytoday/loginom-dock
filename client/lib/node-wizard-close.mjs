@@ -3,7 +3,8 @@ const requireValue=(value,message)=>{if(!value)throw Error(message);};
 
 export function wizardCloseBinding(state) {
  const w=state.wizard,n=state.prepared_node_context;
- const input=n?.input_port?.direction==='input'&&n.input_port.port===0&&w?.stage==='input_mapping';
+ const input=n?.input_port?.direction==='input'&&Number.isInteger(n.input_port.port)&&n.input_port.port>=0&&n.input_port.port<100&&Number.isInteger(n.input_port.native_index)&&n.input_port.native_index>=0
+  &&typeof n.input_port.port_guid==='string'&&n.input_port.port_guid.length>0&&typeof n.input_port.opening_operation_id==='string'&&n.input_port.opening_operation_id.length>0&&w?.stage==='input_mapping';
  requireValue(w?.status==='observed' && (w.owner_context?.status==='observed'||input)
   && n?.verified===true && n.surface==='wizard','A prepared wizard is required for cancellation');
  return {kind:'close',root_ref:w.root_ref,root_tid:w.root_tid,stage:w.stage,

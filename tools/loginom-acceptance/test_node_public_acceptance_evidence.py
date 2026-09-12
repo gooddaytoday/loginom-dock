@@ -62,6 +62,25 @@ class PublicNodeAcceptanceTests(unittest.TestCase):
                 mutate(self.evidence)
                 self.assertFalse(self.audit()['passed'])
 
+    def test_corrected_same_id_requires_strict_preallocation_refusal_before_start(self):
+        import json
+        for c in self.evidence['calls']:c['row']+=2
+        for r in self.evidence['tools']:r['row']+=2
+        error=dict(status='FAILED',action_key='request.validate',operation_id=None,phase='request_rejected',effect_possible=False,request_rejected=True,trace=[],error=dict(code='REQUEST_REJECTED'),output=dict(operation=dict(operation_id=None,state='idle',outcome=None,cleanup_confirmed=True,effect_state='none')))
+        call=dict(tool=PREFIX+'dock_node_apply',arguments=dict(operation_id='import',invalid=True),row=1,session_id='caller',tool_call_id='refused')
+        reply=dict(tool=call['tool'],row=2,session_id='caller',tool_call_id='refused',result=dict(isError=True,error=json.dumps(error)))
+        self.evidence['calls'].insert(0,call);self.evidence['tools'].insert(0,reply)
+        def check():return verify_public_nodes_and_saves(self.evidence,{'import':self.request},['save'],allow_validation_refusals=True)
+        self.assertTrue(check()['passed'],check())
+        for fault in ['late','effect','allocated','duplicate_declaration']:
+            before=copy.deepcopy(self.evidence)
+            if fault=='late':call['row']=9;reply['row']=10
+            if fault=='effect':changed=copy.deepcopy(error);changed['effect_possible']=True;reply['result']['error']=json.dumps(changed)
+            if fault=='allocated':changed=copy.deepcopy(error);changed['output']['operation']['state']='running';reply['result']['error']=json.dumps(changed)
+            if fault=='duplicate_declaration':self.evidence['events'].append(copy.deepcopy(self.evidence['events'][0]))
+            with self.subTest(fault=fault):self.assertFalse(check()['passed'])
+            self.evidence=before;call=self.evidence['calls'][0];reply=self.evidence['tools'][0]
+
     def test_validation_refusal_is_optional_and_requires_no_allocated_effect(self):
         import json
         error=dict(status='FAILED',action_key='request.validate',operation_id=None,phase='request_rejected',

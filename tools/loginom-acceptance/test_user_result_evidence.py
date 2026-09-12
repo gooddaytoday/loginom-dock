@@ -24,6 +24,19 @@ class UserResultTests(unittest.TestCase):
         self.assertEqual(normalized['tools'][1]['result']['outcome'],e['events'][2]['outcome'])
         self.assertEqual(len(e['tools'][1]['result']['output']['ports'][0]['sample']),6)
 
+    def test_unallocated_rejection_before_corrected_same_id_does_not_expand_invalid_request(self):
+        import json
+        e=fixture()
+        for c in e['calls'][1:]:c['row']+=2
+        for r in e['tools'][1:]:r['row']+=2
+        call=deepcopy(e['calls'][1]);call.update(row=3,tool_call_id='refused');call['arguments']['parameters']={'invalid':True}
+        error=dict(status='FAILED',action_key='request.validate',operation_id=None,phase='request_rejected',effect_possible=False,request_rejected=True,trace=[],error=dict(code='REQUEST_REJECTED'),output=dict(operation=dict(operation_id=None,state='idle',outcome=None,cleanup_confirmed=True,effect_state='none')))
+        reply={**deepcopy(call),'row':4,'result':{'isError':True,'error':json.dumps(error)}}
+        e['calls'].insert(1,call);e['tools'].insert(1,reply)
+        self.assertTrue(normalize_user_evidence(e)[1]['passed'])
+        error['effect_possible']=True;reply['result']['error']=json.dumps(error)
+        self.assertFalse(normalize_user_evidence(e)[1]['passed'])
+
     def test_rejects_changed_public_evidence(self):
         def field(path,value):
             def mutate(e):

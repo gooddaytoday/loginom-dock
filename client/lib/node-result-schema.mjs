@@ -67,7 +67,13 @@ const filterConfigurationReadback=object({kind:values('row_filter'),scope:values
  input_mapping:object({port:{type:'integer',const:0},autosync:bool,fields:boundedFields(readbackMappingField)}),
  output_mappings:{...array(object({port:{type:'integer',minimum:0,maximum:1},autosync:bool,fields:boundedFields(object({...readbackMappingField.properties,excluded:bool}))})),minItems:2,maxItems:2},
  package_persistence_verified:{type:'boolean',const:false}});
-const configurationReadback={anyOf:[importConfigurationReadback,calculatorConfigurationReadback,groupingConfigurationReadback,sortingConfigurationReadback,reformConfigurationReadback,filterConfigurationReadback]};
+const joinConfigurationReadback=object({kind:values('join'),scope:values('observed_before_verified_finish'),node:ref,
+ receipt_ids:{...array(str),minItems:5,maxItems:5},values_are:values('observed_ui_values'),mode:values('inner','left'),
+ keys:{...array(object({left:str,right:str})),minItems:1,maxItems:1000},case_sensitive:bool,include_joined_keys:bool,
+ input_mappings:{...array(object({port:{type:'integer',minimum:0,maximum:1},autosync:bool,fields:boundedFields(readbackMappingField)})),minItems:2,maxItems:2},
+ output_mapping:object({port:{type:'integer',const:0},autosync:bool,fields:boundedFields(object({...readbackMappingField.properties,excluded:bool}))}),
+ package_persistence_verified:{type:'boolean',const:false}});
+const configurationReadback={anyOf:[importConfigurationReadback,calculatorConfigurationReadback,groupingConfigurationReadback,sortingConfigurationReadback,reformConfigurationReadback,filterConfigurationReadback,joinConfigurationReadback]};
 export const nodeApplyResultSchema=object({operation_id:str,status:values('SUCCEEDED','FAILED','NOT_APPLIED','AMBIGUOUS'),
  effect_possible:bool,phases:array(receipt),node:nullable(ref),execution,output,
  package_saved:{type:'boolean',const:false},cleanup_complete:bool,warnings:array(str),

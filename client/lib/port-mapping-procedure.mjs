@@ -45,7 +45,7 @@ export async function configureOutputAutosync(channel,value) {
 // A fields list is the full ordered layout; exclusions are explicit entries.
 export function resolveConfiguredOutputMapping(mapping,configured,native) {
   const requireValue=(v,m)=>{if(!v)throw new Error(m);};
-  requireValue((mapping?.port===0||Number.isInteger(mapping?.port)&&mapping.port>0&&mapping.direction==='output'&&native?.node_context?.verified===true&&native.node_context.output_port?.port===mapping.port)&&(mapping.direction==='input'?native?.mapping_wizard==='TuneDataSourceMappingWizard':mapping.direction==='output'&&native?.mapping_wizard!=='TuneDataSourceMappingWizard'),'Port mapping direction differs from native wizard');
+  requireValue((mapping?.port===0||Number.isInteger(mapping?.port)&&mapping.port>0&&native?.node_context?.verified===true&&(mapping.direction==='output'?native.node_context.output_port?.port===mapping.port:mapping.direction==='input'&&native.node_context.input_port?.port===mapping.port))&&(mapping.direction==='input'?native?.mapping_wizard==='TuneDataSourceMappingWizard':mapping.direction==='output'&&native?.mapping_wizard!=='TuneDataSourceMappingWizard'),'Port mapping direction differs from native wizard');
   requireValue(native?.verified===true&&native.inventory_complete===true&&native.source_identity_verified===true,
     'Complete native mapping source identity required');
   const used=configured.filter(c=>c.used),sources=native.source_fields,targets=native.target_fields;
@@ -89,7 +89,7 @@ export async function configureOutputField(channel,field) {
   if(original.name===field.name&&original.label===field.label)return {verified:true,cleanup_complete:true,effect_possible:false,field:original,source_identity_verified:true,settings_applied:false};
   const definitions=await readOutputDefinitionPages(channel,{expectedCount:baseline.target_fields.length});
   const offset=Math.floor(original.index/8)*8;
-  let state=await observeOutputDefinitionPage(channel,{offset,schemaId:definitions.schema_id,total:definitions.total_columns});
+  let state=await observeOutputDefinitionPage(channel,{offset,schemaId:definitions.schema_id,total:definitions.total_columns,field:original,fieldAction:'double_click'});
   const rowOf=s=>s.wizard?.output_columns?.fields?.find(f=>f.index===original.index&&f.name===original.name&&f.label===original.label);
   const row=rowOf(state);if(!row)throw new Error('Output field row is unavailable');
   const root=state.wizard.root_ref;
@@ -145,7 +145,7 @@ export async function reorderOutputFields(channel,recordIds) {
       const index=expected.target_fields.findIndex(f=>f.record_id===recordIds[destination]),field=expected.target_fields[index];
       if(grouped&&expected.target_fields[index-1].excluded!==field.excluded)throw Error('Output reorder would cross an exclusion group');
       const offset=Math.floor(index/8)*8;
-      state=await observeOutputDefinitionPage(channel,{offset,total:recordIds.length});
+      state=await observeOutputDefinitionPage(channel,{offset,total:recordIds.length,field});
       const rowOf=s=>s.wizard?.output_columns?.fields?.find(f=>f.index===index&&f.name===field.name&&f.label===field.label);
       const root=state.wizard.root_ref;
       await channel.perform({condition:'select output field to move',initialObservation:state,
@@ -255,7 +255,7 @@ export async function excludeOutputField(channel,sourceRecordId) {
     ||baseline.target_fields.filter(f=>!f.excluded).length<2)throw Error('Output exclusion restriction or ambiguous source');
   const semantic=({rendered_indices,...rest})=>rest;
   const definition=await readOutputDefinitionPages(channel,{expectedCount:baseline.target_fields.length});
-  state=await observeOutputDefinitionPage(channel,{offset:Math.floor(field.index/8)*8,schemaId:definition.schema_id,total:definition.total_columns});
+  state=await observeOutputDefinitionPage(channel,{offset:Math.floor(field.index/8)*8,schemaId:definition.schema_id,total:definition.total_columns,field});
   const rowOf=s=>s.wizard?.output_columns?.fields?.find(f=>f.index===field.index&&f.name===field.name&&f.label===field.label);
   const root=state.wizard.root_ref;
   await channel.perform({condition:'select optional output field',initialObservation:state,

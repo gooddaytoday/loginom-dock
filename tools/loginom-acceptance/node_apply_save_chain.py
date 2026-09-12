@@ -55,7 +55,7 @@ def verify_save_chain(events, seed_request, final_path, revisions, *, expected_g
             failures.append(key+':order_or_id')
         previous_pos = end_pos
         checkpoint = start.get('checkpoint', {})
-        # Repeated declared checkpoints may replace only the draft proven by
+        # Declared checkpoints or save/reopen may replace only the file proven by
         # the immediately preceding stage. Other overwrites remain refused.
         parameters = start.get('parameters', {})
         if (set(parameters) != {'path', 'conflict_policy'} or parameters.get('path') != path
@@ -108,8 +108,8 @@ def verify_save_chain(events, seed_request, final_path, revisions, *, expected_g
         conflicts = [(i,t) for i,t in enumerate(trace) if t.get('event') == 'save_conflict_observed']
         overwrites = [(i,t) for i,t in enumerate(trace) if t.get('event') == 'overwrite_confirmed']
         if conflicts or overwrites:
-            own_draft = (stages is not None and index > 0 and key == keys[0]
-                         and expected_stages[index-1] == (key,path,False)
+            own_draft = (stages is not None and index > 0
+                         and expected_stages[index-1] == (keys[0],path,False)
                          and parameters.get('conflict_policy') == 'replace'
                          and checkpoint.get('package_identity',{}).get('path') == path)
             trace_bound = (len(selected) == len(names) and len(conflicts) == len(overwrites) == 1

@@ -32,15 +32,24 @@ def paired_public_calls(evidence):
     return pairs, failures
 
 
-def proven_validation_refusal(call, reply, events, accepted_ids):
+def proven_validation_refusal(call, reply, events, accepted_ids, pairs=()):
     # Only unallocated, paired MCP validation errors may be excluded from the
     # set of executed nodes. A generic tool error or unknown effect never qualifies.
     try:
         operation = call['arguments']['operation_id']
         result = reply['result']
         if (call['tool'] != PREFIX+'dock_node_apply' or not isinstance(operation,str) or not operation
-                or operation in accepted_ids or any(e.get('operation_id') == operation for e in events)
                 or not isinstance(result,dict) or result.get('isError') is not True):return False
+        if operation in accepted_ids:
+            # The public contract tells the caller to correct an unallocated
+            # request under the same ID. It must precede every allocated start;
+            # those starts still undergo the complete journal binding below.
+            starts=[(c,r) for c,r in pairs if c.get('tool')==PREFIX+'dock_node_apply'
+                    and c.get('arguments',{}).get('operation_id')==operation
+                    and r.get('result',{}).get('state') in ('running','settled')]
+            if not starts or any(reply['row']>=c['row'] or c['session_id']!=call['session_id'] for c,r in starts):return False
+            if len([e for e in events if e.get('operation_id')==operation and e.get('phase')=='node_apply_prepared'])!=1:return False
+        elif any(e.get('operation_id')==operation for e in events):return False
         error, _ = json.JSONDecoder().raw_decode(result['error'])
         state = error['output']['operation']
         return (error.get('status') == 'FAILED' and error.get('action_key') == 'request.validate'
@@ -59,7 +68,7 @@ def verify_public_nodes_and_saves(evidence, requests, save_ids, *, allow_validat
     events = evidence['events']
     allowed_node = {PREFIX+n for n in ('dock_node_apply', 'dock_node_wait', 'dock_node_status')}
     relevant = [(c, r) for c, r in pairs if c.get('tool') in allowed_node]
-    refused = [(c,r) for c,r in relevant if allow_validation_refusals and proven_validation_refusal(c,r,events,set(requests))]
+    refused = [(c,r) for c,r in relevant if allow_validation_refusals and proven_validation_refusal(c,r,events,set(requests),pairs)]
     relevant = [(c,r) for c,r in relevant if not any(c is discarded for discarded,_ in refused)]
     actual_ids = {c.get('arguments', {}).get('operation_id') for c, _ in relevant}
     if actual_ids != set(requests):
