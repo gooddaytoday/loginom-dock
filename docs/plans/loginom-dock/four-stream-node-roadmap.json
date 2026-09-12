@@ -2562,7 +2562,16 @@
     "review_rounds": 1,
     "periodic_polling": false,
     "event_source": "Developer completion messages to coordinator; actionable blockers only during work",
-    "heartbeat_status": "DELETED_BY_USER"
+    "heartbeat_status": "DELETED_BY_USER",
+    "shared_project_memory": {
+      "permission": "read-only targeted access",
+      "target_uri": "viking://user/kartamyshev/peers/-Users-kartamyshev-Git-loginom-dock/memories",
+      "cross_peer_call_scope": "all only with exact target_uri or exact descendant read URI",
+      "keep_own_peer": true,
+      "sibling_worktrees_allowed": false,
+      "periodic_recall": false,
+      "policy": "docs/loginom-dock/shared-project-memory.md"
+    }
   },
   "accepted_components": [
     {

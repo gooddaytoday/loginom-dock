@@ -18,7 +18,8 @@
 - Architecture: `docs/loginom-dock/architecture.md`.
 - Dock server resource URI: `viking://resources/loginom-dock` (Dock connection
   and identity only; not the personal agent-memory resource root).
-- Personal agent project-memory URI for this checkout:
+- Personal project-memory URI of the main checkout (shared read root for node
+  worktrees; their own capture Peer remains derived from their own path):
   `viking://user/kartamyshev/peers/-Users-kartamyshev-Git-loginom-dock/memories`.
 - Read the plan and current implementation before changing architecture. Track
   verified progress in `docs/loginom-dock/implementation-status.md`; do not mark
@@ -26,12 +27,13 @@
 
 ## OpenViking memory
 
-- Before substantial work, check memory health and the injected context. When
-  more context is needed, use `find` or `search` in list mode with the exact
-  personal project-memory URI above as `target_uri` and `peer_scope="actor"`.
-  This Peer is workspace-derived; verify it if the checkout path changes.
+- Before substantial work, check memory health and the injected context. Use
+  `find` or `search` in list mode in your own workspace-derived memory with
+  `peer_scope="actor"`; the main checkout uses the project URI above, while a
+  node worktree keeps its own path-derived Peer. Verify it when the path changes.
   Retrieve relevant global User memory separately within actor scope as needed.
-  Cross-project retrieval must be explicit; do not set a global Peer override.
+  Additional shared-project reading is explicitly authorized below. Other
+  cross-project retrieval still requires permission; never set a global Peer override.
 - The personal OpenViking connection and the Dock server are separate systems.
   Do not use the Dock resource URI for personal memory restoration. Query Dock
   resources through its own connection when the task needs product knowledge.
@@ -49,6 +51,36 @@
 - Canonical architecture and CI decisions live in this repository. When CI changes,
   update its documentation and agreed OpenViking copy together; agree exact copy
   URIs before publication. Do not silently publish repository content elsewhere.
+
+### Shared project memory: explicit read permission (2026-09-13)
+
+- The user explicitly authorized all current and future Loginom Dock node
+  developer/review/fix tasks to READ the main project's memory from their own
+  worktrees. This is an exception to earlier cross-checkout read restrictions.
+- The ONLY additional shared root is:
+  `viking://user/kartamyshev/peers/-Users-kartamyshev-Git-loginom-dock/memories`.
+- Keep your own workspace-derived Peer, actor-scoped personal/global retrieval
+  and automatic capture unchanged. Do not override peerId, identity headers,
+  environment, credentials, endpoint or global plugin/MCP configuration.
+- For an actual context gap, use registered OpenViking find/search in list mode
+  with that EXACT target_uri, peer_scope="all" for that call, and limit=3.
+  Never use a broad all-scope query without the exact shared root.
+- Read at most one or two relevant files using exact returned URIs under the
+  shared root plus '/', with peer_scope="all" for that read. Reject results or
+  links outside this root; do not follow them into sibling worktree/project memory.
+- This permission is read-only: do not write/edit/delete/publish in the shared
+  root. Keep experiments and task capture in your own worktree memory. It does
+  not grant access to other node worktrees or unrelated projects, and does not
+  change server ACLs. Existing relevant global User actor scope remains available.
+- Current user instructions, your branch's code/docs and live evidence outrank
+  memory. Check dates, revisions and acceptance status; stale manual-review,
+  xhigh or polling decisions in memory do not replace current workflow rules.
+- Empty results do not justify wider searches. If the tools or access fail,
+  preserve the error and continue from project evidence without changing Peer.
+- Full coordinator policy:
+  `/Users/kartamyshev/Git/loginom-dock/docs/loginom-dock/shared-project-memory.md`.
+  This root-checkout document may be read for instructions; keep implementation
+  changes and task artifacts in your own worktree. Do not add periodic recall.
 
 ## Implementation boundaries
 
