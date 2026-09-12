@@ -98,10 +98,10 @@ def audit(request,evidence,prompt):
             raw=next(s['node_duplicates'] for _,s in sequence['observations'] if s.get('node_duplicates'))
             def roles(fs):return sorted(tuple(c[k] for k in ('name','label','type','data_kind','usage_type')) for c in fs)
             check(key+'_persisted_roles',roles(raw['fields'])==roles(result(seed)['configuration']['readback']['fields']))
-            for suffix,r in [('initial',mr),('persisted',later_m)]:checks[key+'_'+suffix+'_output']=verify_duplicates_output(events,r,f['rows'],f['duplicate_groups'],f['contradiction_groups'])
+            for suffix,r in [('initial',mr),('persisted',later_m)]:checks[key+'_'+suffix+'_output']=verify_duplicates_output(events,r,f['rows'],f['duplicate_groups'],f['contradiction_groups'],source_columns=f['columns'])
         f=fixtures['main10']
-        checks['key_only_output']=verify_duplicates_output(events,keyonly,f['rows'],[[1,2,3],[4,5,6],[9,10]],[])
-        checks['restored_output']=verify_duplicates_output(events,restored,f['rows'],f['duplicate_groups'],f['contradiction_groups'])
+        checks['key_only_output']=verify_duplicates_output(events,keyonly,f['rows'],[[1,2,3],[4,5,6],[9,10]],[],source_columns=f['columns'])
+        checks['restored_output']=verify_duplicates_output(events,restored,f['rows'],f['duplicate_groups'],f['contradiction_groups'],source_columns=f['columns'])
         for r in requests:
             if r['finish']=='execute':check(r['operation_id']+'_full_read',r['read']['ports']==[0] and r['read']['sample_rows']==10 and r['read']['require_exact_numbers'] is True)
             if r['target']['type']=='research.duplicates':

@@ -2,14 +2,22 @@
 
 Group numbers are arbitrary identifiers. Their membership is checked first;
 only then are those identifiers used in the raw-cell comparison. Original
-values and expected memberships always come from the independent fixture.
+values, input column definitions and expected memberships always come from the
+independent fixture. A zero-row table must satisfy the same schema contract.
 """
 from decimal import Decimal
 from calculator_output_evidence import verify_calculator_output
 from duplicates_oracle import verify_marking
+from duplicates_configuration_evidence import verify_duplicates_configuration
+
+# Observed Loginom 7.4.2 contract; independent of the client implementation.
+SERVICE_COLUMNS = [dict(name=n, label=l, type=t, data_kind='Дискретный') for n,l,t in (
+    ('Duplicate', 'Дубликат', 'boolean'), ('DuplicateGroup', 'Группа дубликата', 'integer'),
+    ('Contradiction', 'Противоречие', 'boolean'), ('ContradictionGroup', 'Группа противоречия', 'integer'))]
+SCHEMA_KEYS = ('name', 'label', 'type', 'data_kind')
 
 
-def verify_duplicates_output(events, request, source_rows, duplicate_groups, contradiction_groups, identity='Id'):
+def verify_duplicates_output(events, request, source_rows, duplicate_groups, contradiction_groups, identity='Id', *, source_columns):
     failures = []
     execution_id = None
     try:
@@ -25,9 +33,31 @@ def verify_duplicates_output(events, request, source_rows, duplicate_groups, con
         port = ports[0]
         if not port['sample_complete'] or port['row_count'] != len(source_rows) or len(port['sample']) != len(source_rows):
             raise ValueError('duplicates_complete_rows_required')
-        columns = [{k:c[k] for k in ('name', 'label', 'type', 'data_kind')} for c in port['schema']]
-        if len({c['name'] for c in columns}) != len(columns):
-            raise ValueError('duplicates_unique_columns')
+        # The empty fixture has no rows from which to infer its schema. Require
+        # the caller's independent input definition for every fixture instead.
+        source_schema = [{k:c[k] for k in SCHEMA_KEYS} for c in source_columns]
+        expected_schema = SERVICE_COLUMNS + source_schema
+        expected_by_name = {c['name']:c for c in expected_schema}
+        if (not source_schema or len(expected_by_name) != len(expected_schema)
+                or identity not in {c['name'] for c in source_schema}):
+            raise ValueError('duplicates_source_schema_required')
+        actual = [{k:c[k] for k in SCHEMA_KEYS} for c in port['schema']]
+        canonical = lambda fs: sorted(tuple(c[k] for k in SCHEMA_KEYS) for c in fs)
+        if canonical(actual) != canonical(expected_schema):
+            raise ValueError('duplicates_expected_schema')
+        # Existing output order may differ from the CSV. Only the permutation
+        # comes from the result; every expected definition comes from the oracle.
+        columns = [expected_by_name[c['name']] for c in actual]
+        config = verify_duplicates_configuration(events, request)
+        if not config['passed']:
+            failures.extend(config['failures'])
+            raise ValueError('duplicates_output_configuration')
+        readback = result['configuration']['readback']
+        if canonical(readback['fields']) != canonical(source_schema):
+            raise ValueError('duplicates_input_schema')
+        mapped = readback['output_mapping']['fields']
+        if mapped != [dict(name=c['name'], label=c['label'], type=c['type'], source_name=c['name']) for c in columns]:
+            raise ValueError('duplicates_output_mapping_schema')
         def decode(cell, column):
             if cell['type'] != column['type'] or type(cell['is_null']) is not bool:
                 raise ValueError('duplicates_cell_type')
