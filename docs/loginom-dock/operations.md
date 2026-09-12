@@ -1,3 +1,28 @@
+# Диагностика доступности координатором — 13 сентября 2026
+
+Пользователь разрешил координатору при недоступности Dock самостоятельно заходить
+на VPS и проверять причину, без повторного запроса разрешения на диагностику.
+Использовать описанный ниже SSH-доступ и проверенный host key. Проверять внешний
+HTTP/TLS, SSH, текущие контейнеры, Caddy, ресурсы и относящиеся к сбою журналы,
+сохраняя только сведения без секретов. До выбора исправления установить слой сбоя.
+
+Доступность восстановлена: обычный маршрут с Mac дал HTTP200 обоих доменов
+примерно за 0.45 s, успешный SSH, диагностику клиента и реальное чтение через MCP.
+Во время предшествующих таймаутов путь через `utun7` не работал, а соединения
+через `en0` к тому же VPS проходили. Проверены контейнеры, ресурсы и loopback
+API/Caddy; точная причина сбоя туннельного пути не установлена. Личная OpenViking
+по-прежнему даёт TLS-ошибку. Потоки ожидают ручного продолжения.
+[Доказательства, ограничения и checkpoints](dock-availability-2026-09-13.md).
+
+Для проверки только доступности использовать `/health`. В текущем исходном коде
+`/ready` выполняет embedding probe, а `verify-server.py` вызывает `/ready`.
+Последний подходит для расширенной проверки установки с учётом конфигурации моделей,
+но не является пассивной проверкой соединения. Прочитанный серверный pin:
+`7b7118468353eacab83551a3570efb4de76b6b2f`. Монитор loopback API не доказывает
+исправность публичного TLS.
+
+---
+
 # Клиент с Объединением обновлён — 12 сентября 2026
 
 Код Объединения и исправлений отправлен в GitHub main: **0e2bb03f**.
@@ -211,10 +236,13 @@ API/MCP-контейнер не пересоздавался. current/server sou
 ## Стенд Loginom для тестирования и отладки
 
 С 7 сентября2026 по явному выбору пользователя использовать
-`http://logi-test-plan.bg.local/app/?testable=true`, account `user` без пароля.
-Живой вход и просмотр `/user` проверены; отображаемая версия7.4.2.
-По уточнению пользователя 7 сентября 2026 целевой Loginom развёрнут на Linux,
-Excel на этом стенде не поддерживается и исключён из текущего плана реализации.
+`http://logi-test-plan.bg.local/app/?testable=true`; отображаемая версия7.4.2.
+Исходная проверка использовала `user`, но для текущих потоков назначены отдельные
+аккаунты test-2/test-1/test-3/test-4, для координатора — `orcestrator`.
+Назначения и собственные каталоги проверять по [реестру потоков](../plans/loginom-dock/three-stream-workflow.md).
+Уточнением пользователя 12 сентября прежнее исключение Excel от 7 сентября
+отменено: Linux-стенд поддерживает XLSX, импорт и экспорт включены двумя задачами
+в [очередь потока1](../plans/loginom-dock/four-stream-node-roadmap.md).
 Это адрес целевого Loginom, отдельно от VPS/API/MCP Dock ниже. Production Dock
 и установленный клиент этой проверкой не изменялись. Перед новой приёмкой
 нужны соответствующие origin/build pins и проверенные storage allowed roots.
@@ -253,7 +281,7 @@ ssh = ['sshpass', '-e', 'ssh', '-p', config.get('LOGINOM_DOCK_SSH_PORT', '22'),
        '-o', f'UserKnownHostsFile={root / ".dock/known_hosts"}',
        '-o', 'ConnectTimeout=30',
        f'{config["LOGINOM_DOCK_SSH_USER"]}@{config["LOGINOM_DOCK_SSH_HOST"]}']
-subprocess.run(ssh + ['python3 /opt/loginom-dock/tools/verify-server.py'],
+subprocess.run(ssh + ['curl --connect-timeout 5 --max-time 10 --fail --silent --show-error http://127.0.0.1:1933/health'],
                env=env, check=True)
 ```
 
@@ -353,7 +381,7 @@ readlink -f /opt/loginom-dock/current
 cat /opt/loginom-dock/current/source.commit
 docker ps --format 'table {{.Names}}\t{{.Image}}\t{{.Status}}'
 docker inspect loginom-dock-caddy-1 --format '{{range .Mounts}}{{println .Source "->" .Destination}}{{end}}'
-python3 /opt/loginom-dock/tools/verify-server.py
+curl --connect-timeout 5 --max-time 10 --fail --silent --show-error http://127.0.0.1:1933/health
 systemctl list-timers --all --no-pager 'loginom-dock-*'
 cat /opt/loginom-dock/monitoring/health.json
 ```
@@ -361,8 +389,9 @@ cat /opt/loginom-dock/monitoring/health.json
 Не печатать полный `docker inspect`/`docker compose config`, `ov.conf`, `.env`,
 `client.json` или истории агента: они могут содержать секреты. Для синтаксиса
 Compose использовать `config --quiet`. `verify-server.py` проверяет HTTPS,
-readiness, аутентификацию, права обычного клиента и каталог MCP; это не тест модели
-или полного сценария Loginom.
+readiness, аутентификацию, права обычного клиента и каталог MCP. В текущем коде
+readiness включает embedding probe; это расширенная проверка установки,
+не пассивный сетевой probe и не приёмка полного сценария Loginom.
 
 ### Точный production Compose
 

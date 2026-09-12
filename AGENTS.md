@@ -7,6 +7,13 @@
 - Production paths, access, build/deploy/rollback and current inventory:
   `docs/loginom-dock/operations.md`. Verify live state before server changes;
   repository HEAD, deployed server and installed client may have different revisions.
+- On 2026-09-13 the user authorized the coordinator to diagnose Dock availability
+  problems directly on the Dock VPS whenever they block the streams. Use the
+  existing project SSH access without asking for this diagnostic permission again.
+  Check network/TLS, Caddy, service state, resources and relevant redacted logs;
+  preserve the incident and stream checkpoints in project documentation. Determine
+  the failing layer before choosing a repair. For connectivity-only checks use
+  `/health`; current source `/ready` and `verify-server.py` can call embeddings.
 - Canonical plan: `docs/plans/2026-09-02-loginom-dock-implementation-plan.md`.
 - Architecture: `docs/loginom-dock/architecture.md`.
 - Dock server resource URI: `viking://resources/loginom-dock` (Dock connection
