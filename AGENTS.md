@@ -72,6 +72,12 @@
   (`archiveActive=false`); do not claim hook isolation from that flag alone.
   Use fresh source harnesses for changed handlers; do not globally reload MCP or
   reinstall the shared client while the node streams are active.
+  The user then authorized a fourth stream using the newly created Loginom
+  `test-4` account, after checking the running streams. Node14 Missing values
+  is assigned exclusively to stream4 on gpt-6-astra / medium, in its own chat,
+  `codex/node-14-missing-values` branch and permanent worktree. Remove node14
+  from stream1's next-node queue. Verify test-4 and its storage in the live UI.
+  The same isolation and manual acceptance/review/release rules apply.
 - Preserve OpenViking APIs, MCP tools, ingestion, search, sessions, storage schema,
   `viking://` URIs, internal package names and upstream attribution. Prefer small
   adapters over forks of existing subsystems; never add a second repository importer.
