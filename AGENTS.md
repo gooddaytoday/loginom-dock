@@ -107,8 +107,12 @@
   Merge is authorized ONLY by a separate user command in the coordinator chat;
   do not infer permission to push main, deploy or update the shared plugin.
   Preserve pending branches; start new nodes from a recorded accepted main base.
-  Follow docs/plans/loginom-dock/automatic-node-workflow.md and maintain one
-  coordinator heartbeat, idempotent phase dispatch and the local state registry.
+  Follow docs/plans/loginom-dock/automatic-node-workflow.md. The latest user
+  clarification disables periodic polling: automation loginom-dock is PAUSED.
+  Developers send one completion message per phase to the coordinator, plus
+  actionable blockers only. Advance on these events with idempotent phase
+  dispatch and the local registry; verify the old turn completed before sending
+  the next phase. Do not reactivate the heartbeat without a new user request.
   The full queue is maintained in
   [the four-stream roadmap](docs/plans/loginom-dock/four-stream-node-roadmap.md)
   and [its JSON registry](docs/plans/loginom-dock/four-stream-node-roadmap.json).
