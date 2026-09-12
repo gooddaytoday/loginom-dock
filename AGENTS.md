@@ -46,11 +46,11 @@
 ## Implementation boundaries
 
 - The user ended the parallel node-development pilot on 2026-09-11 and returned
-  to sequential work. Work on one node at a time; do not resume concurrent
-  developer/reviewer agents without a new explicit user request. Preserve the
+  to sequential work until authorizing the new streams described below. Do not
+  resume the old pilot. Preserve the
   pilot worktrees and consult `docs/loginom-dock/parallel-node-pilot.md` for the
-  unaccepted work and resumption checkpoints. Implementation is paused by the
-  user's instruction except for explicitly requested follow-ups. On 2026-09-11
+  unaccepted work and resumption checkpoints. Work remains limited to explicitly
+  requested follow-ups and streams. On 2026-09-11
   the shared process-panel return fix and user-v1 readback/auditor follow-up
   were completed with 31/31 autonomous audit checks and 11/11 negative cases.
   Nodes09/10 were subsequently completed through separate sequential requests.
@@ -64,7 +64,7 @@
   Prepare and verify isolated environments, then run one ordinary app task,
   worktree and named branch per node on gpt-6-astra / medium. This is a new run;
   the old pilot stays parked. Reviews and subsequent nodes still require dispatch.
-  The active tasks use permanent `.worktrees/node-{11,12,13}-*` folders as separate
+  The active tasks use permanent `.worktrees/node-{11,12,13,14}-*` folders as separate
   saved app projects with local execution. Do not archive them to reload config:
   archiving an app-managed temporary worktree deleted its directory during setup.
   Each project config selects its own source MCP and sets the installed Dock
@@ -78,6 +78,14 @@
   `codex/node-14-missing-values` branch and permanent worktree. Remove node14
   from stream1's next-node queue. Verify test-4 and its storage in the live UI.
   The same isolation and manual acceptance/review/release rules apply.
+  Current assignments are stream1 -> node11, stream2 -> node12, stream3 -> node13,
+  stream4 -> node14. Next assignments are stream1 -> Text export, stream2 -> node16,
+  stream3 -> node15, stream4 -> Sampling. After Text export, stream1 takes XLSX
+  import and XLSX export as two ordinary, separate node tasks. Every new node
+  gets its own app chat, permanent worktree and named branch; dispatch is manual,
+  with review and merging later. The full queue is maintained in
+  [the four-stream roadmap](docs/plans/loginom-dock/four-stream-node-roadmap.md)
+  and [its JSON registry](docs/plans/loginom-dock/four-stream-node-roadmap.json).
 - Preserve OpenViking APIs, MCP tools, ingestion, search, sessions, storage schema,
   `viking://` URIs, internal package names and upstream attribution. Prefer small
   adapters over forks of existing subsystems; never add a second repository importer.
@@ -129,9 +137,11 @@
   connects, opens, configures, finishes, executes and reads the node output.
   Follow the canonical plan's node-level-operations section and V1–V5 stages.
   The first analytical release covers the eight types and modes in plan section 1;
-  the remaining inventory stays in the roadmap. Excel is excluded from this
-  implementation plan because the target Loginom Linux server does not support
-  it (user clarification of 2026-09-07). Use bounded UI fallback for
+  the remaining inventory stays in the roadmap. On 2026-09-12 the user clarified
+  that the target Linux Loginom supports XLSX and explicitly requested Excel.
+  This supersedes the Excel exclusion of 2026-09-07: XLSX import and export enter
+  stream1 after Text export as two separate tasks, outside the original 03–10
+  release scope. Other Excel formats remain unverified. Use bounded UI fallback for
   unsupported types/modes; do not claim it as a ready handler. Do not introduce
   a general scenario-plan interpreter as a release dependency.
 - Do not reopen each wizard in the normal product path. Verify settings during
