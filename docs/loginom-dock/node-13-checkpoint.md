@@ -177,3 +177,33 @@ runtime `d2fcaea53e7474b14db50e9d942a28ba3f9359ea5b6e9836c62d0b1ebfe1cef6`,
 Полный клиентский набор после исправлений: **1401 PASS / 1 SKIP / 0 FAIL**,
 1402 теста, запуск с доступом к localhost, concurrency=1.
 Лог: `.dock/client-tests-resume.log`. Полный node13-new-24 выполняется.
+
+В 6c827c79 весь node13-new-24 дошёл до SUCCEEDED checkpoint: 24 флага,
+28 записей mapping, 27 включённых выходов с заданным порядком, DateB исключён,
+все фазы по finish verified. Независимый `date_time_audit.py` подтвердил raw
+configuration (PASS). Однако MCP-клиент отверг финальный ответ: в
+node-result-schema отсутствовала ветка date_time readback. Поэтому полный
+публичный вызов не считается успешным. Ветка схемы добавлена; 7/7 schema tests
+прошли, фактический сохранённый checkpoint валиден по исправленной схеме.
+
+Чтобы сохранить уже настроенную диагностическую работу, после свежего графа
+выполнен публичный package.save_checkpoint с replace только собственной копии
+`/test-3/N13-6c827c79.lgp`: SUCCEEDED, save_completed=true,
+persisted_content_verified=false. Затем пакет закрыт, диалогов нет, harness
+закрыт. Новый fresh source harness должен открыть этот сохранённый пакет,
+сделать новую собственную копию (`.dock/start-configured-case.mjs`), заново
+прочитать граф, активировать fixture-source и выполнить
+`.dock/execute-configured.mjs` (existing Календарь, parameters={}, полный exact
+read до 30 минут). Это проверка сохранённых настроек, ещё не доказанная
+package persistence. Исходная fixture сохранена отдельно и не изменялась.
+
+Текущая сессия исполнения: `5f9483cd-5975-4ce1-97f3-68897afc3132`, runtime
+`86ec04cdbbebefa50970059b5a29fd5adab8b37bfb1f568a20934173ba8eaba5`,
+сохранённая конфигурация скопирована в `/test-3/N13-5f9483cd.lgp`.
+Узел Календарь GUID `b95ac3b5-12ea-4f63-8537-a25f0ebff7a3` обнаружен в новом
+графе с исходной связью. `node13-execute-24` (parameters={}, mappings=[])
+прошёл configure/finish/execute и читает точный выход. Результат ещё ожидается.
+Повторные API/schema tests: 13/13 PASS, `.dock/node-api-schema-resume.log`.
+После завершения read запустить independent audit и negative checks для этой
+операции; при успехе сопоставить readback с предыдущим сохранённым конфигом.
+Нельзя заявлять успешный публичный вызов до получения его финального ответа.
