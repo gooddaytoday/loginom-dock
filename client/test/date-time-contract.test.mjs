@@ -16,6 +16,12 @@ test('existing empty parameters preserve; explicit empty field list clears only 
  assert.throws(()=>validateDateTimeParameters({fields:[{field:{kind:'input_field',name:'A'},transformations:[]}]},'calendar',request));
  assert.throws(()=>validateDateTimeParameters({},'calendar',{target:{kind:'existing'},mappings:[{direction:'input',fields:[{source:{kind:'configured_field',name:'A'},excluded:true}]}]}));
 });
+test('explicit date output layout refuses autosync before changing a node',()=>{
+ const mappings=[{direction:'output',port:0,autosync:true,fields:[{source:{kind:'configured_field',name:'A'}}]}];
+ assert.throws(()=>validateDateTimeParameters({},'calendar',{target:{kind:'existing'},mappings}),/layout requires autosync disabled/);
+ mappings[0].autosync=false;validateDateTimeParameters({},'calendar',{target:{kind:'existing'},mappings});
+ delete mappings[0].autosync;validateDateTimeParameters({},'calendar',{target:{kind:'existing'},mappings});
+});
 test('effective input mapping is validated before its Done, preserving retained field names',()=>{
  const native={target_fields:[{name:'A',type:'datetime'}]};
  validateDateTimeInputParameters(parameters,{fields:null},native);

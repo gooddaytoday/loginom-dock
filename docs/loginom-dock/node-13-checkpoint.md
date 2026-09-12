@@ -207,3 +207,61 @@ package persistence. Исходная fixture сохранена отдельн�
 После завершения read запустить independent audit и negative checks для этой
 операции; при успехе сопоставить readback с предыдущим сохранённым конфигом.
 Нельзя заявлять успешный публичный вызов до получения его финального ответа.
+
+`node13-execute-24` завершился публичным **SUCCEEDED**, cleanup_complete=true,
+полный read 4×27, все 15 пустых стандартных форматов дат восстановлены,
+возврат в сценарий подтверждён. Независимый audit PASS (configuration/raw_output/
+values), **8/8 negative PASS**. CSV-адаптация независимого oracle исправлена:
+его общий CSV parser принимает пробел, а не T между датой/временем; typed ISO
+проверяется отдельно и правила сравнения значений не ослаблены. Все значения
+12 преобразований на обоих полях и null подтверждены, конец периода — последний
+календарный день в 00:00:00.000. Hermes не запускался.
+
+Однако после reopening/Next исходные поля Id/DateA/Amount переместились после
+вычисленных при autosync=true. Порядок исходного запроса **не сохранился**;
+этот прогон не доказывает полную persistence. Добавлена защита: явный выходной
+layout отключает autosync; fields+autosync=true отвергаются до изменений.
+35/35 профильных тестов прошли, live-проверка новой защиты ещё нужна.
+Собственная копия закрыта через штатное «Не сохранять» после завершения read,
+диалог исчез, harness закрыт. Сохранённый базовый результат
+`/test-3/N13-6c827c79.lgp` остаётся источником следующей копии.
+Новый harness: start-configured-case → graph → activate-source → fix-layout.
+После успешного node13-layout-fixed: независимый audit, save, отдельное reopening
+и проверка сохранённого порядка вместе с точным read. Далее остальные случаи.
+
+Сессия `fcccbde6-d697-465d-8b2c-603d7d51d037`, runtime
+`f19e8e833228c9443cf50432523b0ea515de2b8cd6bb192d825140e0aa8d1bd7`:
+node13-layout-fixed публично SUCCEEDED, independent configuration audit PASS,
+порядок Id/Amount/24 преобразования/DateA восстановлен, DateB исключён,
+autosync=false. Публичный node13-layout-save SUCCEEDED для
+`/test-3/N13-fcccbde6.lgp`, пакет закрыт без диалогов.
+
+Новое независимое открытие: сессия `a52fd065-7187-41e1-abe2-aeea4ff6f74f`,
+тот же source runtime f19e8e..., `.dock/start-layout-case.mjs` открыла точный
+сохранённый пакет и создала копию `/test-3/N13-a52fd065.lgp`. Граф считан заново,
+GUID Календарь остался b95ac3b5-12ea-4f63-8537-a25f0ebff7a3. Выполняется
+node13-execute-24 (parameters={}, mappings=[], полный exact read).
+После успешного результата: date_time_audit.py, date_time_negative.py и новый
+`date_time_persistence.py <fcccbde6-session> node13-layout-fixed <a52fd065-session>
+node13-execute-24`. Последний сравнивает семантическую конфигурацию, публичные
+ответы, save receipt и отдельное точное открытие исходного пакета.
+На прежней паре 6c827c79→5f9483cd он уже отказал: saved_configuration_changed.
+
+По отдельному запросу координатора выполнен MEMORY_ACCESS_CHECK: один адресный
+find в общем root памяти (all только на этот запрос, limit=3, read_content=false),
+затем read post_acceptance_fixes.md от 2026-09-10 внутри разрешённого root.
+Доступ успешен. Локальный resolver подтвердил собственный workspace-derived
+Peer -Users-kartamyshev-Git-loginom-dock--worktrees-node-13-date-time,
+explicitPeerConfigured=false, workspacePeer=true. Настройки не менялись.
+Координатору отправлен один запрошенный итог. Исторические инструкции о
+промежуточных save/review не заменяют текущих. Изменение AGENTS.md координатором
+о разрешённом чтении общей памяти сохранено как внешняя правка.
+
+После независимого reopening в a52fd065 phase output_mapping подтвердил
+сохранение autosync=false и порядка Id, Amount, A_date, A_month_end…;
+execute прошёл, полный read продолжается. Полный клиентский набор на текущем
+коде: **1403 PASS / 1 SKIP / 0 FAIL** (1404 теста),
+`.dock/client-tests-layout.log`. Python oracle: 3/3 PASS.
+Для пустого входа аудитор дополнен явным fixture=empty; стандартная fixture
+boundaries остаётся неизменной. Новые приватные сценарии empty-fixture и
+empty-date-new пока только подготовлены, не запускались.

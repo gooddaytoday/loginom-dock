@@ -35,7 +35,9 @@ export async function configureDateTimeOutput(channel,c,p,mapping={}){
   const ids=planned.map(f=>{const matches=edited.target_fields.filter(t=>(t.source??t.exclusion_source)?.record_id===f.source.record_id);need(matches.length===1,'mapped source changed');return matches[0].record_id;});
   changes.push(await reorderOutputFields(channel,ids));
  }
- if(mapping.autosync!==undefined)changes.push(await configureOutputAutosync(channel,mapping.autosync));
+ // Native autosync appends passthrough fields after generated fields on the
+ // next node validation. An explicit layout must therefore disable it.
+ if(mapping.fields||mapping.autosync!==undefined)changes.push(await configureOutputAutosync(channel,mapping.autosync??false));
  const final=(await channel.observe({condition:'date/time final output mapping',readMappings:true,ready})).node_mapping;
  // Excluded records are service records, not output columns. Loginom gives
  // them the source name as label; compare the retained source label instead.
