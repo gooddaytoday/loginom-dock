@@ -119,7 +119,7 @@ async function mutateGraph(page, task, read) {
     const p=task.effect.parameters,kind=task.effect.kind;
     if(kind==='create'){
       const title=task.types[p.type].title.replace(/\s/g,'_');
-      const palette=task.request.workflow_ref.prefix+';ModelForm;colVendors_Компоненты>'+(p.type==='imports.text'?'Импорт':'Трансформация')+'>'+title+';TreeText';
+      const palette=task.request.workflow_ref.prefix+';ModelForm;colVendors_Компоненты>'+(p.type==='imports.text'?'Импорт':p.type==='research.duplicates'?'Исследование':'Трансформация')+'>'+title+';TreeText';
       const origin=await find(task.request.workflow_ref.prefix+';ModelForm;cmpDiagram').boundingBox();
       const target={x:origin.x+p.position.x,y:origin.y+p.position.y};
       const reachable=await find(task.request.workflow_ref.prefix+';ModelForm;cmpDiagram').evaluate((e,p)=>{
@@ -246,7 +246,7 @@ export function createNodeTargetBrowserAdapter({execute,origin,build,pinned}) {
       if(!graph.interaction_ready)throw new Error('Drag surface is not ready');
       if(value.target.kind==='new'){
         const title=NODE_TYPES[value.target.type].title.replace(/\s/g,'_');
-        const tid=value.workflow_ref.prefix+';ModelForm;colVendors_Компоненты>'+(value.target.type==='imports.text'?'Импорт':'Трансформация')+'>'+title+';TreeText';
+        const tid=value.workflow_ref.prefix+';ModelForm;colVendors_Компоненты>'+(value.target.type==='imports.text'?'Импорт':value.target.type==='research.duplicates'?'Исследование':'Трансформация')+'>'+title+';TreeText';
         const available=await call(`async page => page.locator('[data-tid='+${JSON.stringify(JSON.stringify(tid))}+']').evaluateAll(es=>es.length===1 && !!es[0].getBoundingClientRect().width && !es[0].closest('.x-item-disabled,.x-grid-row-disabled'))`,deadline);
         if(!available)throw new Error('Component unavailable in the observed platform/license or palette');
       }

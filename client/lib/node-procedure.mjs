@@ -7,6 +7,7 @@ import {makeSortingContextCode} from './sorting-context.mjs';
 import {makeUnionContextCode} from './union-context.mjs';
 import {makeJoinContextCode} from './join-context.mjs';
 import {makeFilterContextCode} from './filter-context.mjs';
+import {makeDuplicatesContextCode} from './duplicates-context.mjs';
 import {makeReformContextCode} from './reform-context.mjs';
 import {makeGroupingContextCode} from './grouping-context.mjs';
 import {makeCalculatorContextCode} from './calculator-context.mjs';
@@ -161,7 +162,7 @@ export function createNodeProcedure({ operation, execute, record, wrapMutation,
         throw new NodeProcedureStepError(result);
       return structuredClone(result);
     },
-    async observe({ condition, ready, confirmIdentity, timeoutMs = 15000, importColumnPage, outputColumnPage, readProcesses = false, readOutputs = false, readMappings = false, readCalculator = false, readGrouping = false, readSorting = false, readReform = false, readFilter = false, readJoin = false, readUnion = false, readPreview = false, readNavigation = false, tablePage, tableDialog, tableFormatPage, wizardConfirmation } = {}) {
+    async observe({ condition, ready, confirmIdentity, timeoutMs = 15000, importColumnPage, outputColumnPage, readProcesses = false, readOutputs = false, readMappings = false, readCalculator = false, readGrouping = false, readSorting = false, readReform = false, readDuplicates = false, readFilter = false, readJoin = false, readUnion = false, readPreview = false, readNavigation = false, tablePage, tableDialog, tableFormatPage, wizardConfirmation } = {}) {
       checkBudget();
       if (typeof condition !== 'string' || !condition.trim() || typeof ready !== 'function'
         || !Number.isFinite(timeoutMs) || timeoutMs <= 0 || timeoutMs > 15000) {
@@ -172,7 +173,7 @@ export function createNodeProcedure({ operation, execute, record, wrapMutation,
       if(tableDialog && (!['format','filter'].includes(tableDialog.kind)||!tableDialog.table))throw new Error('A typed Table dialog binding is required');
       if(tablePage)makeNodeTableContextCode(preparedNodeContext,tablePage.table,tablePage.page);
       if(tableDialog)makeNodeTableContextCode(preparedNodeContext,tableDialog.table,{row_offset:0,row_limit:0,column_offset:0,column_limit:1});
-      if ((readProcesses || readOutputs || readMappings || readCalculator || readGrouping || readSorting || readReform || readFilter || readJoin || readUnion || readPreview) && !preparedNodeContext) throw new Error('Native process/output reads require a prepared node');
+      if ((readProcesses || readOutputs || readMappings || readCalculator || readGrouping || readSorting || readReform || readDuplicates || readFilter || readJoin || readUnion || readPreview) && !preparedNodeContext) throw new Error('Native process/output reads require a prepared node');
       // A failed wait must invalidate even a previously usable observation.
       snapshot = null;
       evidenceSnapshot = null;
@@ -199,7 +200,7 @@ export function createNodeProcedure({ operation, execute, record, wrapMutation,
         if (roots.status !== 'SUCCEEDED') throw new Error('Node procedure roots could not be observed');
         const wizard = roots.output.wizard;
         const portals = wizard?.status === 'observed' ? (roots.output.ui?.elements??[]).filter(e =>
-          (e.tid?.startsWith(wizard.root_tid + ';') || wizard.stage==='field_parameters' && e.tid?.startsWith('EditReformColumnDefForm;')) && e.tid.endsWith(';boundlist')) : [];
+          (e.tid?.startsWith(wizard.root_tid + ';') || wizard.stage==='field_parameters' && e.tid?.startsWith('EditReformColumnDefForm;') || wizard.stage==='input_mapping' && e.tid==='EditTuneColumnDefForm;cbxUsageType;boundlist') && e.tid.endsWith(';boundlist')) : [];
         if(portals.length>1)throw new Error('Node procedure dropdown owner is ambiguous');
         // Dropdowns live outside the wizard subtree. Reading the unique
         // portal plus fixed wizard guards avoids scanning unrelated file tabs.
@@ -225,7 +226,8 @@ export function createNodeProcedure({ operation, execute, record, wrapMutation,
         if(filterDialogs.length>1)throw Error('Filter dialog is ambiguous');
         const joinMenus=readJoin&&wizard?.stage==='join'?(roots.output.ui?.elements??[]).filter(e=>e.tid==='mn'):[];
         if(joinMenus.length>1)throw Error('Join link menu is ambiguous');
-        const root = joinMenus[0]?.ref ?? filterDialogs[0]?.ref ?? previewRoot ?? dialogRoot[0]?.ref ?? outputEditors[0]?.ref ?? navigationRoot ?? processRoot ?? outputRoot ?? (portals.length===1 ? portals[0].ref : expressionEditors[0]?.ref ?? (wizard?.status === 'observed' ? wizard.root_ref : graphRoot));
+        const rolePortal=wizard?.stage==='input_mapping'&&portals[0]?.tid==='EditTuneColumnDefForm;cbxUsageType;boundlist'?portals[0].ref:undefined;
+        const root = rolePortal ?? joinMenus[0]?.ref ?? filterDialogs[0]?.ref ?? previewRoot ?? dialogRoot[0]?.ref ?? outputEditors[0]?.ref ?? navigationRoot ?? processRoot ?? outputRoot ?? (portals.length===1 ? portals[0].ref : expressionEditors[0]?.ref ?? (wizard?.status === 'observed' ? wizard.root_ref : graphRoot));
         if (observationNow() >= deadline) break;
         result = await execute(makeWorkspaceUiCode({ mode: 'observe', operation_id: id,
           ...boundOptions,
@@ -271,7 +273,7 @@ export function createNodeProcedure({ operation, execute, record, wrapMutation,
         // observation; they are not an execution or data-freshness claim.
         for (const [requested,key,makeCode] of [[readProcesses,'node_processes',makeNodeProcessContextCode],
           [readOutputs,'node_outputs',makeNodeOutputContextCode], [readMappings,'node_mapping',makeNodeMappingContextCode],
-          [readUnion,'node_union',makeUnionContextCode], [readJoin,'node_join',makeJoinContextCode], [readCalculator,'node_calculator',makeCalculatorContextCode], [readGrouping,'node_grouping',makeGroupingContextCode], [readSorting,'node_sorting',makeSortingContextCode], [readReform,'node_reform',makeReformContextCode]]) {
+          [readUnion,'node_union',makeUnionContextCode], [readJoin,'node_join',makeJoinContextCode], [readCalculator,'node_calculator',makeCalculatorContextCode], [readGrouping,'node_grouping',makeGroupingContextCode], [readSorting,'node_sorting',makeSortingContextCode], [readReform,'node_reform',makeReformContextCode], [readDuplicates,'node_duplicates',makeDuplicatesContextCode]]) {
           if (!requested) continue;
           if (observationNow() >= deadline) break;
           const native=await execute(makeCode(preparedNodeContext),{timeout:Math.min(35000,Math.max(1,deadline-observationNow()))});
@@ -406,6 +408,7 @@ export function createNodeProcedure({ operation, execute, record, wrapMutation,
           readGrouping:initialObservation?.node_grouping!==undefined,
           readSorting:initialObservation?.node_sorting!==undefined,
           readReform:initialObservation?.node_reform!==undefined,
+          readDuplicates:initialObservation?.node_duplicates!==undefined,
           readFilter:initialObservation?.node_filter!==undefined,
           readJoin:initialObservation?.node_join!==undefined,
           readUnion:initialObservation?.node_union!==undefined,

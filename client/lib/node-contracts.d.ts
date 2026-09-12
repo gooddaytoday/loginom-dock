@@ -1,7 +1,7 @@
 /** Shared 02/03 contract. Runtime publication of node.apply belongs to 03. */
 export type NodeType = 'imports.text' | 'transform.calculator' | 'transform.reform_columns'
   | 'transform.filter_data' | 'transform.group_data' | 'transform.sorting'
-  | 'transform.join_data' | 'transform.union_data';
+  | 'research.duplicates' | 'transform.join_data' | 'transform.union_data';
 export interface WorkflowRef { workflow_id: string; tab_tid: string; prefix: string; navigation_path: {tid: string; label: string}[] }
 export interface NodeRef { document_id: string; workflow_id: string; node_id: string }
 export interface Position { x: number; y: number }
@@ -35,7 +35,7 @@ export interface NodeHandler<T extends NodeType, P> {
   configure(context: NodeProcedureContext, parameters: P): Promise<VerifiedNodePhase>;
   /** Pure projection of accepted receipts; never executes or rereads the UI. */
   configurationReadback?(context: {node: NodeRef; operation_id: string;
-    phases: Array<PhaseReceipt & {value: VerifiedNodePhase}>}): TextImportConfigurationReadback | CalculatorConfigurationReadback | GroupingConfigurationReadback | SortingConfigurationReadback | JoinConfigurationReadback;
+    phases: Array<PhaseReceipt & {value: VerifiedNodePhase}>}): TextImportConfigurationReadback | CalculatorConfigurationReadback | GroupingConfigurationReadback | SortingConfigurationReadback | JoinConfigurationReadback | DuplicatesConfigurationReadback;
 }
 export interface VerifiedNodePhase { verified: true; cleanup_complete: true; effect_possible: boolean }
 export interface NodeProcedureContext {
@@ -52,7 +52,7 @@ export interface NodeApplyResult {
   execution: NodeExecution; output: NodeOutput;
   /** A local node checkpoint never proves that the package was saved. */
   package_saved: false; cleanup_complete: boolean; warnings: string[];
-  configuration?: {status: 'applied' | 'discarded'; readback?: TextImportConfigurationReadback | CalculatorConfigurationReadback | GroupingConfigurationReadback | SortingConfigurationReadback | JoinConfigurationReadback};
+  configuration?: {status: 'applied' | 'discarded'; readback?: TextImportConfigurationReadback | CalculatorConfigurationReadback | GroupingConfigurationReadback | SortingConfigurationReadback | JoinConfigurationReadback | DuplicatesConfigurationReadback};
   checkpoint_kind?: 'local_node_checkpoint' | 'local_node_cancellation' | 'local_node_stopped';
   persisted_package_verified?: false; pending_phase?: PhaseName | null; error?: NodeError;
 }
@@ -167,4 +167,14 @@ export interface JoinConfigurationReadback {
   input_mappings: Array<{port: 0 | 1; autosync: boolean;
     fields: Array<{index: number; name: string; label: string; type: string; data_kind: string; source_name: string}>}>;
   output_mapping: GroupingConfigurationReadback['output_mapping'];
+}
+
+export interface DuplicatesParameters { input_fields: string[]; output_fields: string[] }
+export interface DuplicatesConfigurationReadback {
+  kind: 'duplicates'; scope: 'observed_before_verified_finish'; node: NodeRef;
+  receipt_ids: string[]; values_are: 'observed_ui_values'; package_persistence_verified: false;
+  fields: Array<{index: number; field_id: string; name: string; label: string; type: string; data_kind: string;
+    usage_type: 0 | 3 | 4; input_field: {field_id: string; name: string; label: string; type: string; index: number; source_name: string; source_field_id: string}}>;
+  input_mapping: {port: 0; fields: Array<{name: string; source_name: string}>};
+  output_mapping: {port: 0; fields: Array<{name: string; label: string; type: string; source_name: string}>};
 }

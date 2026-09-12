@@ -2,6 +2,7 @@ import { createHash } from 'node:crypto';
 
 export const NODE_CONTRACT_REVISION = '1.0.0';
 const definitions = [
+  ['research.duplicates', 'Дубликаты и противоречия', 'duplicates', 1, 1, false, ['mark'], 'processors/scrutiny/duplicates.md'],
   ['imports.text', 'Текстовый файл', 'importtextfile', 0, 1, false, ['delimited'], 'integration/import/txt/README.md'],
   ['transform.calculator', 'Калькулятор', 'calcdata', 1, 1, false, ['expression'], 'processors/transformation/calc/README.md'],
   ['transform.reform_columns', 'Параметры полей', 'reformcolumns', 1, 1, false, ['scalar'], 'processors/transformation/fields-features.md'],
@@ -16,7 +17,7 @@ export const NODE_TYPES = freeze(Object.fromEntries(definitions.map(([type, titl
   type, title, icon_class: 'bg-vendor-icon-' + icon, contract_revision: NODE_CONTRACT_REVISION,
   tabular_inputs: inputs, tabular_outputs: outputs, additional_tabular_inputs: additional, modes,
   semantics: type === 'transform.join_data' ? 'Join two tables by keys; not positional Соединение.'
-    : type === 'transform.union_data' ? 'Append rows, preserving duplicates; not UNION DISTINCT.' : title,
+    : type === 'transform.union_data' ? 'Append rows, preserving duplicates; not UNION DISTINCT.' : type === 'research.duplicates' ? 'Mark all copies and contradictions; retain all rows. Filtering Duplicate=false removes every member of a duplicate group. Unassigned fields are preserved and ignored. No automatic deduplication or conflict resolution.' : title,
   graph_handler: 'node_target_v1', graph_handler_status: 'internal_candidate', configuration_handler: null,
   configuration_status: 'planned_in_subplans_03_to_10',
   sources: { e2e: ['bg/helpers/workflow/node.ts', 'bg/helpers/workflow/ports.ts', 'bg/helpers/workflow/links.ts'],

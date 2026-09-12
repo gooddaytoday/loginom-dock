@@ -3487,7 +3487,7 @@ async function inputPortFinishFixture(mode='valid') {
   const {inputPortBreadcrumbs}=await import('./input-port-breadcrumbs.fixture.mjs');
   const panel=page.add('div','MF;TF-5;NavigationBar;NavigationPanel','',{x:48,y:35,width:1392,height:36});
   const crumbs=inputPortBreadcrumbs.map((n,i)=>{
-    const crumb=page.add('a',n.tid,n.label,n.rect,panel),icon={4:'maptree-icon-workflow',5:'bg-vendor-icon-calcdata',8:'maptree-icon-wizard'}[i];
+    const multiline=mode==='multiline'; const crumb=page.add('a',multiline?n.tid.replace('Revenue','Duplicates:__in:_Key_Sub'):n.tid,multiline&&i===5?'Duplicates: in: Key, Sub':n.label,n.rect,panel),icon={4:'maptree-icon-workflow',5:'bg-vendor-icon-calcdata',8:'maptree-icon-wizard'}[i];
     if(icon)page.add('span',null,'',{x:n.rect.x+1,y:n.rect.y+1,width:16,height:16},crumb).attrs.class=icon;return crumb;
   });
   const done=page.add('button','MF;TF-5;WizrdMCF;btnDone','Готово',{x:1300,y:950,width:100,height:25},owner);
@@ -3500,8 +3500,8 @@ async function inputPortFinishFixture(mode='valid') {
     owner.remove();for(const c of crumbs.slice(5))c.remove();
     if(mode==='wrong_workflow')crumbs[4].ownText='Другой сценарий';
     graph=page.add('div','MF;TF-5;ModelForm;cmpDiagram','',{x:48,y:71,width:1392,height:929});
-    const key=mode==='wrong_node'?'Other':'Revenue';node=page.add('g','MF;TF-5;Graph;'+key,'',{x:100,y:200,width:150,height:80},graph);
-    label=page.add('span','MF;TF-5;Graph;'+key+';Label;Label',key,{x:110,y:220,width:120,height:30},node);
+    const key=mode==='wrong_node'?'Other':mode==='multiline'?'Duplicates:__in:_Key_Sub':'Revenue';node=page.add('g','MF;TF-5;Graph;'+key,'',{x:100,y:200,width:150,height:80},graph);
+    label=page.add('span','MF;TF-5;Graph;'+key+';Label;Label',mode==='multiline'?'Duplicates:in: Key, Sub':key,{x:110,y:220,width:120,height:30},node);
     if(mode==='duplicate_node')page.add('g','MF;TF-5;Graph;'+key,'',node.box,graph);
     if(['toast','foreign_toast','permanent_toast'].includes(mode)){toast=page.add('div',mode==='foreign_toast'?'foreign':'toast','Сохранено',{x:1000,y:800,width:300,height:75});toast.attrs.role='dialog';}
     if(mode==='mask')page.add('div','mask','Загрузка').attrs.class='x-mask-msg';
@@ -3527,10 +3527,10 @@ test('typed input-port finish is offered only with full mapping and exact owner 
 });
 
 test('typed input-port finish uses one gesture and quiet exact graph return without applied claims',async()=>{
-  for(const mode of ['valid','late_body','wrong_node','wrong_workflow','still_open','mask','duplicate_node','churn','late_tab']){
+  for(const mode of ['valid','multiline','late_body','wrong_node','wrong_workflow','still_open','mask','duplicate_node','churn','late_tab']){
     const {page,waits}=await inputPortFinishFixture(mode),snapshot=await page.observe();
     const done=snapshot.ui.elements.find(e=>e.wizard_finish?.mode==='input_port');assert.ok(done,mode);
-    const result=await page.act({verb:'finish_wizard',ref:done.ref},snapshot),success=['valid','late_body'].includes(mode);
+    const result=await page.act({verb:'finish_wizard',ref:done.ref},snapshot),success=['valid','multiline','late_body'].includes(mode);
     assert.equal(result.status,success?'SUCCEEDED':'AMBIGUOUS',mode+JSON.stringify(result.error));
     assert.equal(page.events.filter(e=>e==='click').length,1,mode);
     const event=result.trace.find(e=>e.event==='input_port_finish_verified');assert.equal(!!event,success,mode);
@@ -4593,4 +4593,43 @@ test('compact filter observation retains visible final rows ahead of clipped sav
  const target=observed.ui.elements.find(e=>e.tid===base+';colDelete_Id-99');
  assert.ok(target);assert.ok(target.allowed_actions.includes('click'));assert.equal(target.filter_cell.record_id,'r99');
  assert.ok(observed.ui.elements.length<=240);
+});
+
+test('duplicate role page is recognized by its native grid without an add-mapping button',async()=>{
+  const page=new Page(),root='MF;TF-1;WizrdMCF',form=page.add('div',root);
+  page.add('div',root+';TuneDataSourceInputPortWizard;grdTargetColumns','',undefined,form);
+  page.add('button',root+';btnNext','Далее',undefined,form);
+  const observed=await page.observe();assert.equal(observed.wizard.stage,'input_mapping');
+  assert.equal(observed.wizard.controls.btnNext.enabled,true);
+});
+
+test('global duplicate role selection retains its dialog and rejects unrelated field changes',async()=>{
+ for(const fault of [false,true]) {
+  const page=new Page(),base='MF;TF-1;WizrdMCF;',wizard=page.add('div',base.slice(0,-1)),stem=base+'TuneDataSourceInputPortWizard;';
+  page.add('div',stem+'grdTargetColumns','',undefined,wizard);
+  const grid=page.add('div',stem+'grdTargetColumns;tbl','',undefined,wizard);grid.id='roles-view';grid.attrs.id=grid.id;
+  const row=page.add('table',null,'',undefined,grid);row.attrs={class:'x-grid-item-selected','data-recordindex':'0','data-recordid':'r1','data-boundview':grid.id};
+  page.add('td',stem+'colName_A','A',undefined,row);const label=page.add('td',stem+'colDisplayName_A','A',undefined,row);
+  page.add('span',null,'',undefined,label).attrs.class='bg-TBGDataType-dtInteger';
+  page.add('td',stem+'colDataKind_A','Дискретный',undefined,row);page.add('td',stem+'colUsageType_A','Не задано',undefined,row);
+  const form=page.add('div','EditTuneColumnDefForm');form.id='role-editor';form.attrs.class='x-window';const inputs={};
+  page.add('div','EditTuneColumnDefForm;header','Редактировать столбец',undefined,form);
+  for(const [key,value] of [['edtName','A'],['edtDisplayName','A'],['cbxDataType','Целый'],['cbxDataKind','Дискретный'],['cbxUsageType','Не задано']]) {
+   const owner=page.add('div','EditTuneColumnDefForm;'+key,'',undefined,form),input=page.add('input',null,'',undefined,owner);input.value=value;inputs[key]=input;
+   if(key!=='cbxUsageType'){input.disabled=true;input.attrs.disabled='';}
+  }
+  const record={isModel:true,internalId:'r1'},store={$className:'Ext.data.Store',isLoading:()=>false,getAt:i=>i===0?record:null};
+  const native={FView:{el:{dom:form}},FAddMode:false,Records:[record]};
+  page.context.Ext={getCmp:id=>id===form.id?{Controller:native}:id===grid.id?{el:{dom:grid},getStore:()=>store}:null};
+  page.app.Application={FInstance:{FMainForm:{Items:{Workspace:{getActiveTab:()=>({Controller:{FController:{FView:{el:{dom:wizard}}}}})}}}}};
+  const list=page.add('div','EditTuneColumnDefForm;cbxUsageType;boundlist','',{x:600,y:300,width:140,height:40});
+  page.add('div','EditTuneColumnDefForm;cbxUsageType;boundlist;Выходное','Выходное',{x:605,y:305,width:130,height:25},list);
+  const first=await page.observe();assert.equal(first.wizard.stage,'input_mapping');assert.equal(first.wizard.column_parameters.portal_bound,true);
+  const read=await page.execute({mode:'observe',root_ref:first.ui.elements.find(e=>e.wizard_combo?.kind==='option').wizard_combo.list_ref});
+  const option=read.output.ui.elements.find(e=>e.wizard_combo?.kind==='option');assert.ok(option,JSON.stringify({wizard:read.output.wizard,combos:read.output.ui.elements.filter(e=>e.wizard_combo)}));
+  assert.equal(read.output.ui.elements.some(e=>e.wizard_field?.scope==='output_column'),false);
+  const click=page.mouse.click;page.mouse.click=async(...args)=>{await click(...args);list.remove();inputs.cbxUsageType.value='Выходное';if(fault)inputs.edtName.value='Other';};
+  const result=await page.act({verb:'select_wizard_option',ref:option.ref},read.output);
+  assert.equal(result.status,fault?'AMBIGUOUS':'SUCCEEDED',JSON.stringify(result.error));assert.equal(page.events.filter(e=>e==='click').length,1);
+ }
 });
