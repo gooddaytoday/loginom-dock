@@ -64,13 +64,15 @@
   On 2026-09-12 the user requested a plan for three separate app-task streams
   controlled through the coordinator chat. The plan is
   `docs/plans/loginom-dock/three-stream-workflow.md`: planning does not launch
-  development or resume the old pilot. Start only the streams explicitly requested
-  by the user; review and the next node are dispatched on request, merging later.
+  development or resume the old pilot. The subsequent 2026-09-13 instruction
+  below supersedes the original manual review/next-node policy; merging remains
+  subject to a separate user command.
   The user subsequently authorized implementation of the first three streams
   (11 Replacement, 12 Duplicates, 13 Date/time) in this coordinator chat.
   Prepare and verify isolated environments, then run one ordinary app task,
   worktree and named branch per node on gpt-6-astra / medium. This is a new run;
-  the old pilot stays parked. Reviews and subsequent nodes still require dispatch.
+  the old pilot stays parked. The coordinator now dispatches reviews and subsequent
+  nodes automatically under the 2026-09-13 workflow below.
   The active tasks use permanent `.worktrees/node-{11,12,13,14}-*` folders as separate
   saved app projects with local execution. Do not archive them to reload config:
   archiving an app-managed temporary worktree deleted its directory during setup.
@@ -84,13 +86,30 @@
   is assigned exclusively to stream4 on gpt-6-astra / medium, in its own chat,
   `codex/node-14-missing-values` branch and permanent worktree. Remove node14
   from stream1's next-node queue. Verify test-4 and its storage in the live UI.
-  The same isolation and manual acceptance/review/release rules apply.
+  The same isolation rules apply; review and continuation now follow the
+  2026-09-13 workflow below. Release remains separately authorized.
   Current assignments are stream1 -> node11, stream2 -> node12, stream3 -> node13,
   stream4 -> node14. Next assignments are stream1 -> Text export, stream2 -> node16,
   stream3 -> node15, stream4 -> Sampling. After Text export, stream1 takes XLSX
   import and XLSX export as two ordinary, separate node tasks. Every new node
-  gets its own app chat, permanent worktree and named branch; dispatch is manual,
-  with review and merging later. The full queue is maintained in
+  gets its own app chat, permanent worktree and named branch. On 2026-09-13
+  the user authorized automatic continuation: after development completes, run
+  one review on gpt-6-astra/medium in the SAME developer app task; send one
+  round of confirmed fixes there on gpt-6-astra/medium. The user's subsequent
+  clarification forbids automatic repeat review after that correction round.
+  Verify fixes with focused tests/live evidence; do not disguise another full
+  review as verification. This supersedes the earlier xhigh review preference.
+  After the required final autonomous audit passes, start the next eligible
+  queued node
+  in a NEW app task/worktree/branch on gpt-6-astra/medium. The coordinator
+  assigns the single Hermes Sol/low slot; no concurrent Hermes acceptance.
+  A same-chat review is a separate phase, not an independent fresh-context agent.
+  Merge is authorized ONLY by a separate user command in the coordinator chat;
+  do not infer permission to push main, deploy or update the shared plugin.
+  Preserve pending branches; start new nodes from a recorded accepted main base.
+  Follow docs/plans/loginom-dock/automatic-node-workflow.md and maintain one
+  coordinator heartbeat, idempotent phase dispatch and the local state registry.
+  The full queue is maintained in
   [the four-stream roadmap](docs/plans/loginom-dock/four-stream-node-roadmap.md)
   and [its JSON registry](docs/plans/loginom-dock/four-stream-node-roadmap.json).
 - Preserve OpenViking APIs, MCP tools, ingestion, search, sessions, storage schema,

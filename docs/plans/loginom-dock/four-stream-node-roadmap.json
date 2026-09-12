@@ -5,9 +5,10 @@
   "status": "planned_queue_with_active_assignments",
   "scope": "70 ещё не принятых компонентов; ручное назначение. Это план, не результат приёмки новых handlers.",
   "precedence_notes": [
+    "Уточнение пользователя 13.09.2026: ревью и доработки Astra/medium в той же задаче; после одного раунда доработок повторное ревью не запускать. Это отменяет прежние xhigh и повторное ревью.",
     "Уточнение пользователя от 12.09.2026 отменяет исключение Excel от 07.09: Linux-стенд поддерживает XLSX. Импорт и экспорт XLSX включены в обычную очередь потока1. Другие форматы не проверены.",
     "Новая live-палитра координатора содержит 75 компонентов; OneCRequest, ExecCmd и Tableau не наблюдались и имеют владельца в conditional_reserve.",
-    "Очередь — ручной порядок назначения. Никаких автоматических запусков, слияний и наследования неслитого предыдущего узла.",
+    "С 13.09.2026 координатор автоматически назначает ревью и доработки в той же задаче, затем следующий узел в новой задаче/worktree/ветке. Слияние только по отдельной команде пользователя; наследование неслитого предыдущего узла запрещено.",
     "Активные 11–14 и номера существующих подпланов 11–16 сохранены; другим узлам новые номера не присвоены.",
     "Для активных узлов branch slug — справочная уже назначенная ветка. Все остальные slug только предложены, создание не выполнялось."
   ],
@@ -2543,17 +2544,22 @@
   ],
   "source_base_commit": "b22b73b23afd501440b4d31fd97c7dedc8e93b2b",
   "dispatch": {
-    "automatic": false,
-    "trigger": "Дай потоку N следующий узел",
+    "automatic": true,
+    "trigger": "Completion of current development, same-task review/fixes, required acceptance and resource release",
     "unit": "one component per new app chat, permanent worktree, named branch and Loginom package/workflow",
     "developer_model": "gpt-6-astra",
     "developer_reasoning": "medium",
     "reviewer_model": "gpt-6-astra",
-    "reviewer_reasoning": "xhigh",
-    "review": "on user dispatch",
-    "hermes": "one manually assigned slot: openai-codex/gpt-5.6-sol/low",
-    "merge": "later, on separate request",
-    "blocked_item": "При ручной выдаче записать причину недоступности и взять ближайшую подходящую строку того же потока; сохранять владельца и порядок пропущенного пункта. Резерв не запускать без подтверждённого допуска."
+    "reviewer_reasoning": "medium",
+    "review": "one source read-only review in same developer task after completed development: gpt-6-astra/medium",
+    "hermes": "one coordinator-assigned slot after review: openai-codex/gpt-5.6-sol/low; required independent audit",
+    "merge": "ONLY separate user command in coordinator thread; no automatic merge, main push or release",
+    "blocked_item": "При выдаче записать причину недоступности и взять ближайшую подходящую строку того же потока; сохранять владельца и порядок пропущенного пункта. Резерв не запускать без подтверждённого допуска.",
+    "fixes": "one correction round in same developer task: gpt-6-astra/medium, live confirmation then correction and targeted verification; no repeat review",
+    "policy": "docs/plans/loginom-dock/automatic-node-workflow.md",
+    "heartbeat_interval_minutes": 5,
+    "repeat_review": false,
+    "review_rounds": 1
   },
   "accepted_components": [
     {
@@ -2721,7 +2727,7 @@
       "acceptance_evidence": null
     }
   ],
-  "shared_contract_policy": "Первый владелец вправе подготовить недостающую общую часть внутри своего ограниченного подплана отдельным коммитом; она не обязана быть готова до старта этого владельца. Другой поток использует только принятую базу. Пока слияния отложены, компоненты с такой зависимостью остаются в очереди; при ручной выдаче можно пропустить их либо явно переназначить владельца с записью причины. Незавершённый чужой код не копировать и вторую конкурирующую реализацию молча не начинать. Указанные владельцы назначены планом, новые задачи не запущены.",
+  "shared_contract_policy": "Первый владелец вправе подготовить недостающую общую часть внутри своего ограниченного подплана отдельным коммитом; она не обязана быть готова до старта этого владельца. Другой поток использует только принятую базу. Пока слияния отложены, компоненты с такой зависимостью остаются в очереди; при выдаче можно пропустить их либо явно переназначить владельца с записью причины. Незавершённый чужой код не копировать и вторую конкурирующую реализацию молча не начинать. Указанные владельцы назначены планом, новые задачи не запущены.",
   "next_by_lane": {
     "1": {
       "component_id": "component.exports.Text",
@@ -2746,8 +2752,9 @@
   },
   "finalized_at": "2026-09-13T00:04:38.014661+03:00",
   "current_execution_note": {
-    "all_four_streams": "checkpoint_saved_dock_tls_blocker",
-    "probe": {
+    "all_four_streams": "development_resumed_after_dock_and_personal_memory_recovery",
+    "dispatch": "Automatic same-task review/fixes, then new task/worktree/branch after all gates; separate user command for merging",
+    "previous_incident_probe": {
       "verified_by": "coordinator curl without credentials",
       "endpoint": "https://loginom.duckdns.org/mcp",
       "tcp_connect_seconds": 0.019282,
@@ -2759,6 +2766,7 @@
       "root_cause": "not established",
       "checked_at": "2026-09-13T00:04:38.012878+03:00"
     },
-    "dispatch": "Автопродолжение не настроено; после восстановления endpoint нужны новые source harness/pins."
+    "updated_date": "2026-09-13",
+    "report": "docs/loginom-dock/dock-availability-2026-09-13.md"
   }
 }
