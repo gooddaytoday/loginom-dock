@@ -56,7 +56,24 @@ def verify_replacement_configuration(events, request):
         native = [s['node_replacement'] for _, s in sequence['observations'] if s.get('node_replacement', {}).get('verified') is True]
         if not native or any(not owned(n['node_context']) or n.get('inventory_complete') is not True for n in native): raise ValueError('replacement_raw_owner')
         schema = lambda n: [(f['record_id'], f['name'], f['label'], f['type']) for f in n['input_fields']]
-        if any(schema(n) != schema(native[0]) for n in native): failures.append('replacement_input_identity')
+        refresh = config.get('input_inventory_refresh')
+        if refresh:
+            before_schema, after_schema = (schema(dict(input_fields=refresh[k])) for k in ('before', 'after'))
+            semantic = lambda rows: [{k: v for k, v in f.items() if k != 'record_id'} for f in rows]
+            transitions = []
+            for n in native:
+                current = schema(n)
+                if not transitions or transitions[-1] != current: transitions.append(current)
+            expected_transitions = [before_schema] if before_schema == after_schema else [before_schema, after_schema]
+            policies = [s['node_mapping'] for _, s in sequence['observations'] if s.get('node_mapping')]
+            if (semantic(refresh['before']) != semantic(refresh['after']) or transitions != expected_transitions
+                    or refresh['policy'] not in policies or request['parameters'].get('output_mode') is not None
+                    or schema(config) != after_schema): failures.append('replacement_input_refresh')
+            if before_schema != after_schema:
+                step = next(step for step, s in sequence['observations'] if s.get('node_replacement', {}).get('verified') and schema(s['node_replacement']) == after_schema)
+                action = [a for n, a, _ in sequence['mutations'] if n < step][-1]
+                if action.get('verb') != 'wizard_step' or action.get('expected_stage') != 'replacement': failures.append('replacement_input_refresh_navigation')
+        elif any(schema(n) != schema(native[0]) for n in native): failures.append('replacement_input_identity')
         before, after = {}, {}
         for n in native:
             if n.get('selected') and not n.get('editor_open'):

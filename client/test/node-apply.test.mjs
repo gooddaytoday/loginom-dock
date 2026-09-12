@@ -185,3 +185,20 @@ test('incomplete or unacknowledged reform refusal retains uncertainty',async()=>
   const r=await f.run();assert.equal(r.status,'AMBIGUOUS');assert.equal(r.pending_phase,'target');assert.equal(r.cleanup_complete,false);
  }
 });
+
+test('replacement collision is a clean refusal only after an owned verified cancellation',async()=>{
+ for(const failure of [null,'journal','owner','discarded','verification']){
+  const f=fixture({failJournal:failure==='journal'?'node_phase_refused':undefined}),p=request();
+  p.target={kind:'existing',type:'transform.replace_columns',ref:{document_id:'doc',workflow_id:'workflow',node_id:'node1'}};p.mode='exact';
+  f.handlers.set(p.target.type,{revision:'1',modes:['exact'],validate:()=>{},configure:async()=>{
+   const e=Error('Replacement output collision: A_Replace');
+   e.nodePhaseRefusal={phase:'configure',status:'FAILED',effect_possible:true,cleanup_complete:true,settings_unchanged:true,verification:'replacement_effective_preflight_completed',proof:{closed:{verified:true,cleanup_complete:true,draft_discarded:true,settings_applied:false,node_context:{verified:true,...p.target.ref}}}};
+   if(failure==='owner')e.nodePhaseRefusal.proof.closed.node_context.node_id='foreign';
+   if(failure==='discarded')e.nodePhaseRefusal.proof.closed.draft_discarded=false;
+   if(failure==='verification')delete e.nodePhaseRefusal.verification;
+   throw e;
+  }});
+  const r=await f.run(p);assert.equal(r.status,failure?'AMBIGUOUS':'FAILED');assert.equal(r.cleanup_complete,!failure);assert.equal(r.pending_phase,failure?'configure':null);
+  assert.ok(!f.calls.includes('execute'));assert.ok(!f.calls.includes('read'));
+ }
+});

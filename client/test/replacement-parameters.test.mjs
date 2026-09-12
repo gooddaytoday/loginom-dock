@@ -12,3 +12,15 @@ test('unknown fields and incompatible types fail source preflight',()=>{assert.t
 test('unsupported modes and nonzero precision are refused',()=>{assert.throws(()=>validateReplacementParameters(params(),'regex',request));const p=params();p.rules[0]={field:{kind:'input_field',name:'Amount'},type:'real',precision:0.001,pairs:[],other:{mode:'keep'}};assert.throws(()=>validateReplacementParameters(p,'exact',request),/precision zero/);});
 
 test('remaining real values that Loginom would round are rejected before mutation',()=>{const p=params();p.rules=[{field:{kind:'input_field',name:'Amount'},type:'real',precision:0,pairs:[],other:{mode:'value',value:value(-5.125,'real')}}];assert.throws(()=>validateReplacementParameters(p,'exact',request),/two decimal/);p.rules[0].other.value.value=-5.25;assert.doesNotThrow(()=>validateReplacementParameters(p,'exact',request));});
+
+test('partial replacement validates saved rules with the effective output mode',async()=>{
+ const {resolveEffectiveReplacementParameters:resolve}=await import('../lib/replacement-parameters.mjs');
+ const rule=name=>({...params().rules[0],field:{kind:'input_field',name}});
+ const fields=['A','A_Replace','B','C'].map(name=>({name,type:'string'}));
+ assert.throws(()=>resolve({output_mode:'add'},fields,[rule('A')],'replace'),/collision: A_Replace/);
+ assert.throws(()=>resolve({rules:[rule('A')]},fields,[rule('B')],'add'),/collision: A_Replace/);
+ assert.throws(()=>resolve({rules:[rule('A')]},fields,[rule('B')],undefined),/Observed replacement output mode/);
+ assert.deepEqual(resolve({rules:[rule('C')]},fields,[rule('B')],'add').rules.map(r=>r.field.name),['B','C']);
+ for(const mode of ['replace','add'])assert.deepEqual(resolve({output_mode:mode},fields,[rule('B'),rule('C')],'replace').rules.map(r=>r.field.name),['B','C']);
+ assert.doesNotThrow(()=>resolve({rules:[rule('A')]},fields,[rule('B')],'replace'));
+});

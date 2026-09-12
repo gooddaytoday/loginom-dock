@@ -7,7 +7,7 @@ import {replacementConfigurationReadback} from './replacement-readback.mjs';
 import {replacementParametersSchema} from './node-api.mjs';
 import {configureReplacementInlineMapping} from './replacement-output.mjs';
 export function createReplacementNodeSupport(config){return createTabularTransformNodeSupport(config,{
- type:'transform.replace_columns',mode:'exact',revision:'replacement-v1-internal-1',readback:replacementConfigurationReadback,parameterSchema:replacementParametersSchema,
+ type:'transform.replace_columns',mode:'exact',revision:'replacement-v1-internal-2',readback:replacementConfigurationReadback,parameterSchema:replacementParametersSchema,
  validate:validateReplacementParameters,validateInput:validateReplacementInputParameters,preflight:preflightReplacementSource,
  configurationObservation:{condition:'replacement configuration page',readReplacement:true,ready:s=>s.wizard?.stage==='replacement'&&s.node_replacement?.verified===true},
  async configure(channel,p,{request}){

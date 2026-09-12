@@ -1,4 +1,6 @@
-import {resolveReplacementParameters,replacementValueKey,validateReplacementParameters} from './replacement-parameters.mjs';
+import {resolveReplacementParameters,resolveEffectiveReplacementParameters,replacementValueKey,validateReplacementParameters} from './replacement-parameters.mjs';
+import {observeReplacementOutputPolicy} from './replacement-output.mjs';
+import {closePreparedWizard} from './node-wizard-close.mjs';
 const canonical=v=>Array.isArray(v)?v.map(canonical):v&&typeof v==='object'?Object.fromEntries(Object.keys(v).sort().map(k=>[k,canonical(v[k])])):v;
 const need=(v,m)=>{if(!v)throw Error(m);},same=(a,b)=>JSON.stringify(canonical(a))===JSON.stringify(canonical(b));
 const normalized=r=>({field:{kind:'input_field',name:r.selected},type:r.input_fields.find(f=>f.name===r.selected).type,pairs:r.pairs.map(({from,to})=>({from,to})),other:r.other,...(r.input_fields.find(f=>f.name===r.selected).type==='string'?{case_sensitive:r.case_sensitive}:{precision:r.precision})});
@@ -23,7 +25,7 @@ export async function revealReplacementAdd(channel,observe,ready){
 export async function configureReplacement(channel,p,{newNode=false}={}){
  const ready=s=>s.wizard?.stage==='replacement'&&s.node_replacement?.verified===true;
  const observe=(condition,extra=()=>true)=>channel.observe({condition,readReplacement:true,ready:s=>ready(s)&&extra(s.node_replacement)});
- let state=await observe('replacement input inventory');const baseline=state.node_replacement;
+ let state=await observe('replacement input inventory'),baseline=state.node_replacement;
  resolveReplacementParameters(p,baseline.input_fields);
  const control=(s,suffix,verb='click')=>{const tid=s.wizard.root_tid+';ReplaceColumnsWizard;'+suffix,es=s.ui.elements.filter(e=>(e.tid===tid||['fill','press'].includes(verb)&&e.identity?.anchor_tid===tid)&&e.allowed_actions.includes(verb));need(es.length===1,'Replacement control unavailable: '+suffix);return es[0];};
  const act=async(suffix,verb='click',args={})=>{const s=suffix==='grdReplaceItems;tbl;GroupHeader;0;AddButton'?await revealReplacementAdd(channel,observe,ready):await observe('replacement control '+suffix);return channel.perform({condition:'replacement '+suffix,initialObservation:s,ready,identity:()=>({field:s.node_replacement.selected,suffix}),resolve:s=>({verb,ref:control(s,suffix,verb).ref,...args})});};
@@ -50,6 +52,36 @@ export async function configureReplacement(channel,p,{newNode=false}={}){
  for(const f of baseline.input_fields.filter(f=>f.mode==='manual')){const r=await select(f.name);need(!r.editor_open,'Existing replacement row editor is active');oldRules.push(normalized(r));}
  if(newNode)need(oldRules.length===0,'New replacement has unexpected rules');
  if(oldRules.length)validateReplacementParameters({rules:oldRules},'exact',{target:{kind:'existing'},inputs:[],read:{ports:[]},mappings:[],finish:'done'});
+ let outputMode=p.output_mode,modeProof=null,inventoryRefresh=null;
+ if(outputMode===undefined&&p.rules!==undefined){
+  // Read the saved policy before touching any rule. All navigation stays in
+  // this same wizard; Close below discards its draft if the request conflicts.
+  const current=await observe('replacement rules before policy inspection');
+  await channel.perform({condition:'inspect saved replacement output policy',initialObservation:current,ready,
+   identity:()=>baseline.node_context,resolve:s=>{const es=s.ui.elements.filter(e=>e.tid===s.wizard.root_tid+';btnNext'&&e.allowed_actions.includes('wizard_step'));need(es.length===1,'Replacement policy Next unavailable');return {verb:'wizard_step',ref:es[0].ref,expected_stage:'output_mapping'};}});
+  const policy=await observeReplacementOutputPolicy(channel);modeProof=policy.node_mapping;
+  outputMode=modeProof.produce_mode==='supplement'?'add':['replace','default'].includes(modeProof.produce_mode)?'replace':null;
+  need(outputMode,'Unknown saved replacement output policy');
+  await channel.perform({condition:'return from replacement policy inspection',initialObservation:policy,
+   ready:s=>s.wizard?.stage==='output_mapping'&&s.node_mapping?.verified===true,
+   identity:()=>baseline.node_context,resolve:s=>{const es=s.ui.elements.filter(e=>e.tid===s.wizard.root_tid+';btnPrev'&&e.allowed_actions.includes('wizard_step'));need(es.length===1,'Replacement policy Previous unavailable');return {verb:'wizard_step',ref:es[0].ref,expected_stage:'replacement'};}});
+  const returned=(await observe('replacement rules after policy inspection')).node_replacement;
+  const fields=rows=>rows.map(({record_id,...field})=>field);
+  need(same(fields(returned.input_fields),fields(baseline.input_fields)),'Replacement policy inspection changed input fields');
+  inventoryRefresh={before:baseline.input_fields,after:returned.input_fields,policy:modeProof};
+  baseline=returned; // Previous rematerializes the same input collection with fresh Ext record IDs.
+  for(const rule of oldRules)need(same(normalized(await select(rule.field.name)),rule),'Replacement policy inspection changed saved rules');
+ }
+ if(outputMode!==undefined){
+  try{resolveEffectiveReplacementParameters(p,baseline.input_fields,oldRules,outputMode);}
+  catch(error){
+   const closed=await closePreparedWizard(channel);
+   error.nodePhaseRefusal={phase:'configure',status:'FAILED',effect_possible:true,cleanup_complete:true,
+    settings_unchanged:true,verification:'replacement_effective_preflight_completed',
+    proof:{saved_rules:oldRules,output_mode:outputMode,mode_observation:modeProof,input_inventory_refresh:inventoryRefresh,closed}};
+   throw error;
+  }
+ }
  for(const rule of p.rules??[]){
   let r=await select(rule.field.name);
   if(r.input_fields.find(f=>f.name===rule.field.name).mode==='none'){
@@ -96,5 +128,5 @@ export async function configureReplacement(channel,p,{newNode=false}={}){
  state=await observe('replacement final owner');
  const schema=fields=>fields.map(({record_id,name,label,type})=>({record_id,name,label,type}));
  need(same(schema(state.node_replacement.input_fields),schema(baseline.input_fields)),'Replacement input identity changed');
- return {verified:true,cleanup_complete:true,effect_possible:!!p.rules?.length,configuration:{...state.node_replacement,rules,requested_output_mode:p.output_mode??null},preservation:{unrequested_rules:true,input_identity:true}};
+ return {verified:true,cleanup_complete:true,effect_possible:!!p.rules?.length,configuration:{...state.node_replacement,rules,requested_output_mode:p.output_mode??null,effective_output_mode:outputMode??null,input_inventory_refresh:inventoryRefresh},preservation:{unrequested_rules:true,input_identity:true}};
 }

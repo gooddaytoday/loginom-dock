@@ -15,16 +15,21 @@ export function validateReplacementSources(configuration,native){
  const mode=native.produce_mode==='supplement'?'add':['replace','default'].includes(native.produce_mode)?'replace':null;
  const sources=replacementSources(configuration,mode);
  need(sources.length===native.source_fields.length&&new Set(native.source_fields.map(f=>f.name)).size===sources.length&&native.source_fields.every(s=>sources.some(f=>f.name===s.name&&f.label===s.label&&f.type===s.type)),'Replacement generated schema differs');
- if(configuration.requested_output_mode)need(mode===configuration.requested_output_mode,'Replacement output mode differs');
+ const expectedMode=configuration.effective_output_mode??configuration.requested_output_mode;
+ if(expectedMode)need(mode===expectedMode,'Replacement output mode differs');
  return native.target_fields.filter(f=>f.source===null&&!f.excluded);
 }
-async function setMode(channel,configuration){
+export async function observeReplacementOutputPolicy(channel){
  const ready=s=>s.wizard?.stage==='output_mapping'&&s.node_mapping?.verified===true;
  const view=await channel.observe({condition:'replacement output view',ready:s=>s.wizard?.stage==='output_mapping'});
  const tables=view.ui.elements.filter(e=>[view.wizard.root_tid+';DerivedDataSourceMappingEngineOutputPortWizard;rbTable;DisplayEl',view.wizard.root_tid+';DerivedDataSourceOutputSocketWizard;rbTable;DisplayEl'].includes(e.tid)&&e.allowed_actions.includes('click'));
  need(tables.length===1,'Replacement output table view unavailable');
  await channel.perform({condition:'show replacement output definitions',initialObservation:view,ready:s=>s.wizard?.stage==='output_mapping',identity:()=>view.prepared_node_context,resolve:()=>({verb:'click',ref:tables[0].ref})});
- let s=await channel.observe({condition:'replacement output policy',readMappings:true,ready});
+ return channel.observe({condition:'replacement output policy',readMappings:true,ready});
+}
+async function setMode(channel,configuration){
+ const ready=s=>s.wizard?.stage==='output_mapping'&&s.node_mapping?.verified===true;
+ let s=await observeReplacementOutputPolicy(channel);
  const desired=configuration.requested_output_mode,actual=s.node_mapping.produce_mode;
  if(desired&&(desired==='add'?actual!=='supplement':actual!=='replace')){
   const form=s.node_mapping.mapping_wizard,root=s.wizard.root_tid,base=root+';'+form+';btnProduceType';

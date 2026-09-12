@@ -56,3 +56,9 @@ export function resolveReplacementParameters(p,fields){
  return p;
 }
 export function validateReplacementInputParameters(p,resolved,native){resolveReplacementParameters(p,resolved.fields??native.target_fields);}
+export function resolveEffectiveReplacementParameters(p,fields,savedRules,savedMode){
+ const mode=p.output_mode??savedMode;
+ need(['replace','add'].includes(mode),'Observed replacement output mode required for partial rules');
+ const rules=savedRules.filter(r=>!p.rules?.some(w=>w.field.name===r.field.name)).concat(p.rules??[]);
+ return resolveReplacementParameters({rules,output_mode:mode},fields);
+}
