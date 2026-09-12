@@ -15,7 +15,7 @@ function matches(element, selector) {
   selector = selector.trim();
   const breadcrumbLabel=/^(\[data-tid\*=";cnrNaviMode;b\.s"\]) (\.x-btn-inner-default-toolbar-small)$/.exec(selector);
   if(breadcrumbLabel)return matches(element,breadcrumbLabel[2]) && !!element.parentElement?.closest(breadcrumbLabel[1]);
-  const ownedInput=/^((?:\[data-tid[$^*]?="[^"]+"\])+) (input|textarea|\.x-form-error-msg)$/.exec(selector);
+  const ownedInput=/^((?:\[data-tid[$^*]?="[^"]+"\])+) (input|textarea|\.x-form-error-msg|img\.x-grid-checkcolumn)$/.exec(selector);
   if(ownedInput)return matches(element,ownedInput[2]) && !!element.parentElement?.closest(ownedInput[1]);
   const not = [...selector.matchAll(/:not\(([^)]+)\)/g)];
   if (not.some(([, inner]) => matches(element, inner))) return false;
@@ -2113,6 +2113,25 @@ for(const completion of ['done','execute'])test('wizard '+completion+' waits for
   }
 });
 
+test('date/time exposes untagged native checkbox images only for the exact cached row and flag',async()=>{
+ for(const mode of ['valid','record_changed','flag_changed','duplicate_image','foreign_store']){
+  const page=new Page(),base='MF;TF-1;WizrdMCF;DateReformWizard;';
+  page.context.innerWidth=1000;page.context.innerHeight=800;
+  const form=page.add('div','MF;TF-1;WizrdMCF','',{x:10,y:80,width:1000,height:600});
+  const root=page.add('div',base.slice(0,-1),'',{x:20,y:90,width:900,height:500},form);
+  const grid=page.add('div',base+'grdDataFormat;tbl','',{x:30,y:100,width:800,height:400},root);grid.attrs.id='date-grid';grid.id='date-grid';
+  const row=page.add('table',null,'',{x:35,y:120,width:700,height:30},grid);Object.assign(row.attrs,{class:'x-grid-item','data-recordindex':'0','data-recordid':mode==='record_changed'?'other':'r0','data-boundview':'date-grid'});
+  const cell=page.add('td',base+'colDoDateTimeFirst_0','',{x:160,y:120,width:100,height:30},row);
+  const image=page.add('img',null,'',{x:200,y:125,width:16,height:16},cell);image.attrs.class='x-grid-checkcolumn';
+  if(mode==='duplicate_image'){const second=page.add('img',null,'',{x:220,y:125,width:16,height:16},cell);second.attrs.class='x-grid-checkcolumn';}
+  const record={isModel:true,internalId:'r0',data:{Func:0,ISO8601:false,DoDateTimeFirst:mode==='flag_changed',DoDateTimeLast:false,DoNumber:false,DoString:false}};
+  page.context.Ext={getCmp:id=>id==='date-grid'?{el:{dom:grid},getStore:()=>({$className:mode==='foreign_store'?'Other':'Ext.data.Store',isLoading:()=>false,getData:()=>({items:[record]})})}:undefined};
+  const s=await page.observe(),flags=s.ui.elements.filter(e=>e.date_time_cell?.role==='flag');
+  assert.equal(flags.length,mode==='valid'?1:0,mode+JSON.stringify({wizard:s.wizard,elements:s.ui.elements.map(e=>({tid:e.tid,role:e.date_time_cell}))}));
+  if(mode==='valid'){assert.equal(flags[0].date_time_cell.record_id,'r0');assert.equal(flags[0].date_time_cell.checked,false);assert.ok(flags[0].allowed_actions.includes('click'),JSON.stringify(flags[0]));assert.equal(flags[0].identity.anchor_tid,base+'colDoDateTimeFirst_0');}
+ }
+});
+
 function groupingFixture() {
   const page=new Page(),base='MF;TF-1;WizrdMCF;GroupDataWizard;';
   page.context.innerWidth=1000;page.context.innerHeight=800;
@@ -3418,16 +3437,18 @@ test('input port context observes exact node path and display caption without po
 });
 
 test('input port overflow caption requires native binding and the exact hidden caption',async()=>{
- for(const mode of ['bound','unbound','wrong_caption','missing_icon']) {
+ for(const mode of ['bound','unbound','wrong_caption','missing_icon','port_bound','port_unbound','port_wrong_caption']) {
   const {page,crumbs}=await inputPortContextFixture();crumbs[8].style.display='none';
+  if(mode.startsWith('port_'))crumbs[7].style.display='none';
+  if(mode==='port_wrong_caption')crumbs[7].ownText='Other';
   if(mode==='wrong_caption')crumbs[8].ownText='Other';
   if(mode==='missing_icon')crumbs[8].children[0].remove();
-  if(mode!=='unbound')page.execute=async options=>clone(await vm.runInContext('('+workspaceUiCapability.toString()+')',page.context)(page,
+  if(!mode.endsWith('unbound'))page.execute=async options=>clone(await vm.runInContext('('+workspaceUiCapability.toString()+')',page.context)(page,
    {expected_build:build,expected_origin:origin,prepared_node_context:{node:{node_id:'node'},workflow_ref:{prefix:'MF;TF-5',navigation_path:[]}},...options},
    async()=>({verified:true,surface:'wizard',node_id:'node',input_port:{direction:'input',port:0}})));
   const full=await page.observe(),narrow=await page.execute({mode:'observe',root_ref:full.wizard.root_ref});
   assert.deepEqual(narrow.output.wizard.input_port_context,full.wizard.input_port_context);
-  assert.equal(full.wizard.input_port_context.status==='observed',mode==='bound',mode);
+  assert.equal(full.wizard.input_port_context.status==='observed',['bound','port_bound'].includes(mode),mode);
  }
 });
 
@@ -3502,6 +3523,7 @@ async function inputPortFinishFixture(mode='valid') {
     graph=page.add('div','MF;TF-5;ModelForm;cmpDiagram','',{x:48,y:71,width:1392,height:929});
     const key=mode==='wrong_node'?'Other':'Revenue';node=page.add('g','MF;TF-5;Graph;'+key,'',{x:100,y:200,width:150,height:80},graph);
     label=page.add('span','MF;TF-5;Graph;'+key+';Label;Label',key,{x:110,y:220,width:120,height:30},node);
+    if(mode.startsWith('ellipsis'))label.ownText=mode==='ellipsis_wrong_text'?'Other…':'Reve…';
     if(mode==='duplicate_node')page.add('g','MF;TF-5;Graph;'+key,'',node.box,graph);
     if(['toast','foreign_toast','permanent_toast'].includes(mode)){toast=page.add('div',mode==='foreign_toast'?'foreign':'toast','Сохранено',{x:1000,y:800,width:300,height:75});toast.attrs.role='dialog';}
     if(mode==='mask')page.add('div','mask','Загрузка').attrs.class='x-mask-msg';
@@ -3511,6 +3533,9 @@ async function inputPortFinishFixture(mode='valid') {
     if(mode==='churn')page.mutationObserver.pending.push({type:'attributes',target:node,attributeName:'style'});
     if(mode==='late_tab'&&waits===2)page.tab.attrs['data-tid']='MF;cntMain;cntWorkspace;Workspace;t.br;tb-2';
   };
+  if(mode.startsWith('ellipsis')&&mode!=='ellipsis_unbound')page.execute=async options=>clone(await vm.runInContext('('+workspaceUiCapability.toString()+')',page.context)(page,
+    {expected_build:build,expected_origin:origin,prepared_node_context:{node:{node_id:'node'},workflow_ref:{prefix:'MF;TF-5',navigation_path:[]}},...options},
+    async()=>({verified:true,node_id:'node',surface:graph?'graph':'wizard',tid:graph?(mode==='ellipsis_wrong_body'?'foreign':node.attrs['data-tid']):'MF;TF-5;WizrdMCF',...(!graph?{input_port:{direction:'input',port:0}}:{})})));
   return {...f,done,waits:()=>waits};
 }
 
@@ -3527,10 +3552,10 @@ test('typed input-port finish is offered only with full mapping and exact owner 
 });
 
 test('typed input-port finish uses one gesture and quiet exact graph return without applied claims',async()=>{
-  for(const mode of ['valid','late_body','wrong_node','wrong_workflow','still_open','mask','duplicate_node','churn','late_tab']){
+  for(const mode of ['valid','late_body','wrong_node','wrong_workflow','still_open','mask','duplicate_node','churn','late_tab','ellipsis_bound','ellipsis_unbound','ellipsis_wrong_body','ellipsis_wrong_text']){
     const {page,waits}=await inputPortFinishFixture(mode),snapshot=await page.observe();
     const done=snapshot.ui.elements.find(e=>e.wizard_finish?.mode==='input_port');assert.ok(done,mode);
-    const result=await page.act({verb:'finish_wizard',ref:done.ref},snapshot),success=['valid','late_body'].includes(mode);
+    const result=await page.act({verb:'finish_wizard',ref:done.ref},snapshot),success=['valid','late_body','ellipsis_bound'].includes(mode);
     assert.equal(result.status,success?'SUCCEEDED':'AMBIGUOUS',mode+JSON.stringify(result.error));
     assert.equal(page.events.filter(e=>e==='click').length,1,mode);
     const event=result.trace.find(e=>e.event==='input_port_finish_verified');assert.equal(!!event,success,mode);

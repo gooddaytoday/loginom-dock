@@ -7,7 +7,7 @@ export const uiActionSchema = {
   type: 'object', additionalProperties: false, required: ['verb'],
   properties: {
     verb: { type: 'string', enum: ['click', 'double_click', 'right_click', 'fill', 'press', 'drag', 'scroll', 'scroll_horizontal', 'set_checked', 'replace_expression', 'set_wizard_field', 'wizard_step', 'select_wizard_option', 'apply_expression_parameters', 'cancel_expression_parameters', 'open_wizard', 'begin_wizard', 'confirm_wizard_deactivation', 'finish_wizard', 'execute_wizard', 'execute_graph_node', 'confirm_wizard_close', 'show_process_node', 'cancel_process', 'open_node_views', 'enter_table', 'apply_output_column', 'cancel_output_column', 'apply_reform_column', 'cancel_reform_column'] },
-    expected_stage: { oneOf:[{type:'string',enum:['text_import_file','text_import_format','input_mapping','output_mapping','calculator','grouping','sorting','field_parameters','row_filter','join','union','done']},{const:['output_mapping','done']}],
+    expected_stage: { oneOf:[{type:'string',enum:['text_import_file','text_import_format','input_mapping','output_mapping','calculator','grouping','sorting','field_parameters','row_filter','join','union','date_time','done']},{const:['output_mapping','done']}],
       description: 'Required only for wizard_step: destination after the observed next/previous control, not the current stage. For delimited Text Import, next follows text_import_file → text_import_format → output_mapping → done; previous reverses this order. input_mapping means a separate INPUT PORT mapping wizard, never Text Import output columns. Calculator, Grouping and Sorting validation may use [output_mapping, done] for its conditional output page. Other wizard families may have different paths; inspect their current UI and sources instead of guessing. Do not pass this field to open_wizard or finish_wizard.' },
     checked: { type: 'boolean' },
     delta_y: { type: 'integer', minimum: -1000, maximum: 1000 },
@@ -35,7 +35,7 @@ export function validateUiAction(action, snapshot) {
   if (action.verb === 'scroll_horizontal' && (!Number.isInteger(action.delta_x) || !action.delta_x || Math.abs(action.delta_x)>1000)) throw new Error('Horizontal scroll requires a nonzero integer delta_x within -1000..1000');
   if (action.verb === 'set_checked' && typeof action.checked !== 'boolean') throw new Error('set_checked requires a boolean checked value');
   if (snapshot) {
-    if(action.verb==='wizard_step'&&Array.isArray(action.expected_stage)&&!['calculator','grouping','sorting','field_parameters','row_filter','join','union'].includes(snapshot.wizard?.stage))throw new Error('Conditional destinations require a supported transform configuration');
+    if(action.verb==='wizard_step'&&Array.isArray(action.expected_stage)&&!['calculator','grouping','sorting','field_parameters','row_filter','join','union','date_time'].includes(snapshot.wizard?.stage))throw new Error('Conditional destinations require a supported transform configuration');
     if(action.verb==='wizard_step' && (snapshot.wizard?.status!=='observed' || snapshot.wizard.stage===action.expected_stage))throw new Error('wizard_step requires a different destination stage and an observed wizard');
     if (!Array.isArray(snapshot.ui?.elements)) throw new Error('UI action requires an observation snapshot');
     for (const ref of refs) {
@@ -237,7 +237,7 @@ export function workspaceUiCapability(page, task, readNodeContext, captureProces
       text_import_format:';ImportTextFileParamsWizard;edtValueNull',
       input_mapping:[';TuneDataSourceInputPortWizard;btnAddMappingColumn',';TuneDataSourceMappingWizard;btnAddMappingColumn'],
       output_mapping:[';ColumnsMappingEngineOutputPortWizard;btnAddMappingColumn',';DerivedDataSourceOutputSocketWizard;btnAddMappingColumn',';DerivedDataSourceMappingEngineOutputPortWizard;btnAddMappingColumn'],
-      calculator:';CalcDataWizard;btnAddExpr',grouping:';GroupDataWizard;grdUsedFields;tbl',sorting:';SortingWizard;SortingColumnCollection;grdSorting;tbl',
+      date_time:';DateReformWizard;grdDataFormat;tbl',calculator:';CalcDataWizard;btnAddExpr',grouping:';GroupDataWizard;grdUsedFields;tbl',sorting:';SortingWizard;SortingColumnCollection;grdSorting;tbl',
       union:';UnionDataWizard;grdUnionData;grd-1;tbl',join:';JoinDataWizard;grdSourceColumns;tbl',row_filter:';FilterDataWizard;FilterDataPanel;tbl',field_parameters:';ReformColumnsWizard;grdTargetColumns;tbl',done:';DoneWizard;edtDisplayName'};
     const wizardButtons=['btnPrev','btnNext','btnDone','btnExecute','btnClose','btnError'];
     // Breadcrumb labels are fixed global context even for a narrow file row;
@@ -573,11 +573,12 @@ export function workspaceUiCapability(page, task, readNodeContext, captureProces
       else if(panels.length===1&&inside(panels[0],panels[0])) {
         const panel=panels[0],crumbs=all.filter(e=>{charge();return panel.contains(e)&&/;cnrNaviMode;b\.s_/.test(getTid(e)??'');});
         if(crumbs.length>32)context.status='bounded';
-        else if(crumbs.length===9&&crumbs.every((e,i)=>(inside(e,panel)||i===8&&preparedInputPort?.direction==='input'&&!sensitive(e))&&(getTid(e)??'').startsWith(prefix))) {
+        else if(crumbs.length===9&&crumbs.every((e,i)=>(inside(e,panel)||i>=7&&preparedInputPort?.direction==='input'&&!sensitive(e))&&(getTid(e)??'').startsWith(prefix))) {
           // Ext may hide the final wizard breadcrumb in the overflow menu.
           // Admit only its fixed caption with an independently bound native port.
-          const items=crumbs.map((e,i)=>({ref:refOf(e),tid:getTid(e),label:i===8&&preparedInputPort?.direction==='input'
-            &&!visible(e)&&e.textContent.trim()==='Настройка'?'Настройка':textOf(e,true)}));
+          const hiddenCaption=(e,i)=>preparedInputPort?.direction==='input'&&!visible(e)
+            &&(i===8&&e.textContent.trim()==='Настройка'||i===7&&e.textContent.trim()==='Входной источник данных');
+          const items=crumbs.map((e,i)=>({ref:refOf(e),tid:getTid(e),label:hiddenCaption(e,i)?e.textContent.trim():textOf(e,true)}));
           const unique=new Set(items.map(i=>i.tid)).size===items.length;
           const bounded=items.every(i=>i.tid.length<=2048&&i.label.length<240)&&items.reduce((n,i)=>n+i.tid.length+i.label.length,0)<=4096;
           const chain=items.every((i,n)=>i.tid.slice(prefix.length).split('>').length===n+1&&(!n||i.tid.startsWith(items[n-1].tid+'>')));
@@ -1900,7 +1901,7 @@ function readRenderedInputMapping(observation) {
         processMenuControls.set(refOf(filters[0]),{action:'mniShowCompletedProcesses',menu_ref:refOf(menus[0]),
           panel_ref:refOf(consoles[0]),checked:filters[0].classList.contains('x-menu-item-checked'),opening_verified:false});
     }
-    const candidates = select('button,input,textarea,select,[contenteditable="true"],[role="button"],[role="checkbox"],[role="radio"],[role="combobox"],[role="menuitem"],[role="tab"],[role="treeitem"],[role="option"],[role="spinbutton"],[data-tid]')
+    const candidates = select('button,input,textarea,select,[contenteditable="true"],[role="button"],[role="checkbox"],[role="radio"],[role="combobox"],[role="menuitem"],[role="tab"],[role="treeitem"],[role="option"],[role="spinbutton"],[data-tid],[data-tid$=";DateReformWizard"] img.x-grid-checkcolumn')
       .filter(element => visible(element) && !sensitive(element) && scopeOf(element) !== 'inactive_workflow');
     const selectedRoot = rootRef ? dom.find(element=>state.ids.get(element)===rootRef) : null;
     if (rootRef && (!selectedRoot || !visible(selectedRoot) || sensitive(selectedRoot) || scopeOf(selectedRoot)==='inactive_workflow')) {
@@ -2052,6 +2053,28 @@ function readRenderedInputMapping(observation) {
         if(cells.length===1&&visible(cells[0])&&!sensitive(cells[0]))joinCells.set(refOf(cells[0]),{side,field_key:d.Name,record_id:String(r.internalId),row_ref:refOf(row),grid_ref:refOf(grid),wizard_root_ref:wizard.root_ref});
       }
     }
+    // Bind rendered date fields and checkboxes to their cached native row.
+    // Repeated labels are allowed; record identity, not label, chooses a field.
+    const dateTimeCells=new Map();
+    if(!discoverRoots&&wizard.stage==='date_time')for(const [gridName,role] of [['grdColumns','field'],['grdDataFormat','flag']]) {
+      const base=wizard.root_tid+';DateReformWizard;',grids=tids.get(base+gridName+';tbl')??[];
+      if(grids.length!==1)continue;const grid=grids[0],view=globalThis.Ext?.getCmp?.(grid.id),store=view?.getStore?.(),records=store?.getData?.()?.items;
+      if(view?.el?.dom!==grid||store?.$className!=='Ext.data.Store'||store.isLoading?.()||!Array.isArray(records)||records.length>1000)continue;
+      const rows=[...grid.querySelectorAll('table.x-grid-item')];charge();if(rows.length>200)continue;
+      for(const row of rows){const index=Number(row.getAttribute('data-recordindex')),r=records[index],d=r?.data;
+        if(!Number.isSafeInteger(index)||index<0||!r?.isModel||row.getAttribute('data-recordid')!==String(r.internalId)||row.getAttribute('data-boundview')!==grid.id)continue;
+        if(role==='field'){
+          const cells=[...row.querySelectorAll('[data-tid]')].filter(e=>(getTid(e)??'').startsWith(base+'colDisplayName_'));
+          if(cells.length===1&&typeof d.Name==='string'&&d.DataType===2&&cells[0].textContent.trim()===d.DisplayName)
+            dateTimeCells.set(refOf(cells[0]),{role,field_key:d.Name,record_id:String(r.internalId),grid_ref:refOf(grid),wizard_root_ref:wizard.root_ref});
+        }else for(const flag of ['DoDateTimeFirst','DoDateTimeLast','DoNumber','DoString']){
+          const cells=[...row.querySelectorAll('[data-tid]')].filter(e=>getTid(e)===base+'col'+flag+'_'+index);
+          const imgs=cells.length===1?[...cells[0].querySelectorAll('img.x-grid-checkcolumn')]:[];
+          if(imgs.length===1&&typeof d[flag]==='boolean'&&imgs[0].classList.contains('x-grid-checkcolumn-checked')===d[flag])
+            dateTimeCells.set(refOf(imgs[0]),{role,flag,func:d.Func,iso:d.ISO8601,checked:d[flag],record_id:String(r.internalId),grid_ref:refOf(grid),wizard_root_ref:wizard.root_ref});
+        }
+      }
+    }
     const sortingCells=new Map();
     if(!discoverRoots&&wizard.stage==='sorting')for(const [gridName,role] of [['grdFields','available'],['grdSorting','selected']]){
       const base=wizard.root_tid+';SortingWizard;SortingColumnCollection;',grids=tids.get(base+gridName+';tbl')??[];
@@ -2124,7 +2147,7 @@ function readRenderedInputMapping(observation) {
       &&visible(storageRootPanels[0])&&storageRootPanels[0].contains(storageRootCandidates[0])
       &&visible(storageRootCandidates[0])&&!sensitive(storageRootCandidates[0])
       &&textOf(storageRootCandidates[0],true)==='Файлы'?storageRootCandidates[0]:null;
-    const interesting = element => unionCells.has(state.ids.get(element)) || joinCells.has(state.ids.get(element)) || /^MF;TF(?:-\d+)?;ModelForm;PreviewWindow;p\.h;close$/.test(getTid(element)??'') || element===storageRoot || filterCells.has(state.ids.get(element)) || reformColumnCells.has(state.ids.get(element)) || outputColumnCells.has(state.ids.get(element)) || tableScrollers.has(state.ids.get(element)) || viewerControls.has(state.ids.get(element)) || /;ViewsForm;colVendors_Визуализаторы>[^;]+;TreeText$/.test(getTid(element)??'') || processGridControls.has(state.ids.get(element)) || processExpanders.has(state.ids.get(element)) || outputScroller(element) || importScroller(element) || processCells.has(state.ids.get(element)) || processMenuControls.has(state.ids.get(element)) || sortingCells.has(state.ids.get(element)) || groupingCells.has(state.ids.get(element)) || !!comboPart(element) || importColumnCellRefs.has(state.ids.get(element)) || element.matches('button,input,textarea,select,[contenteditable="true"],[role="button"],[role="checkbox"],[role="radio"],[role="combobox"],[role="menuitem"],[role="tab"],[role="treeitem"],[role="option"],[role="spinbutton"]')
+    const interesting = element => dateTimeCells.has(state.ids.get(element)) || unionCells.has(state.ids.get(element)) || joinCells.has(state.ids.get(element)) || /^MF;TF(?:-\d+)?;ModelForm;PreviewWindow;p\.h;close$/.test(getTid(element)??'') || element===storageRoot || filterCells.has(state.ids.get(element)) || reformColumnCells.has(state.ids.get(element)) || outputColumnCells.has(state.ids.get(element)) || tableScrollers.has(state.ids.get(element)) || viewerControls.has(state.ids.get(element)) || /;ViewsForm;colVendors_Визуализаторы>[^;]+;TreeText$/.test(getTid(element)??'') || processGridControls.has(state.ids.get(element)) || processExpanders.has(state.ids.get(element)) || outputScroller(element) || importScroller(element) || processCells.has(state.ids.get(element)) || processMenuControls.has(state.ids.get(element)) || sortingCells.has(state.ids.get(element)) || groupingCells.has(state.ids.get(element)) || !!comboPart(element) || importColumnCellRefs.has(state.ids.get(element)) || element.matches('button,input,textarea,select,[contenteditable="true"],[role="button"],[role="checkbox"],[role="radio"],[role="combobox"],[role="menuitem"],[role="tab"],[role="treeitem"],[role="option"],[role="spinbutton"]')
       || /;(?:Input|Output)_[^;]+$|;Label;Label$|;Graph;[^;]+$|;btn[^;]+$|;edt[^;]+$|;mi[^;]+$|;tb(?:-\d+)?$/.test(getTid(element) ?? '')
       // Pinned E2E bg/selectors.ts:272,279,286: palette tree labels and
       // expanders are spans without button/treeitem roles in some UI builds.
@@ -2354,6 +2377,7 @@ function readRenderedInputMapping(observation) {
       const calculatorEditor=calculatorEditorOf(element);
       const combo=comboPart(element);
       const filterCell=filterCells.get(state.ids.get(element)),outputColumn=outputColumnCells.get(state.ids.get(element)),reformColumnField=reformColumnCells.get(state.ids.get(element)),importDefinitionCell=importDefinitionCells.get(state.ids.get(element));
+      const dateTimeCell=dateTimeCells.get(state.ids.get(element));
       const groupingField=groupingCells.get(state.ids.get(element));
       const unionField=unionCells.get(state.ids.get(element));
       const sortingField=sortingCells.get(state.ids.get(element)),joinField=joinCells.get(state.ids.get(element));
@@ -2440,7 +2464,7 @@ function readRenderedInputMapping(observation) {
         ? 'Открыть список: '+(combo.field.name==='type'?'Тип данных':'Вид данных'):''), scope: scopeOf(element), ...fieldValue,
         ...(viewToggle?{view_toggle:viewToggle}:{}),...(viewerVendor?{viewer_vendor:viewerVendor}:{}),...(viewerControl?{viewer_card:viewerControl}:{}),...(tableScroller?{table_scroller:tableScroller}:{}),...(processGrid?{process_grid:processGrid}:{}),...(processExpander?{process_expander:processExpander}:{}),...(processRow?{process_row:processRow}:{}),...(processMenu?{process_menu:processMenu}:{}),
         ...(outputColumn?{output_column:outputColumn}:{}),...(reformColumnField?{reform_column:reformColumnField}:{}),...(importDefinitionCell?{import_definition_cell:importDefinitionCell}:{}),
-        ...(groupingField ? {grouping_field:groupingField} : {}), ...(sortingField?{sorting_field:sortingField}:{}),
+        ...(dateTimeCell?{date_time_cell:dateTimeCell}:{}),...(groupingField ? {grouping_field:groupingField} : {}), ...(sortingField?{sorting_field:sortingField}:{}),
         ...(storageEntry ? {storage_entry:storageEntry} : {}),
         ...(graphNodeOf(element) ? {graph_node:graphNodeOf(element)} : {}),
         ...(scroll ? { scroll } : {}),
@@ -2459,11 +2483,11 @@ function readRenderedInputMapping(observation) {
         ...(wizardFields.has(element) ? {wizard_field:wizardFields.get(element)} : {}),
         ...(horizontalScroll?{horizontal_scroll:horizontalScroll}:{}),
         ...(filterCell?{filter_cell:filterCell}:{}),
-        signature: { ...(unionField?{union_field:unionField}:{}), ...(joinField?{join_field:joinField}:{}), ...(filterCell?{filter_cell:filterCell}:{}),tag, tid, role, type: element.getAttribute('type'), name: element.getAttribute('name'), label, ...fieldValue, dialog_ref: dialogRef(element), scroll, check_state:checkState, ...(horizontalScroll?{horizontal_scroll:horizontalScroll}:{}),...(groupingField?{grouping_field:groupingField}:{}),...(sortingField?{sorting_field:sortingField}:{}),...(viewToggle?{view_toggle:viewToggle}:{}),...(viewerVendor?{viewer_vendor:viewerVendor}:{}),...(viewerControl?{viewer_card:viewerControl}:{}),...(tableScroller?{table_scroller:tableScroller}:{}),...(processGrid?{process_grid:processGrid}:{}),...(processExpander?{process_expander:processExpander}:{}),...(processRow?{process_row:processRow}:{}),...(processMenu?{process_menu:processMenu}:{}),...(outputColumn?{output_column:outputColumn}:{}),...(reformColumnField?{reform_column:reformColumnField}:{}),...(importDefinitionCell?{import_definition_cell:importDefinitionCell}:{}) },
+        signature: { ...(unionField?{union_field:unionField}:{}), ...(joinField?{join_field:joinField}:{}), ...(filterCell?{filter_cell:filterCell}:{}),tag, tid, role, type: element.getAttribute('type'), name: element.getAttribute('name'), label, ...fieldValue, dialog_ref: dialogRef(element), scroll, check_state:checkState, ...(horizontalScroll?{horizontal_scroll:horizontalScroll}:{}),...(dateTimeCell?{date_time_cell:dateTimeCell}:{}),...(groupingField?{grouping_field:groupingField}:{}),...(sortingField?{sorting_field:sortingField}:{}),...(viewToggle?{view_toggle:viewToggle}:{}),...(viewerVendor?{viewer_vendor:viewerVendor}:{}),...(viewerControl?{viewer_card:viewerControl}:{}),...(tableScroller?{table_scroller:tableScroller}:{}),...(processGrid?{process_grid:processGrid}:{}),...(processExpander?{process_expander:processExpander}:{}),...(processRow?{process_row:processRow}:{}),...(processMenu?{process_menu:processMenu}:{}),...(outputColumn?{output_column:outputColumn}:{}),...(reformColumnField?{reform_column:reformColumnField}:{}),...(importDefinitionCell?{import_definition_cell:importDefinitionCell}:{}) },
         enabled: isEnabled, visible: true, interaction, bounding_box: boxOf(element),
         // A bounded prefix is not a sufficient value precondition. A dedicated
         // large-field driver must establish its own complete read/write contract.
-        allowed_actions: unionField ? (allowed&&interaction.state==='point_observed'?['click','press',...(scroll?['scroll']:[]),...(horizontalScroll?['scroll_horizontal']:[])]:[]) : joinField ? (allowed&&interaction.state==='point_observed'?['click','right_click','drag','press',...(scroll?['scroll']:[])]:[]) : filterCell ? (allowed&&interaction.state==='point_observed'?['click','double_click','press',...(editable?['fill']:[]),...(scroll?['scroll']:[])]:[]) : tid===workflow?.prefix+';ModelForm;btnToggleActivateCurrent' ? (allowed&&graphExecution&&interaction.state==='point_observed'?['execute_graph_node']:[]) : element===storageRoot ? (allowed && interaction.state==='point_observed'?['click']:[]) : reformColumnField ? (allowed && interaction.state==='point_observed'?['click','double_click','press',...(scroll?['scroll']:[])]:[]) : outputColumn ? (allowed && interaction.state==='point_observed'?['click','double_click','press']:[]) : tableScroller ? (allowed && horizontalScroll?.ref===refOf(element) && interaction.state==='point_observed'?['scroll_horizontal']:[]) : viewerControl ? (allowed && interaction.state==='point_observed' ? [viewerControl.kind==='enter'?'enter_table':'click'] : []) : processGrid || processExpander ? (allowed && interaction.state==='point_observed' ? (processGrid?['right_click','press',...(scroll?.ref===refOf(element)?['scroll']:[])]:['click']) : []) : outputScroller(element) ? (allowed && scroll && scroll.ref===refOf(element) && interaction.state==='point_observed'?['scroll']:[]) : importScroller(element) ? (allowed && horizontalScroll && interaction.state==='point_observed'?['scroll_horizontal']:[]) : processRow || processMenu ? (allowed && interaction.state==='point_observed' ? (processRow?['click','right_click','press']:processMenu.action==='mniCancel'?['cancel_process']:['click','press',...(processMenu.action==='mniShowNodeToProcess'?['show_process_node']:[])]) : []) : sortingField ? (allowed && interaction.state==='point_observed' ? ['click',...(sortingField.part==='field'?['double_click','press']:[]),...(scroll?['scroll']:[])] : []) : groupingField ? (allowed && interaction.state==='point_observed' ? ['click','double_click','press',...(scroll?['scroll']:[])] : []) : expressionWritable ? ['replace_expression'] : allowed && !valueTruncated ? ['click', 'double_click', 'right_click', 'press', 'drag', ...(editable ? ['fill',...(wizardFields.has(element)?['set_wizard_field']:[])] : []), ...(checkState ? ['set_checked'] : []), ...(wizardStep?['wizard_step']:[]), ...(closeConfirmation?['confirm_wizard_close']:[]), ...(deactivationConfirmation?['confirm_wizard_deactivation']:[]), ...(openWizard?['open_wizard','begin_wizard']:[]),...(openNodeViews?['open_node_views']:[]),...(graphExecution?['execute_graph_node']:[]), ...(finishWizard?[finishWizard.mode==='execute'?'execute_wizard':'finish_wizard']:[]), ...(columnClose?[columnClose.mode+'_'+columnClose.scope+'_column']:[]), ...(expressionApply?['apply_expression_parameters']:[]), ...(expressionCancel?['cancel_expression_parameters']:[]), ...(combo?.kind==='option'?['select_wizard_option']:[]), ...(scroll && interaction.state === 'point_observed' ? ['scroll'] : []), ...(horizontalScroll && interaction.state==='point_observed'?['scroll_horizontal']:[])] : [] };
+        allowed_actions: dateTimeCell ? (allowed&&interaction.state==='point_observed'?['click',...(scroll?['scroll']:[])]:[]) : unionField ? (allowed&&interaction.state==='point_observed'?['click','press',...(scroll?['scroll']:[]),...(horizontalScroll?['scroll_horizontal']:[])]:[]) : joinField ? (allowed&&interaction.state==='point_observed'?['click','right_click','drag','press',...(scroll?['scroll']:[])]:[]) : filterCell ? (allowed&&interaction.state==='point_observed'?['click','double_click','press',...(editable?['fill']:[]),...(scroll?['scroll']:[])]:[]) : tid===workflow?.prefix+';ModelForm;btnToggleActivateCurrent' ? (allowed&&graphExecution&&interaction.state==='point_observed'?['execute_graph_node']:[]) : element===storageRoot ? (allowed && interaction.state==='point_observed'?['click']:[]) : reformColumnField ? (allowed && interaction.state==='point_observed'?['click','double_click','press',...(scroll?['scroll']:[])]:[]) : outputColumn ? (allowed && interaction.state==='point_observed'?['click','double_click','press']:[]) : tableScroller ? (allowed && horizontalScroll?.ref===refOf(element) && interaction.state==='point_observed'?['scroll_horizontal']:[]) : viewerControl ? (allowed && interaction.state==='point_observed' ? [viewerControl.kind==='enter'?'enter_table':'click'] : []) : processGrid || processExpander ? (allowed && interaction.state==='point_observed' ? (processGrid?['right_click','press',...(scroll?.ref===refOf(element)?['scroll']:[])]:['click']) : []) : outputScroller(element) ? (allowed && scroll && scroll.ref===refOf(element) && interaction.state==='point_observed'?['scroll']:[]) : importScroller(element) ? (allowed && horizontalScroll && interaction.state==='point_observed'?['scroll_horizontal']:[]) : processRow || processMenu ? (allowed && interaction.state==='point_observed' ? (processRow?['click','right_click','press']:processMenu.action==='mniCancel'?['cancel_process']:['click','press',...(processMenu.action==='mniShowNodeToProcess'?['show_process_node']:[])]) : []) : sortingField ? (allowed && interaction.state==='point_observed' ? ['click',...(sortingField.part==='field'?['double_click','press']:[]),...(scroll?['scroll']:[])] : []) : groupingField ? (allowed && interaction.state==='point_observed' ? ['click','double_click','press',...(scroll?['scroll']:[])] : []) : expressionWritable ? ['replace_expression'] : allowed && !valueTruncated ? ['click', 'double_click', 'right_click', 'press', 'drag', ...(editable ? ['fill',...(wizardFields.has(element)?['set_wizard_field']:[])] : []), ...(checkState ? ['set_checked'] : []), ...(wizardStep?['wizard_step']:[]), ...(closeConfirmation?['confirm_wizard_close']:[]), ...(deactivationConfirmation?['confirm_wizard_deactivation']:[]), ...(openWizard?['open_wizard','begin_wizard']:[]),...(openNodeViews?['open_node_views']:[]),...(graphExecution?['execute_graph_node']:[]), ...(finishWizard?[finishWizard.mode==='execute'?'execute_wizard':'finish_wizard']:[]), ...(columnClose?[columnClose.mode+'_'+columnClose.scope+'_column']:[]), ...(expressionApply?['apply_expression_parameters']:[]), ...(expressionCancel?['cancel_expression_parameters']:[]), ...(combo?.kind==='option'?['select_wizard_option']:[]), ...(scroll && interaction.state === 'point_observed' ? ['scroll'] : []), ...(horizontalScroll && interaction.state==='point_observed'?['scroll_horizontal']:[])] : [] };
     });
     scanStage='data_views';
     const nodes = labels.slice(0, 200).map(label => {
@@ -3328,9 +3352,14 @@ function readRenderedInputMapping(observation) {
             // Wrapped SVG labels may lose whitespace at BR boundaries, so
             // require both the exact native key and rendered punctuation.
             const key=expected.replace(/\s/g,'_').replace(/,/g,'');
+            const exactBodies=fresh.ui.elements.filter(e=>e.graph_node?.part==='body'&&e.graph_node.node_label===key);
+            const nativeBody=fresh.prepared_node_context?.verified===true&&fresh.prepared_node_context.surface==='graph'
+              &&exactBodies.length===1&&exactBodies[0].tid===fresh.prepared_node_context.tid;
+            const matchesText=text=>{const actual=text.replace(/\s/g,''),full=expected.replace(/\s/g,'');
+              return actual===full||nativeBody&&actual.endsWith('…')&&actual.length>1&&full.startsWith(actual.slice(0,-1));};
             const labels=fresh.ui.elements.filter(e=>e.graph_node?.part==='label'
               && e.graph_node.node_label===key && typeof e.graph_node.label_text==='string'
-              && e.graph_node.label_text.replace(/\s/g,'')===expected.replace(/\s/g,''));
+              && matchesText(e.graph_node.label_text));
             if(labels.length!==1)return null;
             const bodies=fresh.ui.elements.filter(e=>e.graph_node?.part==='body' && e.graph_node.node_label===key);
             return bodies.length===1?bodies[0]:null;

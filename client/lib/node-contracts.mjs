@@ -7,6 +7,7 @@ const definitions = [
   ['transform.reform_columns', 'Параметры полей', 'reformcolumns', 1, 1, false, ['scalar'], 'processors/transformation/fields-features.md'],
   ['transform.filter_data', 'Фильтр строк', 'filterdata', 1, 2, false, ['conditions', 'row_number'], 'processors/transformation/row-filter/README.md'],
   ['transform.group_data', 'Группировка', 'groupdata', 1, 1, false, ['aggregate'], 'processors/transformation/grouping.md'],
+  ['transform.date_time', 'Дата и время', 'datereform', 1, 1, false, ['calendar'], 'processors/transformation/trans-datatime/README.md'],
   ['transform.sorting', 'Сортировка', 'sorting', 1, 1, false, ['keys'], 'processors/transformation/sorting.md'],
   ['transform.join_data', 'Слияние', 'joindata', 2, 1, false, ['inner', 'left'], 'processors/transformation/join/README.md'],
   ['transform.union_data', 'Объединение', 'uniondata', 2, 1, true, ['append_all'], 'processors/transformation/union.md'],
