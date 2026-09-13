@@ -17,14 +17,17 @@ function fake(mode){
  const manager={FPreviewVisible:true,FPreviewForm:{FCurrentPreviewNode:node,FCurrentPreviewPort:port},FShowDataLastCall:{Node:node,Port:port}};
  const sourceNode={FGuid:'source',data:{},FStatus:1,FRunning:false,FIconCls:'bg-vendor-icon-importtextfile',FLabel:{FRawValue:'Source'}};
  node.FLabel={FRawValue:'Target'};node.FIconCls='bg-vendor-icon-columnflipping';
+ const sourcePort={parent:sourceNode,FGuid:'sp',FType:1,FSubType:1,FParam:0,FPortIndex:0},inputPort={parent:node,FGuid:'ip',FType:0,FSubType:1,FParam:0,FPortIndex:0};
+ sourceNode.FPorts=[{FCollection:[]},{FCollection:[sourcePort]}];node.FPorts=[{FCollection:[inputPort]},{FCollection:[port]}];
+ const links=[{FGuid:'edge',FSourcePort:sourcePort,FTargetPort:inputPort}];
  root.childNodes.unshift({internalId:0,data:{id:'1',Status:3,ErrorDetails:'',loaded:true},childNodes:[{internalId:10,data:{id:'1.1',Status:3,ErrorDetails:'',ModelNode:sourceNode.data},childNodes:[]}]});
- const card={Controller:{Node:{data:{node:workflow}},FController:{FPreviewManager:manager,FCreateDraggedNodeStarted:false,FDraggingOverGraph:false,FDiagram:{FNodes:{FCollection:[node,sourceNode]},FmxGraph:{container:{querySelectorAll:()=>[{dataset:{tid:'TF;Graph;Source|Output_Data-0|Target|Input_Data-0'}}]}}}}}};
+ const card={Controller:{Node:{data:{node:workflow}},FController:{FPreviewManager:manager,FCreateDraggedNodeStarted:false,FDraggingOverGraph:false,FDiagram:{FNodes:{FCollection:[node,sourceNode]},FLinks:{FCollection:links},FmxGraph:{container:{querySelectorAll:()=>[{dataset:{tid:'TF;Graph;Source|Output_Data-0|Target|Input_Data-0'}}]}}}}}};
  const env={document,location:{origin:'http://test'},bg:{app:{Version:'7.4.2',WorkFlowTreeNode:Workflow,PackageTreeNode:Package,Application:{FInstance:{FMainForm:{Items:{Workspace:{getActiveTab:()=>card}}}}}}},Ext:{getCmp:id=>id==='preview'?{Controller:dc}:{getStore:()=>({getRoot:()=>root,isLoading:()=>false})}},Uint8Array,DataView,TextDecoder,TextEncoder,setTimeout,clearTimeout};
  env.__loginomDockPreparationV1={document,id:'d',receipts:new Map([['r',{phase:'verified',workflowId:'w',tab,nodeTargetWorkflowNode:workflow,packageNode:pack}]])};
  const b={runtime_binding_id:'test-binding_id',package_id:'pkg',static_source:{node_id:'source',execution_id:'d:1:1'},method:321,interface:116,port:0,offset:0,rows:1,columns:[0],execution:{status:'completed',execution_id:'d:1:2'},document_id:'d',workflow_id:'w',tab_tid:'tab',prefix:'TF',node_id:'n',port_guid:'p',origin:'http://test',source:{owner:0,object:9},schema:[{name:'Scalar',label:'Scalar',type:6}],row_count:1};
  env.__loginomDockCollapseRuntimeV1={document,binding_id:'test-binding_id',check:s=>assert.equal(s,session)};
  const context=vm.createContext(env);
- return {page:{evaluate:(fn,arg)=>{context.arg=arg;return vm.runInContext('('+fn.toString()+')(arg)',context);}},b,counters,sourceNode,root,helper,dc,dt,store,finish:error=>finish(error)};
+ return {page:{evaluate:(fn,arg)=>{context.arg=arg;return vm.runInContext('('+fn.toString()+')(arg)',context);}},b,counters,sourceNode,node,links,sourcePort,inputPort,root,helper,dc,dt,store,finish:error=>finish(error)};
 }
 test('fixed321 only and local buffers released',async()=>{const f=fake();const r=await readNativeVariant(f.page,f.b,decodeVariantFrame);assert.equal(r.cells[0].decoded.type,'real');assert.deepEqual(f.counters,{sent:1,released:2});});
 for(const mode of ['changed-cache','new-execution','stale-response'])test('reject '+mode+' after response and release buffers',async()=>{const f=fake(mode);await assert.rejects(()=>readNativeVariant(f.page,f.b,decodeVariantFrame));assert.deepEqual(f.counters,{sent:1,released:2});});
@@ -78,3 +81,26 @@ test('zero native read requires completed count plus all schema fields, makes no
 for(const [name,change] of [['missing fetched count',f=>delete f.store.proxy.FTotalRowCount],['pending count',f=>f.store.proxy.pendingOperations.x={}],['pending page',f=>f.store.pageRequests.x={}],['unknown field mapping',f=>f.store.proxy.FDataFieldNames=[]],['nonzero server count',f=>f.dc.FTotalRowCount=1]])test('zero native read rejects '+name,async()=>{const f=empty();change(f);await assert.rejects(()=>readNativeVariant(f.page,f.b,decodeVariantFrame));assert.equal(f.counters.sent,0);});
 
 for(const [name,change] of [['51 rows',b=>{b.rows=51;b.row_count=51;}],['9 columns',b=>b.columns=Array.from({length:9},(_,i)=>i)],['incomplete row selection',b=>b.rows=0],['partial offset',b=>b.offset=1]])test('full bounds reject '+name+' before native dispatch',async()=>{const f=fake();change(f.b);await assert.rejects(()=>readNativeVariant(f.page,f.b,decodeVariantFrame));assert.equal(f.counters.sent,0);});
+
+test('native link accepts labels whose test IDs normalize spaces and Unicode',async()=>{
+ const f=fake();f.sourceNode.FLabel.FRawValue='Импорт mixed';f.node.FLabel.FRawValue='Свёртка mixed';
+ const r=await readNativeVariant(f.page,f.b,decodeVariantFrame);assert.equal(r.cells.length,1);assert.equal(f.counters.sent,1);
+});
+for(const [name,change] of [
+ ['extra edge',f=>f.links.push({...f.links[0]})],
+ ['foreign parent',f=>f.sourcePort.parent={...f.sourceNode}],
+ ['wrong input index',f=>f.inputPort.FPortIndex=1],
+ ['variable link',f=>f.inputPort.FSubType=4],
+ ['detached port',f=>f.sourceNode.FPorts[1].FCollection=[]],
+ ['missing edge identity',f=>delete f.links[0].FGuid],
+])test('native topology rejects '+name+' before dispatch',async()=>{
+ const f=fake();change(f);await assert.rejects(()=>readNativeVariant(f.page,f.b,decodeVariantFrame),/static topology/);assert.equal(f.counters.sent,0);
+});
+for(const [name,change] of [
+ ['edge replacement',f=>f.links[0]={...f.links[0]}],
+ ['edge GUID change',f=>f.links[0].FGuid='new-edge'],
+ ['port GUID change',f=>f.sourcePort.FGuid='new-port'],
+])test('native topology rejects '+name+' across an awaited response',async()=>{
+ const f=fake('deferred'),pending=readNativeVariant(f.page,f.b,decodeVariantFrame);change(f);f.finish();
+ await assert.rejects(pending,/stale owner/);assert.deepEqual(f.counters,{sent:1,released:2});
+});

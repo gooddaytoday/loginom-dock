@@ -35,8 +35,15 @@ export async function readNativeVariant(page,b,decode,options={}) {
    const graphNodes=model.FDiagram.FNodes.FCollection;
    need(graphNodes.filter(n=>n.FIconCls==='bg-vendor-icon-importtextfile').length===1
     &&graphNodes.filter(n=>n!==node&&n!==sourceNode).every(n=>n.FIconCls==='bg-vendor-icon-modelvariables'&&n.FStatus===0&&n.FRunning===false),'unknown/dynamic graph source');
-   const graphLinks=[...model.FDiagram.FmxGraph.container.querySelectorAll('[data-tid]')].map(e=>e.dataset.tid).filter(t=>t.includes('|'));
-   need(graphLinks.length===1&&graphLinks[0]===b.prefix+';Graph;'+sourceNode.FLabel.FRawValue+'|Output_Data-0|'+node.FLabel.FRawValue+'|Input_Data-0','static topology changed');
+   // Test IDs normalize node labels (for example spaces become underscores).
+   // Bind the real native edge and its port owners, independent of display names.
+   const graphLinks=model.FDiagram.FLinks.FCollection,graphLink=graphLinks[0];
+   need(graphLinks.length===1&&typeof graphLink?.FGuid==='string'&&graphLink.FGuid.length>0,'static topology changed');
+   const sourcePort=graphLink.FSourcePort,inputPort=graphLink.FTargetPort;
+   need(sourcePort?.parent===sourceNode&&sourceNode.FPorts[1].FCollection.includes(sourcePort)
+    &&inputPort?.parent===node&&node.FPorts[0].FCollection.includes(inputPort)
+    &&sourcePort.FType===1&&inputPort.FType===0
+    &&[sourcePort,inputPort].every(p=>p.FSubType===1&&p.FParam===0&&p.FPortIndex===0&&typeof p.FGuid==='string'&&p.FGuid.length>0),'static topology changed');
    need(model.FCreateDraggedNodeStarted===false&&model.FDraggingOverGraph===false&&!model.FDraggedNode,'concurrent graph interaction');
    const ownProcesses=records.filter(r=>r.data.ModelNode===node.data);
    need(ownProcesses.some(r=>String(r.data.id).startsWith(parts[1]+'.')&&r.data.Status===3&&r.data.ErrorDetails===''),'execution node owner');
@@ -61,7 +68,7 @@ export async function readNativeVariant(page,b,decode,options={}) {
    const schema=v(v(v(dc,'FColumnInfosStore'),'data'),'items').map(r=>{const d=v(r,'data');return {name:d.Name,label:d.DisplayName,type:d.DataType};});
    need(JSON.stringify(schema)===JSON.stringify(b.schema)&&schema.length<=8&&b.columns.length===schema.length,'schema');
    const count=v(dt,'FTotalRowCount');need(count===b.row_count&&count===v(helper,'$FRowCount')&&b.offset+b.rows<=count&&b.columns.every(c=>Number.isInteger(c)&&c>=0&&c<schema.length),'row/column bounds');
-   return {sourceNode,sourceData:sourceNode.data,graphFingerprint:JSON.stringify(graphLinks),processRoot,processFingerprint,node,port,dc,dt,ds,store,helper,cache:v(helper,'$FData'),identity,owner:v(identity,'$OW'),object:v(identity,'$O'),schema:JSON.stringify(schema),count};
+   return {sourceNode,sourceData:sourceNode.data,graphLink,sourcePort,inputPort,graphFingerprint:JSON.stringify([graphLink.FGuid,sourcePort.FGuid,inputPort.FGuid]),processRoot,processFingerprint,node,port,dc,dt,ds,store,helper,cache:v(helper,'$FData'),identity,owner:v(identity,'$OW'),object:v(identity,'$O'),schema:JSON.stringify(schema),count};
   };
   need(Object.keys(options).every(k=>['operationId','timeoutMs','requireAtomicSnapshot','maxBytes'].includes(k)),'diagnostic option allowlist');
   need(options.requireAtomicSnapshot!==true,'atomic snapshot unavailable for fixed321');
