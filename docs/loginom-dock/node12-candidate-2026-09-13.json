@@ -39,5 +39,13 @@
   "existing_server_and_current_preserved": true,
   "autonomous_acceptance_passed": false,
   "hermes_launched": false,
-  "shared_client_updated": false
+  "shared_client_updated": false,
+  "candidate_preflight": {
+    "developer_reported_result": "PASSED",
+    "report_hash_and_model_manifest_fields_verified": true,
+    "report_sha256": "0003c315158004ac41a9f3d0b61e49bc541e462e050ee56e626877b64f1358b5",
+    "model_started": false,
+    "documents_commit": "8475e8adc78a8812054af250627dcb8fc4d7c93f",
+    "hermes_slot_granted": false
+  }
 }

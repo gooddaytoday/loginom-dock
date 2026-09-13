@@ -1,3 +1,51 @@
+# Кандидат11 проверен, слот приёмки выдан;12 готов следующим — 13 сентября 2026
+
+Узел11 завершил подготовку в прежней задаче: код `91dee921`, отдельный commit
+harness/goal/docs `be4d31bf9e15e1ea4ab4e1868010871927c34d8b`. На VPS собран и
+staged/readback `2026.09.13-node11.1-candidate`;389 source members сверены с Git.
+Все4 опубликованных файла совпали со сборкой, обе save revisions равны `2`,
+allowed_roots:[`/test-2`], compatibility7.4.2/macos/chromium, stale_actions:[].
+Manifest SHA `28434c4b61305eaa08c76db1dad470599852b48f333f734ad3e946687941ab37`.
+Dock skill API подтвердил8 entries, manifest revision
+`afa295bf48dc48da5d3c995665a06ef2190ff620bae3243d46557e0371536790` и main content
+integrity. Сервер/current и общий клиент сохранены; activation не выполнялась.
+[Полный candidate pin и доказательства](node11-candidate-2026-09-13.json).
+
+Проверка процессов не обнаружила активного acceptance/Hermes CLI; существующие
+Hermes gateway оставлены. Единственный слот `node11-hermes-20260913-28434c4b`
+выдан узлу11 для Sol/low. Команда `node11:autonomous-acceptance:1:28434c4b61305eaa08c76db1dad470599852b48f333f734ad3e946687941ab37`;
+ход `01a098a2-6613-76b1-85d2-111df4531a95` подтверждён active/inProgress.
+Это подтверждение назначения фазы, не доказательство уже стартовавшей модели
+или успешного аудита. Требуются полный declared goal, окончательная persistence,
+независимый аудит и освобождение процессов/слота по итоговому событию.
+
+Узел12 закончил полный preflight своего candidate, дополнительно прочитал manifest
+зарегистрированным Dock MCP. Report SHA
+`0003c315158004ac41a9f3d0b61e49bc541e462e050ee56e626877b64f1358b5` и поля
+model/manifest/model_started:false проверены координатором. Только docs commit
+`8475e8adc78a8812054af250627dcb8fc4d7c93f`; runtime/harness прежние.
+[Подтверждения](node12-candidate-2026-09-13.json). Ход
+`01a0989a-1f11-7c83-993f-c30dc753df78` проверен completed/idle. Статус — ожидание
+Hermes после11; слот12 не выдан, повторный preflight без новой причины не нужен.
+
+Узел14 закончил единственный fix: code `a63586fe096f4fd7f17f346c391834d3e34bdaa4`,
+HEAD `e88cb6182cdc2b6c051d772c02ac53df5b331016`. Координатор прочитал таблицу
+закрытия `missing-values-fix-r1-2026-09-13.md`, проверил HEAD и completed/idle.
+N14-R1/R2 закрыты в source по живым доказательствам: строгий readback, доказанная
+terminal failure→FAILED/cleanup и явная новая попытка после исправления CSV.
+Незакрытое требование — lost-reply input_mapping recovery. В прежней задаче
+назначена точечная разработка этой фазовой сверки/продолжения на Astra medium,
+команда `node14:development-recovery:1:e88cb6182cdc2b6c051d772c02ac53df5b331016`.
+Новый ход `01a098a5-65c8-7f00-99d8-a96936db4eca` подтверждён active/inProgress.
+Это завершение ранее известного требования, не второй review/fix round.
+Повторное ревью не проводится; Hermes14 не выдан. Native save/test-4, собственный
+candidate и полный автономный PASS14 всё ещё обязательны.
+
+Реестр хранит точные ID/фазы; ждать итоговых событий, не добавлять таймер.
+Следующие узлы, merge/push и обновление общего клиента не запускались.
+
+---
+
 # Кандидат узла12 собран на VPS и проверен — 13 сентября 2026
 
 Подготовительный ход узла12 завершён;624 файла архива сверены с Git objects

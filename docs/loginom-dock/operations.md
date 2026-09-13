@@ -1,3 +1,23 @@
+# Кандидат узла11 размещён без активации — 13 сентября 2026
+
+Версия `2026.09.13-node11.1-candidate`, source code `91dee921` (389 tracked inputs),
+runtime `b99b922033e87b7580f14c2eec8cd0744c23bab29ee45b2548212cdac8c394ca`.
+Manifest URI: `viking://resources/loginom-dock/catalogs/executor-preview/releases/2026.09.13-node11.1-candidate/manifest.json`.
+SHA: `28434c4b61305eaa08c76db1dad470599852b48f333f734ad3e946687941ab37`.
+Сборка и stage/readback выполнены на VPS Node24.19.0 в
+`/opt/loginom-dock/releases/20260913-node11-1-91dee921/`; там же build/stage и
+coordinator-readback reports. Source inbox — соседний `20260913-node11-preparation`.
+
+Повторно прочитаны4 immutable файла: совпали побайтно. Save roots:[`/test-2`],
+обе revisions:`2`; Loginom7.4.2/macos/chromium; E2E2cad5602, stale_actions:[].
+Проверен текущий Dock skill manifest8 entries и main content integrity, revision
+`afa295bf48dc48da5d3c995665a06ef2190ff620bae3243d46557e0371536790`.
+`activated:false`, сервер/current и общий клиент сохранены.
+[Полные hashes/pins](node11-candidate-2026-09-13.json).
+Это staged-каталог для отдельной source-приёмки; успех Hermes ещё не получен.
+
+---
+
 # Кандидат узла12 собран на VPS и проверен — 13 сентября 2026
 
 Подготовительный ход узла12 завершён;624 файла архива сверены с Git objects
