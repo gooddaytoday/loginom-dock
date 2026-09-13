@@ -29,6 +29,8 @@ def project_node(snapshot):
                 p['sample'].append(cells)
             p['sample_rows']=len(p['sample']);p['sample_complete']=port.get('sample_complete',False)
             output['ports'].append(p)
+    if 'file_artifacts' in data:
+        output['file_artifacts']=[pick(f,'artifact_id destination bytes sha256 execution_id verification_id freshness_basis') for f in data['file_artifacts']]
     if 'format_restoration' in data:output['format_restoration']=pick(data['format_restoration'],'restored table')
     if 'workflow_return' in data:output['workflow_returned']=data['workflow_return'].get('verified') is True
     if not node:output.update(deepcopy(outcome))

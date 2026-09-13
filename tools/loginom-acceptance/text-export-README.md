@@ -86,3 +86,30 @@ patch и полное повторное сравнение байтов/нас�
 Завершённая матрица разработки и ограничения:
 [план node17](../../docs/plans/loginom-dock/17-text-export.md),
 [машиночитаемые доказательства](../../docs/plans/loginom-dock/17-text-export-evidence.json).
+
+
+Подготовленный автономный goal: `goals/text-export-node-complete.txt`, 22 полные
+операции узлов, три отдельно допускаемых входных CSV, 7 вариантов ожидаемых
+байтов в `fixtures/text-export/contract.json`. `run.py --goal
+text-export-node-complete --preflight ...` проверяет только подготовку.
+`--run` разрешён лишь после отдельного назначения слота координатором.
+
+Полный аудитор: `text_export_acceptance.py --run-dir RUN --external-dir FRESH`.
+Он не принимает резюме модели, предыдущую диагностику или PASS-флаги вместо
+сырого доказательства. Внешняя новая сессия содержит обычные `session.json`,
+`preparation.json`, `execution-events.jsonl`, скачанные native files и результаты
+четырёх destination-only операций. `external-manifest.json` задаёт точный
+`model_run_directory`, `exports` с ключами changed/typed/wide/zero; каждый элемент
+содержит имя `receipt` и `baseline_operation_id` из финального model-run.
+`inventory_receipt` указывает полное read-only наблюдение своего test-2 store:
+loading=false, count=total=len(entries), все entries с FileName/FilePath/Size,
+matching собственных файлов и наблюдаемая navigation. Требуется заново определить
+активный prefix вкладки: закрытие пакета может создать следующую файловую вкладку.
+Baseline для changed — последний применённый Done (либо его проверенный
+model-reopen), для остальных — последние соответствующие выполненные узлы.
+Каждый внешний destination начинается с `/test-2/Dock-export-RUN_ID-external-`.
+Мастер не перенастраивается: inputs=[], mappings=[], parameters={destination}.
+Для Empty сначала отдельно выполнить сохранённый фильтр с parameters={}.
+
+План запуска, текущие native gates и ограничения:
+[подготовка приёмки node17](../../docs/plans/loginom-dock/17-text-export-acceptance-preparation.md).
