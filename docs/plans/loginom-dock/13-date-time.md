@@ -1,6 +1,9 @@
 # 13. Дата и время
 
-Статус на 2026-09-13: **development complete, ready for separate review**.
+Статус на 2026-09-13: **reviewed; fix round 1 complete; N13-R3 closed**.
+N13-R1/R2 открыты как зависимости общей части 14, R2 live Date/time unconfirmed.
+[Отчёт доработки](../../loginom-dock/node-13-fix-1.md): свежий 4×27 и strict
+persistence PASS, Python 519 PASS, negatives 89/89 + 8/8. Hermes не запускался.
 Новый разрешённый поток от 2026-09-12; [отчёт проверок](../../loginom-dock/node-13-development-report.md).
 Следующая аналитическая группа, вне обязательного набора V4. Обработчик ещё
 не принят; [checkpoint разработки](../../loginom-dock/node-13-checkpoint.md).

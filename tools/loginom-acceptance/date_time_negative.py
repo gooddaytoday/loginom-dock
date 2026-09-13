@@ -54,6 +54,17 @@ def negative_checks(events, request, fixture_rows=ROWS):
                 fields[0], fields[1] = fields[1], fields[0]
             else: fields[0]['label'] = 'Unrequested label'
             checks['wrong_requested_input_' + kind] = dict(passed=audit(events, changed_request, fixture_rows=fixture_rows)['passed'] is False)
+    output_mapping = next((m for m in request['mappings'] if m['direction'] == 'output' and m.get('fields')), None)
+    if output_mapping:
+        final_fields = next(e['result']['configuration']['readback']['output_mapping']['fields'] for e in events
+                            if e.get('operation_id') == op and e.get('phase') == 'node_checkpoint')
+        for index, original in enumerate(output_mapping['fields']):
+            effective_excluded = next(f['excluded'] for f in final_fields if f['name'] == original.get('name', original['source']['name']))
+            for key in ('name', 'label', 'excluded'):
+                changed_request = deepcopy(request)
+                field = next(m['fields'] for m in changed_request['mappings'] if m['direction'] == 'output')[index]
+                field[key] = not effective_excluded if key == 'excluded' else ('UnrequestedOutput' if key == 'name' else 'Unrequested output label')
+                checks[f'wrong_requested_output_{index}_{key}'] = dict(passed=audit(events, changed_request, fixture_rows=fixture_rows)['passed'] is False)
     return dict(passed=all(c['passed'] for c in checks.values()), checks=checks)
 
 if __name__ == '__main__':

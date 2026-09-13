@@ -1,3 +1,17 @@
+# Узел 13: post-review fix завершён — 13 сентября 2026
+
+N13-R3 закрыто: независимый output-аудитор проверяет requested name/label/excluded
+сквозных и сохранённых вычисленных полей, включая parameters={}.
+Свежие live mapping и save/reopen/execute: **4×27**, все 12 операций по двум датам,
+raw/config/values и strict persistence PASS; negatives 89/89 + 8/8.
+Python 519 PASS; SDK schema 180 публичных ответов без ошибок.
+N13-R1/R2 остаются зависимостями общей части владельца 14; R2 подтверждён только
+source/model evidence. Hermes, merge, публикация и установка не выполнялись.
+[Отчёт исправления](node-13-fix-1.md), [ревью](node-13-review-1.md),
+[checkpoint](node-13-checkpoint.md).
+
+---
+
 # Узел 13 готов к отдельному ревью — 13 сентября 2026
 
 В `codex/node-13-date-time` завершены development и прямые проверки обработчика

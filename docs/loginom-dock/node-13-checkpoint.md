@@ -1,6 +1,21 @@
 # Узел 13: checkpoint разработки
 
-## Текущее состояние — 13 сентября 2026
+## Fix round 1 — текущая точка
+
+По команде `node13:fix:1:4d6f632e61b7a183fb63bb090e93ab3e29bf52a5:N13-R3`
+завершён единственный fix round: **N13-R3 закрыто**. Live dcb8e87c подтвердил
+исходный порт, новые RowId/SalesAmount/SavedYearA и метки: audit PASS, 89/89 negatives.
+Сохранён `/test-3/N13-dcb8e87c.lgp`. Свежая cef3cdde выполнила отдельную копию:
+**4×27**, все 12 операций по двум датам, raw/config/values и strict persistence PASS,
+8/8 negatives. Python 519 PASS; strict SDK schema 180 ответов без ошибок.
+Обе live-сессии fix round закрыты, exit 0; сохранённый baseline оставлен без изменений.
+Runtime dd0979bf… неизменен; изменены Python-аудитор/тесты и документы.
+[Отчёт fix round](node-13-fix-1.md) содержит pins, evidence и configure extension contract.
+R1/R2 остаются зависимостями общей части владельца 14; R2 — source/model finding,
+новое live-падение Date/time не подтверждено. Общий код не интегрирован.
+Следующие review/Hermes/admission — только по отдельной команде координатора.
+
+## Состояние по завершении development — 13 сентября 2026
 
 **Development и прямые проверки завершены; готов к отдельному ревью.**
 Ветка `codex/node-13-date-time`. [Итоговый отчёт](node-13-development-report.md)

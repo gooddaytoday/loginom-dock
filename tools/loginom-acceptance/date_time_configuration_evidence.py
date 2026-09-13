@@ -2,6 +2,7 @@
 import re
 from node_procedure_evidence import verify_internal_sequence
 from date_time_removal_evidence import verify_removals
+from date_time_output_evidence import initial_output_mapping, verify_output_mapping
 
 # Native semantics confirmed in the real 7.4.2 wizard, not imported from JS.
 OPERATIONS = {
@@ -124,23 +125,8 @@ def verify_date_time_configuration(events, request):
         mapping = next((m for m in request['mappings'] if m['direction'] == 'output'), {})
         if ('autosync' in mapping or 'fields' in mapping) and out['native_mapping']['autosync'] != mapping.get('autosync', False):
             raise ValueError('date_time_requested_output_autosync')
-        for f in out['native_mapping']['target_fields']:
-            s = f.get('source') or f.get('exclusion_source')
-            origin = generated.get(s['record_id'], dict(input=s['name']))
-            configured_name = origin.get('configured_name') or f['name']
-            override = next((m for m in mapping.get('fields', []) if m['source']['name'] == configured_name), {})
-            if origin.get('configured_name') and f['name'] != override.get('name', origin['configured_name']):
-                raise ValueError('date_time_requested_output_name')
-            if origin.get('configured_label') and f['label'] != override.get('label', origin['configured_label']):
-                raise ValueError('date_time_requested_output_label')
-            if 'excluded' in override and f['excluded'] != override['excluded']:
-                raise ValueError('date_time_requested_exclusion')
-            if not f['excluded']:
-                projection.append(dict(name=f['name'], label=f['label'], type=f['type'], input=origin['input'], **({'operation': origin['operation']} if origin.get('operation') else {})))
-        if 'fields' in mapping:
-            order = [f.get('name', f['source']['name']) for f in mapping['fields'] if not f.get('excluded', False)]
-            if order != [f['name'] for f in projection]:
-                raise ValueError('date_time_requested_output_order')
+        baseline = initial_output_mapping(events, op, node)
+        projection = verify_output_mapping(baseline, out['native_mapping'], generated, mapping)
         for name in ('node_finish', 'finish'):
             f = phase(name)
             if not f.get('settings_applied') or not owned(f['node_context']) or f['mode'] != ('done' if name == 'node_finish' else request['finish']):
