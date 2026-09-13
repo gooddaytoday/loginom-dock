@@ -1,3 +1,18 @@
+# Узел13: R2 terminal failure интегрирован и проверен — 13 сентября 2026
+
+Применён разрешённый patch47830abe… (11 файлов/18 hunks) из a63586fe… без
+остальных изменений14. Real missing-source fault под test-3: FAILED/
+local_node_failed/cleanup:true, native reason/group/owner и отсутствие stale read
+проверены независимо.15/15 negatives, repeat/resume без эффекта, pending released.
+После восстановления CSV новый запрос дал свежие4×8/config/raw/values PASS;
+manual mappings/autosync=false/Amount excluded сохранены. Сеанс закрыт exit0.
+Focused135 PASS; клиент1477 PASS/1 SKIP; Python533 PASS.
+[Отчёт](node-13-r2-integration-1.md), [доказательства](node-13-r2-integration-evidence.json).
+R2_terminal_live=PASS. Полная автономная приёмка/Hermes остаются OPEN;
+main/push/deploy/plugin/routing не менялись. Ниже сохранена история прежних состояний.
+
+---
+
 # Узел13: ручная выходная схема проверена — 13 сентября 2026
 
 Исправлено добавление quarter/hour существующего Date/time при autosync=false.

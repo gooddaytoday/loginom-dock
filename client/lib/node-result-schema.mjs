@@ -8,7 +8,8 @@ const nullable=schema=>({anyOf:[schema,{type:'null'}]});
 const ref=object({document_id:str,workflow_id:str,node_id:str});
 const error=object({code:str,message:str,cause:object({code:str,message:str})},['code','message']);
 const phase=values('validate','source','workflow','target','input_mapping','open','configure','node_finish','output_mapping','finish','execute','read');
-const execution=object({status:values('not_requested','pending','completed','cancelled'),execution_id:nullable(str),stop_verified:bool},['status','execution_id']);
+const execution={anyOf:[object({status:values('not_requested','pending','completed','cancelled'),execution_id:nullable(str),stop_verified:bool},['status','execution_id']),
+ object({status:values('failed'),execution_id:str,failure_verified:{type:'boolean',const:true},root_id:str,group_id:str,group_record_id:str})]};
 const receipt=object({phase,receipt_id:str,status:values('pending','verified','not_requested'),effect_possible:bool});
 const cell=object({type:str,is_null:bool,value:{type:['string','number','boolean','null']},decimal:str,
  representation:str,precision:str,display_text:str,timezone:str},['type','is_null','precision']);
@@ -91,7 +92,7 @@ export const nodeApplyResultSchema=object({operation_id:str,status:values('SUCCE
  effect_possible:bool,phases:array(receipt),node:nullable(ref),execution,output,
  package_saved:{type:'boolean',const:false},cleanup_complete:bool,warnings:array(str),
  configuration:object({status:values('applied','discarded'),readback:configurationReadback},['status']),
- checkpoint_kind:values('local_node_checkpoint','local_node_cancellation','local_node_stopped'),
+ checkpoint_kind:values('local_node_checkpoint','local_node_cancellation','local_node_stopped','local_node_failed'),
  persisted_package_verified:{type:'boolean',const:false},pending_phase:nullable(phase),error},
  ['operation_id','status','effect_possible','phases','node','execution','output','package_saved','cleanup_complete','warnings']);
 const outcome=object({status:values('SUCCEEDED','FAILED','NOT_APPLIED','AMBIGUOUS'),action_key:{type:'string',const:'node.apply'},

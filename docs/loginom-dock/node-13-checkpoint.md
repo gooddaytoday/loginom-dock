@@ -1,5 +1,24 @@
 # Узел 13: checkpoint разработки
 
+## R2 integration — целевой live gate завершён
+
+По отдельному разрешению применён точный patch47830abe… из a63586fe…:
+11 файлов/18 hunks, повторные blob/SHA/dry-check и post-apply payload PASS.
+Live aa03cb93-8df3-4b1c-808e-6a13e835caf4, runtime
+2488fdaa08e4d6da9b7a31fb7598f675a8ad972efd65640b34cbc851feb16e2b:
+реальная ошибка отдельного CSV → FAILED/local_node_failed/cleanup:true,
+полная свежая группа5/root457/record1343, native source failed и target parent_failed.
+Независимый terminal audit PASS,15/15 negatives. Repeat/resume1057→1057→1057,
+inspect resolved, pending released. CSV восстановлен, новый запрос SUCCEEDED,
+свежие4×8/config/raw/values PASS; прежняя manual configuration сохранена.
+Диагностическая копия закрыта без сохранения, .held отсутствует, harness exit0.
+Focused135 PASS, клиент1477 PASS/1 SKIP, Python533 PASS.
+[Отчёт](node-13-r2-integration-1.md), [доказательства](node-13-r2-integration-evidence.json).
+
+R2_terminal_live закрыт в этом scope. Full autonomous10rowgoal, новый admission
+и Hermes остаются OPEN и требуют dispatch координатора; слот Hermes не занимался.
+Новых чужих hunks, main/push/deploy/plugin/routing изменений нет.
+
 ## Manual output follow-up — целевая проверка завершена
 
 Назначение `node13:manual-output-followup:1:b01f2e83ca6253087bba71150f078b9d9083f612`.

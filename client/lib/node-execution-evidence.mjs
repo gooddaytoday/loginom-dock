@@ -59,6 +59,21 @@ export function verifyCompletedExecution(execution,snapshot,owner) {
     process_id:p.process_id,process_record_id:p.record_id,group_id:execution.group_id,owner_verified:true};
 }
 
+// A dependency can fail before the requested child starts. This proves failure
+// of the uniquely identified launch group, not execution of that child.
+export function verifyFailedExecution(execution,snapshot) {
+  const ps=inventory(snapshot,execution.node,execution.root_id);
+  const group=ps.find(p=>p.parent_id===null&&p.process_id===execution.group_id&&p.record_id===execution.group_record_id);
+  requireValue(execution.execution_id===execution.node.document_id+':'+execution.root_id+':'+execution.group_id,
+    'Failed execution identity differs');
+  requireValue(group?.error===true&&group.progress_state?.verified===true&&group.progress_state.state==='failed'
+    &&group.progress_state.source==='native_progress_record'&&group.progress_state.terminal===true
+    &&group.progress_state.can_cancel===false&&nonempty(group.error_details?.trim()),'Same execution group must have a verified terminal failure and reason');
+  return {verified:true,status:'failed',execution_id:execution.execution_id,node:structuredClone(execution.node),
+    root_id:execution.root_id,group_id:execution.group_id,group_record_id:execution.group_record_id,
+    failure_verified:true,output_refreshed:false,error:{code:'NODE_EXECUTION_FAILED',message:group.error_details.slice(0,1000)}};
+}
+
 // Upstream dependencies can add sibling processes to this launch. Their captions
 // do not identify the requested child; use cached ModelNode object ownership.
 // Show Node remains an independent check before accepting completion.
