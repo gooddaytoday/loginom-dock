@@ -140,7 +140,8 @@ def validate_inputs(args):
     if profile not in ('chatgpt-sol','xiaomi-mimo') or profile=='xiaomi-mimo' and getattr(args,'goal',None)!='data-pipeline':
         raise ValueError('Xiaomi comparison is authorized only for the full data-pipeline goal')
     max_turns_limit=300 if getattr(args,'goal','basic-graph') in ('data-pipeline','calculator-roundtrip') else 100
-    if not 30 <= args.timeout <= 3600 or not 1 <= args.max_turns <= max_turns_limit:
+    timeout_limit = 14400 if getattr(args, 'goal', None) == 'date-time-sales' else 3600
+    if not 30 <= args.timeout <= timeout_limit or not 1 <= args.max_turns <= max_turns_limit:
         raise ValueError("Invalid acceptance budget")
     if args.manifest_uri is not None and not re.fullmatch(re.escape(MANIFEST_ROOT) + r"[0-9A-Za-z.+-]+/manifest\.json", args.manifest_uri):
         raise ValueError("Invalid candidate manifest URI")
@@ -159,6 +160,10 @@ def validate_inputs(args):
 
 def execute(args):
     os.umask(0o077)
+    date_admission = None
+    if getattr(args, 'goal', None) == 'date-time-sales':
+        from date_time_launch import guard
+        date_admission = guard(args)
     validate_inputs(args)
     profile=getattr(args,'model_profile','chatgpt-sol')
     provider,model=('xiaomi','mimo-v2.5') if profile=='xiaomi-mimo' else ('openai-codex','gpt-5.6-sol')
@@ -206,6 +211,11 @@ def execute(args):
             fixture=WORK / join_fixture_dir / name
             if sha(fixture)!=expected_sha or fixture.stat().st_size!=expected_bytes:raise ValueError('Join fixture changed')
             harness_inputs[join_fixture_dir+'/'+name]=sha(fixture)
+    if date_admission is not None:
+        from date_time_goal_oracle import FIXTURES
+        from date_time_admission import INPUTS
+        for name in ('sales.csv', 'expected.json', 'inputs.json', 'admission.pending.json'):
+            harness_inputs['fixtures/date-time/'+name] = sha(FIXTURES/name)
     info = {"schema_version": 2, "loginom_url": loginom_url, "storage_directory":getattr(args,"storage_directory",None), "scope": "source_runtime", "model_started": False,
             "provider": provider, "model": model, "reasoning_effort": reasoning, "hermes_version": "0.21.0",
             "model_profile": profile, "provider_selection": "explicit CLI; effective usage identity checked after the run",
@@ -222,6 +232,9 @@ def execute(args):
             "budget": {"timeout_seconds": args.timeout, "max_turns": args.max_turns},
             "series": {"planned_attempts": 1, "variant": fault, "pass_criteria": "union_review_acceptance.py full scenario contract" if goal_id=="union-review-complete" else "union_node_acceptance.py full scenario contract" if goal_id=="union-node-complete" else "join_node_acceptance.py full scenario contract" if goal_id in ("join-node-complete","join-review-complete") else "filter_node_acceptance.py full scenario contract" if goal_id == 'filter-node-complete' else "reform_node_acceptance.py full scenario contract" if goal_id == 'reform-node-complete' else "sales_sorting_acceptance.py full scenario contract" if goal_id == 'sales-sorting-complete' else "grouping_node_acceptance.py full scenario contract" if goal_id == 'grouping-node-complete' else "calculator_node_acceptance.py full scenario contract" if goal_id == 'calculator-node-complete' else "node_apply_acceptance.py full scenario contract" if goal_id == 'node-apply-complete' else "audit.py declared variant contract"},
             "manifest_uri": args.manifest_uri, "manifest_sha256": args.manifest_sha256}
+    if date_admission is not None:
+        info['acceptance_inputs_sha256'] = sha(INPUTS)
+        info['series']['pass_criteria'] = 'date_time_sales_acceptance.py including independent post-run diagnostics'
     if profile == 'chatgpt-sol':
         info['auth_policy'] = AUTH_POLICY
         with tempfile.TemporaryDirectory(prefix='dock-auth-guard-') as guard_temp:
@@ -236,7 +249,7 @@ def execute(args):
         print(json.dumps({"preflight": "passed", "model_started": False, "hermes_version": "0.21.0",
                           "provider": provider, "model": model, "reasoning_effort": reasoning, "client_revision": frozen["client_revision"]}))
         return 0
-    run_id = time.strftime("%Y%m%d-%H%M%S") + "-" + uuid.uuid4().hex[:8]
+    run_id = date_admission["run_id"] if date_admission is not None else time.strftime("%Y%m%d-%H%M%S") + "-" + uuid.uuid4().hex[:8]
     run = args.runs_root.resolve() / run_id
     run.mkdir(parents=True, exist_ok=False, mode=0o700)
     hermes_home = run / "private/hermes-home"
@@ -248,6 +261,8 @@ def execute(args):
     native_skill_copy.parent.mkdir(parents=True, mode=0o700)
     write(native_skill_copy, NATIVE_SKILL.read_text())
     package = args.storage_directory + "/packages/Dock-acceptance-" + run_id + ".lgp"
+    if date_admission is not None:
+        package = '/test-3/packages/Dock-date-time-'+run_id+'.lgp'
     info.update(run_id=run_id, package_path=package)
     prompt = render_goal(goal.read_text(),package,args.storage_directory)
     if goal_id in ('file-upload-probe','file-upload-verify','data-pipeline','import-roundtrip','calculator-roundtrip','node-import-roundtrip','node-apply-complete','calculator-node-complete','grouping-node-complete','sales-sorting-complete','reform-node-complete','filter-node-complete'):
@@ -258,6 +273,10 @@ def execute(args):
         prompt=join_probe.prompt(goal.read_text(),package,args.storage_directory,run_id)
     if goal_id == 'data-pipeline':
         prompt=data_pipeline.prompt(goal.read_text(),package,args.storage_directory,run_id)
+    if date_admission is not None:
+        from date_time_goal_oracle import artifact, render
+        info['input_artifact'] = artifact(run_id)
+        prompt = render(run_id)
     write(run / "scenario.txt", prompt)
     write(run / "request.json", info)
     # No key is persisted in the child config. Dock reads its own explicit config.
@@ -273,6 +292,9 @@ def execute(args):
     if goal_id in ('join-node-complete','join-review-complete','union-node-complete','union-review-complete'):
         for file,artifact in zip(join_probe.FIXTURES,info['input_artifacts']):
             command.extend(['--input-artifact',json.dumps({**artifact,'sourcePath':str(WORK / join_fixture_dir / file)},ensure_ascii=False)])
+    if date_admission is not None:
+        command.extend(['--input-artifact', json.dumps({**info['input_artifact'],
+            'sourcePath': str(FIXTURES/'sales.csv')}, ensure_ascii=False)])
     # Hermes oneshot otherwise snapshots tools after 15s, even while this
     # server is still connecting. A measured cold start took 16.5s; use the
     # same bounded wait as the declared MCP connection budget.
@@ -302,6 +324,8 @@ def execute(args):
             raise ValueError("MCP tool precheck failed")
         if runtime_pin(REPO) != frozen or not harness_unchanged(harness_inputs):
             raise ValueError("Source changed before model launch")
+        if date_admission is not None:
+            guard(args)
         write(hermes_home / "auth.json", connection_values)
         env = environment(model_env, hermes_home, run)
         argv = [str(args.hermes), "--provider", provider, "--model", model, "--reasoning", reasoning,

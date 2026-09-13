@@ -1,3 +1,14 @@
+# Узел 13: входы приёмки подготовлены — 13 сентября 2026
+
+Подготовлены естественное ТЗ продаж, CSV/байты, frozen независимые expected,
+полный аудитор и отдельный guarded launch scaffold. Новый declared scope:
+12×27 по двум датам, 0×27 пустой ветки, месячные/квартальные суммы 8×3 и 6×3.
+Это ожидаемые результаты; нового live/Hermes исполнения не было.
+R1/R2 остаются открытыми; final source/archive/catalog и слот не назначены.
+[Отчёт и admission](node-13-acceptance-input-preparation-1.md).
+
+---
+
 # Узел 13: post-review fix завершён — 13 сентября 2026
 
 N13-R3 закрыто: независимый output-аудитор проверяет requested name/label/excluded

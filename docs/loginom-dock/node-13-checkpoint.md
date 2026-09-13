@@ -1,5 +1,19 @@
 # Узел 13: checkpoint разработки
 
+## Подготовка входов приёмки — завершена 13 сентября 2026
+
+Команда `node13:acceptance-input-preparation:1:ed53b0189fa92dfc879015ee08580dcadf2c3cd2`.
+Подготовлены естественное ТЗ месячных/квартальных продаж, CSV 12×4, независимые
+frozen таблицы 12×27 / 0×27 / 8×3 / 6×3, полный auditor и отдельный guarded launcher.
+[Отчёт подготовки](node-13-acceptance-input-preparation-1.md) содержит хэши,
+рабочие команды, точный configure contract и матрицу admission.
+Shared R1/R2 остаются OPEN; final runtime/archive/catalog и слот не назначены.
+Модель, браузер, stage/build/merge/push/deploy и повторный review не запускались.
+Следующее действие — только разрешённая интеграция общей части и целевые live
+проверки, затем новый candidate и отдельный dispatch приёмки. Текущая подготовка
+не принимает узел и не запускает следующий. Исторические результаты ниже относятся
+к своим ревизиям и fixture, а не к новому declared goal.
+
 ## Fix round 1 — текущая точка
 
 По команде `node13:fix:1:4d6f632e61b7a183fb63bb090e93ab3e29bf52a5:N13-R3`

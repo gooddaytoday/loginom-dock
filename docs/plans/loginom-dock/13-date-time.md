@@ -1,5 +1,8 @@
 # 13. Дата и время
 
+Подготовлены [входы приёмки и admission scaffold](../../loginom-dock/node-13-acceptance-input-preparation-1.md);
+новый полный live/Hermes прогон не запускался, R1/R2 остаются OPEN.
+
 Статус на 2026-09-13: **reviewed; fix round 1 complete; N13-R3 closed**.
 N13-R1/R2 открыты как зависимости общей части 14, R2 live Date/time unconfirmed.
 [Отчёт доработки](../../loginom-dock/node-13-fix-1.md): свежий 4×27 и strict
