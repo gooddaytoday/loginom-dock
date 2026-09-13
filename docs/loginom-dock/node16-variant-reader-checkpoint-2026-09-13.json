@@ -1,0 +1,44 @@
+{
+  "checked_at": "2026-09-13T05:44:08.716943+00:00",
+  "node": 16,
+  "thread_id": "01a0992c-6ce0-7f10-bd53-9bf92ed7ae8a",
+  "phase": "development",
+  "control_message_id": "node16:variant-ui-followup:1:live-1789276952774",
+  "source_evidence_directory": ".worktrees/node-16-collapse-columns/.dock/node16/live-1789276952774",
+  "source_evidence_sha256": {
+    "wizard-stores-after.json": "690abfc3a5e594ac7a6892120de0d6ae0c481c92e4cc6caae835441821ca9b1b",
+    "preview-records.json": "42287f6f43651addd00e3018f8d07f40f8f5bafa17d402be879e737caa03a1b5",
+    "table-cache.json": "3af6e068d3b659e1bf27c1587616e57339e42cd0c7a6fb148c26a8b6928979e9",
+    "table-toolbar.json": "56804f41344bad695ce79d1dc69dfa7c6da77f05393abacc02de6cd691fc0e15",
+    "format-select.json": "b7a5ab3637381d51e313ceb6010ad52fc1286a0d99cd1a499294ee90c832e63b"
+  },
+  "read_only_findings": {
+    "existing_variant_reader": "formatted_display / precision unverified",
+    "table_cache": "same displayed 1 for string/integer; rounded real and datetime without milliseconds",
+    "preview_records": "JS primitives contain full real; Date serialized without scalar evidence; native integer vs real subtype not established",
+    "generated_DataTypes_excluded_evidence_present": false,
+    "impossibility_of_ui_route_proven": false
+  },
+  "decision": "Continue handler development; one bounded own loaded UI-preview probe with generated DataTypes excluded. Preserve exact subtype/scalar/precision requirements; implement only if source/live evidence establishes them. Otherwise report a concrete contract blocker.",
+  "architecture_change_authorized": false,
+  "raw_rpc_added": false,
+  "hermes_assigned": false,
+  "acceptance_complete": false,
+  "review_started": false,
+  "developer_guidance_sent": true,
+  "memory_health": "healthy; actor retrieval found relevant prior Table reader memory",
+  "resume_after_usage_limit": {
+    "checked_at": "2026-09-13T08:16:42.452457+00:00",
+    "previous_turn": "01a09933-04c7-7383-a7ce-2a77892f9492",
+    "previous_status": "failed_usage_limit",
+    "ordinary_usage_allowed_verified": true,
+    "idempotency_key": "node16:development-resume:1:usage-limit-01a09933",
+    "turn_id": "01a099d6-3653-7761-a1f7-17d70dbb7254",
+    "app_status": "active/inProgress",
+    "model_requested": "gpt-6-astra",
+    "reasoning_requested": "medium",
+    "developer_reported": "session and saved package restored; shared memory works; bounded DataTypes-off probe next",
+    "changes_preserved": true,
+    "new_review_or_acceptance": false
+  }
+}
