@@ -4,6 +4,7 @@ from node_apply_reopen_binding import verify_reopen_binding
 from existing_import_evidence import _verify_existing_import_output
 from import_source_binding import source_ordered_settings
 from full_read_evidence import verify_full_read
+from identity_import_evidence import verify_identity_import_mapping, verify_identity_autosync
 
 
 def verify_persisted_schema(events, request, expected_columns):
@@ -29,13 +30,17 @@ def verify_persisted_import(evidence, seed, request, source_bytes, path, revisio
         # The caller need not request a wizard or repeat settings. Existing
         # native opening/configure evidence must still prove every parameter;
         # an output-only observation cannot establish saved import settings.
-        if seed.get('mappings') or request.get('mappings'):
-            return dict(passed=False,checks=checks,failures=['persisted_import_mapping_not_in_scope'])
+        if request.get('mappings') != [] or request.get('inputs') != [] or request.get('parameters', {}).get('settings') != {}:
+            return dict(passed=False,checks=checks,failures=['persisted_import_must_remain_unchanged'])
+        checks['seed_identity_mapping'] = verify_identity_import_mapping(evidence['events'], seed, source_bytes)
+        if not checks['seed_identity_mapping']['passed']:
+            return dict(passed=False,checks=checks,failures=['persisted_import_seed_mapping'])
         expected=source_ordered_settings(seed['parameters']['settings'],source_bytes)['columns']
         checks['schema']=verify_persisted_schema(evidence['events'],request,expected)
         checks['full_read']=verify_full_read(evidence['events'],request,expected_rows)
         checks['native_output']=_verify_existing_import_output(evidence['events'],seed,request,source_bytes,
             reopened_package=True)
-    passed=len(checks)==5 and all(c['passed'] for c in checks.values())
+        checks['identity_autosync'] = verify_identity_autosync(evidence['events'], request) if seed['mappings'] else dict(passed=True, scope='unmapped_import')
+    passed=len(checks)==7 and all(c['passed'] for c in checks.values())
     return dict(passed=passed,checks=checks,package_persistence_verified=passed,
                 scope='verified_reopening_native_unchanged_import',hermes_acceptance_verified=False)

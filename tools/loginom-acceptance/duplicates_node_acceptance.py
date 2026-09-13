@@ -11,6 +11,7 @@ from artifact_delivery_evidence import verify_delivered_import_output
 from node_configuration_evidence import verify_configuration_readback
 from persisted_import_evidence import verify_persisted_import
 from full_read_evidence import verify_full_read
+from identity_import_evidence import verify_identity_import_mapping
 from node_apply_reopen_binding import verify_reopen_binding
 from node_apply_save_chain import verify_save_chain
 from workflow_activation_evidence import verify_workflow_activation
@@ -86,7 +87,8 @@ def audit(request,evidence,prompt):
         for key,f in fixtures.items():
             label='Node12-'+key;ir=imports[label];mr=marks[label+'-mark'];inode=result(ir)['node'];mnode=result(mr)['node']
             settings=ir['parameters']['settings'];actual=[{k:v for k,v in c.items() if k!='source_name' or v!=c.get('name')} for c in settings['columns']]
-            check(key+'_import_contract',ir['mode']=='delimited' and ir['finish']=='execute' and ir['inputs']==[] and ir['mappings']==[] and actual==[dict(c,used=True) for c in f['columns']] and settings['format']==dict(delimiter=';',decimal_separator='.',null_marker='__NULL__',text_qualifier='"') and all(settings['source'][k]==v for k,v in dict(encoding='UTF-8',rows_to_skip=0,first_line_as_title=True).items()))
+            checks[key+'_identity_mapping']=verify_identity_import_mapping(events,ir,f['data'])
+            check(key+'_import_contract',ir['mode']=='delimited' and ir['finish']=='execute' and ir['inputs']==[] and checks[key+'_identity_mapping']['passed'] and actual==[dict(c,used=True) for c in f['columns']] and settings['format']==dict(delimiter=';',decimal_separator='.',null_marker='__NULL__',text_qualifier='"') and all(settings['source'][k]==v for k,v in dict(encoding='UTF-8',rows_to_skip=0,first_line_as_title=True).items()))
             check(key+'_mark_contract',mr['mode']=='mark' and mr['finish']=='execute' and mr['parameters']==f['parameters'] and mr['mappings']==[] and mr['inputs']==[dict(source=inode,output=0,input=0)])
             checks[key+'_import_config']=verify_configuration_readback(events,ir)
             op=ir['parameters']['source']['upload_operation_id'].removesuffix(':upload')
