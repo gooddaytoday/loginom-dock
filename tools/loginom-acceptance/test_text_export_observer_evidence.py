@@ -6,31 +6,35 @@ from text_export_observer_evidence import verify_observer,sha,REVISION
 def encoded(value):return json.dumps(value,ensure_ascii=False,separators=(',',':')).encode()
 
 class ObserverEvidenceTests(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        import subprocess,shutil
+        cls.template=tempfile.TemporaryDirectory(prefix='node17-cross-runtime-');cls.addClassCleanup(cls.template.cleanup)
+        node='/Users/kartamyshev/.loginom-dock/releases/0.1.0-dev.20260910.3-80ca61417ec7/runtime/node'
+        script=Path(__file__).with_name('text-export-observer-offline.mjs')
+        subprocess.run([node,str(script),'--synthetic-fixture',cls.template.name],check=True,capture_output=True,text=True,timeout=10)
+
     def setUp(self):
+        import shutil
         self.temp=tempfile.TemporaryDirectory(prefix='node17-proof-test-');self.addCleanup(self.temp.cleanup)
-        self.root=Path(self.temp.name).resolve();self.data=b'x\n';self.read_id='synthetic-read'
-        self.identity=dict(document_id='d',workflow_id='w',node_id='n',source_node_id='s')
-        snapshot=dict(complete=True,**self.identity,graph={'nodes':['s','n']},settings={'delimiter':';'},source_settings={'delimiter':';'})
-        self.expected=dict(overall_deadline_ms=3600000,run_id='run',session_id='session',runtime='a'*64,origin='http://logi-test-plan.bg.local',identity=self.identity,expected_snapshot=snapshot,
-            baseline=dict(original_event_hash='b'*64,original_event_index=1,destination='/test-2/result.csv',native_file='original/result.csv',bytes=2,sha256=sha(self.data)),
-            reject=dict(terminal_event_hash='c'*64,terminal_event_index=10,status='FAILED',cleanup_complete=True,verification='text_export_conflict_rejected',destination='/test-2/result.csv'))
-        self.request={'params':{'name':'dock_node_apply','arguments':{'operation_id':'replace','parameters':{'overwrite':'replace','destination':'/test-2/result.csv'}}}}
-        b={k:copy.deepcopy(v) for k,v in self.expected.items() if k!='expected_snapshot'}
-        b.update(observer_revision=REVISION,read_id=self.read_id,deadline_ms=60000,request_sha256=sha(encoded(self.request)))
-        r=dict(read_id=self.read_id,before=copy.deepcopy(snapshot),after=copy.deepcopy(snapshot),destination='/test-2/result.csv',bytes=2,sha256=sha(self.data),native_file='reject-baseline/'+self.read_id+'/result.csv',cleanup_complete=True,workflow_returned=True,download_count=1,listener_before_gesture=True)
-        kinds=['snapshot_before','download_listener','download_gesture','download_completed','workflow_return','snapshot_after']
-        payloads=[snapshot,{}, {},dict(suggested_name='result.csv',download_completed=True,destination=r['destination']),self.identity,snapshot]
-        r['raw']=[dict(kind=k,seq=i+1,read_id=self.read_id,session_id='session',origin=self.expected['origin'],payload=copy.deepcopy(payloads[i])) for i,k in enumerate(kinds)]
-        self.events=[dict(kind=k,payload=p,mono_ms=i+1) for i,(k,p) in enumerate(zip(['reject_bound','read_started','read_completed','replace_dispatch'],[b,{'read_id':self.read_id},r,{'read_id':self.read_id,'request_sha256':b['request_sha256']}]))]
-        self.file=self.root/r['native_file'];self.file.parent.mkdir(parents=True);self.file.write_bytes(self.data)
-        self.persist()
+        self.run=Path(self.temp.name).resolve();shutil.copytree(self.template.name,self.run,dirs_exist_ok=True)
+        self.root=self.run/'observer';fixture=json.loads((self.run/'synthetic-expected.json').read_text())
+        self.run_request=fixture['run'];self.expected=fixture['expected'];self.request=fixture['request'];self.data=b'x\n'
+        self.events=[json.loads(x) for x in (self.root/'observer.jsonl').read_text().splitlines()]
+        self.read_id=self.events[0]['payload']['read_id'];self.identity=self.expected['identity']
+        self.file=self.root/self.events[2]['payload']['native_file']
 
     def persist(self):
         previous='0'*64;lines=[]
         for i,e in enumerate(self.events):
             e.update(seq=i+1,previous=previous);line=encoded(e);previous=sha(line);lines.append(line)
         (self.root/'observer.jsonl').write_bytes(b'\n'.join(lines)+b'\n')
-        self.expected['actual_replace_dispatch']=dict(operation_id='replace',after_observer_chain_sha256=previous,mono_ms=5,before_product_dispatch=True)
+        if len(self.events)>2 and 'action_ledger' in self.events[2]['payload']:
+            actions=[]
+            for e in self.events[2]['payload']['action_ledger']:
+                actions.extend([dict(phase='prepared',**{k:e[k] for k in ['seq','step','code_sha256','run_id','session_id','mono_start']}),dict(phase='completed',**e)])
+            (self.root/'observer-actions.jsonl').write_text('\n'.join(json.dumps(x) for x in actions)+'\n')
+        self.expected['actual_replace_dispatch']=dict(operation_id='replace',after_observer_chain_sha256=previous,mono_ms=self.events[-1]['mono_ms']+1,before_product_dispatch=True)
 
     def result(self):return verify_observer(self.root,self.expected,self.request)['passed']
 
@@ -46,8 +50,8 @@ class ObserverEvidenceTests(unittest.TestCase):
             (2,['destination'],'/test-2/other.csv'),(2,['bytes'],3),(2,['sha256'],'0'*64),
             (2,['cleanup_complete'],False),(2,['workflow_returned'],False),(2,['download_count'],2),
             (2,['listener_before_gesture'],False),(2,['native_file'],'original/result.csv'),
-            (2,['after','settings','delimiter'],','),(2,['after','source_settings','delimiter'],','),
-            (2,['after','graph','nodes'],['s']),(2,['before','complete'],False),
+            (2,['after','settings_verified'],True),(2,['after','workflow_ref','workflow_id'],'other'),
+            (2,['after','graph','nodes'],[]),(2,['before','complete'],False),
             (2,['raw',1,'kind'],'download_gesture'),(2,['raw',3,'payload','suggested_name'],'old.csv'),
             (2,['raw',3,'session_id'],'old-session'),(2,['raw',4,'payload','node_id'],'other'),
             (3,['read_id'],'old-read'),(3,['request_sha256'],'0'*64),
@@ -75,6 +79,22 @@ class ObserverEvidenceTests(unittest.TestCase):
         self.request['params']['arguments']['parameters']['overwrite']='reject';self.assertFalse(self.result())
         self.request['params']['arguments']['parameters']['overwrite']='replace'
         other=self.root/'other.csv';other.write_bytes(self.data);self.file.unlink();self.file.symlink_to(other);self.assertFalse(self.result())
+
+    def test_forbidden_observer_actions_and_raw_sidecar_binding(self):
+        original=copy.deepcopy(self.events)
+        for kind in ['Configure','Finish','Execute','save','upload','reload','press','scroll']:
+            self.events=copy.deepcopy(original);self.events[2]['payload']['action_ledger'][3]['step']['kind']=kind
+            self.persist();self.assertFalse(self.result())
+        self.events=original;self.persist()
+        (self.root/'observer-actions.jsonl').unlink();self.assertFalse(self.result())
+
+    def test_outer_binds_to_actual_journal_and_dispatch_before_replace(self):
+        from text_export_observer_run import verify_run_observer
+        result=verify_run_observer(self.run,self.run_request,self.request['params']['arguments'])
+        self.assertTrue(result['passed'],result)
+        actual=self.root/'actual-dispatch.jsonl';e=json.loads(actual.read_text());e['journal_line_count']+=1
+        actual.write_text(json.dumps(e)+'\n')
+        self.assertFalse(verify_run_observer(self.run,self.run_request,self.request['params']['arguments'])['passed'])
 
     def test_nonmonotonic_and_nonfinite_times_are_refused(self):
         for time in [0,float('nan'),float('inf')]:

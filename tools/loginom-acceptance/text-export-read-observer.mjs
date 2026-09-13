@@ -1,24 +1,26 @@
 // Independent acceptance instrumentation, never a public retained-byte API.
-// No SDK installation or browser launch until a graph/settings reader is proven.
+// Contract2 checks observable graph identity and bytes; settings are unverified.
 import {createHash,randomUUID} from 'node:crypto';
 import {performance} from 'node:perf_hooks';
 import {mkdir,realpath,lstat,open} from 'node:fs/promises';
 import {constants} from 'node:fs';
 import {resolve,join,basename,isAbsolute} from 'node:path';
+import {REVISION,checkActionLedger} from './text-export-observer-policy.mjs';
 const hash=x=>createHash('sha256').update(x).digest('hex');
 const same=(a,b)=>JSON.stringify(a)===JSON.stringify(b);
 const need=(v,m)=>{if(!v)throw Error(m);};
-export const OBSERVER_REVISION='node17-reject-read-observer.1-unadmitted';
-export const SNAPSHOT_BLOCKER='NATIVE_APPLIED_SETTINGS_GRAPH_READER_UNAVAILABLE';
+export const OBSERVER_REVISION=REVISION;
+export const SNAPSHOT_BLOCKER='NATIVE_OBSERVER_SMOKE_NOT_ADMITTED';
 export async function unavailableNativeObserver(){throw Error(SNAPSHOT_BLOCKER);}
-const requiredSnapshot=['document_id','workflow_id','node_id','source_node_id','graph','settings','source_settings'];
+const requiredSnapshot=['document_id','workflow_id','node_id','source_node_id','graph','workflow_ref'];
 export function validateSnapshots(before,after,identity){
  for(const s of [before,after]){
   need(s&&s.complete===true&&requiredSnapshot.every(k=>Object.hasOwn(s,k)),'Incomplete native snapshot');
   for(const k of ['document_id','workflow_id','node_id','source_node_id'])need(s[k]===identity[k],'Snapshot identity differs');
-  for(const k of ['graph','settings','source_settings'])need(s[k]&&typeof s[k]==='object'&&Object.keys(s[k]).length>0,'Missing live '+k);
+  need(!Object.hasOwn(s,'settings')&&!Object.hasOwn(s,'source_settings')&&s.settings_verified===false,'Contract2 does not verify settings');
+  for(const k of ['graph','workflow_ref'])need(s[k]&&typeof s[k]==='object'&&Object.keys(s[k]).length>0,'Missing live '+k);
  }
- need(same(before,after),'Native graph/settings changed during read');
+ need(same(before,after),'Observed graph/identity changed during read');
 }
 
 // The observer receives an absolute deadline, abort signal and fresh read ID.
@@ -55,7 +57,7 @@ export function createReadObserverGate({dispatch,observe=unavailableNativeObserv
    const p=request.params.arguments?.parameters;
    need(p?.overwrite==='replace'&&p.destination===baseline.destination&&reject.destination===baseline.destination,'Wrong replace path');
    need(baseline.bytes>=0&&Number.isSafeInteger(baseline.bytes)&&/^[a-f0-9]{64}$/.test(baseline.sha256),'Invalid original bytes');
-   await record('reject_bound',{run_id,session_id,runtime,baseline,reject,identity,origin:context.origin,observer_revision:OBSERVER_REVISION,read_id:readId,overall_deadline_ms:context.overall_deadline_ms,deadline_ms:deadline,request_sha256:hash(original)});guard();
+   await record('reject_bound',{run_id,session_id,runtime,baseline,reject,identity,source_edge:context.source_edge,workflow_ref:context.workflow_ref,origin:context.origin,observer_revision:OBSERVER_REVISION,read_id:readId,overall_deadline_ms:context.overall_deadline_ms,deadline_ms:deadline,request_sha256:hash(original)});guard();
    await record('read_started',{read_id:readId});guard();
    need(isAbsolute(artifactRoot)&&await realpath(artifactRoot)===resolve(artifactRoot),'Private artifact root must be ordinary');guard();
    const owner=await lstat(artifactRoot);need(owner.isDirectory()&&(owner.mode&0o077)===0,'Artifact root not private');guard();
@@ -69,7 +71,8 @@ export function createReadObserverGate({dispatch,observe=unavailableNativeObserv
    need(data.length===baseline.bytes&&hash(data)===baseline.sha256,'Downloaded bytes differ from original');
    need(result&&result.read_id===readId&&result.cleanup_complete===true,'Read cleanup/identity unconfirmed');
    validateSnapshots(result.before,result.after,identity);
-   need(same(result.before,context.expected_snapshot),'Live state differs from bound pre-read baseline');
+   need(result.before.source_node_id===context.identity.source_node_id,'Fresh source identity differs');
+   checkActionLedger(result.action_ledger,context);
    need(result.destination===baseline.destination&&result.bytes===baseline.bytes&&result.sha256===baseline.sha256,'Baseline bytes changed');
    need(result.native_file===nativeFile&&result.native_file!==baseline.native_file,'Fresh private file required');
    need(result.listener_before_gesture===true&&result.download_count===1&&result.workflow_returned===true,'Native causal chain incomplete');

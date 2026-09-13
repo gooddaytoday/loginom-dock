@@ -2,17 +2,20 @@ import test from 'node:test';import assert from 'node:assert/strict';
 import {mkdtemp,writeFile,rm,realpath} from 'node:fs/promises';import {tmpdir} from 'node:os';import {join,relative} from 'node:path';import {createHash} from 'node:crypto';
 import {createReadObserverGate} from './text-export-read-observer.mjs';
 const digest=x=>createHash('sha256').update(x).digest('hex');
+import {syntheticBinding,syntheticNativeResponses} from './text-export-observer-fixture.mjs';
+import {bindObserver} from './text-export-observer-binding.mjs';
+import {createNativeObserver} from './text-export-observer-native.mjs';
 async function fixture(t,change={},options={}){
  const root=await realpath(await mkdtemp(join(tmpdir(),'node17-observer-test-')));t.after(()=>rm(root,{recursive:true,force:true}));
- const bytes=Buffer.from('x\n');const identity={document_id:'d',workflow_id:'w',node_id:'n',source_node_id:'s'};
- const snapshot={complete:true,...identity,graph:{nodes:['s','n'],links:[['s','n']]},settings:{delimiter:';'},source_settings:{delimiter:';'}};
- const context={overall_deadline_ms:performance.now()+3600000,run_id:'20260913-180000-1234abcd',session_id:'session',runtime:'a'.repeat(64),origin:'http://logi-test-plan.bg.local',other_pending_operations:[],identity,expected_snapshot:snapshot,
-  baseline:{original_event_hash:'b'.repeat(64),original_event_index:1,operation_id:'initial',execution_id:'e',destination:'/test-2/result.csv',bytes:bytes.length,sha256:digest(bytes),native_file:'original/result.csv'},
-  reject:{terminal_event_hash:'c'.repeat(64),terminal_event_index:10,operation_id:'reject',status:'FAILED',cleanup_complete:true,verification:'text_export_conflict_rejected',destination:'/test-2/result.csv'}};
- const request={params:{name:'dock_node_apply',arguments:{operation_id:'replace',parameters:{destination:'/test-2/result.csv',overwrite:'replace'}}}};const lines=[],calls=[];
- const observe=async({readId,downloadPath})=>{await writeFile(downloadPath,bytes);return {read_id:readId,before:snapshot,after:structuredClone(snapshot),destination:context.baseline.destination,bytes:bytes.length,sha256:digest(bytes),native_file:relative(root,downloadPath),cleanup_complete:true,listener_before_gesture:true,download_count:1,workflow_returned:true,raw:['snapshot_before','download_listener','download_gesture','download_completed','workflow_return','snapshot_after'].map((kind,i)=>({kind,seq:i+1,read_id:readId,session_id:context.session_id,origin:context.origin,payload:i===0||i===5?snapshot:i===3?{suggested_name:'result.csv',download_completed:true,destination:context.baseline.destination}:i===4?identity:{}})),...change};};
+ const f=syntheticBinding(),context=bindObserver({...f,overallDeadline:performance.now()+3600000}),request=f.request,lines=[],calls=[];
+ const queue=syntheticNativeResponses(context),actions=[];
+ const native=createNativeObserver({artifactRoot:root,record:async e=>actions.push(e),invoke:async({code})=>{
+  const response=queue.shift();if(response.observer_download_count){const path=JSON.parse(code.match(/"download_path":("[^"\\]*(?:\\.[^"\\]*)*")/)[1]);await writeFile(path,'x\n');}
+  return {content:[{type:'text',text:JSON.stringify(response)}]};
+ }});
+ const observe=async opts=>({...await native(opts),...change});
  const gate=createReadObserverGate({artifactRoot:root,append:async s=>lines.push(s),observe,dispatch:async r=>{calls.push(structuredClone(r));return {actual_reply:true};},...options});
- return {root,context,request,gate,lines,calls,observe};
+ return {root,context,request,gate,lines,calls,observe,actions};
 }
 test('unit-only successful observation dispatches exact request once with causal chain',async t=>{
  const f=await fixture(t);const original=structuredClone(f.request);assert.deepEqual(await f.gate.invoke(f.request,f.context),{actual_reply:true});assert.deepEqual(f.calls,[original]);assert.deepEqual(f.lines.map(s=>JSON.parse(s).kind),['reject_bound','read_started','read_completed','replace_dispatch']);await assert.rejects(f.gate.invoke(f.request,f.context));assert.equal(f.calls.length,1);
@@ -31,7 +34,7 @@ test('deadline and late observer completion cannot release replace',async t=>{
 test('concurrent calls are blocked throughout read interval',async t=>{
  let release,started;const ready=new Promise(r=>started=r);const f=await fixture(t,{}, {observe:async()=>{started();return new Promise(r=>release=r);}});const pending=f.gate.invoke(f.request,f.context);await ready;await assert.rejects(f.gate.invoke({params:{name:'dock_action_run'}}),/BLOCKED/);release({});await assert.rejects(pending);assert.equal(f.calls.length,0);
 });
-test('native reader remains unavailable without opening a wizard',async t=>{
+test('default core remains closed without an explicitly wired observer',async t=>{
  const f=await fixture(t,{}, {observe:undefined});await assert.rejects(f.gate.invoke(f.request,f.context),/NOT_DISPATCHED/);assert.equal(f.calls.length,0);
 });
 test('dispatch transport failure is not described as no dispatch',async t=>{

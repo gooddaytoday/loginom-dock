@@ -234,6 +234,7 @@ def execute(args):
             "manifest_uri": args.manifest_uri, "manifest_sha256": args.manifest_sha256}
     if goal_id=='text-export-node-complete':
         info['acceptance_readiness']={'ready':False,'blockers':[REJECT_BASELINE_BLOCKER]}
+        info['acceptance_observer']={'contract':2,'native_smoke_admitted':False,'entry':'text-export-observer-client.mjs','settings_verified':False}
     if profile == 'chatgpt-sol':
         info['auth_policy'] = AUTH_POLICY
         with tempfile.TemporaryDirectory(prefix='dock-auth-guard-') as guard_temp:
@@ -274,6 +275,7 @@ def execute(args):
     write(run / "request.json", info)
     # No key is persisted in the child config. Dock reads its own explicit config.
     entry = REPO / "client/bin/loginom-dock.mjs" if fault == "none" else WORK / {"lost_receipt": "lost-receipt-client.mjs", "rename": "rename-client.mjs", "partial_link": "partial-link-client.mjs", "position": "position-client.mjs", "save_reopen": "save-reopen-client.mjs"}[fault]
+    if goal_id=='text-export-node-complete':entry=WORK/'text-export-observer-client.mjs'
     command = [str(entry), "--config", str(args.dock_config.resolve()),
                "--state-dir", str(dock_home), "--agent", "hermes", "--adapter-revision", "0.1.0-rc.4-acceptance",
                "--mode", "executor-replay", "--action-manifest-uri", args.manifest_uri,
@@ -292,6 +294,7 @@ def execute(args):
               "mcp_servers": {"loginom-dock": {"command": str(args.node), "args": command,
               "connect_timeout": 180, "timeout": 360, "enabled": True,
               "env": {"DOCK_ACCEPTANCE_RUN_DIR": str(run),
+                      "DOCK_ACCEPTANCE_DEADLINE_EPOCH_MS": str(int(time.time()*1000)+args.timeout*1000),
                       "DOCK_ACCEPTANCE_EXECUTOR_SHA256": frozen["inputs"]["client/lib/executor.mjs"]}}},
               "agent": {"max_turns": args.max_turns, "reasoning_effort": reasoning},
               # Keep the small Dock-only surface as direct typed tools. The

@@ -6,6 +6,7 @@ supplied. Preparatory live evidence is never substituted for a later model run.
 import argparse,hashlib,importlib.util,json,stat
 from pathlib import Path
 from text_export_readiness import require_reject_baseline_reader
+from text_export_observer_run import verify_run_observer
 from evidence import PREFIX,KNOWLEDGE_TOOLS
 from audit import knowledge_scope
 from grouping_node_acceptance import model_completed
@@ -122,7 +123,10 @@ def audit_directory(directory,external_dir=None):
             else:
                 assert r['finish']=='execute';checks['bytes_'+str(index)]=export_check(out,case,ev,directory,dest)
                 assert out['output']['output']['file_artifacts'][0]['freshness_basis']==('explicit_replace_and_completed_native_execution' if index==7 else 'native_absence_check_and_completed_execution')
-            if index==7:assert r['parameters']['overwrite']=='replace'
+            if index==7:
+                assert r['parameters']['overwrite']=='replace'
+                checks['reject_baseline_observer']=verify_run_observer(directory,request,r)
+                assert checks['reject_baseline_observer']['passed']
             if index in [1,2,4,8]:before_reopen[{1:'typed',2:'wide',4:'zero',8:'changed'}[index]]=out
             if index>=10:after_reopen[case]=out;checks['model_persist_'+case]=preserved(before_reopen[case],out,r)
         # Preserve source identity independently of what the export requested.
