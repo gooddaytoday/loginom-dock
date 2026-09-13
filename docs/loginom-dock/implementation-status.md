@@ -1,3 +1,15 @@
+# Node16: пустой результат после открытия проверен — 13 сентября 2026
+
+В своей ветке подтверждены сохранные owner/port/link IDs и полная схема пустого
+результата после save/reopen/reexecute. Причина прежнего предупреждения —
+неактивный upstream перед входным мастером; добавлен ранний NOT_APPLIED без мутации.
+Source:1409PASS/1SKIP; Collapse:21PASS. Exact non-null variant всё ещё BLOCKED.
+[Follow-up и доказательства](collapse-empty-persistence-2026-09-13.md),
+[план ограниченного read-прототипа для отдельного решения](collapse-variant-prototype-plan-2026-09-13.md).
+Полная development acceptance/Hermes/release не заявлены.
+
+---
+
 # Node16: независимая часть реализована, полная приёмка заблокирована — 13 сентября 2026
 
 Только ветка `codex/node-16-collapse-columns`, база `a3b419bde8a660e1905284ee62a46362d5a49e09`.
