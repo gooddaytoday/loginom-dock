@@ -43,5 +43,9 @@ export async function preflightMissingValuesSource(options,ctx,config){
  const phase='missing_values_preflight_completed',saved=await onRecord({phase,operation_id:operation.id,proof});
  need(saved?.phase===phase&&JSON.stringify(saved.proof)===JSON.stringify(proof),'Missing values source proof was not durably acknowledged');
  if(error){error.nodePhaseRefusal={phase:'target',status:'FAILED',effect_possible:true,cleanup_complete:true,settings_unchanged:true,verification:'missing_values_preflight_completed'};throw error;}
- return proof;
+ // A later graph refusal may still be terminal although this inspection
+ // deactivated the source. Carry only the durably acknowledged, unchanged
+ // settings proof; lost replies and unfinished editors never reach this point.
+ return {...proof,target_refusal:{phase:'target',status:'FAILED',effect_possible:true,
+  cleanup_complete:true,settings_unchanged:true,verification:phase}};
 }

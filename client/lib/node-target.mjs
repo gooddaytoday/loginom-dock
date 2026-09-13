@@ -80,6 +80,9 @@ export async function prepareNodeTarget({ request, operation, adapter, record, s
       try { receipt = await adapter.mutate(effect, operation.deadline, signal); }
       catch (error) { await commit(); throw error; }
       if (receipt?.status === 'NOT_APPLIED' && receipt.effect_possible === false && receipt.cleanup_complete === true) {
+        // Confirm the same live graph before accepting a pre-dispatch refusal.
+        // An unrelated change or lost observation keeps this effect pending.
+        if(!same(before,await observe()))throw new Error('Graph changed after refused gesture');
         (state.refusals??=[]).push({id:effect.id,kind,receipt:structuredClone(receipt)});
         state.pending = null; state.effect_possible=priorEffect;
         await commit();

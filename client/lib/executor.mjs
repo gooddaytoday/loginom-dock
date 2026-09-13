@@ -2123,8 +2123,17 @@ export function createActionRuntime({ pinned, execute, artifactStore, allowCandi
             if(result.status!=='SUCCEEDED'){
               const error=new Error(result.error??'Node target is not verified');
               if(result.status==='NOT_APPLIED' && result.partial_effect===false && result.cleanup_complete===true
-                && preflight?.effect_possible!==true && operation.targetPhase?.effect_possible===false && !operation.targetPhase?.pending)
-                error.nodePhaseRefusal={phase:'target',status:'NOT_APPLIED',effect_possible:false,cleanup_complete:true};
+                && operation.targetPhase?.effect_possible===false && !operation.targetPhase?.pending){
+                if(preflight?.effect_possible!==true)
+                  error.nodePhaseRefusal={phase:'target',status:'NOT_APPLIED',effect_possible:false,cleanup_complete:true};
+                else if(preflight.verified===true && preflight.cleanup_complete===true && preflight.settings_changed===false
+                  && preflight.target_refusal?.verification==='missing_values_preflight_completed')
+                  // Source inspection has a known activity effect, but no
+                  // target gesture was applied. Preserve that effect and use
+                  // the existing verified-refusal path instead of stranding
+                  // a clean operation behind the uncertainty gate.
+                  error.nodePhaseRefusal=structuredClone(preflight.target_refusal);
+              }
               throw error;
             }
             return {verified:true,cleanup_complete:!operation.targetPhase?.pending,

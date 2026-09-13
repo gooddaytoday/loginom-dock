@@ -4,9 +4,9 @@ from decimal import Decimal,ROUND_HALF_UP
 from pathlib import Path
 from destinations import render_goal,storage_segments
 WORK=Path(__file__).parent
-VERSION='2026.09.13-node14-test4.1-candidate'
+VERSION='2026.09.13-node14-test4.2-candidate'
 MANIFEST_URI='viking://resources/loginom-dock/catalogs/executor-preview/releases/'+VERSION+'/manifest.json'
-PIN='a9db4113ac69d38d7227e971ece3652acf3e1bf836723e6e577917eda916406f'
+PIN='0f835b823b54e2eefc3fd720fbfdf73606bcab70e9f9a805487efa6399a97b18'
 FILES=['core.csv','precision.csv','skew.csv','boundary.csv','one-in-120.csv','all-null.csv','empty.csv','changed.csv']
 SCHEMA=[dict(name=n,label=n,type='real' if n=='Amount' else 'string' if n=='Note' else 'integer',data_kind='Непрерывный' if n in ('Amount','Count') else 'Дискретный') for n in ('Id','Amount','Count','Note','Untouched')]
 # Every label survives in the saved package. The main/source-change intermediate

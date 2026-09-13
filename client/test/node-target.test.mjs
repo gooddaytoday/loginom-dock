@@ -118,3 +118,11 @@ test('Union lost Input_Add or connection reply cannot create a duplicate on retr
   assert.equal(f.calls.filter(x=>x==='add_input').length,1);assert.equal(f.graph.links.length,3);
  }
 });
+
+for(const lost of [false,true])test('pre-dispatch refusal cannot clear '+(lost?'lost post-refusal observation':'changed graph'),async()=>{
+ const f=fixture();let refused=false;const observe=f.adapter.observe;
+ f.adapter.observe=async()=>{if(refused&&lost)throw Error('observation lost');return observe();};
+ f.adapter.mutate=async()=>{refused=true;if(!lost)f.graph.nodes[0].label='changed';return {status:'NOT_APPLIED',effect_possible:false,cleanup_complete:true};};
+ const r=await f.run();assert.equal(r.status,'AMBIGUOUS');assert.equal(r.cleanup_complete,false);assert.ok(r.pending);
+ assert.equal(f.operation.targetPhase.refusals?.length??0,0);
+});
