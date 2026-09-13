@@ -7546,3 +7546,14 @@ recovery, блокирующем native-save. Full pre-audit FAIL,12-result reop
 в /test-4 проверены. Focused123 PASS; клиент1444 PASS/1 SKIP; Python12 PASS.
 [Отчёт, pins и ограничения полного аудитора](missing-values-target-recovery-2026-09-13.md).
 Архив test4.2 подготовлен, stage/Hermes не запускались. Полный goal не принят.
+
+
+## Узел 14: terminal refusal verifier — 2026-09-13
+
+Source `83dc0db5` добавил строгий учёт доказанного терминального отказа размещения
+с сохранением всех событий и user-v1 вызовов. Реальная операторская цепочка:
+2 успеха + 1 доказанный отказ, native save; компонентный аудит PASS. Python 523 PASS,
+клиент 1445 PASS / 1 SKIP, final focused 6/6. Старый автономный FAIL и 13 receipts
+сохранены. Полная цель 27/9/12 и независимый reopen остаются обязательными.
+[Отчёт и свежий пакет кандидата](missing-values-terminal-refusal-verifier-2026-09-13.md).
+Test4.2 не staged; Hermes, review, push и deployment не запускались.

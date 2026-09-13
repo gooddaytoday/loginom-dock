@@ -149,3 +149,15 @@ Production/harness pins сохранены; новый прогон и испр�
 и13 receipts не изменены. [Полный отчёт и следующий candidate packet](../../loginom-dock/missing-values-target-recovery-2026-09-13.md).
 Candidate test4.2 не staged; строгий полный аудитор пока не принимает отказанные
 prepared-запросы без node_checkpoint. Новый Hermes только по отдельному назначению.
+
+
+### Terminal refusal verifier — 2026-09-13
+
+Source `83dc0db5`: полный аудитор теперь учитывает дополнительно к ровно 27 успехам
+только доказанные терминальные отказы размещения с успешным семантически тем же
+запросом под новым ID. События и публичные вызовы не удаляются; 9 импортов,
+12 результатов, native save и независимый reopen обязательны. Компонентный live
+аудит PASS; это не полная автономная приёмка. Старый FAIL сохранён.
+[Отчёт, проверки и pins](../../loginom-dock/missing-values-terminal-refusal-verifier-2026-09-13.md).
+Свежий packet test4.2 проверен из source commit; сборка/stage и новый Hermes
+ожидают отдельного назначения координатора.
