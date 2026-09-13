@@ -12,7 +12,9 @@ const bridge = { server: { async connect() {} }, async close() {
     clipboard_leases_retained: scenario === 'success' ? 0 : 1 };
 } };
 mock.module(new URL('../../lib/config.mjs', import.meta.url).href, { namedExports: { loadConfig: async () => ({}) } });
-mock.module(new URL('../../lib/session.mjs', import.meta.url).href, { namedExports: { createSession: async () => ({}) } });
+mock.module(new URL('../../lib/session.mjs', import.meta.url).href, { namedExports: { createSession: async () => ({
+  directory: '/unit-session', metadata: {sessionId:'shutdown-fixture',clientRevision:'fixture'},
+}) } });
 mock.module(new URL('../../lib/bridge.mjs', import.meta.url).href, { namedExports: { createBridge: async () => bridge } });
 process.argv = [process.execPath, new URL('../../bin/loginom-dock.mjs', import.meta.url).pathname];
 process.on('message', () => { process.send({ kind: 'state', calls }); });

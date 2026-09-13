@@ -32,6 +32,8 @@ test('MCP application refusals remain typed normal content and the same connecti
       const code = request.arguments.code;
       const output = code.includes('async function prepareWorkspace(')
         ? { status: 'READY', target: compatibility, authenticated: true, created_draft: true, effect_possible: true, document_id: 'fixture-document', target_verified: true, package_ref: {path:null,persisted:false}, workflow_ref: { tab_tid: page.tabTid, prefix: page.prefix, workflow_id: 'fixture-workflow', navigation_path: [] } }
+        : code.includes('async function observeGeometry(')
+        ? { version:1, source:'prepare_same_browser_page', observed:{document_id:'fixture-document'}, fixture:true }
         : await page.execute(code);
       return { content: [{ type: 'text', text: JSON.stringify(output) }] };
     }
@@ -106,6 +108,7 @@ test('MCP application refusals remain typed normal content and the same connecti
     assert.notEqual(prepared.isError, true);
     const metadata = JSON.parse(prepared.content[0].text);
     assert.equal(metadata.prepared, true);
+    assert.equal(metadata.workspace.browser_geometry.source,'prepare_same_browser_page');
     assert.deepEqual(metadata.input_artifacts,[admitted]);
     assert.equal(JSON.stringify(metadata.input_artifacts).includes(sourcePath),false);
     assert.deepEqual(metadata.executor.available_actions, ['node.add', 'link.create', 'package.save_as', 'node.configure_text_import', 'package.save_checkpoint']);

@@ -15,6 +15,7 @@ import { createActionRuntime, parseCapabilityResult } from './executor.mjs';
 import {createCandidateNodeSupport} from './node-support.mjs';
 import {isNodeApiTool,dispatchNodeApi} from './node-api.mjs';
 import { makeWorkspacePrepareCode, parseWorkspacePreparation, prepareWorkspaceSession, requirePreparedWorkspace, workspaceObserveTool } from './workspace.mjs';
+import { makeBrowserGeometryCode, parseBrowserGeometry } from './browser-geometry.mjs';
 import { createExecutionJournal } from './execution-journal.mjs';
 import { createRecoveryContext } from './recovery-context.mjs';
 import { outcomeVerification } from './outcome-verification.mjs';
@@ -201,7 +202,18 @@ export async function createBridge(config, session) {
                 if (!config.loginomUrl) throw new Error('Workspace preparation requires the configured Loginom URL');
                 const code = makeWorkspacePrepareCode({ ...workspaceOptions, recoverOnly });
                 const response = await browser.callTool({ name: 'browser_run_code_unsafe', arguments: { code } }, undefined, { timeout: 125000 });
-                return parseWorkspacePreparation(response);
+                const state = parseWorkspacePreparation(response);
+                if (state.status === 'READY') {
+                  const geometry = await browser.callTool({ name: 'browser_run_code_unsafe', arguments: {
+                    code: makeBrowserGeometryCode({ session_id: session.metadata.sessionId,
+                      operation_id: state.operation_id, document_id: state.document_id,
+                      runtime_revision: session.metadata.clientRevision,
+                      manifest_sha256: session.metadata.actionManifestDigest,
+                      workflow_ref: state.workflow_ref }),
+                  } }, undefined, { timeout: 15000 });
+                  state.browser_geometry = parseBrowserGeometry(geometry);
+                }
+                return state;
               },
               assertTarget: target => assertCatalogTarget(pinnedActions, target), record: recordExecution,
               save: () => session.save(catalog),
