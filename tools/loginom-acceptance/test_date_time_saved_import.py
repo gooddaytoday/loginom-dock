@@ -9,6 +9,29 @@ ROOT = Path(__file__).resolve().parents[2]
 
 
 class SavedImportProtocol(unittest.TestCase):
+    def test_storage_render_retry_discards_only_stale_reads(self):
+        script = """import assert from 'node:assert/strict';
+        import {downloadSavedSource} from './tools/loginom-acceptance/date-time-saved-source.mjs';
+        for(const message of ['Workspace changed between observation pages; begin a new observation.','permission denied']){
+          let calls=0,actions=0;
+          const state={observation_id:'fresh',workflow_ref:{prefix:'F'},ui:{elements:[
+            {tid:'F;FileStorageForm;table',ref:'table'},
+            {tid:'F;NavigationBar;NavigationPanel',ref:'bar'}],dialogs:[],masks:[]}};
+          const ctx={rawRuntime:{observe:async options=>{
+            calls++;
+            if(calls===3)throw Error(message);
+            if(calls===5)return {status:'SUCCEEDED',output:{...state,file_storage:{status:'observed',directory:'/foreign'}}};
+            return {status:'SUCCEEDED',output:state};
+          },uiAct:async()=>{actions++;throw Error('Unexpected navigation');}}};
+          await assert.rejects(downloadSavedSource(ctx,{operationId:'test',sourcePath:'/test-3/existing.csv',bytes:1,sha256:'a'.repeat(64)}),
+            {message:message.startsWith('Workspace changed')?'Files root unavailable':'permission denied'});
+          assert.equal(calls,message.startsWith('Workspace changed')?5:3);
+          assert.equal(actions,0);
+        }
+        """
+        subprocess.run([str(Path.home()/'.loginom-dock/current/runtime/node'), '--input-type=module', '-e', script],
+                       cwd=ROOT, check=True, capture_output=True, text=True)
+
     def test_expectation_v2_changes_only_excluded_label(self):
         old = ROOT/'docs/loginom-dock/node13-live-preflight/frozen-v1'
         new = ROOT/'docs/loginom-dock/node13-live-preflight/frozen-v2'

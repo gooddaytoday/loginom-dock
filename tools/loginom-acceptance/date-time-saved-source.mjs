@@ -23,8 +23,15 @@ export async function downloadSavedSource(ctx,{operationId,sourcePath,bytes,sha2
  };
  const current=async()=>{
   const deadline=Date.now()+15000;
-  while(Date.now()<deadline){const r=await roots(),bars=r.ui.elements.filter(e=>e.tid===r.workflow_ref?.prefix+';NavigationBar;NavigationPanel');
-   if(bars.length===1){const s=await detail(r,bars[0]);if(s.file_storage?.status==='observed'&&!s.ui.dialogs.length&&!s.ui.masks.length)return s;}
+  while(Date.now()<deadline){
+   try {
+    const r=await roots(),bars=r.ui.elements.filter(e=>e.tid===r.workflow_ref?.prefix+';NavigationBar;NavigationPanel');
+    if(bars.length===1){const s=await detail(r,bars[0]);if(s.file_storage?.status==='observed'&&!s.ui.dialogs.length&&!s.ui.masks.length)return s;}
+   } catch(error) {
+    // Storage can still render after navigation. Discard the stale observation;
+    // only retry reads with new roots, never repeat the navigation gesture.
+    if(!/^Workspace changed between observation pages;/.test(error.message))throw error;
+   }
   }throw Error('Source directory unavailable');
  };
  const row=async filename=>{

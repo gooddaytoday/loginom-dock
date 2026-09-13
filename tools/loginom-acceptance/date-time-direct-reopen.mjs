@@ -4,6 +4,7 @@ import path from 'node:path';
 import {createHash} from 'node:crypto';
 import {createNodeTargetBrowserAdapter} from '../../client/lib/node-target-browser.mjs';
 import {inspectAndExecuteSavedImport} from './date-time-saved-import.mjs';
+import {readDiagnosticEvents} from './date-time-event-reference.mjs';
 import {assertReadOnlyWizardAction} from './date-time-reopen-policy.mjs';
 async function diagnosticFiles(ctx){
  const names=(await ctx.fs.readdir(ctx.dir)).filter(name=>/^browser-\d+\.json$/.test(name)||['execution-events.jsonl','public-api.jsonl'].includes(name));
@@ -23,7 +24,7 @@ export async function reopenDateTimeAcceptance(ctx,runDirectory){
  if(request.goal_id!=='date-time-sales'||request.package_path!==packagePath||request.run_id!==path.basename(dir)
    ||request.runtime_source_pin.client_revision!==ctx.session.metadata.clientRevision||evidence.export_complete!==true)throw Error('Run identity differs');
  const labels=['Продажи','Календарь','Месяцы','Кварталы','Нет продаж','Пустой календарь'];
- const events=evidence.events,planned=new Map(),final=new Map();
+ const events=await readDiagnosticEvents(evidence),planned=new Map(),final=new Map();
  for(const e of events){if(e.phase==='node_apply_prepared')planned.set(e.operation_id,e.request);
   if(e.phase==='node_checkpoint'&&e.result.status==='SUCCEEDED'){
    const r=planned.get(e.operation_id);if(!r)throw Error('Missing original request');

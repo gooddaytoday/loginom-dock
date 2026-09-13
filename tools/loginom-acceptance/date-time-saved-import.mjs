@@ -2,6 +2,7 @@
 import {createHash} from 'node:crypto';
 import {createNodeProcedure} from '../../client/lib/node-procedure.mjs';
 import {withBrowserReceipt} from '../../client/lib/executor.mjs';
+import {selectPreparedGraphNode} from '../../client/lib/node-graph-selection.mjs';
 import {openPreparedWizard} from '../../client/lib/node-wizard-open.mjs';
 import {closePreparedWizard} from '../../client/lib/node-wizard-close.mjs';
 import {readImportDefinitionPages,readOutputDefinitionPages} from '../../client/lib/import-definition-pages.mjs';
@@ -33,6 +34,7 @@ export async function inspectAndExecuteSavedImport(ctx,{operationId,node,origina
   wrapMutation:(code,r)=>withBrowserReceipt('('+code+')(page)',{receipt_namespace:'node13-diagnostic:'+ctx.session.metadata.sessionId,
    receipt_id:r.id,receipt_signature:r.signature,operation_id:r.id})});
  await ctx.record({phase:'diagnostic_import_prepared',operation_id:operationId,request,protocol_revision:2,original_node:originalCheckpoint.node});
+ await selectPreparedGraphNode(channel,await channel.observe({condition:'saved import graph before inspection',ready:s=>s.prepared_node_context?.surface==='graph'}),'select saved import for inspection');
  await openPreparedWizard(channel);
  try {
   const source=await channel.observe({condition:'saved import source values',ready:s=>s.wizard?.stage==='text_import_file'&&s.wizard.import_source?.status==='draft_ui_values'});
