@@ -170,3 +170,13 @@ Source `83dc0db5`: полный аудитор теперь учитывает �
 READY test-4 и8/8 startup CSV. Исходный полный goal сохранён. Подготовлен
 отдельный pinned launch plan одного Hermes; запуск только после выдачи слота.
 Candidate test4.2 staged координатором, не activated. Старый FAIL неизменён.
+
+
+### Автономный candidate2 — FAIL, 2026-09-13
+
+[Run20260913-132939-0384fe0b](../../loginom-dock/missing-values-autonomous-acceptance-3-2026-09-13.md)
+использовал выделенный слот: Sol/low25 API calls,5 успешных импортов.
+import-allnull остановился AMBIGUOUS/configure на подтверждении preview после
+NULL; inspect оставил pending без recovery. Полный аудит FAIL,12 результатов
+и save/reopen отсутствуют. Source/goal/harness и предыдущие FAIL сохранены.
+Дальнейшая диагностика/повтор требуют отдельного назначения; процессов нет.

@@ -7567,3 +7567,14 @@ Source83dc0db5/runtime bdddbd1b, inventory156/395/252 неизменны. Реа
 [Отчёт и pins](missing-values-candidate2-preflight-2026-09-13.md).
 Готов к одному полному Hermes; слот не выдан. Goal27/9/12/save/reopen и старый
 FAIL13/13 сохранены. Candidate staged координатором, activate=false.
+
+
+## Узел 14: автономный candidate2 — FAIL, 2026-09-13
+
+Один разрешённый run20260913-132939-0384fe0b завершился с process exit0,
+но независимый полный аудит FAIL: 5/27 успехов,5/9 импортов,0 Missing Values,
+без save/reopen. import-allnull остался AMBIGUOUS/configure после ввода NULL
+(WIZARD_FIELD_NOT_CONFIRMED), inspect pending без recovery. Actual Sol/low,
+25 API calls; полный export31/31/3396 сохранён, собственные процессы завершены.
+[Отчёт и pins](missing-values-autonomous-acceptance-3-2026-09-13.md).
+Старый FAIL13/13 и source/harness/goal сохранены. Второй прогон не запускался.
