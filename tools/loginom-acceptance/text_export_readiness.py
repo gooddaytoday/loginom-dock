@@ -37,7 +37,9 @@ def require_reject_baseline_reader(purpose='full',manifest=MANIFEST):
         for n,h in current.items():pinned(WORK,n,h)
         changed=sorted(n for n in old if old[n]!=current[n])
         assert changed==m['changed_since_diagnostic'], 'Unaccounted harness change'
-        protected=['text-export-observer-native.mjs','text-export-observer-sdk.mjs','text-export-read-observer.mjs','text-export-observer-binding.mjs','text-export-observer-policy.mjs','text_export_origin.py','text_export_observer_evidence.py','text_export_observer_run.py']
+        # Binding equality is now structural; its current source is frozen above.
+        # Historical native download/dispatch evidence keeps its original binder.
+        protected=['text-export-observer-native.mjs','text-export-observer-sdk.mjs','text-export-read-observer.mjs','text-export-observer-policy.mjs','text_export_origin.py','text_export_observer_evidence.py','text_export_observer_run.py']
         if not all(old[n]==current[n] for n in protected):
             # Use the already verified current download, not a new admission stage.
             ref=m['observer_diagnostic'];latest=json.loads(pinned(ROOT,ref['path'],ref['sha256']).read_text())

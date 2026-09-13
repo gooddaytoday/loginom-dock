@@ -30,3 +30,18 @@ test('unknown gestures never enter the native builder allowlist',()=>{const f=sy
 test('lower-level SDK request cannot bypass the observer allowlist',async t=>{const r=await run(t,{illegalCallAt:3,illegalDirect:true});assert.equal(r.illegalBlocked,true);assert.equal(r.dispatched,0);assert.equal(r.hook.violated,true);});
 
 test('issued compact workflow ref stays unchanged on the wire and binds full journal identity',async t=>{const r=await run(t,{compactWorkflow:true});assert.equal(r.error,null);assert.equal(r.dispatched,1);});
+
+// MCP JSON field order is not part of document/workflow/node identity.
+test('binding accepts reordered JSON keys but refuses changed or extra identity fields',()=>{
+ const f=syntheticBinding();
+ const reorder=value=>Array.isArray(value)?value.map(reorder):value&&typeof value==='object'?Object.fromEntries(Object.entries(value).reverse().map(([k,v])=>[k,reorder(v)])):value;
+ const original=bindObserver({...f,overallDeadline:1000});
+ const ordered={...f,request:reorder(f.request)};
+ assert.deepEqual(bindObserver({...ordered,overallDeadline:1000}),original);
+ const journal=f.journal.trim().split('\n').map(JSON.parse).map(reorder).map(JSON.stringify).join('\n')+'\n';
+ assert.deepEqual(bindObserver({...ordered,journal,overallDeadline:1000}).identity,original.identity);
+ for(const key of ['document_id','workflow_id','node_id','extra']){
+  const changed=structuredClone(ordered);changed.request.params.arguments.target.ref[key]='foreign';
+  assert.throws(()=>bindObserver({...changed,overallDeadline:1000}));
+ }
+});

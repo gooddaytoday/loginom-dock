@@ -46,7 +46,8 @@ async function setup(){
  need(bytes.equals(golden)&&bytes.length===124&&hash(bytes)===f.sha256,'Native baseline differs from frozen CSV');
  const rejectRequest={...base,operation_id:'smoke-reject',target:{kind:'existing',type:'exports.text',ref:baseline.node},parameters};
  const rejected=await node(rejectRequest);need(rejected.status==='FAILED'&&rejected.cleanup_complete===true,'Reject not terminal/clean');
- replaceRequest={...rejectRequest,operation_id:'smoke-replace',parameters:{...parameters,overwrite:'replace'}};
+ // Exercise actual MCP key reordering observed in the full autonomous run.
+ replaceRequest={...rejectRequest,operation_id:'smoke-replace',target:{...rejectRequest.target,ref:{document_id:baseline.node.document_id,node_id:baseline.node.node_id,workflow_id:baseline.node.workflow_id}},parameters:{...parameters,overwrite:'replace'}};
  await save('replace-body.json',replaceRequest);await stage('baseline_reject_ready',{baseline_bytes:bytes.length,baseline_sha256:hash(bytes),session_id:session.metadata.sessionId});
 }
 async function smoke(){

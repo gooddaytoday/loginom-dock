@@ -1,5 +1,6 @@
 import {createHash} from 'node:crypto';
-import {need,same} from './text-export-observer-policy.mjs';
+import {need} from './text-export-observer-policy.mjs';
+import {isDeepStrictEqual as same} from 'node:util';
 const sha=s=>createHash('sha256').update(s).digest('hex');
 const one=xs=>{need(xs.length===1,'Unique observer ledger anchor required');return xs[0];};
 // Reads only actual execution journal entries; no cached settings are evidence.
