@@ -5,17 +5,20 @@ export function wizardCloseBinding(state) {
  const w=state.wizard,n=state.prepared_node_context;
  const input=n?.input_port?.direction==='input'&&Number.isInteger(n.input_port.port)&&n.input_port.port>=0&&n.input_port.port<100&&Number.isInteger(n.input_port.native_index)&&n.input_port.native_index>=0
   &&typeof n.input_port.port_guid==='string'&&n.input_port.port_guid.length>0&&typeof n.input_port.opening_operation_id==='string'&&n.input_port.opening_operation_id.length>0&&w?.stage==='input_mapping';
- requireValue(w?.status==='observed' && (w.owner_context?.status==='observed'||input)
+ const output=n?.output_port?.direction==='output'&&Number.isInteger(n.output_port.port)&&n.output_port.port>=0&&n.output_port.port<100&&Number.isInteger(n.output_port.native_index)&&n.output_port.native_index>=0
+  &&typeof n.output_port.port_guid==='string'&&n.output_port.port_guid.length>0&&typeof n.output_port.opening_operation_id==='string'&&n.output_port.opening_operation_id.length>0
+  &&w?.stage==='output_mapping'&&w.port_context?.status==='observed'&&w.port_context.kind==='output_data'&&w.port_context.node?.ref&&w.port_context.port?.ref;
+ requireValue(w?.status==='observed' && (w.owner_context?.status==='observed'||input||output)
   && n?.verified===true && n.surface==='wizard','A prepared wizard is required for cancellation');
  return {kind:'close',root_ref:w.root_ref,root_tid:w.root_tid,stage:w.stage,
-  owner:structuredClone(input?{input_port:n.input_port}:w.owner_context),node:{document_id:n.document_id,workflow_id:n.workflow_id,node_id:n.node_id}};
+  owner:structuredClone(input?{input_port:n.input_port}:output?{output_port:n.output_port,port_context:w.port_context}:w.owner_context),node:{document_id:n.document_id,workflow_id:n.workflow_id,node_id:n.node_id}};
 }
 
 export function wizardCloseDialogOwner(state,binding) {
  if(binding?.kind!=='close')return false;
  const w=state.wizard,n=state.prepared_node_context,ui=state.ui;
  if(w?.status!=='observed'||w.root_ref!==binding.root_ref||w.root_tid!==binding.root_tid
-  ||w.stage!==binding.stage||!same(binding.owner?.input_port?{input_port:n?.input_port}:w.owner_context,binding.owner)||n?.verified!==true
+  ||w.stage!==binding.stage||!same(binding.owner?.input_port?{input_port:n?.input_port}:binding.owner?.output_port?{output_port:n?.output_port,port_context:w.port_context}:w.owner_context,binding.owner)||n?.verified!==true
   ||!['document_id','workflow_id','node_id'].every(k=>n[k]===binding.node?.[k]))return false;
  if(!Array.isArray(ui?.dialogs)||ui.dialogs.length!==1||!Array.isArray(ui.masks)
   ||ui.masks.some(m=>m.kind!=='modal_background'||m.ref!==binding.root_ref))return false;

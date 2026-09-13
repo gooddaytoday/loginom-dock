@@ -2132,6 +2132,26 @@ test('date/time exposes untagged native checkbox images only for the exact cache
  }
 });
 
+test('date orphan delete cells require the date wizard, exact cached row and an unbound optional output',async()=>{
+ for(const mode of ['valid','linked','required','record_changed','other_wizard']){
+  const page=new Page(),base='MF;TF-1;WizrdMCF;DerivedDataSourceMappingEngineOutputPortWizard;';
+  page.context.innerWidth=1000;page.context.innerHeight=800;
+  const form=page.add('div','MF;TF-1;WizrdMCF','',{x:10,y:80,width:900,height:600});
+  if(mode!=='other_wizard'){const date=page.add('div','MF;TF-1;WizrdMCF;DateReformWizard','',{x:10,y:80,width:900,height:500},form);date.style.display='none';}
+  const root=page.add('div',base.slice(0,-1),'',{x:20,y:90,width:850,height:500},form);
+  page.add('button',base+'btnAddMappingColumn','',{x:30,y:90,width:20,height:20},root);
+  const grid=page.add('div',base+'grdTargetColumns;tbl','',{x:30,y:100,width:800,height:400},root);grid.attrs.id='orphan-grid';grid.id='orphan-grid';
+  const row=page.add('table',null,'',{x:35,y:120,width:700,height:30},grid);Object.assign(row.attrs,{class:'x-grid-item','data-recordindex':'0','data-recordid':mode==='record_changed'?'other':'r0','data-boundview':'orphan-grid'});
+  const cell=page.add('td',base+'colTargetDelete_RenamedYear','',{x:650,y:120,width:30,height:30},row);
+  const icon=page.add('img',null,'',{x:655,y:125,width:16,height:16},cell);icon.attrs.role='button';icon.attrs.class='x-action-col-icon';
+  const record={isModel:true,internalId:'r0',data:{Name:'RenamedYear',Required:mode==='required',ConnectedRecord:mode==='linked'?{}:null}};
+  page.context.Ext={getCmp:id=>id==='orphan-grid'?{el:{dom:grid},getStore:()=>({$className:'Ext.data.Store',isLoading:()=>false,getData:()=>({items:[record]})})}:undefined};
+  const state=await page.observe(),cells=state.ui.elements.filter(e=>e.date_time_cell?.role==='output_delete');
+  assert.equal(cells.length,mode==='valid'?1:0,mode+JSON.stringify({wizard:state.wizard,elements:state.ui.elements.map(e=>({tid:e.tid,date:e.date_time_cell}))}));
+  if(mode==='valid'){assert.equal(cells[0].date_time_cell.record_id,'r0');assert.ok(cells[0].allowed_actions.includes('click'));}
+ }
+});
+
 function groupingFixture() {
   const page=new Page(),base='MF;TF-1;WizrdMCF;GroupDataWizard;';
   page.context.innerWidth=1000;page.context.innerHeight=800;
@@ -4618,4 +4638,26 @@ test('compact filter observation retains visible final rows ahead of clipped sav
  const target=observed.ui.elements.find(e=>e.tid===base+';colDelete_Id-99');
  assert.ok(target);assert.ok(target.allowed_actions.includes('click'));assert.equal(target.filter_cell.record_id,'r99');
  assert.ok(observed.ui.elements.length<=240);
+});
+
+test('output-port Close returns through the port breadcrumb path after exactly one confirmation',async()=>{
+ for(const mode of ['valid','wrong_workflow','wrong_node','still_open','missing_context']) {
+  const {page}=outputPortFinishFixture(mode);
+  const dialog=page.add('div',null,'',{x:400,y:200,width:400,height:150});dialog.attrs.class='x-window';
+  page.add('h1',null,'Подтвердить',undefined,dialog).attrs.role='heading';
+  page.add('span',null,'Вы действительно хотите закрыть мастер настройки?',undefined,dialog);
+  page.add('button','msgbox;tlb;yes','Да',{x:600,y:300,width:50,height:30},dialog);
+  page.add('button','msgbox;tlb;no','Нет',{x:670,y:300,width:50,height:30},dialog);
+  const binding={node:{node_id:'node'},workflow_ref:{prefix:'MF;TF-1',navigation_path:[]}};
+  const execute=options=>vm.runInContext('('+workspaceUiCapability.toString()+')',page.context)(page,
+   {expected_build:build,expected_origin:origin,prepared_node_context:binding,...options},async()=>({verified:true,surface:'wizard',output_port:{direction:'output',port:0,native_index:0,port_guid:'out',opening_operation_id:'open'}}));
+  const snapshot=(await execute({mode:'observe'})).output;
+  const button=snapshot.ui.elements.find(e=>e.allowed_actions.includes('confirm_wizard_close'));
+  if(mode==='missing_context'){assert.equal(button,undefined);continue;}
+  assert.ok(button,mode);
+  const click=page.mouse.click;page.mouse.click=async(...args)=>{await click(...args);dialog.remove();};
+  const result=await execute({mode:'act',operation_id:'output-close',action:{verb:'confirm_wizard_close',ref:button.ref},snapshot});
+  assert.equal(result.status,mode==='valid'?'SUCCEEDED':'AMBIGUOUS',mode+JSON.stringify(result.error));
+  assert.equal(page.events.filter(e=>e==='click').length,1);
+ }
 });

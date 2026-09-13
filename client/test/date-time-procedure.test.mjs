@@ -41,3 +41,15 @@ test('empty parameters preserve every matrix; explicit empty transformations rem
  const f=fixture(),before=structuredClone(f.matrices);await configureDateTime(f.channel,{}, {inputMapping:f.inputMapping});assert.deepEqual(f.matrices,before);
  await configureDateTime(f.channel,{fields:[{field:{kind:'input_field',name:'B'},transformations:[]}]},{inputMapping:f.inputMapping});assert.equal(f.matrices.B[0].string,false);assert.deepEqual(f.matrices.A,before.A);
 });
+test('removal preflight sees every original matrix before any flag changes',async()=>{
+ const f=fixture(),before=structuredClone(f.matrices);let called=0;
+ await configureDateTime(f.channel,{fields:[{field:{kind:'input_field',name:'B'},transformations:[]}]},{inputMapping:f.inputMapping,
+  beforeChanges:original=>{called++;assert.deepEqual(Object.fromEntries(original.field_matrices.map(x=>[x.name,x.matrix])),before);assert.deepEqual(f.matrices,before);}});
+ assert.equal(called,1);assert.equal(f.matrices.B[0].string,false);
+});
+test('refused removal ownership leaves every native flag unchanged',async()=>{
+ const f=fixture(),before=structuredClone(f.matrices);
+ await assert.rejects(configureDateTime(f.channel,{fields:[{field:{kind:'input_field',name:'B'},transformations:[]}]},{inputMapping:f.inputMapping,
+  beforeChanges:()=>{throw Error('unowned original output');}}),/unowned original output/);
+ assert.deepEqual(f.matrices,before);
+});

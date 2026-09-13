@@ -1,6 +1,7 @@
 import {DATE_TIME_OPERATIONS} from './date-time-parameters.mjs';
 import {ensureGroupingOutputSources} from './grouping-output-sources.mjs';
 import {configureOutputFields,configureOutputAutosync,reorderOutputFields} from './port-mapping-procedure.mjs';
+import {removeDateTimeOrphans} from './date-time-removal.mjs';
 const need=(v,m)=>{if(!v)throw Error('Date/time output: '+m);};
 const escape=s=>s.replace(/[.*+?^${}()|[\]\\]/g,'\\$&');
 export function resolveDateTimeOutput(c,p,native,mapping={}){
@@ -25,9 +26,11 @@ export function resolveDateTimeOutput(c,p,native,mapping={}){
  });}
  need(new Set(ordered.map(f=>f.name.toLowerCase())).size===ordered.length,'duplicate output names');return ordered;
 }
-export async function configureDateTimeOutput(channel,c,p,mapping={}){
+export async function configureDateTimeOutput(channel,c,p,mapping={},options={}){
  const ready=s=>s.wizard?.stage==='output_mapping'&&s.node_mapping?.verified===true;
  let initial=await channel.observe({condition:'date/time output mapping',readMappings:true,ready});initial=await ensureGroupingOutputSources(channel,initial);
+ const originalAutosync=initial.node_mapping.autosync;
+ const removal=await removeDateTimeOrphans(channel,initial,options.removed??[]);initial=removal.state;
  const planned=resolveDateTimeOutput(c,p,initial.node_mapping,mapping),changes=[];
  if(p.fields!==undefined||mapping.fields){
   changes.push(await configureOutputFields(channel,{direction:'output',port:0,fields:planned.map(f=>({source:{kind:'configured_field',name:f.source.name},name:f.name,label:f.excluded?f.source.label:f.label,excluded:f.excluded}))},initial.node_mapping.source_fields.map(f=>({...f,used:true}))));
@@ -38,11 +41,12 @@ export async function configureDateTimeOutput(channel,c,p,mapping={}){
  // Native autosync appends passthrough fields after generated fields on the
  // next node validation. An explicit layout must therefore disable it.
  if(mapping.fields||mapping.autosync!==undefined)changes.push(await configureOutputAutosync(channel,mapping.autosync??false));
+ else if(removal.receipts.length)changes.push(await configureOutputAutosync(channel,originalAutosync));
  const final=(await channel.observe({condition:'date/time final output mapping',readMappings:true,ready})).node_mapping;
  // Excluded records are service records, not output columns. Loginom gives
  // them the source name as label; compare the retained source label instead.
  const project=f=>({name:f.name,label:f.excluded?f.source.label:f.label,type:f.source.type,excluded:f.excluded,source:f.source.name});
  const actual=final.target_fields.map(f=>({...f,source:f.source??f.exclusion_source}));
  need(JSON.stringify(actual.map(project))===JSON.stringify([...planned.filter(f=>!f.excluded),...planned.filter(f=>f.excluded)].map(project)),'final output differs');
- return {verified:true,cleanup_complete:true,effect_possible:changes.length>0,native_mapping:final,changes};
+ return {verified:true,cleanup_complete:true,effect_possible:changes.length>0||removal.receipts.length>0,native_mapping:final,changes,removed:removal.receipts};
 }

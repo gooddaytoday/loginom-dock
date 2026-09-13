@@ -1,8 +1,23 @@
 # Узел 13: checkpoint разработки
 
-Статус на 2026-09-12: **implementation in progress**, готовность к автономной
-приёмке не подтверждена. Новый поток `codex/node-13-date-time` от `a3b419b`;
-старый parallel-date-time остаётся историческим. Hermes не запускался.
+## Текущее состояние — 13 сентября 2026
+
+**Development и прямые проверки завершены; готов к отдельному ревью.**
+Ветка `codex/node-13-date-time`. [Итоговый отчёт](node-13-development-report.md)
+содержит актуальные результаты и ограничения. Ревью/Hermes/публикация не запускались.
+Последний source runtime `dd0979bf175bd4164ab0d0647daecd69782b1c8ab0d10b2e690d313b9704b6d0`.
+Последний сохранённый baseline `/test-3/N13-f7cf52c5.lgp`; fresh session
+`6e3aa7ff-33ff-4fd6-893e-2cffdb0ee11a` выполнила его отдельную копию: public
+SUCCEEDED, **0×7**, raw/config/values audit PASS, 9/9 negatives, strict persistence
+PASS с input/output autosync=false. Все собственные live-сессии закрыты, exit0.
+Клиент 1415 PASS / 1 SKIP, Python 511 PASS. Чужие `.gitignore`/`AGENTS.md` сохранены отдельно.
+Следующее действие — только новый dispatch review; Hermes выдаёт координатор.
+
+## История разработки
+
+Ниже сохранены последовательные наблюдения, неудачные попытки и старые точки
+возобновления. Указания «выполняется», номера PTY и незавершённые проверки ниже
+относятся к моменту записи; текущее состояние приведено выше.
 
 ## Изоляция и источники
 
@@ -265,3 +280,326 @@ execute прошёл, полный read продолжается. Полный �
 Для пустого входа аудитор дополнен явным fixture=empty; стандартная fixture
 boundaries остаётся неизменной. Новые приватные сценарии empty-fixture и
 empty-date-new пока только подготовлены, не запускались.
+
+В a52fd065 node13-execute-24 завершился публичным SUCCEEDED, все 15 форматов
+восстановлены, возврат в сценарий подтверждён. Independent configuration/raw
+output/values audit PASS (4×27); date_time_persistence.py fcccbde6→a52fd065 PASS:
+реальное save/reopen/execute сохранило матрицы, имена, метки, типы, включение
+и порядок полей, autosync=false. Это прямая source-диагностика, не Hermes.
+Начата пустая fixture node13-empty-fixture в той же собственной копии; далее
+empty-date-new, small-remove, small-add-reorder, small-close, small-preserve,
+wrong-type и occupied-upstream. Скрипты подготовлены в .dock, ещё не проверены.
+
+Отрицательные проверки node13-execute-24 в a52fd065: **8/8 PASS**;
+лог .dock/layout-negative.log, базовые audit/persistence PASS сохранены в сессии.
+
+В a52fd065 публичный node13-empty-fixture SUCCEEDED (0/4 строк), затем
+публичный node13-empty-new SUCCEEDED: новый Пустой календарь, две даты с метками
+Дата, year(DateA) и month_end(DateB), точный выход **0×6**. Independent
+configuration/raw_output/values audit с --fixture empty: PASS. Начат small-remove.
+
+Пустой прогон прошёл 9/9 отрицательных проверок. При node13-small-remove
+выявлен дефект удаления: флаг DateA year снят, в inline mapping остаётся
+переименованный SmallYear без source. Публичный результат AMBIGUOUS/configure,
+output source missing. Native UI подтвердил orphan и штатное удаление его
+colTargetDelete; ручная проба удалила только эту запись. Черновик закрыт без
+применения, новое открытие показало исходные Count=1/1. Это не успех node.apply.
+
+Исследование cached FWizardItems подтвердило: до изменения флагов source/target
+stores выходной страницы пусты даже после Next→Done→Prev; скрытый cache не
+даёт исходной связи. Исправление добавляет адресный preconfiguration-read
+выходного порта только для существующего узла с fields: читает исходную биекцию,
+закрывает порт через Close без применения; затем обычная настройка. Перед
+переключением флагов план удаления связывает старую матрицу с native source и
+устойчивым target field_id; удаляются лишь соответствующие orphan в inline
+странице, остальные записи/источники проверяются целиком. Чтение нужно для
+принадлежности будущего удаления, не для повторной проверки готовых настроек.
+Пустые parameters и Close не получают этот дополнительный read.
+Новый код ещё не проверен live; 21/21 профильных тестов прошли.
+
+Во время закрытия была штатно восстановлена оборвавшаяся WebSocket-сессия;
+после закрытия мастера заново prepare READY, workflow сменился -2→-3. Публичный
+save был корректно заблокирован старым pending node13-small-remove. Для
+сохранения диагностической fixture выполнен операторский UI SaveAs в отдельный
+/test-3/N13-removal-fixture-a52fd065.lgp; это не public/persistence acceptance.
+Пакет закрыт, диалогов нет, harness a52fd065 закрыт. Следующий fresh source
+harness: start-removal-case → graph → small-preserve (baseline 6 полей) →
+small-remove (новый код) → independent audit → small-add-reorder → Close cases.
+
+Новая сессия 7b102cd5-d88f-45d8-9157-a9b24cfdbec8 (PTY 57475), runtime
+dba4865ebebe0919850f6a1018faa928da4a37d6099dc71c1ee9eb3f7b3de676,
+копия /test-3/N13-7b102cd5.lgp открыта из removal-fixture-a52fd065. Геометрия
+1508×862/viewport=null, Loginom7.4.2/test-3, remote pins сверены fresh prepare.
+small-baseline (parameters={}, Done) выполняется. Последующий порядок: audit →
+small-remove → audit → small-add-reorder → audit → small-close → small-preserve
+→ date_time_close.py → wrong-type (предварительно активировать fixture import)
+→ occupied-upstream → loss-of-reply. Новый harness уже содержит armDateFlagReplyLoss.
+Общий клиент: **1409 PASS / 1 SKIP / 0 FAIL** (1410 тестов),
+.dock/client-tests-removal.log. Python oracle 3/3 PASS; старый полный 4×27
+после дополнения независимого verifier по-прежнему PASS.
+Закрытые harness оставляли Node-процессы без работы; принадлежность шести
+процессов подтверждена по cwd, они завершены TERM после закрытия пакетов.
+
+В 7b102cd5 small-baseline остановлен AMBIGUOUS/input_mapping до нового
+preconfiguration-read: исходные import/filter после reopening не активированы.
+Входной wizard видел неполную схему и на Done спросил об удалении потерянных
+связей. Запрос отменён (Отмена), входной мастер закрыт с подтверждением,
+пакет закрыт без диалогов, harness закрывается. Никакая связь не удалялась.
+Следующая новая сессия обязана выполнить start-removal-case → graph →
+activate-import-guarded → activate-empty-guarded → small-baseline. Это
+исправление подготовки fixture, не успешная проверка новой логики удаления.
+
+Текущая сессия f234b66c-d3d0-4d78-8b42-3d35cc923187 (PTY 90746),
+runtime dba4865e… тот же; start-removal-case выполняется. Новый harness
+после операторского close завершает процесс только после awaited bridge cleanup.
+Профильные тесты дополнены preflight-before-any-flag и отказом без изменения
+матрицы: **23/23 PASS**; общая проверка до этих двух тестов 1409 PASS/1 SKIP.
+
+В f234b66c после ручной контролируемой активации import и filter исходный
+node13-small-baseline публично SUCCEEDED; independent audit PASS. Обе
+матрицы (year DateA/month_end DateB), все 6 связанных выходов сохранены.
+Тем самым проблема прошлого запуска локализована в неактивной fixture.
+Запущен node13-small-remove на исправленном runtime dba4865e; результат ожидается.
+
+### Возобновление после перезапуска, 2026-09-13
+
+Команда координатора node13-development-resume-shared-memory-20260913.3:
+только development/direct UI; review, Hermes и публикация не запускались.
+Зарегистрированный MCP подтвердил healthy и общий actor Peer основного проекта;
+выполнены один targeted find и read, результат однократно передан координатору.
+Маршрутизация и capture cursor не изменялись этой задачей.
+
+f234b66c small-remove завершился AMBIGUOUS/open: `A prepared wizard is required
+for cancellation` при Close предварительно прочитанного OUTPUT-порта, до правки
+флагов. После перезапуска старый процесс отсутствовал; отдельный операторский
+запуск его browser profile показал экран входа. Браузер закрыт, неоднозначный
+receipt сохранён; восстановление прежнего draft не утверждается.
+
+Добавлена проверяемая привязка Close выходного порта к native opening receipt,
+точному port_context и исходному узлу. Возврат использует тот же breadcrumb path,
+что существующий output-port Done. Независимый Python verifier расширен отдельно.
+Профильные JS проверки: **271/271 PASS**, Python close evidence: **3/3 PASS**.
+Полный клиент: **1413 PASS / 1 SKIP / 0 FAIL** (1414 тестов),
+`.dock/client-tests-output-close-unrestricted.log`. Первая sandbox-попытка получила
+listen EPERM в тестах локальных clipboard sockets; повтор с доступом прошёл.
+
+Текущая live-сессия d2bde39d-f454-4857-ad3b-b696acfac089, runtime
+`a8b38a21816d9dc42d52722b9ee49ac9b4998ff415683c84066c975d7041eecf`,
+копия `/test-3/N13-d2bde39d.lgp`, Loginom 7.4.2 / test-3, viewport=null,
+1508×862. Базовая fixture открыта, import и empty-filter активированы отдельно;
+small-baseline выполняется. Успех live Close/output removal пока не установлен.
+
+d2bde39d small-baseline: public SUCCEEDED, independent configuration audit PASS
+(`.dock/d2-baseline-audit.log`). small-remove прошёл open, включая настоящий Close
+исходного выходного порта без применения. Configure остановился AMBIGUOUS до
+нажатия удаления: `Initial bound observation is no longer current or ready`.
+Raw observation страницы содержал exact orphan delete cell, но node_mapping
+отсутствовал: paging helper читает UI без native mappings. Исправление добавляет
+fresh combined output page + native mapping и сравнение полных связей до жеста;
+perform сохраняет этот режим для повторной проверки. Тест проверяет успех и
+отказы при изменении чужого источника до/после удаления: **6/6 PASS**.
+Мастер d2bde39d закрыт оператором с подтверждением без применения, собственная
+копия закрывается без сохранения. Это не успешное завершение small-remove.
+Следующий fresh runtime: start-removal-case → graph → guarded import/filter
+activation → small-remove. Дополнительный baseline без параметров уже проверен
+на неизменной fixture; перед новым удалением baseline вновь читается самим handler.
+
+Fresh сессия 91422da2-86b3-443f-96cc-a88986eb4668 (PTY 72138), runtime
+`f9af04091f4d30ed18dca9638ade7f1c0401195505db76ae93d47ecb66911f0d`;
+копия `/test-3/N13-91422da2.lgp`, документ 1789262485623-hqfoz5xdphe,
+workflow -2 / MF;TF-3. Подготовка guarded activation выполняется.
+Предыдущий harness 14354 завершился exit 0 после закрытия пакета и bridge;
+новый операторский shutdown больше не оставил idle process.
+Полный клиент после paging fix: **1414 PASS / 1 SKIP / 0 FAIL** (1415 тестов),
+`.dock/client-tests-orphan-paging.log`.
+
+91422da2 small-remove (без baseline) остановился AMBIGUOUS/open:
+`Fetching grouping sources changed the output definition`. Native Get source
+columns изменил 5 исходных targets на 6, добавив Amount при autosync=true.
+Имена/field IDs остальных пяти совпали. Строгий общий verifier не ослаблялся;
+это отдельная граница неполной сохранённой fixture, ещё до изменения флагов.
+Оператор отменяет OUTPUT wizard без применения и закрывает копию без сохранения.
+Следующая сессия обязательно baseline → audit → public save отдельной копии →
+small-remove; эту нормализованную копию затем использовать для повторов.
+Пропуск baseline выше признан неверным для данной fixture, хотя input/filter
+были активированы. Предыдущая d2bde39d всё ещё подтверждает live output Close;
+новый paging fix пока не достигнут live.
+
+Сессия e6677b8e-9b20-49d8-9278-d194767dba09 (PTY 80785), тот же runtime f9af0409…:
+prepare-small-fixture → small-baseline public SUCCEEDED → independent audit PASS
+`.dock/e6-baseline-audit.log` → реальный public package.save_checkpoint
+`node13-small-fixture-save` SUCCEEDED в `/test-3/N13-e6677b8e.lgp`.
+Сохранение без reopening, persisted_content_verified=false. Это новая полная
+baseline fixture для дальнейших повторов; `.dock/start-stable-case.mjs` открывает
+её и создаёт отдельную копию. В текущей сессии small-remove запущен после save.
+Все 509 Python acceptance unit tests прошли (`.dock/python-acceptance-output-close.log`);
+модели/Hermes не запускались.
+
+e6677b8e small-remove дошёл до реального однократного удаления orphan SmallYear.
+После удаления полное сравнение native mappings подтвердило: удалён только
+SmallYear, остальные поля/источники неизменны с перенумерацией index/group_index;
+единственный дополнительный эффект — autosync true→false. Поэтому прежняя
+проверка корректно остановила configure AMBIGUOUS. Мастер отменён, пакет закрыт
+без диалогов/сохранения, harness завершился exit0; сохранённая baseline e6677b8e
+осталась исходной, дальнейшие удаления не сохранялись.
+
+Исправление учитывает ровно штатный autosync=false непосредственно после delete,
+сохраняя полное сравнение остальных свойств; configureDateTimeOutput затем
+восстанавливает исходный autosync, если пользователь не задал иной output layout.
+Независимый verifier проверяет и точный transition, и восстановление autosync.
+Python отдельный тест: исходный transition и 7 отрицательных подмен проходят;
+JS orphan suite 6/6 PASS. Live результата нового исправления пока нет.
+Следующий fresh harness: prepare-stable-fixture (base `/test-3/N13-e6677b8e.lgp`)
+→ small-remove → audit → small-add-reorder → Close/preserve → refusals → fault.
+
+Текущая сессия 32e30eb6-620f-4d33-b3d6-1118774f8f02 (PTY 79697), runtime
+`78b5938fd8d46d71f2030340c076a2f905929a55053a336a77f44d2f4a8889d4`;
+prepare-stable-fixture завершился READY: `/test-3/N13-32e30eb6.lgp` создана из
+сохранённой baseline e6677b8e, import/filter активированы, окно1508×862/viewportnull.
+Документ1789263363009-ynvk8w85wx, workflow -2 / MF;TF-3. small-remove выполняется.
+После последнего runtime fix: клиент **1414 PASS / 1 SKIP**, Python **510 PASS**,
+`.dock/client-tests-removal-autosync.log`, `.dock/python-acceptance-removal-autosync.log`.
+
+32e30eb6 small-remove остановился AMBIGUOUS/open на source fetch 5→6 даже после
+public save baseline. Поэтому гипотеза о достаточности сохранения/нормализации
+отозвана: baseline в той же сессии заполнял runtime cache, а не устранял условие
+первого открытия. Отдельная операторская диагностика после close/reopen той же
+копии (workflow сменился -2→-3, prefix MF;TF-5) подтвердила до Get source columns:
+store.getCount=5, getTotalCount=5, loading=false, complete=true, limit=25,
+pendingOperations={}, поля SmallYear/SmallMonthEnd/Id/DateA/DateB. Это не
+обрезка журнала и не частично загруженный cache. Raw browser-68 также имел5,
+после Get source columns browser-78 имел6 с добавленным Amount.
+
+Добавлен Date/time-specific verifier источников: при исходном autosync=true
+допускается только добавление точных сквозных копий native sources в конец при
+полной неизменности прежних targets. Генерируемый/переименованный/унаследованный
+новый столбец, изменение старого либо расширение autosync=false отклоняются.
+Общий grouping verifier остался строгим; ensureGroupingOutputSources принимает
+optional verifier, только Date/time baseline передаёт свой. До/после source fetch
+сохраняются отдельным proof; Python независимо проверяет этот transition и
+полную исходную bijection. JS focused10/10 PASS, Python2/2 (с отрицательными
+подменами) PASS. Live нового verifier ещё не было.
+Операторские open отказали без жеста при скрытом порте и reuse старого operationID
+после переоткрытия; после fresh selection и нового ID exact port открылся.
+Это отдельные диагностические действия, не успешный retry node.apply.
+
+32e30eb6 operator cache wizard закрыт с подтверждением, пакет закрыт без диалогов,
+harness exit0. Текущая новая сессия 1e796919-a7f3-4966-8339-b93a0f309734
+(PTY59153), runtime `dd0979bf175bd4164ab0d0647daecd69782b1c8ab0d10b2e690d313b9704b6d0`.
+prepare-stable-fixture выполняется. Полный клиент **1415 PASS / 1 SKIP**,
+Python **511 PASS**; после добавления обязательных baseline verified/inventory/
+source_identity flags отдельный Python removal suite2/2 PASS.
+Дополнен date_time_negative.py для Done без output read (5 общих подмен), а для
+existing parameters.fields — подмены исходных source bindings/Close application.
+Persistence verifier получил --fixture empty для будущего восстановления после
+контролируемой потери ответа; старый default boundaries сохранён. Live такого
+восстановления и проверки fault ещё не было.
+
+1e796919 `node13-small-remove`: **public SUCCEEDED**, независимый config/removal
+аудит **PASS**, 7/7 negative mutations обнаружены (`.dock/1e-removal-audit.log`,
+`.dock/1e-removal-negative.log`). Удалён SmallYear; сохранены SmallMonthEnd ←
+DateB/month_end и Id/DateA/DateB/Amount, итоговые5 полей, autosync=true.
+Проверены raw source fetch5→6 с точным append Amount, исходный OUTPUT Close без
+применения, снятие только year DateA, exact orphan deletion и восстановление
+autosync. Незапрошенная матрица DateB и StringFmt сохранены. Пакет после удаления
+ещё не сохранялся; это не persistence/Hermes acceptance.
+В той же сессии `node13-small-add-reorder` запущен: DateA year+month_start,
+входной порядок Id/Amount/DateB/DateA, DateB не запрошен.
+
+1e796919 `node13-small-add-reorder`: **public SUCCEEDED**, независимый аудит PASS,
+9/9 negative checks (`.dock/1e-add-reorder-audit.log`, `...-negative.log`). Добавлены
+DateA/year SmallYear и DateA/month_start SmallMonthStart; DateB/month_end сохранён,
+выход7 полей. Входной порядок Id/Amount/DateB/DateA подтверждён raw mapping и
+запросом. В independent verifier добавлена проверка входных names/labels/order и
+явного autosync (а также явного output autosync); negative request-only order и
+label mutations обнаружены. Ранее empty-new audit прошёл, теперь11/11 negatives.
+
+Для Close → preserve выбран фиксированный output autosync=false, поскольку
+штатная пересортировка generated/passthrough при autosync=true уже подтверждена
+на большом кейсе и не должна смешиваться с доказательством отмены черновика.
+`node13-small-freeze-output` (parameters={}, output autosync=false) выполняется.
+Затем audit → small-close → small-preserve → date_time_close.py с before_id
+node13-small-freeze-output → wrong-type → occupied-upstream → public save → fault.
+
+1e796919 freeze-output public SUCCEEDED и audit PASS (`.dock/1e-freeze-audit.log`):
+output autosync=false, семь полей и обе матрицы сохранены. `node13-small-close`
+public SUCCEEDED с configuration.discarded, cleanup=true, без input/output mapping
+и без выполнения. `node13-small-preserve` (parameters={}, mappings=[], Done)
+выполняется; Close audit ещё ожидает этот результат.
+Подготовлен независимый `date_time_refusals.py` для wrong-type/occupied-input:
+требует public NOT_APPLIED, cleanup=true, effect=false и неизменный граф;
+дополнительно проверяет реально наблюдённый integer-вход или чужую занятую связь.
+Эти refusal cases пока не запускались live.
+
+1e796919 small-preserve public SUCCEEDED. **Close audit PASS**, до/после полностью
+совпали обе матрицы, input mapping/order и output mapping/order при autosync=false;
+6/6 отрицательных подмен обнаружены (`.dock/1e-close-audit.log`, session
+`date-time-close-negative.json`, script `.dock/check-close-negatives.py`).
+`node13-wrong-type`: public NOT_APPLIED, cleanup=true/effect=false, native preview
+подтвердил Id integer, новый узел не создан, граф неизменен; refusal audit PASS.
+`node13-occupied-upstream`: public NOT_APPLIED, cleanup=true/effect=false,
+исходная связь import→Календарь сохранена, filter→Календарь не создана; refusal
+audit PASS. Замена занятого upstream этим контрактом не поддерживается.
+Public save перед fault (`node13-small-fixture-save`) выполняется; будущая
+recovery база — собственная `/test-3/N13-1e796919.lgp`, состояние7 полей.
+
+1e796919 public save-before-fault SUCCEEDED в `/test-3/N13-1e796919.lgp`.
+`node13-lost-flag` воспроизвёл запланированную потерю ответа: реальный click
+DateB / func5 / DoNumber SUCCEEDED (internal `node13-lost-flag:n44`, raw
+browser-968.json), но драйвер получил injected exception и public AMBIGUOUS/configure.
+Матрица до/после повторов независимо прочитана: только quarter false→true,
+month_end и остальные28 строк сохранены. Повтор SAME request вернул AMBIGUOUS,
+resume отклонён `Resume requires the original inspected node checkpoint without
+an unresolved phase`; browser sequence **969→969→969**, ни одного вызова UI.
+`date_time_reply_loss.py` audit PASS. Это доказательство безопасного отказа от
+повтора, **не automatic recovery**. Черновик ещё открыт; далее оператор Close
+без применения → закрытие копии без сохранения → fresh prepare-fault-recovery
+(base `/test-3/N13-1e796919.lgp`) → small-reopen-execute → empty audit + persistence
+от `node13-small-preserve` этой сессии. Чужие/старые неоднозначные операции не
+возобновлять. Текущая active PTY59153, source runtime dd0979bf… без новых client edits.
+
+Fault audit дополнительно обнаружил6/6 подмен (`date-time-reply-loss-negative.json`).
+Черновик отменён с native confirmation, пакет закрыт без диалогов; harness1e796919
+завершился exit0. Fresh recovery сессия f7cf52c5-9dc4-41dd-a405-f4df805b9526
+(PTY8174), тот же source runtime dd0979bf…; exact base-open сохранённого
+`/test-3/N13-1e796919.lgp`, отдельная копия `/test-3/N13-f7cf52c5.lgp`,
+prepare READY, import/filter активированы. Документ1789266042473-y75nouzh2ha,
+workflow -2 / MF;TF-3. `node13-small-reopen-execute` (parameters={}, mappings=[],
+execute/read port0 exact) выполняется. Последний незакрытый live-check — audit
+пустого результата7 столбцов и independent persistence1e→f7. После него закрыть
+копию/браузер, финализировать docs и локальный commit, один phase outcome
+координатору. Review/Hermes/публикация остаются отдельным dispatch.
+
+### Уточнение persistence после fault — 13 сентября 2026
+
+f7cf52c5 `node13-small-reopen-execute` public SUCCEEDED, точный выход **0×7**;
+raw/config/value audit PASS, 9/9 negatives. Сохранённые преобразования и весь
+output mapping совпали, quarter из отменённого fault draft отсутствует. Строгий
+persistence audit **FAIL: saved_configuration_changed**: только порядок входа
+при input autosync=true изменился с Id/Amount/DateB/DateA на Id/DateB/DateA/Amount.
+Это не полный persistence PASS. Проверяется явно фиксированный input autosync=false
+(`node13-small-freeze-input`), затем отдельный save/reopen/execute без настройки.
+Логи `.dock/f7-reopen-audit.log`, `.dock/f7-reopen-negative.log`; строгий отказ
+сохранён в f7 session `date-time-persistence.json`. Финальные Python unit tests
+511 PASS (`.dock/python-acceptance-date-final.log`).
+
+f7cf52c5 `node13-small-freeze-input` public SUCCEEDED/config audit PASS,
+input autosync=false; public save `node13-small-fixture-save` SUCCEEDED в
+`/test-3/N13-f7cf52c5.lgp`. Пакет закрыт без диалогов, harness exit0.
+Свежая сессия `6e3aa7ff-33ff-4fd6-893e-2cffdb0ee11a`, source runtime dd0979bf…
+не менялся; READY, viewport=null/1508×862. Base-open f7, собственная копия
+`/test-3/N13-6e3aa7ff.lgp`. Persistence сравнивать с f7 `node13-small-freeze-input`,
+не со старым baseline с input autosync=true.
+
+### Завершение development-фазы — 13 сентября 2026
+
+6e3aa7ff `node13-small-reopen-execute` public SUCCEEDED, 0×7; независимые
+raw/config/value audit и 9/9 negatives PASS. Strict persistence f7
+`node13-small-freeze-input` → 6e `node13-small-reopen-execute` PASS: совпали
+матрицы, input/output mappings и порядок с autosync=false. Исходный FAIL
+1e→f7 при input autosync=true не удалён и не переобозначен как успех.
+Копия закрыта без сохранения диагностических изменений, диалогов не осталось,
+harness exit0. Runtime не менялся после полного клиентского прогона.
+Финальная передача: локальный коммит этой фазы; отдельный review по запросу,
+затем coordinator-owned Hermes acceptance/candidate admission. Push/merge,
+VPS/build/deploy и глобальные плагины не затрагивались.

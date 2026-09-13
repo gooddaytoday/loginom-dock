@@ -27,6 +27,18 @@ def bound_wizard_close_confirmation(state):
                 or node.get('surface') != 'wizard'):
             return False
         owner = dict(input_port=node.get('input_port'))
+    output = binding.get('owner', {}).get('output_port')
+    if output:
+        context = wizard.get('port_context', {})
+        if (output.get('direction') != 'output' or type(output.get('port')) is not int or not 0 <= output['port'] < 100
+                or type(output.get('native_index')) is not int or output['native_index'] < 0
+                or not isinstance(output.get('port_guid'), str) or not output['port_guid']
+                or not isinstance(output.get('opening_operation_id'), str) or not output['opening_operation_id']
+                or wizard.get('stage') != 'output_mapping' or node.get('surface') != 'wizard'
+                or context.get('status') != 'observed' or context.get('kind') != 'output_data'
+                or not context.get('node', {}).get('ref') or not context.get('port', {}).get('ref')):
+            return False
+        owner = dict(output_port=node.get('output_port'), port_context=context)
     if (binding.get('kind') != 'close' or wizard.get('status') != 'observed'
             or node.get('verified') is not True
             or any(node.get(k) != binding.get('node', {}).get(k) for k in ('document_id', 'workflow_id', 'node_id'))

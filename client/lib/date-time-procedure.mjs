@@ -2,7 +2,7 @@ import {DATE_TIME_OPERATIONS,resolveDateTimeParameters} from './date-time-parame
 const need=(v,m)=>{if(!v)throw Error('Date/time: '+m);};
 const same=(a,b)=>JSON.stringify(a)===JSON.stringify(b);
 const flagKey={DoDateTimeFirst:'first',DoDateTimeLast:'last',DoNumber:'number',DoString:'string'};
-export async function configureDateTime(channel,p,{inputMapping}){
+export async function configureDateTime(channel,p,{inputMapping,beforeChanges}){
  const ready=s=>s.wizard?.stage==='date_time'&&s.node_date_time?.verified===true;
  const observe=condition=>channel.observe({condition,readDateTime:true,ready});
  const start=await observe('complete date/time fields'),baseline=start.node_date_time;
@@ -24,8 +24,14 @@ export async function configureDateTime(channel,p,{inputMapping}){
   }
  };
  const before=[],after=[];
+ if(beforeChanges){
+  for(const field of baseline.fields){const s=await select(field.name);before.push({name:field.name,matrix:structuredClone(s.node_date_time.matrix)});}
+  await beforeChanges({...baseline,input_fields:inputs,field_matrices:before});
+ }
  for(const field of baseline.fields){
-  let s=await select(field.name);const original=structuredClone(s.node_date_time.matrix);before.push({name:field.name,matrix:original});
+  let s=await select(field.name);const original=structuredClone(s.node_date_time.matrix);
+  if(beforeChanges)need(same(original,before.find(f=>f.name===field.name).matrix),'matrix changed after removal preflight');
+  else before.push({name:field.name,matrix:original});
   if(wanted.has(field.name)){
    const desired=wanted.get(field.name).map(t=>DATE_TIME_OPERATIONS[t.operation]);
    for(const row of original)for(const [flag,key] of Object.entries(flagKey)){

@@ -2075,6 +2075,24 @@ function readRenderedInputMapping(observation) {
         }
       }
     }
+    // A removed date transform can leave a renamed, unbound output behind.
+    // Expose its native delete cell only in this date wizard's conditional page.
+    if(!discoverRoots&&wizard.stage==='output_mapping'&&tids.has(wizard.root_tid+';DateReformWizard')){
+      const base=wizard.root_tid+';DerivedDataSourceMappingEngineOutputPortWizard;',grids=tids.get(base+'grdTargetColumns;tbl')??[];
+      if(grids.length===1){const grid=grids[0],view=globalThis.Ext?.getCmp?.(grid.id),store=view?.getStore?.(),records=store?.getData?.()?.items;
+        if(view?.el?.dom===grid&&store?.$className==='Ext.data.Store'&&!store.isLoading?.()&&Array.isArray(records)&&records.length<=1000){
+          for(const row of grid.querySelectorAll('table.x-grid-item')){
+            const index=Number(row.getAttribute('data-recordindex')),r=records[index],d=r?.data;
+            if(!Number.isSafeInteger(index)||index<0||!r?.isModel||typeof d?.Name!=='string'||!d.Name||d.ConnectedRecord!==null||d.Required!==false
+              ||row.getAttribute('data-recordid')!==String(r.internalId)||row.getAttribute('data-boundview')!==grid.id)continue;
+            const cells=[...row.querySelectorAll('[data-tid]')].filter(e=>getTid(e)===base+'colTargetDelete_'+d.Name);
+            const buttons=cells.length===1?[...cells[0].querySelectorAll('img[role="button"]')]:[];
+            if(buttons.length===1&&!buttons[0].classList.contains('x-item-disabled')&&visible(cells[0])&&!sensitive(cells[0]))
+              dateTimeCells.set(refOf(cells[0]),{role:'output_delete',field_key:d.Name,record_id:String(r.internalId),grid_ref:refOf(grid),wizard_root_ref:wizard.root_ref});
+          }
+        }
+      }
+    }
     const sortingCells=new Map();
     if(!discoverRoots&&wizard.stage==='sorting')for(const [gridName,role] of [['grdFields','available'],['grdSorting','selected']]){
       const base=wizard.root_tid+';SortingWizard;SortingColumnCollection;',grids=tids.get(base+gridName+';tbl')??[];
@@ -2415,11 +2433,14 @@ function readRenderedInputMapping(observation) {
       const inputCloseOwner=preparedInputPort?.direction==='input'&&Number.isInteger(preparedInputPort.port)&&preparedInputPort.port>=0&&preparedInputPort.port<100
         &&wizard.stage==='input_mapping'&&wizard.input_port_context?.status==='observed'
         ? wizard.input_port_context:null;
-      const closeConfirmation=tid==='msgbox;tlb;yes' && wizard.status==='observed' && (wizard.owner_context?.status==='observed'||inputCloseOwner)
+      const outputCloseOwner=preparedOutputPort?.direction==='output'&&Number.isInteger(preparedOutputPort.port)&&preparedOutputPort.port>=0&&preparedOutputPort.port<100
+        &&wizard.stage==='output_mapping'&&wizard.port_context?.status==='observed'&&wizard.port_context.kind==='output_data'
+        &&wizard.port_context.node?.ref&&wizard.port_context.port?.ref ? wizard.port_context:null;
+      const closeConfirmation=tid==='msgbox;tlb;yes' && wizard.status==='observed' && (wizard.owner_context?.status==='observed'||inputCloseOwner||outputCloseOwner)
         && dialogs.length===1 && dialogs[0].ref===dialogRef(element) && dialogs[0].title==='Подтвердить'
         && dialogs[0].text==='Подтвердить Вы действительно хотите закрыть мастер настройки? Да Нет'
         ? {root_ref:wizard.root_ref,root_tid:wizard.root_tid,stage:wizard.stage,
-          owner:inputCloseOwner??wizard.owner_context,...(inputCloseOwner?{input_port:preparedInputPort}:{}),dialog_ref:dialogs[0].ref}:null;
+          owner:inputCloseOwner??outputCloseOwner??wizard.owner_context,...(inputCloseOwner?{input_port:preparedInputPort}:outputCloseOwner?{output_port:preparedOutputPort}:{}),dialog_ref:dialogs[0].ref}:null;
       const deactivationConfirmation=tid==='msgbox;tlb;yes' && wizard.status==='absent' && pendingWizardOwner.status==='observed'
         && dialogs.length===1 && dialogs[0].ref===dialogRef(element)
         && dialogs[0].title==='Loginom '+(globalThis.bg?.app?.Version??'')
@@ -3328,7 +3349,7 @@ function readRenderedInputMapping(observation) {
         }
         if(task.action.verb==='confirm_wizard_close') {
           const confirmation=current.ui.elements.find(e=>e.ref===task.action.ref).wizard_close_confirmation;
-          const path=(confirmation.input_port?confirmation.owner.node_path.slice(0,-1):confirmation.owner.path.slice(0,-2)).map(({tid,label})=>({tid,label}));
+          const path=(confirmation.input_port?confirmation.owner.node_path.slice(0,-1):confirmation.output_port?confirmation.owner.path.slice(0,-4):confirmation.owner.path.slice(0,-2)).map(({tid,label})=>({tid,label}));
           const key=confirmation.owner.node.label.replace(/\s/g,'_').replace(/,/g,'');
           const ready=s=>lifecycleContextMatches(s)&&s.wizard.status==='absent'&&!s.ui.dialogs.length&&!s.ui.masks.length
             &&s.navigation_context?.status==='observed'&&same(s.navigation_context.path,path)

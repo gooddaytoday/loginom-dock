@@ -4,6 +4,7 @@ import json
 import re
 from pathlib import Path
 from date_time_audit import audit
+from date_time_oracle import ROWS
 
 
 def events_at(directory):
@@ -52,14 +53,14 @@ def public_success(directory, operation_id):
     return False
 
 
-def verify(before_dir, before_id, after_dir, after_id):
+def verify(before_dir, before_id, after_dir, after_id, fixture_rows=ROWS):
     failures = []
     try:
         before_events, after_events = events_at(before_dir), events_at(after_dir)
         before_request, before = operation(before_events, before_id)
         after_request, after = operation(after_events, after_id)
         for events, request in [(before_events, before_request), (after_events, after_request)]:
-            if not audit(events, request)['passed']:
+            if not audit(events, request, fixture_rows=fixture_rows)['passed']:
                 failures.append('operation_audit_failed')
         if not public_success(before_dir, before_id) or not public_success(after_dir, after_id):
             failures.append('public_success_reply_missing')
@@ -88,8 +89,9 @@ if __name__ == '__main__':
     parser.add_argument('before_operation')
     parser.add_argument('after', type=Path)
     parser.add_argument('after_operation')
+    parser.add_argument('--fixture', choices=['boundaries', 'empty'], default='boundaries')
     args = parser.parse_args()
-    result = verify(args.before, args.before_operation, args.after, args.after_operation)
+    result = verify(args.before, args.before_operation, args.after, args.after_operation, fixture_rows=[] if args.fixture == 'empty' else ROWS)
     (args.after / 'date-time-persistence.json').write_text(json.dumps(result, ensure_ascii=False, indent=2))
     print(json.dumps(result, ensure_ascii=False, indent=2))
     raise SystemExit(0 if result['passed'] else 1)

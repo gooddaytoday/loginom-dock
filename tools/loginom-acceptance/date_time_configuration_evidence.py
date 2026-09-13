@@ -1,6 +1,7 @@
 """Audit raw observations/receipts independently of the JS date handler."""
 import re
 from node_procedure_evidence import verify_internal_sequence
+from date_time_removal_evidence import verify_removals
 
 # Native semantics confirmed in the real 7.4.2 wizard, not imported from JS.
 OPERATIONS = {
@@ -69,6 +70,7 @@ def verify_date_time_configuration(events, request):
             elif matrix != first[name]:
                 raise ValueError('date_time_unrequested_field_changed')
         raw_maps = [s['node_mapping'] for _, s in observations if s.get('node_mapping')]
+        verify_removals(request, config, phase('open'), first, raw_maps, OPERATIONS)
         for direction, value in [('input', incoming), ('output', out)]:
             m = value['native_mapping']
             if m not in raw_maps or not owned(m['node_context']) or m.get('inventory_complete') is not True or m['node_context'].get(direction + '_port', {}).get('port') != 0:
@@ -85,6 +87,21 @@ def verify_date_time_configuration(events, request):
             if seen != set(source_ids):
                 raise ValueError('date_time_mapping_bijection')
         inputs = incoming['native_mapping']['target_fields']
+        input_request = next((m for m in request['mappings'] if m['direction'] == 'input' and m['port'] == 0), {})
+        if 'autosync' in input_request and incoming['native_mapping']['autosync'] != input_request['autosync']:
+            raise ValueError('date_time_requested_input_autosync')
+        if 'fields' in input_request:
+            desired = input_request['fields']
+            if (len(inputs) != len(desired) or any(w['source']['kind'] != 'configured_field'
+                    or f['source']['name'] != w['source']['name'] for f, w in zip(inputs, desired))):
+                raise ValueError('date_time_requested_input_order')
+            originals = next(m['target_fields'] for m in raw_maps if m['mapping_wizard'] == 'TuneDataSourceMappingWizard'
+                             and m.get('source_identity_verified') is True and len(m['target_fields']) == len(inputs)
+                             and all(t.get('source') for t in m['target_fields']))
+            for field, wanted in zip(inputs, desired):
+                original = next(t for t in originals if t.get('source', {}).get('name') == wanted['source']['name'])
+                if any(field[k] != wanted.get(k, original[k]) for k in ('name', 'label')) or field['type'] != original['type']:
+                    raise ValueError('date_time_requested_input_field')
         native_sources = out['native_mapping']['source_fields']
         generated, assigned = {}, set()
         for name, matrix in last.items():
@@ -105,6 +122,8 @@ def verify_date_time_configuration(events, request):
         if assigned != {s['record_id'] for s in native_sources if s['required']}:
             raise ValueError('date_time_generated_coverage')
         mapping = next((m for m in request['mappings'] if m['direction'] == 'output'), {})
+        if ('autosync' in mapping or 'fields' in mapping) and out['native_mapping']['autosync'] != mapping.get('autosync', False):
+            raise ValueError('date_time_requested_output_autosync')
         for f in out['native_mapping']['target_fields']:
             s = f.get('source') or f.get('exclusion_source')
             origin = generated.get(s['record_id'], dict(input=s['name']))
@@ -126,6 +145,6 @@ def verify_date_time_configuration(events, request):
             f = phase(name)
             if not f.get('settings_applied') or not owned(f['node_context']) or f['mode'] != ('done' if name == 'node_finish' else request['finish']):
                 raise ValueError('date_time_finish')
-    except (KeyError, IndexError, TypeError, ValueError, AttributeError) as error:
+    except (KeyError, IndexError, TypeError, ValueError, AttributeError, StopIteration) as error:
         failures.append(str(error))
     return dict(passed=not failures, failures=sorted(set(failures)), projection=projection, scope='date_time_raw_configuration')
