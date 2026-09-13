@@ -284,3 +284,16 @@
 - Use real Loginom for drag, clipboard, execution and package-saving acceptance.
 - Keep credentials out of Git, Docker build contexts, documentation and logs.
 - Commit reports must be in Russian and past tense.
+
+### Coordinator approvals: delegated by user (2026-09-13)
+
+The user authorized the coordinator to approve subsequent node-development steps
+automatically after checking their concrete scope and evidence, including bounded
+cross-branch fix transfers and isolated diagnostic extensions. Developers still
+submit shared-contract/transfer/diagnostic-scope proposals to the coordinator;
+the coordinator records and dispatches decisions without requesting redundant
+user confirmation. This supersedes earlier per-step user approval requirements
+within node development. Separate user commands remain required for merging into
+main, pushing main, production deployment and shared-plugin updates. Do not bypass
+platform approval denials, change model policy or re-enable periodic monitoring.
+Canonical policy: docs/plans/loginom-dock/automatic-node-workflow.md.
