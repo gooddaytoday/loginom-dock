@@ -1,3 +1,41 @@
+# Узел13 закрыл замечание аудитора и готовит входы приёмки — 13 сентября 2026
+
+Единственный fix round завершён; completed/idle подтверждён для хода
+`01a098b7-450c-79f0-b3c5-cccc1548609c`. Commit
+`ed53b0189fa92dfc879015ee08580dcadf2c3cd2`, отчёт в ветке13
+`docs/loginom-dock/node-13-fix-1.md`. N13-R3 закрыто: expected строится из
+первого полного baseline до output mapping и запроса, независимо от actual,
+для сквозных и сохранённых вычисленных name/label/excluded.
+
+Проверены receipts нового baseline28полей, positive и89 отрицательных подмен,
+свежего reopen/execute4×27 и отдельного package_persistence_verified:true.
+Новый запуск выполнялся с parameters:{}, mappings:[] без перенастройки.
+Все8 audit-файлов совпали с pins/Git blobs, aggregate SHA
+`af91c8bfa81dbe051550f7dc01021a5f580d6220907b0c8627d322b50b61c35a`.
+Client tree не менялся; обе новые сессии закрепили runtime
+`dd0979bf175bd4164ab0d0647daecd69782b1c8ab0d10b2e690d313b9704b6d0`.
+Receipt SDK schema:180 ответов без ошибок.519 Python PASS — результат
+разработчика, координатор повторно тесты не запускал. Это прямые Codex evidence,
+не автономная приёмка. Использован прежний диагностический candidate.
+
+N13-R1/R2 остаются открытыми. R1 требует отдельного configure continuation
+в прежнем operation ID с полной живой матрицей и восстановлением оставшегося
+плана; input_mapping14 этого не реализует. R2 требует разрешённой интеграции
+общей части14 и целевой live Date/time terminal failure. На13 пока имеется
+source/model finding, не новая живая проверка ошибки. Интеграция между ветками
+требует отдельной команды пользователя; код не заимствован.
+
+Чтобы выполнить независимую часть до интеграции, в той же задаче на Astra medium
+назначена подготовка natural goal, CSV/bytes/frozen expected, полного аудитора,
+launch scaffold и явных admission gates. Команда
+`node13:acceptance-input-preparation:1:ed53b0189fa92dfc879015ee08580dcadf2c3cd2`;
+ход `01a098df-9a1e-79f2-b513-2a497035e7f9` подтверждён active/inProgress.
+Final runtime/archive/catalog не считать готовыми до R1/R2; новый Hermes13
+не разрешён. Нового review, stage/build, merge/push/deploy/activation и обновления
+общего клиента нет. Реестр обновлён; следующий переход по итоговому событию.
+
+---
+
 # Доработки приёмки11 завершены; ожидается диагноз сохранения12 — 13 сентября 2026
 
 Проверены completed/idle хода`01a098ba-bbe0-7682-8c2b-f07208d9ee15` и отчёт
