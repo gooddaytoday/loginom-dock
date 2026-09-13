@@ -7605,3 +7605,20 @@ scoped audit и данные обоих импортов PASS.43 итоговы�
 27successful/9imports/12final/native save/independent reopen остаются обязательными.
 Старые FAIL сохранены; следующий запуск требует слота координатора.
 [Отчёт и pins](node14-import-refusal-verifier-2026-09-13.md).
+
+## Узел 14: автономная приёмка4 — 2026-09-13, FAIL
+
+По отдельному слоту выполнен единственный run20260913-142944-6167eba2:
+existing subscription/openai-codex/Sol/low,71API calls.18SUCCEEDED
+(9imports+9Missing Values),1NOT_APPLIED,1AMBIGUOUS; native save отсутствует.
+All-null import прошёл. Узел «Порог41» создан и переименован, но remove_link
+автосвязи «Только строка»→«Порог41» получил timeout: effect=true/cleanup=false/
+pending target. Полный аудитор отказал; независимый reopen не запускался.
+
+На фоне ENOSPC первоначальный экспорт получил OperationalError/launcherexit2.
+После координированной очистки npm cache выполнен только экспорт старого run:
+SQLite quick_check=ok, DB/WAL/journals unchanged,71pairs/10717events. Код выхода
+дочерней модели не был сохранён и остался неизвестным. Полный FAIL сохранён.
+Своих процессов0, второйrun/ручное достраивание/изменения кода не выполнялись.
+Source7bef361c/runtime71f73d81/harness256/candidatecadd80df unchanged.
+[Отчёт, ограничения и38 evidence receipts](missing-values-autonomous-acceptance-4-2026-09-13.md).
