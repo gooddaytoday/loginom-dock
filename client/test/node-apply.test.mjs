@@ -185,3 +185,21 @@ test('incomplete or unacknowledged reform refusal retains uncertainty',async()=>
   const r=await f.run();assert.equal(r.status,'AMBIGUOUS');assert.equal(r.pending_phase,'target');assert.equal(r.cleanup_complete,false);
  }
 });
+
+test('date configure resumes the original pending phase only after its verifier',async()=>{
+ const f=fixture(),p=request();p.target.type='transform.date_time';p.mode='calendar';p.finish='done';p.read.ports=[];
+ const original=f.handlers.get('imports.text');let calls=0,verified=0;
+ f.handlers.set('transform.date_time',{...original,modes:['calendar'],configure:async()=>{calls++;if(calls===1)throw Error('lost flag');assert.equal(verified,1);return {verified:true,cleanup_complete:true,effect_possible:true};}});
+ const first=await f.run(p);assert.equal(first.pending_phase,'configure');const boundary=structuredClone(f.operation.nodeApply.pending);
+ f.drivers.verifyPendingConfigure=async state=>{verified++;assert.deepEqual(state.pending,boundary);return true;};
+ const result=await f.run(p,{resume:true});assert.equal(result.status,'SUCCEEDED');assert.equal(result.operation_id,p.operation_id);
+ assert.equal(f.records.filter(e=>e.phase==='node_phase_prepared'&&e.receipt.phase==='configure').length,1);
+ assert.equal(f.records.filter(e=>e.phase==='node_phase_completed'&&e.receipt.phase==='configure').length,1);
+});
+test('refused date configure proof preserves the original pending boundary',async()=>{
+ const f=fixture({failAfter:'configure'}),p=request();p.target.type='transform.date_time';p.mode='calendar';
+ f.handlers.set('transform.date_time',{...f.handlers.get('imports.text'),modes:['calendar']});
+ await f.run(p);const boundary=structuredClone(f.operation.nodeApply.pending),count=f.calls.length;
+ f.drivers.verifyPendingConfigure=async()=>false;
+ await assert.rejects(f.run(p,{resume:true}),/Live package/);assert.deepEqual(f.operation.nodeApply.pending,boundary);assert.equal(f.calls.length,count);
+});

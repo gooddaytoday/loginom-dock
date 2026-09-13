@@ -1423,6 +1423,14 @@ export function createActionRuntime({ pinned, execute, artifactStore, allowCandi
     // reconciliation. Unknown phases keep the gate until a phase-specific
     // verifier is available. A durable node checkpoint is safe to redeliver.
     if(running)return failed(operation,'OPERATION_STILL_PENDING','The local node operation is still running');
+    if(operation.nodeApply?.pending?.phase==='configure'&&operation.nodeApply.request.target.type==='transform.date_time'
+      &&typeof operation.nodeApplyDrivers?.inspectConfigure==='function'){
+      running=true;
+      try{await operation.nodeApplyDrivers.inspectConfigure(operation.nodeApply);}
+      finally{running=false;}
+      // A verified flag is not a completed configure phase. Retain the original
+      // pending boundary; explicit resume performs the remaining configuration.
+    }
     if(operation.nodeApply?.pending?.phase==='workflow'){
       running=true;
       try{
@@ -2020,7 +2028,9 @@ export function createActionRuntime({ pinned, execute, artifactStore, allowCandi
       if(pending&&pending!==operation)throw new Error('Another Dock operation remains pending');
       if(operation&&!resume)return inspectApply(operation);
       if(resume&&['workflow','target'].includes(operation?.nodeApply?.pending?.phase))await inspectApply(operation);
-      if(resume&&(!operation||pending!==operation||operation.nodeApply?.pending||!operation.cleanupConfirmed))
+      const configureContinuation=resume&&operation?.nodeApply?.pending?.phase==='configure'
+        &&request.target.type==='transform.date_time'&&typeof operation.nodeApplyDrivers?.verifyPendingConfigure==='function';
+      if(resume&&(!operation||pending!==operation||!configureContinuation&&(operation.nodeApply?.pending||!operation.cleanupConfirmed)))
         throw new Error('Resume requires the original inspected node checkpoint without an unresolved phase');
       running=true;
       try {
@@ -2041,6 +2051,7 @@ export function createActionRuntime({ pinned, execute, artifactStore, allowCandi
           };
           operation.nodeApplyDrivers=nodeApplyDriverFactory({operation,execute:executeNodeScript,onRecord,now,
             receiptOptions:(id,key,signature)=>receiptOptions(operation,id,key,signature),
+            readReceipt:reference=>readReceipt({...operation,lastReceipt:structuredClone(reference)}),
             verifiedUploads:()=>[...operations.values()].filter(o=>o.action.capability==='artifact.upload'
               && o.outcome?.status==='SUCCEEDED'&&o.cleanupConfirmed===true)
               .map(o=>structuredClone({operation_id:o.id,artifact:o.checkpoint.artifact,outcome:o.outcome}))});

@@ -13,7 +13,7 @@ function fixture({loseReply=false,staleCount=false,collateralChange=false}={}){
   const [id,flag]=action.ref.split('-'),row=matrices[selected].find(r=>r.record_id===id);row[flags[flag]]=!row[flags[flag]];
   if(!staleCount)fields.find(f=>f.name===selected).count+=row[flags[flag]]?1:-1;
   if(collateralChange)matrices[selected][5].number=true;
-  if(loseReply)throw Error('lost reply after flag');
+  if(loseReply){loseReply=false;throw Error('lost reply after flag');}
  }};
  return {channel,fields,matrices,inputMapping:{verified:true,inventory_complete:true,target_fields:fields},stats:()=>({clicks,observations})};
 }
@@ -52,4 +52,19 @@ test('refused removal ownership leaves every native flag unchanged',async()=>{
  await assert.rejects(configureDateTime(f.channel,{fields:[{field:{kind:'input_field',name:'B'},transformations:[]}]},{inputMapping:f.inputMapping,
   beforeChanges:()=>{throw Error('unowned original output');}}),/unowned original output/);
  assert.deepEqual(f.matrices,before);
+});
+
+test('verified continuation skips the applied flag and finishes remaining transformations',async()=>{
+ const f=fixture({loseReply:true}),progress={},p={fields:[{field:{kind:'input_field',name:'A'},transformations:[{operation:'year',name:'Year',label:'Год'},{operation:'quarter',name:'Quarter',label:'Квартал'}]}]};
+ let preflights=0;
+ const options={inputMapping:f.inputMapping,progress,beforeChanges:()=>{preflights++;}};
+ await assert.rejects(configureDateTime(f.channel,p,options),/lost reply/);
+ assert.equal(progress.pending.cell.func,4);assert.equal(f.matrices.A[4].number,true);
+ // Model the exact receipt + full matrix proof produced by inspectConfigure.
+ progress.expected.find(x=>x.name==='A').matrix=structuredClone(progress.pending.expected);delete progress.pending;
+ const clicks=f.stats().clicks,result=await configureDateTime(f.channel,p,options);
+ assert.equal(result.verified,true);assert.equal(preflights,1);
+ assert.equal(f.matrices.A[4].number,true);assert.equal(f.matrices.A[5].number,true);
+ assert.equal(f.stats().clicks-clicks,2,'one field selection and only one remaining setting click');
+ assert.equal(result.before[0].matrix[4].number,false);
 });

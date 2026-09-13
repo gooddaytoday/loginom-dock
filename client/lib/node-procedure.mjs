@@ -48,6 +48,7 @@ export function createNodeProcedure({ operation, execute, record, wrapMutation,
   let sequence = 0;
   const nextStep=()=>{sequence++;return operation.nodeStepSequence=(operation.nodeStepSequence??0)+1;};
   let snapshot = null;
+  let lastPreparedStep = null;
   let evidenceSnapshot = null;
   let snapshotTableDialog = null;
   let snapshotWizardConfirmation = null;
@@ -350,6 +351,7 @@ export function createNodeProcedure({ operation, execute, record, wrapMutation,
       evidenceSnapshot = null;
       if (!persisted || JSON.stringify(persisted.action) !== JSON.stringify(action)
         || persisted.signature !== signature) throw new Error('Prepared step was not durably preserved after redaction');
+      lastPreparedStep = structuredClone(persisted);
       signal?.throwIfAborted();
       if (now() >= operation.deadline) throw new Error('Node procedure deadline elapsed before mutation');
       const code = makeWorkspaceUiCode({ mode: 'act', operation_id: id, action,
@@ -449,6 +451,7 @@ export function createNodeProcedure({ operation, execute, record, wrapMutation,
       }
     },
     get steps() { return sequence; },
+    get lastPreparedStep() { return structuredClone(lastPreparedStep); },
   };
   return Object.freeze(channel);
 }

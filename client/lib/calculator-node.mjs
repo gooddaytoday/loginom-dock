@@ -44,6 +44,7 @@ export function createTabularTransformNodeSupport({targetOrigin,targetBuild},imp
  const nodeApplyDriverFactory=options=>{
   const {operation,execute,onRecord,now,receiptOptions}=options;
   let channel,activeSignal,configured,mapping,columns,executionDriver,executionReceipt,multipleOutputs,preconfiguration;
+  const configureProgress={};
   const enter=ctx=>{activeSignal=ctx.signal;operation.deadline=ctx.deadline;
    channel??=createNodeProcedure({operation,execute,record:onRecord,now,maxSteps:4096,targetOrigin,targetBuild,
     signal:{throwIfAborted:()=>activeSignal?.throwIfAborted(),get aborted(){return activeSignal?.aborted;},get reason(){return activeSignal?.reason;}},preparedNodeContext:{document_id:ctx.document_id,workflow_ref:ctx.workflow_ref,node:ctx.node},
@@ -59,6 +60,21 @@ export function createTabularTransformNodeSupport({targetOrigin,targetBuild},imp
    return verified({effect_possible:true,mode,settings_applied:true,execution_started:false,node_context:graph.prepared_node_context});
   };
   return {
+   ...(implementation?.inspectConfigure?{
+    async inspectConfigure(state,{signal}={}){
+     activeSignal=signal;operation.deadline=Math.min(state.deadline,state.configure_deadline,state.pending?.deadline??0);
+     requireValue(channel&&typeof options.readReceipt==='function','Original configure channel/receipt reader missing');
+     return implementation.inspectConfigure({channel,operation,progress:configureProgress,readReceipt:options.readReceipt,record:onRecord,now});
+    },
+    async verifyPendingConfigure(state,ctx){
+     const proof=await this.inspectConfigure(state,ctx);
+     requireValue(proof.verified===true,'Date/time configure continuation not verified');
+     configureProgress.expected=structuredClone(proof.expected);
+     delete configureProgress.pending;delete configureProgress.step;delete configureProgress.reference;
+     operation.transportUncertain=false;
+     return true;
+    },
+   }:{}),
    ...(implementation?.preflight?{beforeTarget:ctx=>implementation.preflight(options,ctx,{targetOrigin,targetBuild})}:{}),
    verifySource:async()=>verified({not_applicable:true,source_kind:'upstream_table'}),
    async openWizard(ctx) {
@@ -72,7 +88,18 @@ export function createTabularTransformNodeSupport({targetOrigin,targetBuild},imp
    },
    async configureCalculator(ctx,p) {
     enter(ctx);
-    if(implementation){const changed=await implementation.configure(channel,p,{request:operation.nodeApply.request,inputMapping:operation.nodeApply.phases.find(p=>p.phase==='input_mapping')?.value?.native_mapping,preconfiguration});configured=changed.configuration;return changed;}
+    if(implementation){
+     if(implementation.inspectConfigure){configureProgress.signature??=operation.nodeApply.signature;configureProgress.node??=structuredClone(operation.nodeApply.node);}
+     try{
+      const changed=await implementation.configure(channel,p,{request:operation.nodeApply.request,inputMapping:operation.nodeApply.phases.find(p=>p.phase==='input_mapping')?.value?.native_mapping,preconfiguration,
+       ...(implementation.inspectConfigure?{progress:configureProgress}:{})});configured=changed.configuration;return changed;
+     }catch(error){
+      if(implementation.inspectConfigure&&configureProgress.pending){
+       configureProgress.step=channel.lastPreparedStep;configureProgress.reference=structuredClone(operation.lastReceipt);
+      }
+      throw error;
+     }
+    }
     const changed=await configureCalculator(channel,p,{newNode:operation.nodeApply.request.target.kind==='new'});configured=changed.configuration;
     // Close discards this editor draft directly. Next can validate a formula or
     // synchronize a derived port, neither of which is needed for cancellation.

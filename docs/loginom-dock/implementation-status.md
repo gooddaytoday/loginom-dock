@@ -1,3 +1,20 @@
+# Узел13: целевое configure recovery проверено — 13 сентября 2026
+
+Реализовано Date/time-specific восстановление исходной configure после потерянного
+ответа flag click. Live 1de08440: тот же ID/session/runtime, полные 2×29 матрицы,
+без повторных флагов, remaining hour/Next/mapping/execute/read, **4×8**.
+Независимые recovery/config/raw/values PASS, 8/8 evidence negatives; реальный отказ
+при чужом выбранном поле. Client1449 PASS/1 SKIP, focused164, Python533.
+[Отчёт](node-13-configure-recovery-1.md), [план R2](node-13-r2-integration-plan.md).
+
+Ограничение: добавление новых выходов existing узла с autosync=false остановилось
+на 9 sources / 7 targets; это не успешный end-to-end случай. R2 не интегрирован,
+его live gate OPEN. Полная новая приёмка, final pins/catalog и Hermes не запускались.
+R3 и accepted10rowgoal не менялись. Следующий шаг требует dispatch координатора;
+не продолжать автоматически расширение scope, интеграцию или следующую приёмку.
+
+---
+
 # Узел13: вход приёмки приведён к public лимиту — 13 сентября2026
 
 Новая fixture10строк сохраняет все12 преобразований по двум датам и объявленные

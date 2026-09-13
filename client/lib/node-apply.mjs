@@ -119,15 +119,18 @@ export async function applyNode({request, operation, handlers, drivers, record,
     return saved;
   };
   let state=operation.nodeApply;
+  let continuingConfigure=false;
   if(state) {
     requireValue(state.signature===signature, 'node.apply operation ID was used with different parameters or handler');
-    if(state.pending)throw Error('Inspect the unresolved original node phase before continuing');
+    continuingConfigure=resume&&state.pending?.phase==='configure'&&request.target.type==='transform.date_time'
+      &&typeof drivers.verifyPendingConfigure==='function';
+    if(state.pending&&!continuingConfigure)throw Error('Inspect the unresolved original node phase before continuing');
     if(state.result)return structuredClone(state.result);
-    requireValue(resume && state.cleanup_complete===true, 'Explicit inspected resume is required');
+    requireValue(resume && (state.cleanup_complete===true||continuingConfigure), 'Explicit inspected resume is required');
     requireValue(state.resumes<3, 'Node resume budget exhausted');
     // A journal cannot resurrect an unsaved draft. The live driver must attest
     // the same prepared package and every already accepted phase.
-    requireValue(await drivers.verifyContinuation(state,{signal})===true, 'Live package or accepted phases differ from checkpoint');
+    requireValue(await (continuingConfigure?drivers.verifyPendingConfigure(state,{signal}):drivers.verifyContinuation(state,{signal}))===true, 'Live package or accepted phases differ from checkpoint');
     state.resumes++;
     delete state.verified_refusal;
   } else {
@@ -150,9 +153,11 @@ export async function applyNode({request, operation, handlers, drivers, record,
     const deadline=Math.min(state.deadline,now()+budget,configuration?state.configure_deadline:Infinity,
       name==='execute'?state.execution_wait?.deadline??Infinity:Infinity);
     requireValue(now()<deadline,'node.apply configuration deadline elapsed');
-    const pending={phase:name,receipt_id:operation.id+':'+name,deadline,
+    const oldConfigure=continuingConfigure&&name==='configure';
+    const pending=oldConfigure?state.pending:{phase:name,receipt_id:operation.id+':'+name,deadline,
       effect_possible:mutation,before_node:structuredClone(state.node)};
-    await acknowledge({phase:'node_phase_prepared',signature,receipt:pending});
+    requireValue(!oldConfigure||pending.receipt_id===operation.id+':configure'&&now()<pending.deadline,'Original configure boundary differs');
+    if(!oldConfigure)await acknowledge({phase:'node_phase_prepared',signature,receipt:pending});
     check();
     state.pending=pending;state.cleanup_complete=false;
     // Preserve uncertainty until the driver and journal both confirm completion.
