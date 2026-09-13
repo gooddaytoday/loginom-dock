@@ -1,3 +1,17 @@
+# Узел16: hardening проверен, контракт назначен — 13 сентября 2026
+
+Диагностический dc93af3f:6prototype/18evidence/5frontend hashes и lifecycle
+сверены помощником. Public code не менялся; atomic snapshot/server cancellation
+не доказаны, native32 не наблюдались. Исходный16scope требует exact scalar type/value,
+а не все эти отдельные свойства. Координатор согласовал
+[конкретный contract-design этап](node16-variant-contract-next-step-2026-09-13.md),
+разделяющий точность, полноту и согласованность без ложных гарантий.
+В прежней задаче Astra medium ход01a09a66-ab7d-7680-82c4-2dfb438c9de1 active.
+Pure diagnostic adapter разрешён, public integration/Hermes пока не назначены.
+Полная приёмка16 остаётся открытой. Все входящие обработаны.
+
+---
+
 # Узел14: приёмка3 FAIL, диагностика импорта назначена — 13 сентября 2026
 
 Run20260913-132939-0384fe0b: actual openai-codex/Sol/low,25API,
