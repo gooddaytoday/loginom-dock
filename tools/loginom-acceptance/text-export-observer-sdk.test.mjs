@@ -5,7 +5,7 @@ import {syntheticBinding} from './text-export-observer-fixture.mjs';
 import {bindObserver} from './text-export-observer-binding.mjs';
 import {checkStep,NATIVE_SMOKE_ADMITTED} from './text-export-observer-policy.mjs';
 async function run(t,options){const root=await mkdtemp(join(tmpdir(),'node17-sdk-unit-'));t.after(()=>rm(root,{recursive:true,force:true}));return offlineProof(root,options);}
-test('real SDK in-memory wrapper passes exact request once after synthetic native chain',async t=>{const r=await run(t);assert.equal(r.error,null);assert.equal(r.dispatched,1);assert.equal(r.calls,13);assert.equal(NATIVE_SMOKE_ADMITTED,false);});
+test('real SDK in-memory wrapper passes exact request once after synthetic native chain',async t=>{const r=await run(t);assert.equal(r.error,null);assert.equal(r.dispatched,1);assert.equal(r.calls,14);assert.equal(NATIVE_SMOKE_ADMITTED,false);});
 test('unregistered foreign invocation poisons observer even when swallowed',async t=>{const r=await run(t,{illegalCallAt:3});assert.equal(r.illegalBlocked,true);assert.equal(r.dispatched,0);assert.equal(r.hook.violated,true);});
 test('foreign owner, navigation, source, hidden scroll, duplicate download and cleanup negatives',async t=>{
  const variants=[
@@ -16,12 +16,12 @@ test('foreign owner, navigation, source, hidden scroll, duplicate download and c
   [7,r=>{r.output.ui.elements[0].interaction.state='outside_viewport';return r;}],
   [8,r=>({...r,observer_download_count:2})],
   [8,r=>({...r,cleanup_complete:false})],
-  [12,r=>{r.nodes[0].ref.node_id='other';return r;}]
+  [13,r=>{r.nodes[0].ref.node_id='other';return r;}]
  ];
  for(const [index,modify] of variants){const r=await run(t,{changeResponse:(r,i)=>i===index?modify(r):r});assert.equal(r.dispatched,0);assert.ok(r.error);}
 });
 test('binding refuses stale source, foreign run and unterminated operation anchors',()=>{
- const f=syntheticBinding();for(const change of [x=>{x.run.run_id='old'},x=>{x.session.sessionId='foreign'},x=>{const e=x.journal.trim().split('\n');x.journal=[...e.slice(1),e[0]].join('\n')},x=>{x.journal+=JSON.stringify({session_id:'session',runtime_revision:'a'.repeat(64),phase:'node_apply_prepared',operation_id:'pending'})+'\n'}]){
+ const f=syntheticBinding();for(const change of [x=>{x.run.run_id='old'},x=>{x.session.sessionId='foreign'},x=>{const e=x.journal.trim().split('\n');x.journal=[e[0],...e.slice(2),e[1]].join('\n')},x=>{x.journal+=JSON.stringify({session_id:'session',runtime_revision:'a'.repeat(64),phase:'node_apply_prepared',operation_id:'pending'})+'\n'}]){
   const x=structuredClone(f);change(x);assert.throws(()=>bindObserver({...x,overallDeadline:performance.now()+60000}));
  }
 });

@@ -5,6 +5,7 @@ Native admission is still independently blocked by text_export_readiness.py.
 import hashlib,json,re
 from pathlib import Path
 from text_export_observer_evidence import verify_observer
+from text_export_origin import observed_origin
 
 def one(xs):
     if len(xs)!=1:raise ValueError('Unique actual observer anchor required')
@@ -43,7 +44,7 @@ def verify_run_observer(directory,run,replace_request):
         # Deadline is a host-clock bound, not reconstructed from wall-clock UI
         # dates. The outer run timeout and wrapper source pin bind its origin.
         assert actual['mono_ms']<bound['overall_deadline_ms']
-        expected=dict(run_id=run['run_id'],session_id=session['sessionId'],runtime=session['clientRevision'],origin='http://logi-test-plan.bg.local',overall_deadline_ms=bound['overall_deadline_ms'],workflow_ref=replace_request['workflow_ref'],identity={**node,'source_node_id':source['node_id']},source_edge=dict(source=source['node_id'],output=inp['output'],target=node['node_id'],input=inp['input']),
+        expected=dict(run_id=run['run_id'],session_id=session['sessionId'],runtime=session['clientRevision'],origin=observed_origin(past,original['operation_id'],node,runtime=session['clientRevision'],session=session['sessionId']),overall_deadline_ms=bound['overall_deadline_ms'],workflow_ref=replace_request['workflow_ref'],identity={**node,'source_node_id':source['node_id']},source_edge=dict(source=source['node_id'],output=inp['output'],target=node['node_id'],input=inp['input']),
             baseline=dict(original_event_hash=sha(raw[original_i].rstrip(b'\r\n')),original_event_index=original_i,operation_id=original['operation_id'],execution_id=f['execution_id'],destination=destination,bytes=f['bytes'],sha256=f['sha256'],native_file='artifacts/input/output-'+f['artifact_id']+'/'+Path(destination).name,source_event_hash=sha(raw[si].rstrip(b'\r\n')),source_event_index=si),
             reject=dict(terminal_event_hash=sha(raw[ri].rstrip(b'\r\n')),terminal_event_index=ri,operation_id=reject['operation_id'],status='FAILED',cleanup_complete=True,verification='text_export_conflict_rejected',destination=destination),actual_replace_dispatch=actual)
         original_file=session_dir/expected['baseline']['native_file'];assert original_file.resolve().is_relative_to(session_dir.resolve()) and not original_file.is_symlink()

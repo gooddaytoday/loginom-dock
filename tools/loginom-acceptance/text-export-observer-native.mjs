@@ -1,6 +1,7 @@
 // Acceptance-only adapter. Reuses observed UI primitives; never starts a client.
 import {createHash} from 'node:crypto';
 import {performance} from 'node:perf_hooks';
+import {setTimeout as delay} from 'node:timers/promises';
 import {relative} from 'node:path';
 import {readFile} from 'node:fs/promises';
 import {makeWorkspaceUiCode} from '../../client/lib/workspace-ui.mjs';
@@ -21,6 +22,12 @@ export function projectGraph(g,c){
  need(edges.length===1&&same(edges[0],c.source_edge),'Observed source anchor changed');
  return {complete:true,...c.identity,workflow_ref:g.workflow_ref,settings_verified:false,graph:{nodes:g.nodes.map(({dom_epoch,...n})=>n),links:g.links,foreign_links:g.foreign_links}};
 }
+// One deadline, read-only resampling; no navigation action is repeated here.
+export async function waitObserved({sample,accept,guard,sleep=ms=>delay(ms),interval=250}){
+ for(;;){guard();const value=await sample();guard();if(accept(value))return value;
+  guard();await sleep(interval);guard();}
+}
+const owner=s=>({tab_tid:s.workflow_ref?.tab_tid,prefix:s.workflow_ref?.prefix});
 export function createNativeObserver({invoke,artifactRoot,record=async()=>{},clock=()=>performance.now()}){
  return async({context:c,readId,deadline,downloadPath,signal})=>{
   const ledger=[],seenRefs=new Set(),base={expected_origin:c.origin,expected_build:'7.4.2'};
@@ -28,7 +35,7 @@ export function createNativeObserver({invoke,artifactRoot,record=async()=>{},clo
   const run=async(step,code)=>{
    guard();checkStep(step,c);
    if(step.kind==='root')need(seenRefs.has(step.ref),'Unknown observation root');
-   need(ledger.length<32,'Observer action count exceeded');
+   need(ledger.length<512,'Observer action count exceeded');
    const start=clock();await record({phase:'prepared',seq:ledger.length+1,step,code_sha256:hash(code),run_id:c.run_id,session_id:c.session_id,mono_start:start});guard();
    const response=await invoke({code,signal,timeout:Math.max(1,Math.floor(deadline-clock()))});guard();
    const result=parseBrowserResult(response);
@@ -44,24 +51,37 @@ export function createNativeObserver({invoke,artifactRoot,record=async()=>{},clo
    const adapter=createNodeTargetBrowserAdapter({origin:c.origin,build:'7.4.2',execute:code=>{need(++calls===1,'Graph retry forbidden');return run({kind:'graph'},code);}});
    return projectGraph(await adapter.observe(c.graph_request,Date.now()+Math.max(1,deadline-clock())),c);
   };
+  let documentEpoch;
   const observe=async(step)=>{
    const options=step.kind==='roots'?{discover_roots:true}:step.kind==='row'?{discover_roots:true,storage_name:step.name}:{root_ref:step.ref};
-   return (await run(step,makeWorkspaceUiCode({mode:'observe',...base,...options}))).output;
+   const s=(await run(step,makeWorkspaceUiCode({mode:'observe',...base,...options}))).output;guard();
+   need(s?.authenticated===true&&s.origin===c.origin&&s.loginom_build==='7.4.2'&&!s.ui?.dialogs?.length,'Observation owner blocked');
+   need(typeof s.dom_epoch?.document==='string'&&s.dom_epoch.document.length>0&&s.workflow_ref?.tab_tid&&s.workflow_ref?.prefix,'Unknown observation owner');
+   documentEpoch??=s.dom_epoch.document;need(s.dom_epoch.document===documentEpoch,'Observation document changed');return s;
   };
   const roots=()=>observe({kind:'roots'}),root=ref=>observe({kind:'root',ref});
   const nav=async(kind,s,e)=>run({kind,snapshot:s,element:e},makeWorkspaceUiCode({mode:'act',...base,snapshot:s,action:{verb:kind==='folder'?'double_click':'click',ref:e.ref}}));
   const control=async tid=>{const s=await roots(),e=one(s.ui.elements.filter(e=>e.tid===tid));return root(e.ref);};
-  const directory=async()=>{let s=await roots();const e=one(s.ui.elements.filter(e=>e.tid===s.workflow_ref?.prefix+';NavigationBar;NavigationPanel'));return root(e.ref);};
-  const row=async name=>{let s=await observe({kind:'row',name});return root(one(s.ui.elements.filter(e=>e.tid===s.workflow_ref.prefix+';FileStorageForm;colName_'+name)).ref);};
+  const wait=(sample,accept)=>waitObserved({sample,accept,guard,sleep:ms=>delay(ms,undefined,{signal})});
+  const graphOwner=owner({workflow_ref:c.workflow_ref});let filesOwner;
+  const directory=async(expected=null,pending=null)=>wait(async()=>{
+   const s=await roots();guard();
+   if(filesOwner)need(same(owner(s),filesOwner),'Storage owner changed');
+   const panels=s.ui.elements.filter(e=>e.tid===s.workflow_ref.prefix+';NavigationBar;NavigationPanel');
+   if(!panels.length){need(!filesOwner&&same(owner(s),graphOwner),'Unknown navigation owner');return null;}
+   const r=await root(one(panels).ref);guard();need(same(owner(s),owner(r)),'Navigation owner changed during read');
+   need(r.file_storage?.status==='observed'&&typeof r.file_storage.directory==='string','Unknown storage path');
+   filesOwner??=owner(r);need(same(owner(r),filesOwner),'Foreign storage owner');
+   const path=r.file_storage.directory;need((expected?[expected,pending]:['/','/test-2']).includes(path),'Foreign navigation path');
+   return r;
+  },s=>s!==null&&!s.ui.masks?.length&&(!expected||s.file_storage.directory===expected));
+  const row=async name=>{let s=await observe({kind:'row',name});need(same(owner(s),filesOwner),'Foreign row owner');const r=await root(one(s.ui.elements.filter(e=>e.tid===s.workflow_ref.prefix+';FileStorageForm;colName_'+name)).ref);need(same(owner(r),filesOwner),'Foreign row root owner');return r;};
   const before=await graph();
   let s=await control('MF;cntMain;tlbMainToolbar');await nav('files',s,one(s.ui.elements.filter(e=>e.tid==='MF;cntMain;tlbMainToolbar;btnFilestorage')));
   s=await directory();
-  if(!['/','/test-2'].includes(s.file_storage?.directory)){
-   await nav('home',s,one(s.ui.elements.filter(e=>e.tid===s.workflow_ref.prefix+';cnrNaviMode;b.s_Сервер>Файлы')));s=await directory();need(s.file_storage.directory==='/','Unknown navigation');
-  }
   if(s.file_storage.directory==='/'){
    s=await row('test-2');await nav('folder',s,one(s.ui.elements.filter(e=>e.label==='test-2'&&e.storage_entry?.kind==='folder')));
-   s=await directory();
+   s=await directory('/test-2','/');
   }
   need(s.file_storage?.directory==='/test-2','Exact storage not reached');
   const name=c.baseline.destination.split('/').at(-1);s=await row(name);
@@ -74,6 +94,7 @@ export function createNativeObserver({invoke,artifactRoot,record=async()=>{},clo
   const downloaded=await run(step,counted);
   need(downloaded.cleanup_complete===true&&downloaded.observer_download_count===1&&downloaded.observer_listener_registered===true&&downloaded.output?.download_completed===true&&downloaded.output.suggested_name===name&&same(downloaded.output.output_binding,task.output_binding),'Native download binding incomplete');
   s=await control('MF;cntMain;cntWorkspace;Workspace;t.br');await nav('return',s,one(s.ui.elements.filter(e=>e.tid===c.workflow_ref.tab_tid)));
+  await wait(roots,s=>{need(same(owner(s),filesOwner)||same(owner(s),graphOwner),'Foreign return owner');return same(owner(s),graphOwner)&&!s.ui.masks?.length;});
   const after=await graph();need(same(before,after),'Observed graph/identity changed');checkActionLedger(ledger,c);guard();
   const bytes=await readFile(downloadPath);guard();
   const payloads=[before,{}, {},{suggested_name:name,download_completed:true,destination:c.baseline.destination},c.identity,after];

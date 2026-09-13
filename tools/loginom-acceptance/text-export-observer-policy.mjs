@@ -25,7 +25,7 @@ export function checkStep(step,c){
  return true;
 }
 export function checkActionLedger(ledger,c){
- need(Array.isArray(ledger)&&ledger.length>=6&&ledger.length<=32,'Incomplete action ledger');
+ need(Array.isArray(ledger)&&ledger.length>=6&&ledger.length<=512,'Incomplete action ledger');
  for(const [i,e] of ledger.entries()){
   need(e.seq===i+1&&e.session_id===c.session_id&&e.run_id===c.run_id&&e.cleanup_complete===true&&e.mono_end>=e.mono_start&&(i===0||e.mono_start>=ledger[i-1].mono_end),'Action chain differs');
   checkStep(e.step,c);need(/^[a-f0-9]{64}$/.test(e.code_sha256)&&e.response!==undefined,'Raw browser evidence missing');

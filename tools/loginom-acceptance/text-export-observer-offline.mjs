@@ -9,12 +9,12 @@ import {fileURLToPath} from 'node:url';
 import {installObserverSdk} from './text-export-observer-sdk.mjs';
 import {syntheticBinding,syntheticNativeResponses} from './text-export-observer-fixture.mjs';
 import {bindObserver} from './text-export-observer-binding.mjs';
-export async function offlineProof(root,{changeResponse=(r)=>r,changeJournal=x=>x,illegalCallAt=null,illegalDirect=false,compactWorkflow=false}={}){
+export async function offlineProof(root,{changeResponse=(r)=>r,changeJournal=x=>x,illegalCallAt=null,illegalDirect=false,compactWorkflow=false,transformResponses=x=>x}={}){
  root=await realpath(root);const state=join(root,'private','dock-state'),sessionDir=join(state,'sessions','session');await mkdir(sessionDir,{recursive:true,mode:0o700});
  const f=syntheticBinding();f.journal=changeJournal(f.journal);const overallDeadline=performance.now()+60000;
  await writeFile(join(sessionDir,'session.json'),JSON.stringify(f.session));await writeFile(join(sessionDir,'execution-events.jsonl'),f.journal);
  if(compactWorkflow)f.request.params.arguments.workflow_ref={workflow_id:f.workflow_ref.workflow_id};
- const context=bindObserver({...f,overallDeadline}),responses=syntheticNativeResponses(context);
+ const context=bindObserver({...f,overallDeadline}),responses=transformResponses(syntheticNativeResponses(context));
  const originalPath=join(sessionDir,context.baseline.native_file);await mkdir(join(originalPath,'..'),{recursive:true});await writeFile(originalPath,'x\n');
  const browserServer=new Server({name:'synthetic-browser',version:'1'},{capabilities:{tools:{}}});let calls=0,dispatched=0,illegalBlocked=false,hook;
  const browser=new Client({name:'loginom-dock-browser',version:'1'}),foreign=new Client({name:'foreign',version:'1'});

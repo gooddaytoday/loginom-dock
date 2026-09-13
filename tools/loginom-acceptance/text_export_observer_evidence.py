@@ -70,12 +70,13 @@ def project_graph(g,c):
     return dict(complete=True,**c['identity'],workflow_ref=g['workflow_ref'],settings_verified=False,graph=dict(nodes=[{k:v for k,v in n.items() if k!='dom_epoch'} for n in g['nodes']],links=g['links'],foreign_links=g['foreign_links']))
 
 def verify_action_ledger(ledger,c,before,after):
-    assert 6<=len(ledger)<=32
+    assert 6<=len(ledger)<=512
     kinds=[e['step']['kind'] for e in ledger];assert kinds[0]==kinds[-1]=='graph'
     assert kinds.count('files')==kinds.count('download')==kinds.count('return')==1
     d=kinds.index('download');ret=kinds.index('return');assert 0<d<ret<len(kinds)-1
     assert not any(k in ['files','folder','home','download'] for k in kinds[d+1:])
-    refs=set();name=Path(c['baseline']['destination']).name
+    refs=set();name=Path(c['baseline']['destination']).name;document_epoch=None;files_owner=None
+    graph_owner={k:c['workflow_ref'][k] for k in ['tab_tid','prefix']}
     for i,e in enumerate(ledger):
         step=e['step'];kind=step['kind'];assert kind in ['graph','roots','root','row','files','home','folder','download','return']
         assert e['seq']==i+1 and e['run_id']==c['run_id'] and e['session_id']==c['session_id'] and e['cleanup_complete'] is True
@@ -85,7 +86,19 @@ def verify_action_ledger(ledger,c,before,after):
         if kind in ['graph','roots']:assert set(step)=={'kind'}
         if kind=='root':assert set(step)=={'kind','ref'} and step['ref'] in refs
         if kind=='row':assert set(step)=={'kind','name'} and step['name'] in ['test-2',name]
+        if kind in ['roots','root','row']:
+            obs=response['output'];assert obs['authenticated'] is True and obs['origin']==c['origin'] and obs['loginom_build']=='7.4.2' and not obs['ui']['dialogs']
+            epoch=obs['dom_epoch']['document'];assert isinstance(epoch,str) and epoch
+            if document_epoch is None:document_epoch=epoch
+            assert epoch==document_epoch,'Observer UI document changed'
+            owner={k:obs['workflow_ref'][k] for k in ['tab_tid','prefix']};assert all(owner.values())
+            fs=obs.get('file_storage',{})
+            if kinds.index('files')<i<ret and fs.get('status')=='observed' and fs.get('directory') in ['/','/test-2']:
+                if files_owner is None:files_owner=owner
+                assert owner==files_owner,'Observer storage owner changed'
+            if i>ret:assert owner in [files_owner,graph_owner],'Foreign return owner'
         if kind in ['files','home','folder','return','download']:
+
             s=step['snapshot'];el=step['element'];assert s['authenticated'] is True and s['origin']==c['origin'] and s['loginom_build']=='7.4.2' and not s['ui']['dialogs'] and not s['ui']['masks']
             assert s['ui']['elements'].count(el)==1 and el['ref'] in refs
             prefix=s['workflow_ref']['prefix']

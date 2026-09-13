@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Independent byte auditor: no imports from the handler and no native-file writes."""
 import argparse, copy, csv, hashlib, io, json, pathlib, stat
+from text_export_origin import observed_origin
 
 def expected_bytes(fixture, settings):
     stream = io.StringIO(newline='')
@@ -87,7 +88,7 @@ def audit(receipt, fixture, settings, actual, destination, execution_id=None, ev
         assert all(downloaded['output']['output_binding'][k] == v for k,v in binding.items())
         assert one('export_file_read_completed')['workflow_return_verified'] is True
         assert len({e['session_id'] for e in own}) == 1 and len({e['runtime_revision'] for e in own}) == 1
-        assert all(e['target']['origin'].rstrip('/') == 'http://logi-test-plan.bg.local' and e['target']['loginom_build'] == '7.4.2' for e in own)
+        observed_origin(events, node['operation_id'], node['node'], runtime=expected_runtime, session=verified['session_id'])
         assert expected_runtime is None or {e['runtime_revision'] for e in own} == {expected_runtime}
     return {'passed':True, 'bytes':len(actual), 'sha256':artifact['sha256'], 'rows':len(fixture['rows']), 'columns':len(fixture['names']), 'execution_id':run}
 

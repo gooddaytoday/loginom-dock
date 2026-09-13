@@ -16,7 +16,7 @@ import {createRedactor} from '../../client/lib/redact.mjs';
 import {installObserverSdk} from './text-export-observer-sdk.mjs';
 import {parseBrowserResult} from './text-export-observer-native.mjs';
 const need=(v,m)=>{if(!v)throw Error(m);},hash=x=>createHash('sha256').update(x).digest('hex');
-const assignment='node17:native-observer-smoke:1:18b3ac38';
+const assignment='node17:observer-navigation-origin-fix:1:e74d14d2';
 need(process.argv.length===4&&process.argv[2]==='--assignment'&&process.argv[3]===assignment,'Explicit assigned smoke required');
 process.umask(0o077);
 const root=resolve('.'),work=join(root,'tools/loginom-acceptance');
@@ -92,7 +92,7 @@ let captureConnect;
 try{
  session=await createSession(config);need(session.metadata.clientRevision===pin.runtime,'Session runtime changed');
  const run={assignment,run_id:runId,goal_id:'text-export-node-complete',result_profile:config.resultProfile,probe_scope:'reject_baseline_native_smoke_only',scope:'source_runtime',model_launched:false,loginom_url:config.loginomUrl,storage_directory:'/test-2',runtime_source_pin:{client_revision:pin.runtime,inputs:pin.runtime_inputs},budget:{timeout_seconds:600},free_before_browser:free,acceptance_observer:{contract:2,native_smoke_admitted:false}};
- const harness=Object.fromEntries(await Promise.all(Object.keys(pin.harness_inputs).map(async n=>[n,hash(await fs.readFile(join(work,n)))])));harness['text-export-observer-smoke.mjs']=hash(await fs.readFile(new URL(import.meta.url)));run.harness_inputs=harness;await save('request.json',run);
+ const harness=Object.fromEntries(await Promise.all([...new Set([...Object.keys(pin.harness_inputs),...(await fs.readdir(work)).filter(n=>/\.(py|mjs)$/.test(n))])].map(async n=>[n,hash(await fs.readFile(join(work,n)))])));harness['text-export-observer-smoke.mjs']=hash(await fs.readFile(new URL(import.meta.url)));run.harness_inputs=harness;await save('request.json',run);
  const bytes=await fs.readFile(join(work,'fixtures/text-export/input/main.csv'));
  await admitStartupArtifacts(session.artifactStore,[{sourcePath:join(work,'fixtures/text-export/input/main.csv'),name:`Dock-export-${runId}-main.csv`,bytes:bytes.length,sha256:hash(bytes),upload:{directory:'/test-2',overwrite:'reject'}}]);
  hook=installObserverSdk({Client,Server,CallToolRequestSchema,runDirectory:runDir,stateDirectory:stateDir,run,overallDeadline});
