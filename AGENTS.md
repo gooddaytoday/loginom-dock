@@ -3,7 +3,10 @@
 ## Project contract
 
 - Start here: `docs/loginom-dock/agent-handoff.md` (reading order, code map,
-  user decisions, known follow-up work).
+  user decisions, known follow-up work). For every new node and coordinator
+  resumption, follow `docs/plans/loginom-dock/node-workflow-runbook.md`: preparation,
+  shared-memory enrollment, phase gates, isolation and completion events. Future
+  node enrollment is not implemented yet; do not expand the active v1 route list.
 - Production paths, access, build/deploy/rollback and current inventory:
   `docs/loginom-dock/operations.md`. Verify live state before server changes;
   repository HEAD, deployed server and installed client may have different revisions.
@@ -28,9 +31,10 @@
 ## OpenViking memory
 
 - Before substantial work, check memory health and the injected context. Use
-  `find` or `search` in list mode in your own workspace-derived memory with
-  `peer_scope="actor"`; the main checkout uses the project URI above, while a
-  node worktree keeps its own path-derived Peer. Verify it when the path changes.
+  `find` or `search` in list mode with `peer_scope="actor"`. The main checkout
+  uses the project URI above; verified migrated node11–14 worktrees use the same
+  shared Peer. Unmapped worktrees keep their path-derived Peer until coordinator
+  enrollment. Verify the effective route when the path changes.
   Retrieve relevant global User memory separately within actor scope as needed.
   The shared-project read/write transition is explicitly authorized below. Other
   cross-project retrieval still requires permission; never set a global Peer override.

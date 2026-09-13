@@ -3,7 +3,7 @@
   "kind": "four_stream_node_roadmap",
   "date": "2026-09-12",
   "status": "planned_queue_with_active_assignments",
-  "scope": "70 ещё не принятых компонентов; ручное назначение. Это план, не результат приёмки новых handlers.",
+  "scope": "70 ещё не принятых компонентов; автоматическое назначение по итоговым событиям после допуска. Это план, не результат приёмки новых handlers.",
   "precedence_notes": [
     "Последнее уточнение 13.09.2026: отключить периодический опрос; разработчики сообщают о завершении этапа и необходимых действиях при блокере. Автоматическое продолжение запускается по сообщениям, heartbeat сначала приостановлен, затем удалён пользователем.",
     "Уточнение пользователя 13.09.2026: ревью и доработки Astra/medium в той же задаче; после одного раунда доработок повторное ревью не запускать. Это отменяет прежние xhigh и повторное ревью.",
@@ -2566,15 +2566,18 @@
     "shared_project_memory": {
       "permission": "read/write confirmed project knowledge through shared official capture",
       "target_uri": "viking://user/kartamyshev/peers/-Users-kartamyshev-Git-loginom-dock/memories",
-      "cross_peer_call_scope": "legacy exact-root read only until shared actor routing verified",
+      "cross_peer_call_scope": "actor in verified shared routes; no broad all",
       "keep_own_peer": false,
       "sibling_worktrees_allowed": false,
       "periodic_recall": false,
       "policy": "docs/loginom-dock/shared-project-memory.md",
       "target_peer": "-Users-kartamyshev-Git-loginom-dock",
       "preserve_separate_sessions": true,
-      "routing_status": "canonical hooks trusted; legacy capture preserved; awaiting completed phases and app restart before runtime cutover"
-    }
+      "routing_status": "20260913.3 active for node11–14; registered actor access verified; fresh task enrollment not implemented",
+      "future_node_enrollment_ready": false,
+      "future_node_enrollment_gate": "Independent registration preserving active route hashes, pending bootstrap, fresh enrollment, registered actor checks before development; verify without global reload"
+    },
+    "runbook": "docs/plans/loginom-dock/node-workflow-runbook.md"
   },
   "accepted_components": [
     {
@@ -2767,7 +2770,7 @@
   },
   "finalized_at": "2026-09-13T00:04:38.014661+03:00",
   "current_execution_note": {
-    "all_four_streams": "development_resumed_after_dock_and_personal_memory_recovery",
+    "all_four_streams": "Last confirmed checkpoint: node11/12 correction completed awaiting candidate/Hermes; node13/14 development resumed after user restart; all four shared-memory actor access verified",
     "dispatch": "Automatic same-task review/fixes, then new task/worktree/branch after all gates; separate user command for merging",
     "previous_incident_probe": {
       "verified_by": "coordinator curl without credentials",
@@ -2782,6 +2785,7 @@
       "checked_at": "2026-09-13T00:04:38.012878+03:00"
     },
     "updated_date": "2026-09-13",
-    "report": "docs/loginom-dock/dock-availability-2026-09-13.md"
+    "report": "docs/loginom-dock/dock-availability-2026-09-13.md",
+    "checkpoint": "docs/loginom-dock/agent-handoff.md"
   }
 }
