@@ -1009,13 +1009,14 @@ function browserCapability(page, task) {
     await poll(async () => !(await resolve('file_dialog.file_name', {}, { cardinality: 'zeroOrOne', stable: false })));
     const errorMessage = await resolve('message.error', {}, { cardinality: 'zeroOrOne', stable: false });
     if (errorMessage) throw new Error((await errorMessage.innerText()).slice(0, 500));
+    // Both save modes await the native Save As completion before a menu click.
+    // Its handler awaits DoSavePackage before hiding the menu; clicking earlier
+    // can toggle that still-visible menu closed instead of opening Close.
+    await poll(async () => !(await resolve('packages.save_as', {}, { cardinality: 'zeroOrOne', stable: false })));
+    const saveError = await resolve('message.error', {}, { cardinality: 'zeroOrOne', stable: false });
+    if (saveError) throw new Error((await saveError.innerText()).slice(0, 500));
+    record('save_flow_completed', { path: before.path });
     if (keepOpen) {
-      // Native btnSaveAsPackageHandler awaits DoSavePackage before hiding its
-      // menu. btnSavePackageHandler does not, so it cannot supply this receipt.
-      await poll(async () => !(await resolve('packages.save_as', {}, { cardinality: 'zeroOrOne', stable: false })));
-      const saveError = await resolve('message.error', {}, { cardinality: 'zeroOrOne', stable: false });
-      if (saveError) throw new Error((await saveError.innerText()).slice(0, 500));
-      record('save_flow_completed', { path: before.path });
       const prefix = await ensureReady();
       const actualPath = normalizeStoredPath((await packageIdentity()).path);
       const graph = await graphSnapshot(prefix);
@@ -1047,6 +1048,8 @@ function browserCapability(page, task) {
     }
     transientDialog = false;
     await click('packages.menu');
+    await poll(() => resolve('packages.close', {}, { cardinality: 'zeroOrOne', stable: false }));
+    record('package_close_command_ready');
     await click('packages.close', true);
     // Closing and reopening necessarily changes the selected tab identity.
     const closedTabTid = workflow.tab_tid;

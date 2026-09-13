@@ -3,6 +3,44 @@ import {makeNativeOutputDownloadCode,withBrowserReceipt} from './executor.mjs';
 import {readPreparedNodeContext} from './node-context.mjs';
 import {createHash} from 'node:crypto';
 const need=(v,m)=>{if(!v)throw Error(m);},one=xs=>{need(xs.length===1,'Unique export file control required');return xs[0];};
+// A virtual file row may not exist in the DOM until its page is rendered.
+// Search only the observed folder, through bounded native scroll gestures.
+export async function findNativeStorageRow({name,read,roots,ready,act,guard}) {
+ const suffix=';FileStorageForm;colName_'+name.replace(/\s/g,'_').replace(/,/g,'');
+ let binding=null,owner=null,lastTop=null,direction=null;
+ const bind=s=>{
+  need(s.file_storage?.status==='observed','Export search folder unavailable');
+  const value=JSON.stringify({workflow:s.workflow_ref,directory:s.file_storage.directory});
+  if(binding===null)binding=value;else need(value===binding,'Export search folder changed');
+ };
+ const table=()=>ready(async()=>{const r=await roots();const es=r.ui.elements.filter(e=>e.tid===r.workflow_ref?.prefix+';FileStorageForm;pnlFileStorage;tbl');need(es.length<=1,'Export table ambiguous');return es.length?read({root_ref:es[0].ref}):r;},s=>s.file_storage?.status==='observed');
+ guard();
+ const initial=await read({discover_roots:true,storage_name:name});
+ const issued=initial.ui.elements.filter(e=>e.tid===initial.workflow_ref?.prefix+suffix);need(issued.length<=1,'Export file row is ambiguous');
+ if(issued.length){const found=await read({root_ref:issued[0].ref});bind(found);need(found.ui.elements.filter(e=>e.tid===found.workflow_ref.prefix+suffix&&e.label===name).length===1,'Export file name changed');return found;}
+ let s=await table();bind(s);
+ for(let step=0;step<=12;step++){
+  guard();
+  const r=await read({discover_roots:true,storage_name:name});
+  const matches=r.ui.elements.filter(e=>e.tid===r.workflow_ref?.prefix+suffix);
+  need(matches.length<=1,'Export file row is ambiguous');
+  if(matches.length){const found=await read({root_ref:matches[0].ref});bind(found);need(found.ui.elements.filter(e=>e.tid===found.workflow_ref.prefix+suffix&&e.label===name).length===1,'Export file name changed');return found;}
+  s=await table();bind(s);
+  const anchors=s.ui.elements.filter(e=>e.tid?.startsWith(s.workflow_ref.prefix+';FileStorageForm;colName_')&&e.scroll&&e.allowed_actions.includes('scroll')&&e.interaction?.state==='point_observed');
+  if(!anchors.length)throw Error('Export file absent from rendered folder; no scroll owner');
+  const e=anchors[0],scroll=e.scroll;
+  need(anchors.every(a=>a.scroll.ref===scroll.ref),'Export search scroll owner ambiguous');
+  if(owner===null){owner=scroll.ref;direction=scroll.top>0?'up':'down';}
+  need(scroll.ref===owner,'Export search scroll owner changed');
+  if(lastTop!==null)need(direction==='up'?scroll.top<lastTop:scroll.top>lastTop,'Export search scroll did not advance');
+  if(direction==='up'&&scroll.top===0){direction='down';lastTop=null;}
+  if(direction==='down'&&scroll.top>=scroll.max_top)throw Error('Export file absent at folder end');
+  need(step<12,'Export file search scroll budget exhausted');
+  const delta=direction==='up'?-Math.min(1000,scroll.top):Math.min(1000,scroll.max_top-scroll.top);
+  lastTop=scroll.top;await act(s,e,'scroll',{delta_y:delta});
+ }
+ throw Error('Export file search exhausted');
+}
 // Navigates only the assigned storage path using the existing observed UI
 // controls. Downloads use the shared artifact primitive, never a network API.
 export async function readNativeExportFile(options,ctx,configuration,execution){
@@ -20,20 +58,22 @@ export async function readNativeExportFile(options,ctx,configuration,execution){
  const guard=()=>{ctx.signal?.throwIfAborted();need(Date.now()<ctx.deadline,'Export file read deadline elapsed');};
  const record=async(phase,data)=>{const r=await onRecord({phase,operation_id:operation.id,...data});need(r?.phase===phase&&r.operation_id===operation.id,'Export file receipt not acknowledged');};
  const base={expected_origin:targetOrigin,expected_build:targetBuild};
- const read=async options=>{guard();const r=await execute(makeWorkspaceUiCode({mode:'observe',...base,...options}));need(r.status==='SUCCEEDED','Export storage observation failed');return r.output;};
+ const read=async options=>{guard();const r=await execute(makeWorkspaceUiCode({mode:'observe',...base,...options}));need(r.status==='SUCCEEDED','Export storage observation failed: '+(r.error?.code??'UNKNOWN')+' '+(r.error?.message??''));return r.output;};
  const quiet=s=>s.authenticated&&s.origin===targetOrigin&&s.loginom_build===targetBuild&&!s.ui.dialogs.length&&!s.ui.masks.length;
  const ready=async(fn,condition)=>{for(let i=0;i<100;i++){guard();const s=await fn();if(quiet(s)&&condition(s))return s;await new Promise(r=>setTimeout(r,100));}throw Error('Export storage did not settle');};
  const roots=()=>read({discover_roots:true});
- const act=async(s,e,verb='click')=>{
-  const original={workflow:s.workflow_ref,directory:s.file_storage?.directory,package:s.package_identity,tid:e.tid,label:e.label};
+ const act=async(s,e,verb='click',extra={})=>{
+  const original={workflow:s.workflow_ref,directory:s.file_storage?.directory,package:s.package_identity,tid:e.tid,label:e.label,root:s.observation_root?.ref};
   for(let attempt=0;attempt<3;attempt++){
   guard();need(quiet(s)&&e.allowed_actions.includes(verb),'Export storage gesture unavailable');
-  const id=operation.id+':export-file-'+(++sequence),action={verb,ref:e.ref},signature=createHash('sha256').update(JSON.stringify({action,snapshot:s})).digest('hex');
+  const id=operation.id+':export-file-'+(++sequence),action={verb,ref:e.ref,...extra},signature=createHash('sha256').update(JSON.stringify({action,snapshot:s})).digest('hex');
   await record('export_file_step_prepared',{id,action,signature});uncertain=true;
   const r=await execute(withBrowserReceipt('('+makeWorkspaceUiCode({mode:'act',snapshot:s,action,...base})+')(page)',{...receiptOptions(id,'ui.act',signature),operation_id:id}));
   await record('export_file_step_completed',{id,outcome:r});uncertain=r.cleanup_complete!==true;
   if(r.status==='NOT_APPLIED'&&r.effect_possible===false&&r.cleanup_complete===true&&r.error?.code==='UI_EPOCH_CHANGED'&&attempt<2){
-   const fresh=await read({root_ref:e.ref}),matches=fresh.ui.elements.filter(x=>x.ref===e.ref&&x.tid===original.tid&&x.label===original.label);
+   // Keep the stable table root during scroll retries: virtual rows can
+   // detach after the gesture, so they cannot own its post-observation.
+   const fresh=await read({root_ref:verb==='scroll'?original.root:e.ref}),matches=fresh.ui.elements.filter(x=>x.ref===e.ref&&x.tid===original.tid&&x.label===original.label);
    need(quiet(fresh)&&JSON.stringify(fresh.workflow_ref)===JSON.stringify(original.workflow)&&fresh.file_storage?.directory===original.directory&&JSON.stringify(fresh.package_identity)===JSON.stringify(original.package)&&matches.length===1,'Export control changed during pre-gesture refresh');
    s=fresh;e=matches[0];continue;
   }
@@ -42,8 +82,7 @@ export async function readNativeExportFile(options,ctx,configuration,execution){
   }
  };
  const inDirectory=expected=>ready(async()=>{const r=await roots(),e=r.ui.elements.find(e=>e.tid===r.workflow_ref?.prefix+';NavigationBar;NavigationPanel');return e?read({root_ref:e.ref}):r;},s=>s.file_storage?.status==='observed'&&(expected===undefined||s.file_storage.directory===expected));
- const row=async n=>ready(async()=>{const r=await read({discover_roots:true,storage_name:n}),es=r.ui.elements.filter(e=>e.tid===r.workflow_ref?.prefix+';FileStorageForm;colName_'+n);
-  need(es.length<=1,'Export file row is ambiguous');return es.length?read({root_ref:es[0].ref}):r;},s=>s.ui.elements.some(e=>e.tid===s.workflow_ref?.prefix+';FileStorageForm;colName_'+n&&e.label===n));
+ const row=name=>findNativeStorageRow({name,read,roots,ready,act,guard});
  try{
   await record('export_file_lease_prepared',{binding:fileBinding,artifact_id:lease.artifact_id});
   let r=await roots(),toolbar=one(r.ui.elements.filter(e=>e.tid==='MF;cntMain;tlbMainToolbar'));

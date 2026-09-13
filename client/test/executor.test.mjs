@@ -454,3 +454,24 @@ test('save waits for requested reopened tab while another package remains visibl
  assert.equal(outcome.status,'SUCCEEDED',JSON.stringify(outcome.error));assert.equal(waits,2);
  assert.equal(page.events.filter(e=>e==='package_reopened').length,1);
 });
+
+test('save/reopen waits for Save As completion before toggling the menu and for its Close command',async()=>{
+ for(const delayed of ['save-menu','close-command']){
+  const page=linkPage(),click=page.click.bind(page),wait=page.waitForTimeout.bind(page),elements=page.elements.bind(page);
+  let hideAt=null,closeAt=null,saved=false,saveClicks=0,closeClicks=0;
+  page.click=async item=>{const wasMenu=page.menu;await click(item);
+   if(item.symbol==='packages.menu'){
+    if(wasMenu)page.menu=false;
+    if(saved&&delayed==='close-command'&&!page.events.includes('package_closed'))closeAt=page.clock+300;
+   }
+   if(item.symbol==='packages.save_as'){saveClicks++;if(delayed==='save-menu')page.menu=true;}
+   if(item.symbol==='file_dialog.confirm'&&!saved){saved=true;if(delayed==='save-menu')hideAt=page.clock+400;}
+   if(item.symbol==='packages.close')closeClicks++;
+  };
+  page.waitForTimeout=async ms=>{await wait(ms);if(hideAt!==null&&page.clock>=hideAt){page.menu=false;hideAt=null;}};
+  page.elements=()=>{const all=elements();return closeAt!==null&&page.clock<closeAt?all.filter(e=>e.symbol!=='packages.close'):all;};
+  const out=await run(page,'package.save_as',{path:'/user/data/packages/awaited-reopen.lgp',conflict_policy:'fail'});
+  assert.equal(out.status,'SUCCEEDED',delayed+': '+JSON.stringify(out.error));assert.equal(out.output.reopened,true);
+  assert.equal(saveClicks,1);assert.equal(closeClicks,1);assert.deepEqual(page.events.filter(e=>e.startsWith('package_')),['package_closed','package_reopened']);
+ }
+});

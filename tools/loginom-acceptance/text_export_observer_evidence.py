@@ -101,6 +101,23 @@ def verify_download_reveal(step,response):
     assert type(after) is int and after>=moved['to'] and abs(after-moved['max_top'])<=1
     assert reveal_trace_valid(adjusted,adjusted,s,e['ref']),'Native reveal proof differs'
 
+def verify_search_scroll(step,response,c):
+    assert set(step)=={'kind','name','snapshot','element','delta_y'}
+    s=step['snapshot'];el=step['element'];b=el['scroll'];root=s['observation_root']
+    assert step['name']==Path(c['baseline']['destination']).name
+    assert s['authenticated'] is True and s['origin']==c['origin'] and s['loginom_build']=='7.4.2' and not s['ui']['dialogs'] and not s['ui']['masks']
+    assert s['file_storage']['directory']=='/test-2'
+    prefix=s['workflow_ref']['prefix'];assert root['identity']['anchor_tid']==prefix+';FileStorageForm;pnlFileStorage;tbl'
+    assert s['ui']['elements'].count(el)==1 and el['tid'].startswith(prefix+';FileStorageForm;colName_')
+    assert 'scroll' in el['allowed_actions'] and el['interaction']['state']=='point_observed'
+    assert b['ref']==root['ref'] and type(b['top']) is int and type(b['max_top']) is int and 0<=b['top']<=b['max_top']
+    delta=step['delta_y'];assert type(delta) is int and 0<abs(delta)<=1000
+    if safe_return_refusal(response):return
+    assert response['status']=='SUCCEEDED' and response['cleanup_complete'] is True and response['output']['gesture_applied'] is True
+    moves=[e for e in response['trace'] if e['event']=='ui_scroll_applied'];assert len(moves)==1
+    m=moves[0];assert m['owner_ref']==b['ref'] and m['from']==b['top'] and m['to']==max(0,min(b['max_top'],b['top']+delta)) and m['to']!=b['top']
+    out=response['output'];assert out['workflow_ref']==s['workflow_ref'] and out['file_storage']['directory']==s['file_storage']['directory'] and out['dom_epoch']['document']==s['dom_epoch']['document']
+
 def verify_action_ledger(ledger,c,before,after):
     assert 6<=len(ledger)<=512
     kinds=[e['step']['kind'] for e in ledger];assert kinds[0]==kinds[-1]=='graph'
@@ -110,16 +127,20 @@ def verify_action_ledger(ledger,c,before,after):
     assert all(safe_return_refusal(e['response']) for e in returns[:-1]),'Unsafe return retry'
     assert all(return_binding(e['step'])==return_binding(returns[0]['step']) for e in returns),'Return owner changed'
     d=kinds.index('download');ret=max(i for i,k in enumerate(kinds) if k=='return');assert 0<d<ret<len(kinds)-1
-    assert not any(k in ['files','folder','home','download'] for k in kinds[d+1:])
+    assert not any(k in ['files','folder','home','download','search_scroll'] for k in kinds[d+1:])
+    search=[e for e in ledger if e['step']['kind']=='search_scroll'];assert len(search)<=36 and sum(e['response'].get('status')=='SUCCEEDED' for e in search)<=12
     refs=set();name=Path(c['baseline']['destination']).name;document_epoch=None;files_owner=None
     graph_owner={k:c['workflow_ref'][k] for k in ['tab_tid','prefix']}
     for i,e in enumerate(ledger):
-        step=e['step'];kind=step['kind'];assert kind in ['graph','roots','root','row','files','home','folder','download','return']
+        step=e['step'];kind=step['kind'];assert kind in ['graph','roots','root','row','files','home','folder','download','return','search_scroll']
         assert e['seq']==i+1 and e['run_id']==c['run_id'] and e['session_id']==c['session_id'] and e['cleanup_complete'] is True
         assert math.isfinite(e['mono_start']) and math.isfinite(e['mono_end']) and e['mono_end']>=e['mono_start'] and (i==0 or e['mono_start']>=ledger[i-1]['mono_end'])
         assert len(e['code_sha256'])==64 and all(x in '0123456789abcdef' for x in e['code_sha256'])
-        response=e['response'];refused=kind=='return' and safe_return_refusal(response)
+        response=e['response'];refused=kind in ['return','search_scroll'] and safe_return_refusal(response)
         assert refused or 'status' not in response or response['status']=='SUCCEEDED'
+        if kind=='search_scroll':
+            assert step['element']['ref'] in refs
+            verify_search_scroll(step,response,c)
         if kind in ['graph','roots']:assert set(step)=={'kind'}
         if kind=='root':assert set(step)=={'kind','ref'} and step['ref'] in refs
         if kind=='row':assert set(step)=={'kind','name'} and step['name'] in ['test-2',name]

@@ -5,10 +5,11 @@ import {setTimeout as delay} from 'node:timers/promises';
 import {relative} from 'node:path';
 import {readFile} from 'node:fs/promises';
 import {makeWorkspaceUiCode} from '../../client/lib/workspace-ui.mjs';
+import {findNativeStorageRow} from '../../client/lib/text-export-output.mjs';
 import {makeNativeOutputDownloadCode} from '../../client/lib/executor.mjs';
 import {createNodeTargetBrowserAdapter} from '../../client/lib/node-target-browser.mjs';
 import {observeResponse} from './text-export-observer-response.mjs';
-import {need,same,checkStep,checkActionLedger,safeReturnRefusal,returnBinding,checkDownloadReveal} from './text-export-observer-policy.mjs';
+import {need,same,checkStep,checkActionLedger,safeReturnRefusal,returnBinding,checkDownloadReveal,checkSearchScroll} from './text-export-observer-policy.mjs';
 const hash=v=>createHash('sha256').update(v).digest('hex');
 const one=xs=>{need(xs.length===1,'Unique observed control required');return xs[0];};
 export function parseBrowserResult(reply){
@@ -44,9 +45,9 @@ export function createNativeObserver({invoke,artifactRoot,record=async()=>{},rec
     result=await observeResponse({invoke,parse:parseBrowserResult,guard,clock,signal,deadline,code,record:recordResponse,
      binding:{seq:ledger.length+1,step_kind:step.kind,run_id:c.run_id,session_id:c.session_id,read_id:readId,mono_start:start},
      validate:r=>{
-      if(step.kind==='return'&&safeReturnRefusal(r))return;
+      if(['return','search_scroll'].includes(step.kind)&&safeReturnRefusal(r))return;
       if(r.status!==undefined)need(r.status==='SUCCEEDED','Native step incomplete');
-      if(['files','home','folder','return'].includes(step.kind))need(r.cleanup_complete===true&&r.output?.gesture_applied===true,'Navigation cleanup unknown');
+      if(['files','home','folder','return','search_scroll'].includes(step.kind))need(r.cleanup_complete===true&&r.output?.gesture_applied===true,'Navigation cleanup unknown');
      }});
    }catch(error){
     await record({phase:'failure',seq:ledger.length+1,step:{kind:step.kind},code_sha256:hash(code),run_id:c.run_id,session_id:c.session_id,read_id:readId,mono_start:start,mono_end:clock(),deadline_ms:deadline,cancelled:signal.aborted,cleanup_complete:null,pending_ui_actions:null});
@@ -95,7 +96,21 @@ export function createNativeObserver({invoke,artifactRoot,record=async()=>{},rec
    s=await directory('/test-2','/');
   }
   need(s.file_storage?.directory==='/test-2','Exact storage not reached');
-  const name=c.baseline.destination.split('/').at(-1);s=await row(name);
+  const name=c.baseline.destination.split('/').at(-1);
+  s=await findNativeStorageRow({name,guard,roots,
+   read:o=>o.storage_name?observe({kind:'row',name:o.storage_name}):o.discover_roots?roots():root(o.root_ref),
+   ready:(fn,condition)=>wait(fn,s=>!s.ui.masks?.length&&condition(s)),
+   act:async(snapshot,element,verb,extra)=>{
+    const tableRef=snapshot.observation_root.ref,anchor={ref:element.ref,tid:element.tid,label:element.label};
+    for(let attempt=0;attempt<3;attempt++){
+     const step={kind:'search_scroll',name,snapshot,element,delta_y:extra.delta_y};
+     const result=await run(step,makeWorkspaceUiCode({mode:'act',...base,snapshot,action:{verb:'scroll',ref:element.ref,delta_y:extra.delta_y}}));checkSearchScroll(step,result);
+     if(result.status==='SUCCEEDED')return;
+     need(attempt<2&&safeReturnRefusal(result),'Search refresh budget exhausted');
+     const next=await root(tableRef);need(same(next.workflow_ref,snapshot.workflow_ref)&&next.file_storage?.directory===snapshot.file_storage.directory,'Search refresh owner changed');
+     element=one(next.ui.elements.filter(e=>e.ref===anchor.ref&&e.tid===anchor.tid&&e.label===anchor.label));snapshot=next;
+    }
+   }});
   const e=one(s.ui.elements.filter(e=>e.tid===s.workflow_ref.prefix+';FileStorageForm;colName_'+name&&e.label===name));
   const step={kind:'download',snapshot:s,element:e,...(e.interaction?.state==='outside_viewport'?{reveal:{file_ref:e.ref,owner_ref:e.scroll?.ref,from:e.scroll?.top,max_top:e.scroll?.max_top,limit:1000}}:{})};checkStep(step,c);
   const task={...base,operation_id:'observer:'+readId,artifact:{artifact_id:readId,name},output_binding:{session_id:c.session_id,document_id:c.identity.document_id,workflow_id:c.identity.workflow_id,node_id:c.identity.node_id,execution_id:c.baseline.execution_id,destination:c.baseline.destination,directory:'/test-2'},expected_bytes:c.baseline.bytes,snapshot:s,file_ref:e.ref,observation_id:s.observation_id,download_path:downloadPath};

@@ -1,3 +1,14 @@
+# Node17: исправлены ожидание Save As и поиск виртуальной строки
+
+Полная приёмка остаётся незавершённой. Full6 FAIL и read-only original audit
+сохранены. В диагностике подтверждены save/close/reopen копии и поиск точного
+CSV, ранее отсутствовавшего в DOM насыщенной папки test-2. Клиент66/66,
+Text export Python24/24; итоговый набор80 JavaScript PASS. Component
+`20260913-224754-cbf8ef54` и независимый аудит PASS, готовность к новому Hermes
+при сохранении незавершённой полной приёмки. Pins и исторические ограничения —
+в [отчёте исправлений](../plans/loginom-dock/17-text-export-save-reopen-fix.md).
+Повторного полного review, Hermes без слота, merge и выпуска не было.
+
 # Node17: account probe локализован; кандидат подготовлен к отдельной попытке
 
 Назначение `node17:account-probe-diagnosis:1:95a8105c`: source/SDK проверка не

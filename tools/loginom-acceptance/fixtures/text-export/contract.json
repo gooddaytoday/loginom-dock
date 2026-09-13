@@ -2,7 +2,7 @@
   "node": "node17",
   "component": "component.exports.Text",
   "source": "2524921058b29db0e79e9a188ec7bb8fa9ef9d8c",
-  "runtime": "2897649a8d2120d25e4c80af8af2c6cdd834023b5bda1a1bd5baf073c6e9ba32",
+  "runtime": "cd471237bdf5bc67bc668a02b3c5d1ad118b3e9fcfc74a235f10449ac5c1e01f",
   "platform": "Loginom 7.4.2 Linux",
   "storage": "/test-2",
   "cases": [
