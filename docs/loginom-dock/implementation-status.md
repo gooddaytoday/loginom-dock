@@ -1,3 +1,16 @@
+# Node17: fixed account probe — единственная попытка остановлена до baseline
+
+Назначение `node17:user-v1-account-preflight:1:0f37df75`: acceptance-only probe
+закреплён в `0bda0f6e`; 4 focused Node и 20 Text export Python тестов прошли.
+Один новый real stdio run `20260913-152128-6b736e15` подготовил document внутри
+runtime, но account probe не вернул raw result за 30 секунд. Public prepare reply,
+account identity и menu closure не подтверждены. Delivery/node/observer/replace
+не запускались. Браузер закрыт, процессов нет; global config/runtime неизменны.
+Full admission закрыт, user-v1 component/full goal не приняты, Hermes не запускался.
+Автоповтора нет. Следующий trigger координатору: адресная диагностика подшага
+account probe с ограниченным partial evidence до host timeout.
+[Checkpoint и исходное evidence](../plans/loginom-dock/17-text-export-account-preflight.md).
+
 # Node17: candidate admission реализован; user-v1 preflight остановлен до узлов
 
 Назначение `node17:final-admission-preflight:1:79e648b2`: unconditional blocker
