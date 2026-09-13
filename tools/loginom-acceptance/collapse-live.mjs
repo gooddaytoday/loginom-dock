@@ -20,7 +20,7 @@ await fs.symlink(process.env.HOME+'/.loginom-dock/runtime/browsers',dir+'/runtim
 const session=await createSession({stateDir:dir,agent:'codex',adapterRevision:'node16-diagnostic',mode:'executor-replay'});
 session.metadata.targetIdentity={origin:url.origin,loginom_build:'7.4.2'};
 await fs.writeFile(dir+'/session.json',JSON.stringify(session.metadata,null,2));
-const diagnostic={dropReply:null,dropped:[]};
+const diagnostic={dropReply:null,dropUploadReply:null,dropped:[],nodeDrivers:new Map()};
 const client=new Client({name:'collapse-live',version:'1'}),transport=new StdioClientTransport({command:process.execPath,
  args:[session.browserCli,'--config',session.browserConfig],env:{...getDefaultEnvironment(),PLAYWRIGHT_BROWSERS_PATH:session.browserRoot},stderr:'pipe'});
 transport.stderr?.on('data',()=>{});let sequence=0,wire;
@@ -30,6 +30,9 @@ const execute=async code=>{
  await fs.writeFile(dir+'/browser-'+(++sequence)+'.json',JSON.stringify(r));
  const text=r.content.filter(c=>c.type==='text').map(c=>c.text).join('\n'),raw=text.match(/^### Result\n([\s\S]*?)(?:\n### |$)/)?.[1];
  if(!raw)throw Error(text.slice(0,1000));const value=JSON.parse(raw);
+ if(diagnostic.dropUploadReply&&value.action_key==='artifact.upload'&&value.operation_id===diagnostic.dropUploadReply&&value.output?.upload_submitted===true&&value.cleanup_complete===true){
+  const lost={operation_id:diagnostic.dropUploadReply,browser_sequence:sequence,native_result_saved:true};diagnostic.dropUploadReply=null;diagnostic.dropped.push(lost);await fs.writeFile(dir+'/dropped-upload-replies.json',JSON.stringify(diagnostic.dropped,null,2));throw Error('Diagnostic lost upload acknowledgement after native completion');
+ }
  const fault=diagnostic.dropReply,act=value.output?.value;
  if(fault&&value.operation_id===fault.operation_id&&act?.action_key==='ui.act'&&act.status==='SUCCEEDED'&&act.output?.gesture_applied===true&&code.includes(JSON.stringify('verb')+':'+JSON.stringify(fault.verb))){
   diagnostic.dropReply=null;const receipt={operation_id:fault.operation_id,verb:fault.verb,browser_sequence:sequence,gesture_applied:true};diagnostic.dropped.push(receipt);await fs.writeFile(dir+'/dropped-replies.json',JSON.stringify(diagnostic.dropped,null,2));throw Error('Diagnostic reply loss after a verified browser gesture');
@@ -67,7 +70,8 @@ try {
  for(const a of actions)if(['package.save_as','package.save_checkpoint'].includes(a.action_key))a.effect.allowed_roots=[storage];
  const config={targetOrigin:url.origin,targetBuild:'7.4.2'},support=createCandidateNodeSupport(config);
  const rawRuntime=createActionRuntime({pinned:{actions:new Map(actions.map(a=>[a.action_key,a])),selectors:new Map(selectors.map(s=>[s.symbol,s])),pins:{}},
-  execute,onRecord:record,...config,allowCandidate:true,artifactStore:session.artifactStore,...support});
+  execute,onRecord:record,...config,allowCandidate:true,artifactStore:session.artifactStore,...support,
+  nodeApplyDriverFactory:options=>{diagnostic.nodeDrivers.set(options.operation.id,options);return support.nodeApplyDriverFactory(options);}});
  wire=await createPublicNodeWire(rawRuntime,{directory:dir,browserSequence:()=>sequence});
  const ctx={execute,session,dir,fs,record,prep,diagnostic,runtime:wire.runtime,rawRuntime};
  console.log(JSON.stringify({dir,status:'READY',runtime:session.metadata.clientRevision}));

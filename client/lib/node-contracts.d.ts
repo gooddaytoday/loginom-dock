@@ -23,7 +23,7 @@ export interface PortMapping {
 export interface NodeApplyRequest<T extends NodeType, P> extends NodeTargetRequest<T> {
   operation_id: string; contract_revision: string; mode: string; parameters: P;
   mappings: PortMapping[]; finish: 'done' | 'execute' | 'close';
-  read: {ports: number[]; sample_rows: number; require_exact_numbers: boolean};
+  read: {ports: number[]; sample_rows: number; require_exact_numbers: boolean; coverage?: 'sample' | (T extends 'transform.collapse_columns' ? 'full' : never)};
   budgets: {configure_ms: number; execute_ms: number; total_ms: number};
 }
 export interface NodeHandler<T extends NodeType, P> {
@@ -118,13 +118,40 @@ export interface SortingConfigurationReadback {
 }
 export interface NodeError {code: string; message: string; cause?: {code: string; message: string}}
 export interface NodeExecution {status: 'not_requested' | 'pending' | 'completed' | 'cancelled'; execution_id: string | null; stop_verified?: boolean}
-export interface TableCell {
+export interface LegacyTableCell {
+  cell_type?: never; native?: never;
   type: string; is_null: boolean; precision: string;
   /** Exact integers are decimal strings; real values retain canonical decimal text. */
   value?: string | number | boolean | null; decimal?: string; representation?: string;
   display_text?: string; timezone?: string;
 }
-export interface NodeOutputPort {
+export type NativeScalarType = 'integer' | 'real' | 'string' | 'boolean' | 'datetime';
+interface NativeCellBase<T extends NativeScalarType | 'null', V, R extends string, N> {
+  type: T extends 'null' ? NativeScalarType | 'variant' : T | 'variant';
+  cell_type: T; is_null: T extends 'null' ? true : false; precision: 'exact_native';
+  value: V; representation: R; native: N; display_text?: never;
+}
+export type NativeTableCell =
+  | NativeCellBase<'null', null, 'native_null', {tag: 1; encoding: 'null'}>
+  | (NativeCellBase<'integer', string, 'decimal_integer', {tag: 20; encoding: 'signed-int64-le'; bits: 64; bytes_le: string}> & {decimal: string})
+  | (NativeCellBase<'real', string, 'binary64_decimal', {tag: 5; encoding: 'ieee754-binary64-le'; bits: 64; bytes_le: string}> & {decimal: string})
+  | NativeCellBase<'string', string, 'native_string', {tag: 8; encoding: 'utf8'; utf8_hex: string}>
+  | NativeCellBase<'boolean', boolean, 'native_boolean', {tag: 11; encoding: 'boolean8'; bytes_le: '00' | '01'}>
+  | (NativeCellBase<'datetime', string, 'native_oadate_binary64_le', {tag: 7; encoding: 'oadate-binary64-le'; bits: 64; bytes_le: string;
+      temporal_profile: 'loginom-7.4.2-native-oadate'; semantic_scope: 'native_serial_only'; civil_time_verified: false; epoch_verified: false}> & {decimal: string; timezone: 'unspecified'});
+export type TableCell = LegacyTableCell | NativeTableCell;
+export interface ExactTable {rows: NativeTableCell[][]; complete: true}
+export interface NativeReadCoverage {cells_read: number; rows_read: number; columns_read: number; table_complete: true}
+export interface NativeReadConsistency {
+  kind: 'observed_local'; changed: false; exclusive_operation: true; stability_basis: 'owned_static_completed_fixture';
+  atomic_snapshot: false; unobserved_aba_excluded: false;
+}
+export interface NativeReadBinding {
+  read_id: string; document_id: string; workflow_id: string; package_id: string; node_id: string; port_guid: string;
+  execution: {status: 'completed'; execution_id: string};
+}
+export interface NodeOutputPortBase {
+
   port: number; port_guid: string; fresh: boolean; execution_id: string; freshness_basis?: string;
   table?: {view_guid: string; port_guid: string; table_tid: string};
   schema: {index: number; name: string; label: string; type: string; data_kind?: string; header_tid?: string}[];
@@ -132,6 +159,15 @@ export interface NodeOutputPort {
   precision: {numbers_verified: boolean; limitations: string[]; strings: string};
   table_schema_id?: string; filter_enabled?: boolean;
 }
+export interface LegacyNodeOutputPort extends NodeOutputPortBase {
+  exact_table?: never; read_coverage?: never; read_consistency?: never; binding?: never; cell_precision?: never;
+}
+export interface NativeNodeOutputPort extends NodeOutputPortBase {
+  sample: NativeTableCell[][]; exact_table: ExactTable; read_coverage: NativeReadCoverage;
+  read_consistency: NativeReadConsistency; binding: NativeReadBinding;
+  cell_precision: {cells: 'exact_native'; temporal: 'native_serial_only'}; limitations: string[];
+}
+export type NodeOutputPort = LegacyNodeOutputPort | NativeNodeOutputPort;
 export interface NodeOutput {
   status: 'not_refreshed' | 'partial' | 'complete'; evidence_ref: string | null;
   execution_id?: string; ports?: NodeOutputPort[]; no_output_requested?: boolean;

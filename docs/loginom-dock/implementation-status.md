@@ -1,3 +1,15 @@
+# Node16: исправлены R16-1–3 после одного review — 13 сентября 2026
+
+Private upload lineage отклоняет устаревший/неопределённый источник; native read
+связан с53реально загруженными функциями и8constants. Типы sample/full/native
+проверены TypeScript5.2.2. Fullclient1483PASS/1SKIP/0FAIL; независимый final-source
+verifier3public cases/164cells PASS, полное save/newsession сравнение PASS.
+Header-only/all-null дополнительные live остановки сохранены и не засчитаны.
+Один correction round, без повторного review; полная node/Hermes acceptance
+остаётся незавершённой. [Результат и ограничения](node16-review-fix-result-2026-09-13.md).
+
+---
+
 # Node16: bounded exact-full подключён к исходникам — 13 сентября 2026
 
 Этап `node16:exact-wiring:1:7e1bbab9` завершён: private static provenance,

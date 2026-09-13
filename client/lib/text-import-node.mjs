@@ -1,3 +1,4 @@
+import {verifyUploadLineage} from './upload-lineage.mjs';
 import {configureOutputFields,configureOutputAutosync,reorderOutputFields,resolveConfiguredOutputMapping} from './port-mapping-procedure.mjs';
 import {resolveTextImportEncoding} from './text-import-encoding.mjs';
 import {createNodeProcedure} from './node-procedure.mjs';
@@ -37,7 +38,7 @@ export function validateTextImportNodeParameters(p,mode,request) {
   'Private import node currently supports Done/Execute/Close with optional executed output 0 and configured output fields with at least one used field; input mappings and output exclusion are not installed');
 }
 
-export function verifyTextImportSource(parameters,uploads) {
+export function verifyTextImportSource(parameters,uploads,uploadHistory) {
   try {
   const s=parameters.source;
   const u=one(uploads.filter(u=>u.operation_id===s.upload_operation_id),'Verified upload operation is missing or ambiguous');
@@ -57,7 +58,9 @@ export function verifyTextImportSource(parameters,uploads) {
     && (s.bytes===undefined || s.bytes===bytes) && (s.sha256===undefined || s.sha256===sha256),
   'Upload bytes, digest, artifact or exact destination do not match the source');
   validateTextImportPatch({source:{source_path:proof.destination}});
-  return verified({source:{...s,bytes,sha256,destination:proof.destination,verification_id:proof.verification_id}});
+  const source={...s,bytes,sha256,destination:proof.destination,verification_id:proof.verification_id};
+  if(uploadHistory)source.lineage=verifyUploadLineage(source,uploadHistory);
+  return verified({source});
   } catch(error) {
     // This preflight reads only the host's completed upload receipts. No browser
     // call or source upload can have occurred, even when the supplied ID is wrong.
@@ -97,7 +100,7 @@ export function createTextImportNodeSupport({targetOrigin,targetBuild}) {
     configurationReadback:textImportConfigurationReadback,
     validate:validateTextImportNodeParameters,
     configure:(ctx,p,drivers)=>drivers.configureTextImport(ctx,p)}]]);
-  const nodeApplyDriverFactory=({operation,execute,onRecord,now,receiptOptions,verifiedUploads})=>{
+  const nodeApplyDriverFactory=({operation,execute,onRecord,now,receiptOptions,verifiedUploads,uploadHistory})=>{
     let channel,configured,outputColumns,owner,executionDriver,executionReceipt,sourceReceipt,activeSignal;
     const continuationSignal={throwIfAborted:()=>activeSignal?.throwIfAborted(),get aborted(){return activeSignal?.aborted;},get reason(){return activeSignal?.reason;}};
     const enter=ctx=>{
@@ -121,7 +124,7 @@ export function createTextImportNodeSupport({targetOrigin,targetBuild}) {
       return read(to,'import '+to+' ready');
     };
     return {
-      verifySource:async p=>(sourceReceipt=verifyTextImportSource(p,verifiedUploads())),
+      verifySource:async p=>(sourceReceipt=verifyTextImportSource(p,verifiedUploads(),uploadHistory?.())),
       async openWizard(ctx) {
         enter(ctx);
         if(operation.nodeApply.request.finish==='execute') {

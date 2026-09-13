@@ -6,6 +6,8 @@ export async function readNativeVariant(page,b,decode,options={}) {
   need(b.port===0&&b.method===321&&b.interface===116&&Number.isInteger(b.offset)&&b.offset>=0&&Number.isInteger(b.rows)&&b.rows>=0&&b.rows<=50&&b.offset===0&&b.rows===b.row_count&&Array.isArray(b.columns)&&b.columns.length>0&&b.columns.length<=8&&new Set(b.columns).size===b.columns.length,'fixed bounds');
   need(b.execution.status==='completed'&&b.execution.execution_id.startsWith(b.document_id+':'),'completed execution');
   const prep=globalThis.__loginomDockPreparationV1;
+  const runtime=globalThis.__loginomDockCollapseRuntimeV1;
+  need(runtime?.document===document&&runtime.binding_id===b.runtime_binding_id&&typeof b.runtime_binding_id==='string','loaded runtime proof required');
   need(prep?.document===document&&prep.id===b.document_id&&bg.app.Version==='7.4.2'&&location.origin===b.origin,'document/build');
   const receipt=[...prep.receipts.values()].find(r=>r.phase==='verified'&&r.workflowId===b.workflow_id&&r.nodeTargetWorkflowNode);
   need(receipt&&receipt.tab===document.querySelector('[data-tid='+JSON.stringify(b.tab_tid)+']')&&receipt.tab.classList.contains('x-tab-active'),'workflow receipt');
@@ -43,6 +45,7 @@ export async function readNativeVariant(page,b,decode,options={}) {
    const root=document.querySelector('[data-tid='+JSON.stringify(b.prefix+';ModelForm;PreviewWindow;PreviewForm;DataSetForm')+']');
    need(root?.checkVisibility({checkVisibilityCSS:true}),'visible dataset');
    const dc=v(Ext.getCmp(root.id),'Controller'),dt=v(dc,'FDataTable'),ds=v(dc,'FDataSource'),store=v(dt,'FDataSourceStore'),helper=v(ds,'$FHelper'),identity=v(ds,'$');
+   need(globalThis.__loginomDockCollapseRuntimeV1===runtime,'loaded runtime guard replaced');runtime.check(v(ds,'$S'));
    need(dc.FModelNode===node.data&&ds===v(dt,'FDataSource')&&v(v(store,'proxy'),'dataSource')===ds&&v(helper,'FBaseProxy')===ds,'datasource binding');
    need(v(identity,'$OW')===b.source.owner&&v(identity,'$O')===b.source.object,'datasource identity changed');
    need(v(identity,'$I')===116&&Number.isInteger(v(identity,'$OW'))&&v(identity,'$OW')>=0&&Number.isInteger(v(identity,'$O')),'interface116');
@@ -86,7 +89,7 @@ export async function readNativeVariant(page,b,decode,options={}) {
    const releaseRequest=()=>{if(request){request.Release();request=null;op.releasedRequests++;}};
    const releaseResponse=x=>{if(x){x.Release();op.releasedResponses++;}};
    try{
-    request=session.$M.GetDynamicData();request.set_StaticDataSize(32);
+    request=session.$M.GetDynamicData();runtime.check(session,request);request.set_StaticDataSize(32);
     request.InitializeMethodCallMessage(initial.owner,initial.object,321,0);
     request.WriteParameter(0,row);request.WriteParameter$a(8,column);
     // false avoids exception-object unmarshalling through another remote interface.
@@ -104,6 +107,7 @@ export async function readNativeVariant(page,b,decode,options={}) {
     });
     live();
     need(equal(snapshot()),'stale owner/schema/cache after read');
+    runtime.check(session,response);
     need(response.get_MessageType()===1,'non-value response; no exception unmarshalling');
     need(response.get_MessageID()===request.get_MessageID(),'response ID mismatch');
     response.set_StaticDataSize(12);

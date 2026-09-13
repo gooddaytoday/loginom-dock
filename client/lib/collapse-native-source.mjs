@@ -1,9 +1,10 @@
+import {verifyUploadLineage} from './upload-lineage.mjs';
 import {verifyTextImportSource} from './text-import-node.mjs';
 const need=(x,m)=>{if(!x)throw Error(m);};
 
 // Receipts come only from the current executor's private operations map.
 // A later failed/unfinished change invalidates an earlier successful import.
-export function completedStaticImports(history,uploads,ctx) {
+export function completedStaticImports(history,uploads,ctx,uploadHistory) {
  need(Array.isArray(history)&&history.length<=1024,'Bounded private node history required');
  const seen=new Set(),accepted=[];
  for(const item of [...history].reverse()) {
@@ -17,6 +18,8 @@ export function completedStaticImports(history,uploads,ctx) {
    ||JSON.stringify(c.node)!==JSON.stringify(ref))continue;
   const verified=verifyTextImportSource(r.parameters,uploads).source;
   if(c.source.source_path!==verified.destination)continue;
+  need(Number.isSafeInteger(item.sequence),'Private import execution order required');
+  verified.lineage=verifyUploadLineage(verified,uploadHistory,{executionSequence:item.sequence});
   accepted.push({node_id:ref.node_id,execution_id:n.execution.execution_id,import_operation_id:r.operation_id,
    source:verified,configuration:c});
  }

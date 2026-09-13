@@ -1,3 +1,4 @@
+import {bindLoadedNativeRuntime,collectNativeRuntime,verifyLoadedNativeRuntime} from './collapse-native-runtime.mjs';
 import {createHash} from 'node:crypto';
 import {completedStaticImports,bindCollapseNative} from './collapse-native-source.mjs';
 import {decodeVariantFrame} from './variant-native-decode.mjs';
@@ -38,7 +39,7 @@ async function verifyFrontends(execute,origin,signal) {
 export async function readCollapseNativeOutput(channel,read,ctx,options,config) {
  const {execute,operation,onRecord,now}=options;
  need(options.exclusiveNodeOperation?.()===true,'Exact read requires the owning executor operation lock');
- const imports=completedStaticImports(options.nodeHistory?.(),options.verifiedUploads?.(),ctx);
+ const imports=completedStaticImports(options.nodeHistory?.(),options.verifiedUploads?.(),ctx,options.uploadHistory?.());
  const frontends=await verifyFrontends(execute,config.targetOrigin,ctx.signal);
  const graph=s=>s.prepared_node_context?.surface==='graph'&&s.wizard?.status==='absent';
  let s=await channel.observe({condition:'exact output graph',readOutputs:true,ready:s=>graph(s)&&s.node_outputs?.verified===true});
@@ -52,11 +53,13 @@ export async function readCollapseNativeOutput(channel,read,ctx,options,config) 
  const args={document_id:ctx.document_id,workflow_id:ctx.workflow_ref.workflow_id,package_id:ctx.document_id+':'+ctx.workflow_ref.workflow_id,
   node_id:ctx.node.node_id,port_guid:port.port_guid,execution:ctx.execution,tab_tid:ctx.workflow_ref.tab_tid,prefix:ctx.workflow_ref.prefix,
   origin:config.targetOrigin,imports,schema:preview.node_preview_schema.fields.map(f=>({name:f.name,label:f.label,type:codes[f.type]}))};
+ const readId='native-'+createHash('sha256').update(operation.id+':'+ctx.execution.execution_id).digest('hex').slice(0,48);
+ const loaded=await execute(`async page=>(${bindLoadedNativeRuntime.toString()})(page,${JSON.stringify({...args,binding_id:readId})},${collectNativeRuntime.toString()})`,{timeout:10000});
+ const loadedRuntime=verifyLoadedNativeRuntime(loaded,{binding_id:readId,document_id:ctx.document_id});
  const binding=await execute(`async page=>(${bindCollapseNative.toString()})(page,${JSON.stringify(args)})`,{timeout:10000});
  const countLoaderPins={PrepareColumnInfoAndRowCount:'d952415558676c3caf569a51d88bf026e661abdaaf08842d870ddba139730e3f',InitOutput:'c01544ac551e88997f9cea9b62314234ad435bc7632357861cdfc6013e89960e',DataSourceProxyRead:'6206671eaf111d80459c3ed1d5878125ef37918fb1abacc1cd19ce42c7fdf91d'};
  for(const [name,pin] of Object.entries(countLoaderPins))need(createHash('sha256').update(binding.count_loader_sources[name]).digest('hex')===pin,'Native count loader changed: '+name);
- delete binding.count_loader_sources;
- const readId='native-'+createHash('sha256').update(operation.id+':'+ctx.execution.execution_id).digest('hex').slice(0,48);
+ delete binding.count_loader_sources;binding.runtime_binding_id=readId;
  const timeoutMs=Math.min(30000,ctx.deadline-now());need(timeoutMs>0,'Exact read deadline elapsed');
  ctx.signal?.throwIfAborted();need(options.exclusiveNodeOperation()===true,'Exact operation exclusion lost');
  let cancellation;
@@ -77,7 +80,7 @@ export async function readCollapseNativeOutput(channel,read,ctx,options,config) 
  await channel.perform({condition:'close exact output Preview',initialObservation:closing,ready:s=>s.node_preview_schema?.verified===true&&s.node_preview_schema.port_guid===port.port_guid,
   identity:()=>({node:ctx.node,port_guid:port.port_guid,root}),resolve:s=>{const es=s.ui.elements.filter(e=>e.tid===root+';p.h;close'&&e.allowed_actions.includes('click'));need(es.length===1,'Owned Preview close unavailable');return {verb:'click',ref:es[0].ref};}});
  const returned=await channel.observe({condition:'exact output graph restored',ready:graph});
- const proof={binding,count_loader_sha256:countLoaderPins,read_id:readId,frontends,lifecycle:native.lifecycle,coverage:exact.coverage,source_profile:binding.static_source};
+ const proof={binding,loaded_runtime:loadedRuntime,count_loader_sha256:countLoaderPins,read_id:readId,frontends,lifecycle:native.lifecycle,coverage:exact.coverage,source_profile:binding.static_source};
  await recordNativeProof(onRecord,operation.id,proof);
  return {verified:true,cleanup_complete:true,effect_possible:true,status:'complete',execution_id:ctx.execution.execution_id,evidence_ref:ctx.receipt_id,
   ports:[{port:0,port_guid:port.port_guid,fresh:true,execution_id:ctx.execution.execution_id,...value,
