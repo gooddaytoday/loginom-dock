@@ -170,6 +170,18 @@
   actionable blockers only. Advance on these events with idempotent phase
   dispatch and the local registry; verify the old turn completed before sending
   the next phase. Do not recreate periodic monitoring without a new user request.
+  On 2026-09-13 the user authorized a durable coordinator inbox and up to TWO
+  temporary read-only helper subagents for independent event/evidence checks.
+  Register ALL delivered developer events before detailed handling in
+  `.dock/node-streams-20260912/inbox.json`. Only the coordinator writes this queue,
+  dispatches developer commands, changes phase state and allocates Hermes.
+  Helpers return bounded recommendations; no developer messaging, branch edits,
+  phase dispatch or additional full review. Before EVERY final answer reconcile
+  the whole inbox and helper results: no forgotten unhandled events; remaining
+  waits require a reason, owner and concrete next trigger. Resolve uncertain
+  delivery before retrying. This is event-driven bookkeeping, not a background
+  poller or a guarantee of app event delivery. Follow
+  `docs/plans/loginom-dock/coordinator-inbox.md` and the runbook.
   The full queue is maintained in
   [the four-stream roadmap](docs/plans/loginom-dock/four-stream-node-roadmap.md)
   and [its JSON registry](docs/plans/loginom-dock/four-stream-node-roadmap.json).
