@@ -92,16 +92,20 @@
     "created": true,
     "bootstrap_verified": true,
     "registered_actor_access_verified": true,
-    "capture_extraction_verified": false,
-    "next_gate": "After substantive development phase verify extracted project knowledge exact URI/read-back and scoped retrieval",
+    "capture_extraction_verified": true,
+    "next_gate": "Each subsequent task still requires its own registration, actor access and first substantive capture/extraction check",
     "node": 16,
     "thread_id": "01a0992c-6ce0-7f10-bd53-9bf92ed7ae8a",
-    "capture_cursor_observed": 29,
+    "capture_cursor_observed": 194,
     "capture_transport_verified": true,
     "extraction_completed": true,
-    "extracted_memory_changes": 0,
-    "new_project_knowledge_verified": false,
-    "first_capture_evidence": "docs/loginom-dock/node16-start-2026-09-13.json"
+    "extracted_memory_changes": 6,
+    "new_project_knowledge_verified": true,
+    "first_capture_evidence": "docs/loginom-dock/node16-start-2026-09-13.json",
+    "substantive_capture_evidence": "docs/loginom-dock/node16-shared-memory-knowledge-2026-09-13.json",
+    "substantive_capture_checked_at": "2026-09-13T08:19:55.751741+00:00",
+    "project_additions": 5,
+    "global_profile_updates": 1
   },
   "legacy_registry_unchanged": true,
   "legacy_worker_configs_unchanged": true,
@@ -109,5 +113,6 @@
   "global_peer_override": false,
   "app_restart": false,
   "shared_dock_plugin_reinstalled": false,
-  "per_task_registration_required": true
+  "per_task_registration_required": true,
+  "first_fresh_app_task_end_to_end_verified": true
 }

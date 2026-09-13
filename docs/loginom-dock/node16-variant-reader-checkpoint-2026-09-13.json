@@ -27,6 +27,7 @@
   "review_started": false,
   "developer_guidance_sent": true,
   "memory_health": "healthy; actor retrieval found relevant prior Table reader memory",
+  "new_shared_knowledge_evidence": "docs/loginom-dock/node16-shared-memory-knowledge-2026-09-13.json",
   "resume_after_usage_limit": {
     "checked_at": "2026-09-13T08:16:42.452457+00:00",
     "previous_turn": "01a09933-04c7-7383-a7ce-2a77892f9492",

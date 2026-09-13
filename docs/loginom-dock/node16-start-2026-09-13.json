@@ -29,7 +29,7 @@
     "peer": "-Users-kartamyshev-Git-loginom-dock",
     "actor_probe_sha256": "ad1a4f5d936a120f51f2a9eebd874ecb70d60e91cb4abad3929cd1086f5cef3e",
     "read_uri": "viking://user/kartamyshev/peers/-Users-kartamyshev-Git-loginom-dock/memories/events/2026/09/10/baseline_checks_passed.md",
-    "capture_cursor_observed": 29,
+    "capture_cursor_observed": 194,
     "capture_peer_verification": "verified",
     "first_extraction": {
       "capture_peer_verified": true,
@@ -53,7 +53,9 @@
       "new_project_knowledge_verified": false,
       "next_gate": "After substantive development phase verify extracted project knowledge exact URI/read-back and scoped retrieval",
       "manual_capture_or_commit": false
-    }
+    },
+    "new_project_knowledge_verified": true,
+    "substantive_extraction_evidence": "docs/loginom-dock/node16-shared-memory-knowledge-2026-09-13.json"
   },
   "bootstrap_turn_id": "01a0992c-6e83-7033-ad26-c1302c08c68a",
   "actor_probe_turn_id": "01a0992f-414a-7702-aa57-8777127bfe13",
