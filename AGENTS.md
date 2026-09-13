@@ -62,10 +62,13 @@
 - This authorizes coordinated PROJECT-SCOPED routing of both MCP and official
   capture/recall hooks. It does not authorize a global Peer override, other
   projects' memory, credential changes, deletion or bypassing approval denials.
-- Routing migration is being prepared; do not claim it active from instructions
-  alone. Until the coordinator verifies your transition, keep the current runtime
-  and use only the previously allowed targeted reads. Do not manually reroute
-  hooks/MCP or use global remember as a substitute for project capture.
+- Routing generation 20260913.3 is active for the four exact node11–14 worktrees
+  after the user stopped nodes13/14 and restarted the app. All four registered MCPs
+  passed shared actor health/find/read. State cursors were preserved; nodes13/14
+  resumed development in their original tasks. New server capture and extraction
+  were verified on completed node11/12 probes; verify each ongoing phase after
+  completion. New worktrees still require coordinator preparation and verification.
+  Do not manually reroute hooks/MCP or use global remember for project capture.
 - Each task/session, branch, browser and capture cursor stays separate. Existing
   histories and memory records are preserved. The coordinator switches at a
   completed phase boundary; never reset cursors or run duplicate capture paths.
