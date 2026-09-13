@@ -1,3 +1,12 @@
+# Узел11: пакет интеграции Save As готов — 13 сентября 2026
+
+`integration_package_ready / awaiting_user_authorization`: определены два файла
+из `0e11a3fb`, проверены применимость runtime и конфликт контекста теста.
+[Пакет переноса и focused test-2 план](../plans/loginom-dock/11-saveas-integration-package-2026-09-13.md).
+Код не перенесён. A1–A3 не перепроверялись; новый runtime/candidate/Hermes не запускались.
+
+---
+
 # Узел 11: follow-up приёмки завершён — 13 сентября 2026
 
 **followup_complete / awaiting_coordinator**. Исправлены A1 goal, A2 session gate

@@ -1,3 +1,14 @@
+# Узел 11: пакет интеграции Save As подготовлен — 13 сентября 2026
+
+**integration_package_ready / awaiting_user_authorization**.
+Из принятого коммита12 `0e11a3fb` нужны один hunk executor и один race test.
+Проверка применимости runtime прошла; контекст добавления теста требует ручной
+адаптации. Код не перенесён, проверки A1–A3 не повторялись, Hermes не запускался.
+[Точный пакет и focused live план](../plans/loginom-dock/11-saveas-integration-package-2026-09-13.md).
+Следующий шаг — отдельная команда пользователя на применение.
+
+---
+
 # Узел 11: follow-up приёмки завершён — 13 сентября 2026
 
 **followup_complete / awaiting_coordinator**. Исправлены A1 goal, A2 session gate

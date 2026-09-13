@@ -522,3 +522,13 @@ A2: рабочая сессия связана с prepare/public/journal и pins
 Новый runtime требует новой сборки/stage/readback. Save/reopen fix принадлежит
 узлу12; перед запуском учесть его интеграцию. Новый слот11 не выдан, Hermes не запускался.
 [Отчёт и точные pins](../plans/loginom-dock/11-acceptance-followup-2026-09-13.md).
+
+
+## 2026-09-13 — coordinator-reply-resume:1
+
+Подготовлен минимальный пакет переноса Save As из `0e11a3fb`: runtime hunk и один
+race test. `git apply --check` подтвердил чистое применение runtime; тестовый hunk
+требует адаптации EOF-контекста, перенос семиколонных labels и аудиторов12 не нужен.
+Код не менялся, тесты/браузер/Hermes не запускались. Статус
+`integration_package_ready / awaiting_user_authorization`.
+[Пакет и план проверки test-2](../plans/loginom-dock/11-saveas-integration-package-2026-09-13.md).
