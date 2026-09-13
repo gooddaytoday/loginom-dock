@@ -1,3 +1,26 @@
+# Узлу 11 назначена полная приёмка кандидата 11.2 — 13 сентября 2026
+
+Preflight report/pins `49c8b68f` проверен: 8 SHA receipts, 157 текущих runtime
+inputs, 252 штатных harness inputs и отдельно fixtures/replacement/empty.csv
+(253 в ручном inventory). Все байты совпали; различие областей учёта передано
+разработчику. Dock prepare READY, собственные test-2 и /test-2, candidate manifest
+`bb2fe2207e01d594108efb591d1c25036adc12f67168ef895dfde755d391ac2a`.
+Закрытие диагностического черновика прошло после обновления наблюдения;
+первоначальная pagination response shape error сохранена как ограничение.
+
+После completed прежнего хода и освобождения слота14 координатор зарезервировал
+`node11-hermes-20260913-bb2fe220`, назначив один replacement-node-complete run
+с существующей подпиской openai-codex/gpt-5.6-sol/low и штатной независимой
+проверкой полного goal. Задача разработчика остаётся Astra medium.
+Dispatch `node11:autonomous-acceptance:2:bb2fe2207e01d594108efb591d1c25036adc12f67168ef895dfde755d391ac2a`.
+Ход `01a09a12-24dc-76b0-8845-22fbe0890bb5` подтверждён active/inProgress;
+фактический старт модели ещё не подтверждён. Перед запуском нужен свежий
+process/pins preflight. При FAIL/approval denial остановиться без второго прогона
+или обхода gate. Старый FAIL55/59 и A1–A3 сохранены, нового полного ревью нет.
+Main/push/production activation/shared plugin не изменялись.
+
+---
+
 # Одновременные итоги узлов 13 и 16 обработаны — 13 сентября 2026
 
 Оба сообщения записаны в inbox до разбора; два временных read-only помощника
