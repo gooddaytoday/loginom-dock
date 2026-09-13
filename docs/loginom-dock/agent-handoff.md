@@ -1,3 +1,24 @@
+# Узел11: завершён run, назначена отдельная переоценка verifier — 13 сентября 2026
+
+Run20260913-122247-a862a34d, report5891dfdc: один Sol/low запуск, FAIL57/59.
+Все11apply и обаsave завершились; четыре выполнения после настоящего reopen.
+Помощник сверил11frozenartifacts по SHA/размеру,59checks и4native save receipts.
+Два persistence FAIL вызваны безусловным требованиемreplace/исходныйsavedpath
+к первой стадии сохранения новогоPackage1 (фактическиfail/пустойpath).
+Для второйстадии replace/предыдущийsavedpath обязательны; графы совпали.
+
+Completed/idle и свежий process check09:40:38UTC подтвердили завершение, слот11
+освобождён. В той же задаче Astra medium назначен только diagnostic verifier fix,
+focused negative tests и отдельная переоценка тех же frozen evidence с новым
+verifierSHA, раздельным provenance и неизменными исходными11артефактами/FAIL.
+Identity,graph,exactstagepolicy,nativeclose/reopen,freshdata и все59checks сохраняются.
+Новый ход `01a09a25-bc9a-7682-9a30-18e43cdd2ced` active подтверждён.
+Productruntime/Hermes/browser/fullreview/VPS/main/plugin не назначены.
+Успех переоценки ещё не установлен. Узел16 ожидает пользовательского решения
+по [ограниченному variant эксперименту](node16-variant-prototype-decision.md).
+
+---
+
 # Узлы 16 и 14: проверены итоги, назначены следующие действия — 13 сентября 2026
 
 Узел16: source f998985c/report41856b1d. Помощник сверил ранний inactive source guard,
