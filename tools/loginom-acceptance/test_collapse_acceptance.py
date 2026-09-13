@@ -16,6 +16,14 @@ class CollapseAdmissionTest(unittest.TestCase):
  def test_run_blocked_before_auth_even_with_claimed_closed_gates(self):
   with patch.object(a,'frozen',return_value={'gates':{'resource':'PASS'}}),patch.object(run,'connection',side_effect=AssertionError('credentials')),patch.object(run.subprocess,'Popen',side_effect=AssertionError('model')):
    with self.assertRaisesRegex(ValueError,'Collapse admission blocked'):run.execute(SimpleNamespace(goal=a.GOAL_ID,run=True))
+ def test_exact_candidate_admitted_and_wrong_profile_blocked(self):
+  args=SimpleNamespace(manifest_uri=a.CANDIDATE_URI,manifest_sha256=a.CANDIDATE_SHA,model_profile='chatgpt-sol')
+  self.assertTrue(a.admission(args)['ready'])
+  args.model_profile='xiaomi-mimo';self.assertFalse(a.admission(args)['ready'])
+ def test_missing_real_rehearsal_cannot_admit(self):
+  args=SimpleNamespace(manifest_uri=a.CANDIDATE_URI,manifest_sha256=a.CANDIDATE_SHA)
+  with patch.object(a,'verified_candidate',side_effect=ValueError('missing raw preparation')):
+   self.assertFalse(a.admission(args)['ready'])
  def test_fixture_admission_exact_fresh_names(self):
   ds=a.fixtures('20260913-170000-abcdef12','/test-1/node16-new');self.assertEqual(len(ds),5)
   self.assertTrue(all(x['name'].startswith('Dock-collapse-20260913-170000-abcdef12-') for x in ds))
@@ -32,7 +40,7 @@ class CollapseAdmissionTest(unittest.TestCase):
  def test_missing_full_evidence_and_prepared_case_claims_refused(self):
   for e in [{},{'run_id':'foreign'},{'run_id':'20260913-170000-abcdef12','cases':{k:{'status':'CASE_PASS'} for k in outer.EXPECTED}}, {'calls':[],'tools':[],'events':[]}]:
    r=outer.audit({'run_id':'20260913-170000-abcdef12'},e,'prepared',None)
-   self.assertFalse(r['passed']);self.assertFalse(r['subplan_complete']);self.assertFalse(r['checks']['admission']['passed'])
+   self.assertFalse(r['passed']);self.assertFalse(r['subplan_complete'])
  def test_no_forged_readonly_receipt_can_admit_missing_producer(self):
   good=dict(kind='collapse_readonly_source_v1',run_id='r',document_id='new',path='/test-1/a.csv',sha256='a'*64,bytes=12,before_any_write=True,write_operations=[],raw_observation_refs=['raw'],download_artifact_sha256='a'*64,producer_id='claimed-PASS')
   for key,value in [('producer_id',None),('document_id','old'),('sha256','b'*64),('before_any_write',False),('raw_observation_refs',[])]:

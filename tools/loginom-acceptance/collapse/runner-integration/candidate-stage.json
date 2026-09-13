@@ -1,0 +1,53 @@
+{
+  "checked_at": "2026-09-13T16:41:30.435510+00:00",
+  "build_directory": "/opt/loginom-dock/releases/20260913-node16-621bf7a4-candidate",
+  "source_commit": "621bf7a41657dfdc9da60c7510b9f212b8652d79",
+  "stage": {
+    "catalog_uri": "viking://resources/loginom-dock/catalogs/executor-preview/releases/2026.09.13-node16-621bf7a4-candidate",
+    "catalog_version": "2026.09.13-node16-621bf7a4-candidate",
+    "manifest_sha256": "56b73b83ad8ccaf5da652fbed5ce80752658723635c15ec0eaafeaf15e619c4d",
+    "action_catalog_sha256": "7fe295413d9065a3280ae7a2052eea2d8b6b39221423b96155e907cce0fdc54c",
+    "selector_catalog_sha256": "05f1eb4a3f8f851d0856a008143fd79c9bf12a0634b7728283865ae210894f81",
+    "e2e_commit": "2cad5602158fd2e4836d821d644a2b8d92f571a2",
+    "staged": true,
+    "activated": false
+  },
+  "files": [
+    {
+      "name": "actions.json",
+      "uri": "viking://resources/loginom-dock/catalogs/executor-preview/releases/2026.09.13-node16-621bf7a4-candidate/actions.json",
+      "bytes": 34297,
+      "sha256": "7fe295413d9065a3280ae7a2052eea2d8b6b39221423b96155e907cce0fdc54c",
+      "readback_equal": true
+    },
+    {
+      "name": "selectors.json",
+      "uri": "viking://resources/loginom-dock/catalogs/executor-preview/releases/2026.09.13-node16-621bf7a4-candidate/selectors.json",
+      "bytes": 22380,
+      "sha256": "05f1eb4a3f8f851d0856a008143fd79c9bf12a0634b7728283865ae210894f81",
+      "readback_equal": true
+    },
+    {
+      "name": "source-index.json",
+      "uri": "viking://resources/loginom-dock/catalogs/executor-preview/releases/2026.09.13-node16-621bf7a4-candidate/source-index.json",
+      "bytes": 3757,
+      "sha256": "989f8934c69566078735a0f06658c935ab435badf7293180e4f51b0b924d7374",
+      "readback_equal": true
+    },
+    {
+      "name": "manifest.json",
+      "uri": "viking://resources/loginom-dock/catalogs/executor-preview/releases/2026.09.13-node16-621bf7a4-candidate/manifest.json",
+      "bytes": 719,
+      "sha256": "56b73b83ad8ccaf5da652fbed5ce80752658723635c15ec0eaafeaf15e619c4d",
+      "readback_equal": true
+    }
+  ],
+  "server_current": "/opt/loginom-dock/releases/20260904-landing-7b711846",
+  "preview_current": {
+    "status": 404,
+    "sha256": null
+  },
+  "health_status": 200,
+  "activated": false,
+  "full_autonomous_acceptance_passed": false
+}

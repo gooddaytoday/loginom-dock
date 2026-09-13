@@ -163,7 +163,7 @@ def execute(args):
     if getattr(args,'goal',None)==collapse_acceptance.GOAL_ID:
         # Deliberately before auth/config reads, dependency checks and subprocesses.
         admission=collapse_acceptance.admission(args)
-        if not args.run:
+        if not args.run and not admission['ready']:
             write(args.output,admission)
             print(json.dumps({k:v for k,v in admission.items() if k!='harness_inputs'}))
             return 0
@@ -262,6 +262,7 @@ def execute(args):
     native_skill_copy.parent.mkdir(parents=True, mode=0o700)
     write(native_skill_copy, NATIVE_SKILL.read_text())
     package = args.storage_directory + "/packages/Dock-acceptance-" + run_id + ".lgp"
+    if goal_id==collapse_acceptance.GOAL_ID:package=args.storage_directory+'/Dock-acceptance-'+run_id+'.lgp'
     info.update(run_id=run_id, package_path=package)
     prompt = render_goal(goal.read_text(),package,args.storage_directory)
     if goal_id in ('file-upload-probe','file-upload-verify','data-pipeline','import-roundtrip','calculator-roundtrip','node-import-roundtrip','node-apply-complete','calculator-node-complete','grouping-node-complete','sales-sorting-complete','reform-node-complete','filter-node-complete'):
@@ -333,7 +334,7 @@ def execute(args):
         child = subprocess.Popen(argv, cwd=run, env=env, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, start_new_session=True)
         started = True
         status = "FAILED_MODEL_OR_EXPORT"
-        print(json.dumps({"run_id": run_id, "stage": "model_started", "provider": provider, "model": model, "reasoning_effort": reasoning}), flush=True)
+        print(json.dumps({"run_id": run_id, "stage": "model_started", "pid": child.pid, "provider": provider, "model": model, "reasoning_effort": reasoning}), flush=True)
         timed_out = False
         try:
             child.wait(timeout=args.timeout)

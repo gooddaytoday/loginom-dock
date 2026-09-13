@@ -12,6 +12,33 @@ SOURCE='621bf7a41657dfdc9da60c7510b9f212b8652d79'
 RUNTIME='e33dd667c8e7eba1edd96a13621aa7251874198e2340e2efede15baa3681b98b'
 # Native per-session raw bytes/topology producer; bare receipt documents remain unsupported.
 READONLY_PRODUCER='collapse_native_sessions_v1'
+CANDIDATE_URI='viking://resources/loginom-dock/catalogs/executor-preview/releases/2026.09.13-node16-621bf7a4-candidate/manifest.json'
+CANDIDATE_SHA='56b73b83ad8ccaf5da652fbed5ce80752658723635c15ec0eaafeaf15e619c4d'
+SLOT='node16-hermes-20260913-56b73b83'
+REHEARSAL=ROOT/'.dock/node16/candidate-rehearsal-20260913'
+STAGE=WORK/'collapse/runner-integration/candidate-stage.json'
+
+def verified_candidate():
+    stage=json.loads(STAGE.read_text())
+    if stage['source_commit']!=SOURCE or stage['stage']['manifest_sha256']!=CANDIDATE_SHA or not stage['stage']['staged'] or stage['activated'] is not False:raise ValueError('Candidate stage differs')
+    if len(stage['files'])!=4 or not all(f['readback_equal'] for f in stage['files']):raise ValueError('Candidate readback incomplete')
+    raw=json.loads((REHEARSAL/'operator-1.json').read_text())
+    if raw.get('isError'):raise ValueError('Candidate prepare failed')
+    prep=json.loads(raw['content'][0]['text']);manifest=prep['executor']['session_manifest'];workspace=prep['workspace']
+    if not prep['prepared'] or workspace['status']!='READY' or not workspace['target_verified'] or workspace['target']['loginom_build']!='7.4.2':raise ValueError('Real candidate preparation missing')
+    if manifest['actionManifestDigest']!=CANDIDATE_SHA or manifest['actionCatalogDigest']!=stage['stage']['action_catalog_sha256'] or manifest['selectorCatalogDigest']!=stage['stage']['selector_catalog_sha256']:raise ValueError('Prepared candidate pins differ')
+    session=REHEARSAL/'dock-state/sessions'/prep['sessionId']
+    metadata=json.loads((session/'session.json').read_text());browser=json.loads((session/'playwright.json').read_text())['browser']
+    if metadata['clientRevision']!=RUNTIME or browser['contextOptions']['viewport'] is not None or '--start-maximized' not in browser['launchOptions']['args']:raise ValueError('Candidate runtime/window config differs')
+    window=workspace['window']
+    if window['width']<window['available_width']*.9 or window['outer_height']<window['available_height']*.9:raise ValueError('Actual candidate window not expanded')
+    describe=json.loads(json.loads((REHEARSAL/'operator-3.json').read_text())['content'][0]['text'])
+    save=next(x for x in describe['actions'] if x['action_key']=='package.save_checkpoint')
+    if save['effect']['allowed_roots']!=['/test-1/node16-20260913-a56c2488']:raise ValueError('Candidate storage roots differ')
+    card=next(x for x in describe['node_types'] if x['type']=='transform.collapse_columns')
+    if card['candidate_node_apply_available'] is not True or card['candidate_modes']!=['unpivot']:raise ValueError('Candidate Collapse unavailable')
+    return dict(manifest_uri=CANDIDATE_URI,manifest_sha256=CANDIDATE_SHA,slot=SLOT,session_id=prep['sessionId'],model_started=False)
+
 
 def sha(p):return hashlib.sha256(p.read_bytes()).hexdigest()
 def frozen():
@@ -23,7 +50,7 @@ def frozen():
     return json.loads((KIT/'goal.json').read_text())
 def harness_pins():
     paths=[*WORK.glob('*.py'),*WORK.glob('*.mjs'),WORK/'goals/collapse-node-complete.txt']
-    paths += [KIT.parent/'exact-wiring/public-audit.py',KIT.parent/'review-fix/provenance.json',KIT.parent/'runner-integration/readonly-source.schema.json']
+    paths += [KIT.parent/'exact-wiring/public-audit.py',KIT.parent/'review-fix/provenance.json',KIT.parent/'runner-integration/readonly-source.schema.json',KIT.parent/'runner-integration/candidate-stage.json']
     paths += [p for p in KIT.rglob('*') if p.is_file() and '__pycache__' not in p.parts]
     paths += [p for folder in ['native-gates','existing-input-preflight'] for p in (KIT.parent/folder).rglob('*') if p.is_file() and '__pycache__' not in p.parts]
     return {p.relative_to(WORK).as_posix():sha(p) for p in sorted(paths)}
@@ -36,6 +63,7 @@ def prompt(package,directory,run_id):
     text=(KIT/'hermes-goal.md').read_text()
     for p,a in zip(fixture_paths(),fixtures(run_id,directory)):text=text.replace(p.name,a['name'])
     text+='\nИдентификаторы итоговых операций: '+', '.join(run_id+':'+k for k in json.loads((KIT/'expected.json').read_text()))+'. Отдельные операции: '+', '.join(run_id+':'+k for k in ['done','close','negative-conflict','negative-missing','negative-empty','loss'])+'. Для отрицательного отсутствующего поля используйте __MissingField__. При потере ответа сохраняйте исходную операцию.\n'
+    text+='\nДля независимого открытия сохраните каждый из десяти итоговых вариантов отдельным пакетом в этом каталоге: Dock-collapse-'+run_id+'-<имя случая>.lgp. В каждом пакете один сценарий с одной парой текстовый импорт → Свёртка; промежуточные варианты не должны перезаписывать окончательные сохранённые случаи. Идентификаторы финального сохранения: '+', '.join(run_id+':save-'+k for k in json.loads((KIT/'expected.json').read_text()))+'.\n'
     return text+'\nКаталог: '+directory+'\nОсновной пакет: '+package+'\nRun ID: '+run_id+'\nНачинайте operation_id с '+run_id+'; каждому действию — новый суффикс.\n'
 def admission(args):
     errors=[]
@@ -57,7 +85,18 @@ def admission(args):
         pin=runtime_pin(ROOT)
         if pin['client_revision']!=RUNTIME:gates['source-runtime']='OPEN_MISMATCH'
     except (OSError,ValueError):gates['source-runtime']='OPEN_UNVERIFIED'
-    return dict(goal_id=GOAL_ID,status='BLOCKED',ready=False,model_started=False,source_sha=SOURCE,runtime=RUNTIME,
+    verified=None
+    try:
+        verified=verified_candidate()
+        if args is not None and (getattr(args,'manifest_uri',None)!=CANDIDATE_URI or getattr(args,'manifest_sha256',None)!=CANDIDATE_SHA):raise ValueError('Exact coordinator candidate arguments required')
+        if args is not None and getattr(args,'model_profile','chatgpt-sol')!='chatgpt-sol':raise ValueError('Only approved Sol profile allowed')
+        gates['candidate-stage-and-readback']='PASS';gates['candidate-source-rehearsal']='PASS'
+        gates['coordinator-hermes-slot']='RESERVED:'+SLOT
+        gates['resource']='PASS' if free>=10*1024**3 else 'OPEN_INSUFFICIENT_10_GIB'
+        gates['runner-collapse-goal-integration']='ADMITTED_FOR_CURRENT_CANDIDATE'
+    except (OSError,ValueError,KeyError,TypeError,StopIteration) as ex:errors.append(str(ex))
+    ready=not errors and free>=10*1024**3 and not any(str(v).startswith('OPEN') for v in gates.values())
+    return dict(goal_id=GOAL_ID,status='READY_FOR_MODEL' if ready else 'BLOCKED',ready=ready,model_started=False,candidate=verified,source_sha=SOURCE,runtime=RUNTIME,
                 provider='openai-codex',model='gpt-5.6-sol',reasoning_effort='low',fallback_allowed=False,
                 gates=gates,errors=errors,free_bytes=free,minimum_hermes_free_bytes=10*1024**3,
                 readonly_producer=READONLY_PRODUCER,harness_inputs=harness_pins())

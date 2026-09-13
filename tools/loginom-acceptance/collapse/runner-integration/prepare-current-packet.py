@@ -9,7 +9,7 @@ args.output.mkdir(parents=True,exist_ok=False)
 runtime=runtime_pin(a.ROOT)
 if runtime['client_revision']!=a.RUNTIME:raise ValueError('source runtime differs')
 old=json.loads((a.KIT/'source-packet.json').read_text())
-paths={f['path'] for f in old['files']}|set(runtime['inputs'])
+paths={f['path'] for f in old['files']}|set(runtime['inputs'])|{'executor/capability-abi.json'}
 files=[]
 for name in sorted(paths):
  path=a.ROOT/name
