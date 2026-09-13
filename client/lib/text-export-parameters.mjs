@@ -47,3 +47,15 @@ export function validateNativeExportFormat(values){
  for(const [key,allowed] of Object.entries({encoding:[65001],delimiter:[';',',','\t'],header:[0,1,2],line_ending:[0,1],bom:[true,false]}))
   need(allowed.includes(values[key]?.value),'Unsupported retained export '+key);
 }
+
+export function validateNativeExportParams(values){
+ validateExportDestination(values.destination?.value);
+ // Empty date/time settings are the supported, preserved native defaults;
+ // unlike decimal/qualifier they are not reported as a resolved separator.
+ const allowed={text_qualifier:['"'],decimal_separator:['.',','],null_marker:['','?','null','NULL'],
+  true_value:['True','Истина','Да'],false_value:['False','Ложь','Нет'],
+  date_separator:['','.','/','\\','-'],time_separator:['',':','.'],
+  date_format:['','dd/mm/yyyy','mm/dd/yyyy','yyyy/mm/dd','dd/mm/yy','mm/dd/yy','yy/mm/dd'],
+  time_format:['','h:mm','hh:mm','h:mm:ss','hh:mm:ss']};
+ for(const [key,options] of Object.entries(allowed))need(options.includes(values[key]?.value),'Unsupported retained export '+key+'; choose an explicit supported value');
+}

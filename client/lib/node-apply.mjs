@@ -165,7 +165,7 @@ export async function applyNode({request, operation, handlers, drivers, record,
       // never clears uncertainty, even in a nominally non-mutating phase.
       const refusal=error.nodePhaseRefusal;
       if(name==='configure'&&request.target.type==='exports.text'&&refusal?.phase===name&&refusal.status==='FAILED'
-        &&refusal.effect_possible===true&&refusal.cleanup_complete===true&&refusal.settings_unchanged===true&&refusal.verification==='text_export_conflict_rejected'){
+        &&refusal.effect_possible===true&&refusal.cleanup_complete===true&&refusal.settings_unchanged===true&&['text_export_conflict_rejected','text_export_unsupported_retained'].includes(refusal.verification)){
         await acknowledge({phase:'node_phase_refused',signature,receipt:{...pending,...refusal}});
         state.effect_possible=true;state.pending=null;state.cleanup_complete=true;state.verified_refusal=true;
       }
