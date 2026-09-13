@@ -2076,7 +2076,7 @@ export function createActionRuntime({ pinned, execute, artifactStore, allowCandi
             ...(typeof operation.nodeTargetAdapter.activateWorkflow==='function'?{activateWorkflow:ctx=>operation.nodeTargetAdapter.activateWorkflow(
               {document_id:request.document_id,workflow_ref:request.workflow_ref},ctx)}:{}),prepareTarget:async(graph,ctx)=>{
             const overallDeadline=operation.deadline;operation.deadline=ctx.deadline;
-            let result;
+            let result,preflight;
             try{
               if(operation.nodeApplyDrivers.beforeTarget){
                 const current=await operation.nodeTargetAdapter.verifyWorkflow({document_id:graph.document_id,workflow_ref:graph.workflow_ref},ctx);
@@ -2090,7 +2090,7 @@ export function createActionRuntime({ pinned, execute, artifactStore, allowCandi
                 if(sourceGraph?.complete!==true||sourceGraph.document_id!==graph.document_id
                   ||JSON.stringify(sourceGraph.workflow_ref)!==JSON.stringify(graph.workflow_ref))
                   throw Error('Complete owned graph required before node preflight');
-                await operation.nodeApplyDrivers.beforeTarget(ctx);
+                preflight=await operation.nodeApplyDrivers.beforeTarget(ctx);
               }
               result=await prepareNodeTarget({request:graph,operation,adapter:operation.nodeTargetAdapter,
                 record:onRecord,signal:ctx.signal,now});
@@ -2098,7 +2098,7 @@ export function createActionRuntime({ pinned, execute, artifactStore, allowCandi
             if(result.status!=='SUCCEEDED'){
               const error=new Error(result.error??'Node target is not verified');
               if(result.status==='NOT_APPLIED' && result.partial_effect===false && result.cleanup_complete===true
-                && operation.targetPhase?.effect_possible===false && !operation.targetPhase?.pending)
+                && preflight?.effect_possible!==true && operation.targetPhase?.effect_possible===false && !operation.targetPhase?.pending)
                 error.nodePhaseRefusal={phase:'target',status:'NOT_APPLIED',effect_possible:false,cleanup_complete:true};
               throw error;
             }

@@ -1,3 +1,4 @@
+import {createMissingValuesNodeSupport} from './missing-values-node.mjs';
 import {createUnionNodeSupport} from './union-node.mjs';
 import {createJoinNodeSupport} from './join-node.mjs';
 import {createFilterNodeSupport} from './filter-node.mjs';
@@ -10,8 +11,8 @@ import {createCalculatorNodeSupport} from './calculator-node.mjs';
 // Candidate implementations share one lifecycle, gate and browser. Dispatch by
 // the already validated request; never infer a handler from the current UI.
 export function createCandidateNodeSupport(config) {
- const union=createUnionNodeSupport(config),join=createJoinNodeSupport(config),filter=createFilterNodeSupport(config),imports=createTextImportNodeSupport(config),calculator=createCalculatorNodeSupport(config),grouping=createGroupingNodeSupport(config),sorting=createSortingNodeSupport(config),reform=createReformNodeSupport(config);
- const nodeApplyHandlers=new Map([...imports.nodeApplyHandlers,...calculator.nodeApplyHandlers,...grouping.nodeApplyHandlers,...sorting.nodeApplyHandlers,...reform.nodeApplyHandlers,...filter.nodeApplyHandlers,...join.nodeApplyHandlers,...union.nodeApplyHandlers]);
+ const missingValues=createMissingValuesNodeSupport(config),union=createUnionNodeSupport(config),join=createJoinNodeSupport(config),filter=createFilterNodeSupport(config),imports=createTextImportNodeSupport(config),calculator=createCalculatorNodeSupport(config),grouping=createGroupingNodeSupport(config),sorting=createSortingNodeSupport(config),reform=createReformNodeSupport(config);
+ const nodeApplyHandlers=new Map([...missingValues.nodeApplyHandlers,...imports.nodeApplyHandlers,...calculator.nodeApplyHandlers,...grouping.nodeApplyHandlers,...sorting.nodeApplyHandlers,...reform.nodeApplyHandlers,...filter.nodeApplyHandlers,...join.nodeApplyHandlers,...union.nodeApplyHandlers]);
  return {nodeApplyHandlers,nodeApplyDriverFactory:options=>{
   const type=options.operation.parameters?.target?.type;
   if(type==='transform.union_data')return union.nodeApplyDriverFactory(options);
@@ -19,6 +20,7 @@ export function createCandidateNodeSupport(config) {
   if(type==='transform.filter_data')return filter.nodeApplyDriverFactory(options);
   if(type==='imports.text')return imports.nodeApplyDriverFactory(options);
   if(type==='transform.reform_columns')return reform.nodeApplyDriverFactory(options);
+  if(type==='preprocessing.data_recovery')return missingValues.nodeApplyDriverFactory(options);
   if(type==='transform.sorting')return sorting.nodeApplyDriverFactory(options);
   if(type==='transform.group_data')return grouping.nodeApplyDriverFactory(options);
   if(type==='transform.calculator')return calculator.nodeApplyDriverFactory(options);

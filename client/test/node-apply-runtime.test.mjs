@@ -479,3 +479,13 @@ test('recovered target never extends the original configuration deadline',async(
  const count=f.calls.length,result=await f.runtime.runNodeApply(request(),{resume:true});
  assert.equal(result.status,'AMBIGUOUS');assert.equal(f.calls.length,count);assert.ok(!f.calls.includes('open'));
 });
+
+test('source deactivation proof cannot become a no-effect refusal when later palette preflight fails',async()=>{
+ const f=fixture({wrapDrivers:(_context,drivers)=>({...drivers,beforeTarget:async()=>({verified:true,cleanup_complete:true,effect_possible:true})})});
+ f.adapter.verifyWorkflow=async()=>({status:'SUCCEEDED',verified:true,document_id:'doc',workflow_ref:workflow,effect_possible:false,cleanup_complete:true});
+ f.adapter.activateWorkflow=f.adapter.verifyWorkflow;
+ f.adapter.preflight=async()=>{throw Error('Component unavailable');};
+ const result=await f.runtime.runNodeApply(request());
+ assert.equal(result.status,'AMBIGUOUS');assert.equal(result.effect_possible,true);
+ assert.equal(result.output.pending_phase,'target');assert.equal(f.graph.nodes.length,0);
+});

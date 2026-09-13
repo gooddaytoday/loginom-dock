@@ -1,7 +1,11 @@
 # 14. Заполнение пропусков: среднее и строковая константа
 
-Статус: **planned**. Новый подплан следующей аналитической волны.
-Реализация и live-приёмка в рамках подготовки этого документа не выполнялись.
+Статус: **разработка и Codex direct QA завершены; автономная приёмка не выполнена**.
+Отдельный поток4, ветка `codex/node-14-missing-values`. Проверены полный выход,
+сохранение/reopen и безопасное отсутствие повторных жестов при потере ответа.
+Ограничения общего execution failure lifecycle и каталога `/test-4` сохранены
+в [итоговом отчёте](../../loginom-dock/missing-values-development-report-2026-09-13.md).
+Следующий этап — review по отдельной команде координатора; Hermes не запускался.
 Навигация: [реестр](README.md), [общие требования новой волны](next-wave.md).
 Зависимости: [03 — общий node.apply](03-text-import.md),
 [05 — тип/вид поля](05-field-parameters.md), [09 — обычный Hermes](09-hermes-user-diagnostics.md).
@@ -21,8 +25,10 @@
 ## Что есть сейчас и источники
 
 В `executor/inventory/palette-2026-09-05.json` есть `Заполнение_пропусков`;
-в `client/lib/node-contracts.mjs` соответствующий тип ещё не зарегистрирован.
-Нужны карточка, чтение методов/применимости, handler и независимый auditor.
+Стабильный coverage ID `component.preprocessing.DataRecovery` соответствует
+локальному runtime type `preprocessing.data_recovery` и режиму `impute`.
+Тип `preprocessing.data_recovery / impute` зарегистрирован в исходном коде;
+карточка, handler и независимый auditor находятся в live-проверке.
 Общий executor переиспользуется; наличие компонента не означает готовый native handler.
 
 [Help «Заполнение пропусков»](https://help.loginom.ru/userguide/processors/preprocessing/imputation.html)

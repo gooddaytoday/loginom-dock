@@ -25,7 +25,7 @@ function fixture(direction='output') {
  const wizardTree=Object.assign(new WizardTreeNode(),{ParentNode:portTree});
  class WizardModelComponentForm{};const wizard=Object.assign(new WizardModelComponentForm(),{[direction==='input'?'FModelSocket':'FModelEnginePort']:{},FView:{el:{dom:wizardDom}}});
  const card={Controller:{FController:graph,Node:{data:{node:workflow}}}},flags={foreignMenu:false,foreignWizard:false,loading:0,deactivation:false},gestures=[];
- const document={querySelectorAll:q=>{
+ const document={elementFromPoint:()=>flags.foreignHit?menu:portDom,querySelectorAll:q=>{
   if(q.startsWith('[data-tid=')){const t=JSON.parse(q.slice(10,-1));return elements.filter(e=>e.tid===t);}
   if(q.startsWith('[data-tid^=')){const t=JSON.parse(q.slice(11,-1));return elements.filter(e=>e.tid?.startsWith(t));}
   if(q==='[role="dialog"],.x-message-box')return dialog.visible?[dialog]:[];
@@ -36,9 +36,9 @@ function fixture(direction='output') {
  const prep={document,id:'doc',receipts:new Map([['prepare',{phase:'verified',workflowId:'flow',tab,packageNode,nodeTargetWorkflowNode:workflow}]])};
  const app={Version:'7.4.2',ModelForm,WizardTreeNode,ModelPortTreeNode,ModelOutputPortsTreeNode,ModelInputPortsTreeNode,ModelNodeTreeNode,Application:{FInstance:{FMainForm:{Items:{Workspace:{getActiveTab:()=>card}}}}}};
  menu.id='menu';const nativeControls=new Map([dialog,...Object.values(confirmation)].map(e=>[e.id,{el:{dom:e}}]));
- const context=vm.createContext({document,location:{origin:'http://example.test'},bg:{app},__loginomDockPreparationV1:prep,Ext:{getCmp:id=>nativeControls.get(id)??graph.FPortContextMenu}});
+ const context=vm.createContext({document,innerWidth:1000,innerHeight:800,location:{origin:'http://example.test'},bg:{app},__loginomDockPreparationV1:prep,Ext:{getCmp:id=>nativeControls.get(id)??graph.FPortContextMenu}});
  const showWizard=()=>{menu.visible=false;dialog.visible=false;wizardDom.visible=true;card.Controller.FController=wizard;card.Controller.Node.data.node=wizardTree;if(flags.foreignWizard)portTree.FModelNodePort={};flags.loading=2;};
- const page={evaluate:(fn,arg)=>vm.runInContext('('+fn.toString()+')('+JSON.stringify(arg)+')',context),waitForTimeout:async()=>{},locator:selector=>{
+ const page={mouse:{click:async(x,y,options)=>{if(options.button!=='right')throw Error('Expected right click');gestures.push(portDom.tid);menu.visible=true;graph.FCurrentPortMenu=flags.foreignMenu?{}:port;}},evaluate:(fn,arg)=>vm.runInContext('('+fn.toString()+')('+JSON.stringify(arg)+')',context),waitForTimeout:async()=>{},locator:selector=>{
   const tid=JSON.parse(selector.replace(/:visible$/, '').slice(10,-1));return {waitFor:async()=>{},click:async options=>{
    if(options?.trial){if(tid===confirmation.yes.tid)flags.beforeConfirm?.();return;}gestures.push(tid);
    if(tid===portDom.tid){menu.visible=true;graph.FCurrentPortMenu=flags.foreignMenu?{}:port;}
@@ -77,10 +77,9 @@ test('verified opening refuses a different wizard or a reused operation target',
  f.task.port=1;assert.equal((await f.run()).verified,false);assert.equal(f.gestures.length,2);
 });
 test('pre-gesture reservation can be released after a no-effect refusal',async()=>{
- const f=fixture();const original=f.page.locator;let reject=true;
- f.page.locator=s=>{const loc=original(s);return {...loc,click:async options=>{if(reject&&options?.trial)throw Error('covered');return loc.click(options);}};};
+ const f=fixture();f.flags.foreignHit=true;
  assert.equal((await f.run()).status,'NOT_APPLIED');assert.equal(f.prep.outputPortOpenReceipts.size,0);assert.equal(f.gestures.length,0);
- reject=false;assert.equal((await f.run()).status,'SUCCEEDED');assert.equal(f.gestures.length,2);
+ f.flags.foreignHit=false;assert.equal((await f.run()).status,'SUCCEEDED');assert.equal(f.gestures.length,2);
 });
 
 test('reopened ports may omit the lazy FPortIndex but must retain their native cell and tree index',async()=>{
@@ -137,7 +136,7 @@ for (const direction of ['input', 'output']) test(`${direction} port ignores hid
  const f=fixture(direction),old=f.el('mn'),button=f.el('mn;mniConfigurePort');button.parent=old;old.visible=false;button.visible=false;
  assert.equal((await f.run()).status,'SUCCEEDED');assert.equal(f.gestures.length,2);
  const g=fixture(direction),duplicate=g.el('mn');duplicate.visible=false;
- const locate=g.page.locator;g.page.locator=s=>{const l=locate(s);return {...l,click:async o=>{await l.click(o);if(!o?.trial&&o?.button==='right')duplicate.visible=true;}};};
+ const click=g.page.mouse.click;g.page.mouse.click=async(...args)=>{await click(...args);duplicate.visible=true;};
  assert.equal((await g.run()).status,'AMBIGUOUS');assert.equal(g.gestures.length,1);
 });
 
@@ -155,3 +154,5 @@ test('Union third port keeps logical 2, SVG 3 and native tree 2 distinct',async(
  f.graph.FDiagram.FmxGraph.getCellAt=x=>x<30?ports[0].p.FCell:x<60?ports[1].p.FCell:f.port.FCell;
  const r=await f.run();assert.equal(r.status,'SUCCEEDED',r.error);assert.equal(r.port,2);assert.equal(r.native_index,2);assert.equal(r.trace[0].port_tid,'MF;TF;Graph;Node;Input_Data-3');
 });
+
+test('covered port refuses opening before any mouse gesture',async()=>{const f=fixture();f.flags.foreignHit=true;const r=await f.run();assert.equal(r.status,'NOT_APPLIED');assert.equal(r.effect_possible,false);assert.deepEqual(f.gestures,[]);});

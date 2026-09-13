@@ -1912,7 +1912,7 @@ test('wizard owner context uses bounded active-tab breadcrumbs and survives narr
 });
 
 test('typed wizard opening verifies node and workflow path after one settings click',async()=>{
-  for(const mode of ['success','formatted_name','same_label_wrong_key','renamed_tab','replaced_tab','wrong_node','wrong_workflow','dialog','lost_reply',
+  for(const mode of ['bound_begin_pending','bound_begin_lock','bound_begin_foreign','bound_begin_churn','success','formatted_name','same_label_wrong_key','renamed_tab','replaced_tab','wrong_node','wrong_workflow','dialog','lost_reply',
     'stale_region','stale_origin','stale_document','stale_tab','stale_wrong_owner','stale_exhausted']) {
     const page=new Page(),base='MF;TF-1;',panel=page.add('div',base+'NavigationBar;NavigationPanel');
     let path='';
@@ -1927,6 +1927,16 @@ test('typed wizard opening verifies node and workflow path after one settings cl
     const body=page.add('g',base+'Graph;'+nodeKey,'',undefined,graph);
     page.add('span',base+'Graph;'+nodeKey+';Label;Label',nodeLabel,undefined,body);
     page.add('g',base+'Graph;'+nodeKey+';Setting','',{x:500,y:300,width:30,height:30},graph);
+    if(mode.startsWith('bound_begin_')) {
+      let post=0;
+      const reader=async()=>{const clicked=page.events.includes('click');if(clicked)post++;
+        if(mode==='bound_begin_pending'&&clicked&&post<=90)return {verified:false,surface_pending:true};
+        const graph=!clicked||mode==='bound_begin_churn'||post<=2;
+        return {verified:true,document_id:'doc',workflow_id:'workflow',node_id:mode==='bound_begin_foreign'&&post>=2?'foreign':'node',
+          surface:graph?'graph':'wizard',tid:base+(graph?'Graph;'+nodeKey:'WizrdMCF'),...(graph?{locked:clicked&&post%2===0}:{})};};
+      page.execute=async options=>clone(await vm.runInContext('('+workspaceUiCapability.toString()+')',page.context)(page,
+        {expected_build:build,expected_origin:origin,kind:'workspace-ui',prepared_node_context:{node:{node_id:'node'},workflow_ref:{prefix:'MF;TF-1',navigation_path:[]}},...options},reader));
+    }
     const snapshot=await page.observe(),button=snapshot.ui.elements.find(e=>e.wizard_open);
     assert.ok(button);
     let pending=false,detached=null,waits=0;
@@ -1969,11 +1979,15 @@ test('typed wizard opening verifies node and workflow path after one settings cl
       if(mode==='stale_tab'){page.tab.remove();page.add('div','MF;cntMain;cntWorkspace;Workspace;t.br;tb-2','Настройка').attrs.class='x-tab-active';}
       if(mode==='stale_document')vm.runInContext('delete globalThis[Symbol.for("loginom-dock.workspace-ui.identity.v1")]',page.context);
     };
-    const result=await page.act({verb:'open_wizard',ref:button.ref},snapshot);
-    const success=['success','formatted_name','renamed_tab','stale_region'].includes(mode);
+    const result=await page.act({verb:mode.startsWith('bound_begin_')?'begin_wizard':'open_wizard',ref:button.ref},snapshot);
+    const success=['bound_begin_pending','bound_begin_lock','success','formatted_name','renamed_tab','stale_region'].includes(mode);
     assert.equal(result.status,success?'SUCCEEDED':'AMBIGUOUS',mode+JSON.stringify(result.error));
     assert.equal(page.events.filter(e=>e==='click').length,1);
     assert.equal(result.trace.some(e=>e.event==='wizard_open_verified'),success);
+    if(mode==='bound_begin_pending')assert.equal(result.trace.filter(e=>e.event==='node_surface_wait').length,90);
+    if(mode==='bound_begin_lock')assert.equal(result.trace.filter(e=>e.event==='node_graph_lock_rediscovery').length,1);
+    if(mode==='bound_begin_foreign')assert.equal(result.trace.filter(e=>e.event==='node_graph_lock_rediscovery').length,0);
+    if(mode==='bound_begin_churn')assert.equal(result.trace.filter(e=>e.event==='node_graph_lock_rediscovery').length,2);
     if(mode.startsWith('stale_')) {
       assert.equal(result.trace.filter(e=>e.event==='wizard_region_rediscovery').length,mode==='stale_exhausted'?3:1,mode);
       assert.equal(waits,mode==='stale_exhausted'?3:1,mode);
@@ -2312,13 +2326,13 @@ test('input and output editors apply and cancel verify all row properties after 
 });
 
 test('output-port context binds distinct node and port breadcrumbs and rejects wrong ownership',async()=>{
-  for(const mode of ['valid','input_port','wrong_folder','missing_workflow','duplicate','overflow_bound','overflow_unbound']) {
+  for(const mode of ['valid','socket','input_port','wrong_folder','missing_workflow','duplicate','overflow_bound','overflow_unbound']) {
     const page=new Page(),base='MF;TF-1;',wizard=page.add('div',base+'WizrdMCF');
-    page.add('button',base+'WizrdMCF;DerivedDataSourceOutputSocketWizard;btnAddMappingColumn','',undefined,wizard);
+    page.add('button',base+(mode==='socket'?'WizrdMCF;DataSetOutputSocketWizard;grdTargetColumns;tbl':'WizrdMCF;DerivedDataSourceOutputSocketWizard;btnAddMappingColumn'),'',undefined,wizard);
     const panel=page.add('div',base+'NavigationBar;NavigationPanel');let path='';
     const items=[['Package','maptree-icon-package'],['Workflow',mode==='missing_workflow'?'':'maptree-icon-workflow'],['Group','bg-vendor-icon-groupdata'],
       ['Outputs',mode==='wrong_folder'?'maptree-icon-modelinputports':'maptree-icon-modeloutputports'],
-      ['Result',mode==='input_port'?'bg-vendor-icon-inputdatasourcesocketdef':'bg-vendor-icon-deriveddatasourceoutputsocketdef'],[mode.startsWith('overflow')?'Настройка':'Settings','maptree-icon-wizard']];
+      ['Result',mode==='input_port'?'bg-vendor-icon-inputdatasourcesocketdef':mode==='socket'?'bg-vendor-icon-datasetoutputsocketdef':'bg-vendor-icon-deriveddatasourceoutputsocketdef'],[mode.startsWith('overflow')?'Настройка':'Settings','maptree-icon-wizard']];
     for(const [label,icon] of items){path+=(path?'>':'')+label;const tid=base+'cnrNaviMode;b.s_'+path;
       const crumb=page.add('a',tid,label,undefined,panel);page.add('span',null,'',undefined,crumb).attrs.class=icon;
       if(mode.startsWith('overflow')&&label==='Настройка')crumb.style.display='none';
@@ -2331,7 +2345,7 @@ test('output-port context binds distinct node and port breadcrumbs and rejects w
     const context=narrow.output.wizard.port_context;
     assert.deepEqual(context,full.wizard.port_context);assert.notEqual(narrow.output.wizard.owner_context.status,'observed');
     assert.equal(context.opening_verified,false);
-    if(['valid','overflow_bound'].includes(mode)){assert.equal(context.status,'observed');assert.equal(context.node.label,'Group');assert.equal(context.port.label,'Result');assert.equal(context.kind,'output_data');}
+    if(['valid','socket','overflow_bound'].includes(mode)){assert.equal(context.status,'observed');assert.equal(context.node.label,'Group');assert.equal(context.port.label,'Result');assert.equal(context.kind,'output_data');}
     else assert.notEqual(context.status,'observed',mode);
   }
 });
@@ -4045,12 +4059,13 @@ test('an empty native process console exposes only its bound context gesture and
 });
 
 test('Table add/enter controls are bound to native output panels, not repeated card labels',async()=>{
- for(const mode of ['valid','numbered','hidden_enter','foreign_panel','foreign_card','wrong_vendor','duplicate_add']) {
+ for(const mode of ['valid','clipped_add','numbered','hidden_enter','foreign_panel','foreign_card','wrong_vendor','duplicate_add']) {
   const page=new Page();page.context.innerWidth=1000;page.context.innerHeight=800;
   class ViewsForm{};class BrowseViewVendor{};
   const root=page.add('div','MF;TF-1;ViewsForm','',{x:0,y:50,width:900,height:700});
   const panel=page.add('div','MF;TF-1;ViewsForm;cntPorts;11111111-1111-1111-1111-111111111111','',{x:50,y:100,width:600,height:400},root);
   const add=page.add('div','MF;TF-1;ViewsForm;ViewerAddCard'+(mode==='numbered'?'-1':''),'Add',{x:70,y:120,width:150,height:120},panel);
+  if(mode==='clipped_add')add.box.y=770;
   const cardTid='MF;TF-1;ViewsForm;ViewerCard'+(mode==='numbered'?'-1':'');
   const card=page.add('div',cardTid,'Table',{x:240,y:120,width:150,height:120},panel);
   const hoverEnter=page.add('button',cardTid+';btnEnter','Table',{x:250,y:130,width:100,height:30},card);
@@ -4066,6 +4081,7 @@ test('Table add/enter controls are bound to native output panels, not repeated c
   const s=await page.observe(),adds=s.ui.elements.filter(e=>e.viewer_card?.kind==='add'),enters=s.ui.elements.filter(e=>e.viewer_card?.kind==='enter');
   assert.equal(adds.length,['foreign_panel','duplicate_add'].includes(mode)?0:1,mode);
   assert.equal(enters.length,['foreign_panel','foreign_card','wrong_vendor'].includes(mode)?0:1,mode);
+  if(mode==='clipped_add'){let clicked;const click=page.mouse.click;page.mouse.click=async(x,y,...args)=>{clicked={x,y};return click(x,y,...args);};const result=await page.act({verb:'click',ref:adds[0].ref},s);assert.equal(result.status,'SUCCEEDED',JSON.stringify(result.error));assert.ok(clicked.y<800);}
   if(enters.length){assert.equal(enters[0].tid,cardTid);assert.deepEqual(enters[0].allowed_actions,['enter_table']);assert.equal(enters[0].viewer_card.view_guid,'22222222-2222-2222-2222-222222222222');}
  }
 });
@@ -4593,4 +4609,40 @@ test('compact filter observation retains visible final rows ahead of clipped sav
  const target=observed.ui.elements.find(e=>e.tid===base+';colDelete_Id-99');
  assert.ok(target);assert.ok(target.allowed_actions.includes('click'));assert.equal(target.filter_cell.record_id,'r99');
  assert.ok(observed.ui.elements.length<=240);
+});
+
+test('missing values constant trigger requires the exact active cached field editor',async()=>{
+ for(const fault of ['none','foreign_record','inactive','wrong_field','wrong_method','foreign_grid']){
+  const page=new Page(),c=wizardStepFixture(page),base=c.base+';DataRecoveryWizard;';c.marker.remove();Object.assign(page.context,{innerWidth:1000,innerHeight:800});
+  const container=page.add('div',base+'grdColumnsSettings','',{x:20,y:80,width:500,height:300},c.form);container.id='mv-grid';
+  const view=page.add('div',base+'grdColumnsSettings;tbl','',{x:20,y:80,width:500,height:300},container);view.id='mv-view';
+  const row=page.add('table',null,'',{x:20,y:110,width:400,height:25},view);Object.assign(row.attrs,{class:'x-grid-item','data-recordindex':'0','data-recordid':'r1','data-boundview':view.id});
+  page.add('td',base+'colMethod_Note','constant',{x:20,y:110,width:100,height:25},row);
+  const editor=page.add('div',base+'grdColumnsSettings;tbl;celleditor;cbx','',{x:150,y:110,width:120,height:25},view);
+  const trigger=page.add('div',editor.attrs['data-tid']+';trg_SetNullValue','',{x:240,y:110,width:20,height:25},editor);
+  const record={isModel:true,internalId:'r1',data:{Name:'Note',ActionNull:fault==='wrong_method'?3:6}},records=[record];
+  const store={$className:'Ext.data.Store',isLoading:()=>false,getData:()=>({items:records})};
+  const grid={el:{dom:container},getStore:()=>store};grid.editingPlugin={editing:fault!=='inactive',context:{grid:fault==='foreign_grid'?{}:grid,record:fault==='foreign_record'?{...record}:record,field:fault==='wrong_field'?'Name':'ActionNull'}};
+  page.context.Ext={getCmp:id=>id===container.id?grid:id===view.id?{el:{dom:view},getStore:()=>store}:undefined};
+  const snapshot=await page.observe(),control=snapshot.ui.elements.find(e=>e.tid===trigger.attrs['data-tid']);
+  if(fault==='none'){assert.equal(control?.missing_values_field.field_key,'Note');assert.equal(control?.missing_values_field.part,'constant');assert.ok(control.allowed_actions.includes('click'),JSON.stringify(control));}
+  else assert.equal(control,undefined,fault);
+ }
+});
+
+test('bound output scans omit inactive Table interiors while keeping live controls',async()=>{
+ const page=new Page(),root=page.add('div','MF;TF-1;ViewsForm');
+ for(let n=0;n<30;n++){
+  const table=page.add('div','MF;TF-1;ViewsForm;BrowseView-'+(n+1),'',{x:0,y:-9999,width:2,height:2},root);
+  table.attrs.class='x-hidden-offsets';
+  for(let i=0;i<220;i++)page.add('span',null,'cached control',undefined,table);
+ }
+ page.add('button','MF;TF-1;ViewsForm;btnRename','Rename',undefined,root);
+ const result=await vm.runInContext('('+workspaceUiCapability.toString()+')',page.context)(page,
+  {expected_build:build,expected_origin:origin,mode:'observe',prepared_node_context:{node:{node_id:'node'},workflow_ref:{prefix:'MF;TF-1',navigation_path:[]}}},
+  async()=>({verified:true,surface:'views'}));
+ assert.equal(result.status,'SUCCEEDED',JSON.stringify(result.error));
+ assert.ok(result.output.scan.omitted_regions.includes('inactive_table_views'));
+ assert.ok(result.output.scan.visited_elements<1000);
+ assert.ok(result.output.ui.elements.some(e=>e.tid==='MF;TF-1;ViewsForm;btnRename'));
 });

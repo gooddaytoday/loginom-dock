@@ -2,8 +2,9 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import vm from 'node:vm';
 import {readMappingBrowser,readNodeMapping} from '../lib/node-mapping-context.mjs';
-function fixture({grouped=false,input=false}={}) {
- const base='MF;TF;WizrdMCF;'+(input?'TuneDataSourceMappingWizard':grouped?'DerivedDataSourceOutputSocketWizard':'ColumnsMappingEngineOutputPortWizard')+';',all=[],views={};
+function fixture({grouped=false,input=false,socket=false}={}) {
+ grouped ||= socket;
+ const base='MF;TF;WizrdMCF;'+(input?'TuneDataSourceMappingWizard':socket?'DataSetOutputSocketWizard':grouped?'DerivedDataSourceOutputSocketWizard':'ColumnsMappingEngineOutputPortWizard')+';',all=[],views={};
  const el=(tid,text='',parent=null)=>{const e={tid,textContent:text,parent,id:'e'+all.length,attrs:{},checkVisibility:()=>true,
   getAttribute(k){return k==='data-tid'?this.tid:this.attrs[k]??null;},contains(other){return other===this||!!other.parent&&this.contains(other.parent);},
   querySelectorAll(q){return all.filter(x=>x!==this&&this.contains(x)&&q==='table.x-grid-item'&&x.row);},classList:{contains:()=>false}};all.push(e);return e;};
@@ -156,4 +157,9 @@ test('only a settled local CollectionProxy may retain the previous total after a
   proxy.pendingOperations={};proxy.$className='bg.ext.CollectionProxy';s.currentPage=1;s.getRemoteFilter=()=>false;
   mutate();assert.equal(f.read().reason,'mapping_filtered_store');
  }
+});
+
+test('standalone dataset output schema retains effective data kinds and rejects malformed kinds',()=>{
+ const f=fixture({socket:true});f.target[0].data.DataKind=1;const r=f.read();assert.equal(r.verified,true,r.reason);assert.equal(r.mapping_wizard,'DataSetOutputSocketWizard');assert.deepEqual(Array.from(r.target_fields,f=>f.data_kind),['Непрерывный','Дискретный']);
+ f.target[0].data.DataKind=99;assert.equal(f.read().verified,false);
 });

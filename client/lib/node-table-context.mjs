@@ -108,9 +108,19 @@ export async function readNodeTable(page,binding,table,request,readOutputs=readO
         ||xs[0].getAttribute('data-boundview')!==grids[i][0].id))return fail('row_not_rendered');
       const cells=[];
       for(const field of fields) {
-        const cellTid=field.header_tid+'_'+index,els=exact(cellTid),cached=own(data,field.name),props=cached&&Object.getOwnPropertyDescriptors(cached);
+        // Ext recycles rendered rows: the test-id suffix can retain a render
+        // index different from data-recordindex. The native record/row binding
+        // above supplies row identity; the exact header prefix supplies field
+        // identity. Suffixes can also repeat in other recycled rows, so require
+        // uniqueness within this verified record row, not across the document.
+        // Never choose a cell by its current screen position.
+        const prefix=field.header_tid+'_';
+        const els=[...pair[1][0].querySelectorAll('[data-tid]')].filter(e=>{
+          const tid=e.getAttribute('data-tid');return tid?.startsWith(prefix)&&/^\d+$/.test(tid.slice(prefix.length));
+        });
+        const cached=own(data,field.name),props=cached&&Object.getOwnPropertyDescriptors(cached);
         if(!props||Object.getPrototypeOf(cached)!==Object.prototype||Object.values(props).some(d=>!('value'in d)))return fail('cell_cache_shape');
-        if(els.length!==1||!pair[1][0].contains(els[0]))return fail('cell_not_visible',{schema_id:schemaId,column_index:field.index,row_index:request.row_offset+offset});
+        if(els.length!==1)return fail('cell_not_visible',{schema_id:schemaId,column_index:field.index,row_index:request.row_offset+offset});
         if(!inside(els[0],grids[1][0])) {
           const c=els[0].getBoundingClientRect(),g=grids[1][0].getBoundingClientRect(),grid=grids[1][0];
           return fail('cell_not_visible',{schema_id:schemaId,column_index:field.index,row_index:request.row_offset+offset,

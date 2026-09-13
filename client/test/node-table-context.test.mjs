@@ -11,7 +11,7 @@ function fixture() {
    getAttribute(k){return this.attrs[k]??null},getBoundingClientRect(){return this.box},
    contains(x){return this.children.includes(x)||this.children.some(c=>c.contains(x))},
    all(){return this.children.flatMap(c=>[c,...c.all()])},
-   querySelectorAll(q){return this.all().filter(e=>q==='table.x-grid-item'?e.tag==='table':q==='.bg-cell-null-value'?e.attrs.class==='bg-cell-null-value':false)}};
+   querySelectorAll(q){return this.all().filter(e=>q==='[data-tid]'?typeof e.attrs['data-tid']==='string':q==='table.x-grid-item'?e.tag==='table':q==='.bg-cell-null-value'?e.attrs.class==='bg-cell-null-value':false)}};
   e.classList={contains:k=>(e.attrs.class??'').split(' ').includes(k)};elements.set(tid,e);return e;
  };
  const root=el(table.table_tid),left=el(table.table_tid+';grdData;grd;tbl'),right=el(table.table_tid+';grdData;grd-1;tbl');left.id='left';right.id='right';root.children=[left,right];
@@ -38,7 +38,7 @@ function fixture() {
  const paging=Object.assign(new BrowseViewPagingProxy(),{FViewDataInvalid:false,FRequiredPrepareViewData:false,FTotalRowCount:3,FPageIndex:0,FPageSize:1000000});
  const base={FView:{el:{dom:root}},FStatus:4,FBrowseViewDataProxyController:paging,FBrowseViewDataSourceController:{FDataStore:store},FBrowseViewColumnsController:{FColumnNames:names}};
  const model={FViewDescList:{[table.view_guid]:{BaseView:base}}};
- const context=vm.createContext({Object,document:{querySelectorAll:q=>q==='.x-mask-msg,.bg-mask-message'?[]:elements.has(JSON.parse(q.slice(10,-1)))?[elements.get(JSON.parse(q.slice(10,-1)))]:[]},
+ const context=vm.createContext({Object,document:{querySelectorAll:q=>q==='.x-mask-msg,.bg-mask-message'?[]:[...elements.values()].filter(e=>e.attrs['data-tid']===JSON.parse(q.slice(10,-1)))},
    Ext:{getCmp:id=>views[id]},bg:{app:{Application:{FInstance:{FMainForm:{Items:{Workspace:{getActiveTab:()=>({Controller:{FController:model}})}}}}}}},
    getComputedStyle:()=>({display:'block',visibility:'visible'}),innerWidth:1000,innerHeight:800});
  const page={evaluate:(fn,arg)=>structuredClone(vm.runInContext('('+fn.toString()+')('+JSON.stringify(arg)+')',context))};
@@ -122,3 +122,28 @@ for(const [name,change] of Object.entries({cancel:f=>f.base.FBrowseViewColumnsCo
  wrong_index:f=>f.formatRecord.data.SourceColumnIndex=1,loading:f=>f.formatStore.isLoading=()=>true,
  foreign_grid:f=>f.views['format-grid'].el.dom={},wrong_form:f=>f.base.FBrowseViewColumnsController.FBrowseFormat.FView.el.dom=f.root}))
  test('applied format proof refuses '+name,async()=>{const f=singleAppliedFormatFixture();change(f);assert.equal((await read(f)).applied_format,undefined);});
+
+test('recycled cell suffixes use the bound record row and exact field header',async()=>{
+ const f=fixture();
+ for(const c of f.cells)c.attrs['data-tid']=c.attrs['data-tid'].replace(/_(\d+)$/,(_,n)=>'_'+(Number(n)+31));
+ assert.equal((await read(f)).verified,true);
+ f.records[1].data.Text.ValueText='different';
+ assert.equal((await read(f)).reason,'cell_render_mismatch');
+});
+test('recycled cells still reject duplicate identities and cells in a different record row',async()=>{
+ for(const fault of ['duplicate','other_row']){
+  const f=fixture(),cell=f.cells[0];
+  if(fault==='duplicate'){const copy=f.el('other');copy.attrs['data-tid']=cell.attrs['data-tid'];f.rows[0][1].children.push(copy);}
+  else {f.rows[0][1].children=f.rows[0][1].children.filter(e=>e!==cell);f.rows[1][1].children.push(cell);}
+  assert.equal((await read(f)).verified,false,fault);
+ }
+});
+
+test('identical recycled test IDs in different native record rows remain independently readable',async()=>{
+ const f=fixture();
+ for(let column=0;column<3;column++)f.cells[3+column].attrs['data-tid']=f.cells[column].attrs['data-tid'];
+ const r=await read(f);assert.equal(r.verified,true,JSON.stringify(r));
+ assert.equal(r.rows[0].cells[0].text,'1');assert.equal(r.rows[1].cells[0].text,'2');
+ f.rows[1][1].attrs['data-recordid']='r0';
+ assert.equal((await read(f)).verified,false);
+});

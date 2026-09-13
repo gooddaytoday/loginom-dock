@@ -65,3 +65,9 @@ test('second input cancellation binds its own opening receipt',()=>{
  const binding=wizardCloseBinding(state);assert.equal(boundWizardCloseConfirmation(state,binding),true);
  state.prepared_node_context.input_port.port=0;assert.equal(boundWizardCloseConfirmation(state,binding),false);
 });
+
+test('output-port cancellation binds its exact port receipt without a node-wizard owner',()=>{
+ const {state}=fixture();state.wizard.stage='output_mapping';state.wizard.owner_context={status:'unobserved'};state.prepared_node_context.output_port={direction:'output',port:0,native_index:0,port_guid:'p',opening_operation_id:'opened'};
+ const binding=wizardCloseBinding(state);assert.equal(boundWizardCloseConfirmation(state,binding),true);
+ for(const patch of [{port_guid:'other'},{opening_operation_id:'other'},{port:1},{direction:'input'}]){const altered=structuredClone(state);Object.assign(altered.prepared_node_context.output_port,patch);assert.equal(boundWizardCloseConfirmation(altered,binding),false);}
+});

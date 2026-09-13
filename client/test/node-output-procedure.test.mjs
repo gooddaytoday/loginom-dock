@@ -56,3 +56,30 @@ test('empty default datetime masks are applied without selecting away and verifi
  assert.equal(events.filter(a=>a.ref.endsWith('btnApply')).length,2);assert.equal(events.filter(a=>a.ref.endsWith('btnCancel')).length,2);
  await assert.rejects(restoreEmptyDateTimeFormats(channel,table,targets,[{...originals[0],settings:{...originals[0].settings,format_string:'nonempty'}}]),/Only an observed/);
 });
+
+test('new output tables reveal offscreen cards within their exact port before adding and entering',async()=>{
+ const {openNewOutputTable}=await import('../lib/node-output-procedure.mjs');
+ for(const fault of ['none','foreign_port','stalled']){
+  let views=false,selected=false,added=false,active=false,top=0;const actions=[];
+  const control=(ref,extra={})=>({ref,tid:ref,allowed_actions:['click'],interaction:{state:'point_observed'},bounding_box:{y:100},...extra});
+  const card=(ref,kind,guid,outside)=>control(ref,{viewer_card:{kind,port_guid:'port',port_panel_ref:'panel',...(guid?{view_guid:guid}:{})},
+   scroll:{ref:'scroll',top,max_top:800},bounding_box:{y:outside?1000:100},interaction:{state:outside?'outside_viewport':'point_observed'},
+   allowed_actions:outside?[]:[kind==='enter'?'enter_table':'click','scroll']});
+  const snapshot=()=>({prepared_node_context:{verified:true,document_id:'doc',workflow_id:'wf',node_id:'node',surface:views?'views':'graph',tid:'node'},
+   ui:{elements:views?[control('vendor',{viewer_vendor:{kind:'table',selected}}),
+    {...card('anchor','enter','old',false),...(fault==='foreign_port'?{viewer_card:{kind:'enter',port_guid:'other',port_panel_ref:'foreign',view_guid:'old'}}:{})},
+    card('add','add',null,top<400),...(added?[card('new','enter','new',top<800)]:[])]:[
+     control('node',{graph_node:{part:'body'}}),control('views',{allowed_actions:['open_node_views']})]},
+   node_outputs:{verified:true,surface:views?'views':'graph',ports:[{index:0,port_guid:'port',active:true}],
+    tables:[{view_guid:'old',port_guid:'port',active:false},...(added?[{view_guid:'new',port_guid:'port',active,table_tid:active?'table':null}]:[])]}});
+  const channel={observe:async o=>{const s=snapshot();assert.equal(o.ready(s),true,o.condition);return s;},perform:async o=>{
+   const s=snapshot();assert.equal(o.ready(s),true,o.condition);const a=o.resolve(s);actions.push(a);
+   if(a.ref==='views')views=true;if(a.ref==='vendor')selected=true;
+   if(a.verb==='scroll'){assert.ok(['anchor','add'].includes(a.ref));if(fault!=='stalled')top+=400;}
+   if(a.ref==='add'&&a.verb==='click'){assert.equal(top>=400,true);added=true;}
+   if(a.ref==='new'){assert.equal(top>=800,true);active=true;}
+  }};
+  if(fault==='none'){const r=await openNewOutputTable(channel,0);assert.equal(r.table.view_guid,'new');assert.equal(actions.filter(a=>a.verb==='scroll').length,2);}
+  else {await assert.rejects(openNewOutputTable(channel,0),/scroll/);assert.equal(added,false);assert.equal(active,false);}
+ }
+});

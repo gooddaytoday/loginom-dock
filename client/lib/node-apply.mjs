@@ -166,7 +166,7 @@ export async function applyNode({request, operation, handlers, drivers, record,
       const refusal=error.nodePhaseRefusal;
       if(name==='target'&&refusal?.phase===name&&refusal.status==='FAILED'
         &&refusal.effect_possible===true&&refusal.cleanup_complete===true&&refusal.settings_unchanged===true
-        &&refusal.verification==='reform_mapped_preflight_completed'){
+        &&['reform_mapped_preflight_completed','missing_values_preflight_completed'].includes(refusal.verification)){
         await acknowledge({phase:'node_phase_refused',signature,receipt:{...pending,...refusal}});
         state.effect_possible=true;state.pending=null;state.cleanup_complete=true;state.verified_refusal=true;
       }

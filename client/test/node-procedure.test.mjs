@@ -479,3 +479,19 @@ test('Join link menu uses a unique bounded portal only during Join observation',
 });
 
 test('pre-gesture recovery retains the handler stability condition',async()=>{const f=recoveryFixture({confirmIdentity:s=>s.binding});await f.perform();const observations=f.records.filter(e=>e.phase==='node_observation_completed');assert.equal(observations.length,2);assert.ok(observations.every(e=>e.readiness.required_samples===2));assert.equal(f.records.filter(e=>e.phase==='node_observation_sample').length,4);assert.equal(f.mutations,2);});
+
+test('missing values prompt is read through its portal and requires a bound constant field',async()=>{
+ for(const fault of ['none','title','field','method','control','signature']){
+  const node={document_id:'doc',workflow_id:'wf',node_id:'node'},ref={workflow_id:'wf',prefix:'MF;TF-1',tab_tid:'MF;cntMain;cntWorkspace;Workspace;t.br;tb-1',navigation_path:[{tid:'path',label:'workflow'}]},base='MF;TF-1;WizrdMCF';
+  const native={verified:true,node_context:{verified:true,...node,surface:'wizard',tid:base},method_context:{field_name:'Note',record_id:'r'},fields:[{name:fault==='field'?'other':'Note',record_id:'r',used:true,type:'string',method:fault==='method'?'mean':'constant'}]};
+  const state={origin:'http://example.test',loginom_build:'7.4.2',workflow_ref:ref,dom_epoch:{document:'doc'},prepared_node_context:native.node_context,scan:{complete:true},wizard:{status:'observed',stage:'missing_values',root_ref:'wizard',root_tid:base},ui:{masks:[],dialogs:[{ref:'portal',title:fault==='title'?'Other':'Редактирование значения замены для пропусков'}],truncated:{dialogs:false,masks:false},elements:['msgbox;cnt;cnt;txt','msgbox;tlb;ok','msgbox;tlb;cancel'].map(tid=>({tid,ref:tid,identity:{anchor_tid:tid},signature:{dialog_ref:fault==='signature'?'other':'portal'}}))}};
+  if(fault==='control')state.ui.elements.pop();let clock=1;const roots=[];
+  const channel=createNodeProcedure({operation:{id:'mv-prompt',action:{action_key:'node.apply',revision:'1'},deadline:10000},preparedNodeContext:{document_id:'doc',workflow_ref:{...ref,workflow_id:'wf'},node},targetOrigin:state.origin,targetBuild:state.loginom_build,now:()=>clock++,wait:async()=>{clock+=1000},record:async e=>structuredClone(e),execute:async code=>{
+   if(code.includes('function readMissingValuesBrowser'))return structuredClone(native);
+   if(!code.includes('"discover_roots":true'))roots.push(/"root_ref":"([^"]+)"/.exec(code)?.[1]);
+   return {status:'SUCCEEDED',output:structuredClone(state)};
+  }});
+  const read=()=>channel.observe({condition:'owned prompt',readMissingValues:true,ready:()=>true,timeoutMs:2000});
+  if(fault==='none'){await read();assert.ok(roots.includes('portal'));}else await assert.rejects(read());
+ }
+});
