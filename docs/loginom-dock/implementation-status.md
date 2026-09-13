@@ -1,3 +1,27 @@
+# Узлы 16 и 14: проверены итоги, назначены следующие действия — 13 сентября 2026
+
+Узел16: source f998985c/report41856b1d. Помощник сверил ранний inactive source guard,
+minimal save/new-document/reexecute, полные0×4 и input7fields/0rows, graph identity,
+три PASS audit receipts и12negative в каждом. Empty persistence закрыт только при
+явном выполнении upstream; старый pending не объявлен восстановленным.
+Разработчик уведомлён об ожидании конкретного решения по exact variant.
+[Подготовленный ограниченный эксперимент и причина согласования](node16-variant-prototype-decision.md).
+
+Узел14: source e433c593/report f3165f39. Bounded target recovery подтверждён
+выбранными evidence и runtime hunks: FAILED/cleanup после no target effect,
+новыйID success4×5 и native save. Reopen/full goal не приняты. Помощник проверил
+5 выбранных hashes и индекс, не все2523файла и не все тесты повторно.
+Назначен отдельный terminal-refusal verifier follow-up на Astra medium в той же
+задаче; ход `01a09a21-8a9f-7ae0-862d-c09e230cdbec` active подтверждён.
+Строгий scoped учёт всех prepared/calls/refusals, actual graph before/after,
+known source preflight effect и успешный successor с новымID обязателен.
+27successful operations,9imports,12persisted results, final save/reopen остаются
+обязательными. Старый FAIL не переименовывается; дополнительные неизвестные
+операции и недоказанное recovery не прощаются. Candidate build отложен до новых
+verifier/harness pins. Hermes остаётся за11; слияния/выпуска не было.
+
+---
+
 # Узлу 11 назначена полная приёмка кандидата 11.2 — 13 сентября 2026
 
 Preflight report/pins `49c8b68f` проверен: 8 SHA receipts, 157 текущих runtime
