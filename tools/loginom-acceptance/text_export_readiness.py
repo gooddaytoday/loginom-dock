@@ -31,7 +31,23 @@ def require_reject_baseline_reader(purpose='full',manifest=MANIFEST):
         changed=sorted(n for n in old if old[n]!=current[n])
         assert changed==m['changed_since_diagnostic'], 'Unaccounted harness change'
         protected=['text-export-observer-native.mjs','text-export-observer-sdk.mjs','text-export-read-observer.mjs','text-export-observer-binding.mjs','text-export-observer-policy.mjs','text_export_origin.py','text_export_observer_evidence.py','text_export_observer_run.py']
-        assert all(old[n]==current[n] for n in protected), 'Native observer component changed since evidence'
+        if not all(old[n]==current[n] for n in protected):
+            # Use the already verified current download, not a new admission stage.
+            ref=m['observer_diagnostic'];latest=json.loads(pinned(ROOT,ref['path'],ref['sha256']).read_text())
+            r=ROOT/latest['run_directory'];assert r.resolve().is_relative_to(ROOT)
+            for n,h in latest['evidence_sha256'].items():pinned(r,n,h)
+            recorded=json.loads((r/'request.json').read_text())
+            assert recorded['runtime_source_pin']['client_revision']==m['runtime']
+            assert all(recorded['harness_inputs'][n]==current[n] for n in protected+['text-export-observer-response.mjs'])
+            assert latest['evidence_checks_passed'] and latest['download']['passed'] and latest['actual_dispatch_count']==0
+            records=[json.loads(x) for x in (r/'observer/observer.jsonl').read_text().splitlines()]
+            c=records[0]['payload'];proof=next(x['payload'] for x in records if x['kind']=='read_completed')
+            from text_export_observer_evidence import verify_action_ledger
+            verify_action_ledger(proof['action_ledger'],c,proof['before'],proof['after'])
+            assert proof['before']==proof['after'] and proof['workflow_returned'] and proof['cleanup_complete'] and proof['download_count']==1
+            data=(r/'observer'/proof['native_file']).read_bytes()
+            assert len(data)==124 and data==(WORK/'fixtures/text-export/expected/csv.bin').read_bytes() and hashlib.sha256(data).hexdigest()==proof['sha256']
+
         pinned(WORK,'goals/text-export-node-complete.txt',m['goal_sha256'])
         assert m['full_goal']=={'nodeops':22,'deliveries':3,'all_save_reopen_required':True}
         from text_export_observer_run import verify_run_observer

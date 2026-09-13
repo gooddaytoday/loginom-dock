@@ -211,7 +211,7 @@
     "fixtures/text-export/input/wide.csv": "c106b1287d098b5b1905cccb3fd9bbb0c92213f384408eee3c1242ad2fb09d55",
     "fixtures/text-export/typed.json": "a16021d45d1e80883979a4a1bd19627225c111861ad28c1fec33c878d828dabd",
     "fixtures/text-export/wide.json": "2eb17d046fb5bcd25e40d06bc54c8a8721eb59bb4ff263c3ee1c98e2950305fa",
-    "freeze-text-export-admission.py": "b2bfdad738cd85fefae980621bb6d7b7f0f2c3276c82166f745988726f45be2f",
+    "freeze-text-export-admission.py": "d0a4fc9e66df1f7b93b974b809dd0f1679d4a0d8bab871735fd7d90f6da1e6bd",
     "goals/text-export-node-complete.txt": "5db16d49554a80afceedcbad2f9a836378377650bcec1d27c4768638a29b46b6",
     "grouping_configuration_evidence.py": "046167117ee92c12f5bce35d4b01072b7df8f26779ba9217de8ab7f2ee832f6d",
     "grouping_goal_contract.py": "2043488e9e8a2f0026cd928587f03dd566f58aa3b2b38814119bfd17aa2ee95a",
@@ -426,7 +426,7 @@
     "text_export_observer_evidence.py": "ee7a6aed596de434d6efe9e2d3903a91c7107611e0b7e9b684d0a8907e1ee1bd",
     "text_export_observer_run.py": "5f1802984e818f3bb5a075a95d8e400f40dbaf0db37eb13ca30b36a07b1e9df6",
     "text_export_origin.py": "20ebc438cf5c3c4ec1e3959f68d5c3d9a1aa93244d6f0bd9f524d3751ec84ca3",
-    "text_export_readiness.py": "5f500cf7b8b235e2778994a737b7c8ce2a0ac0d586eb1351677564eb5a2864b7",
+    "text_export_readiness.py": "aff8615d32439749a7bf6df7122c502ba7da5aeed23811dd0b3f8cab86b51376",
     "text_export_upload_probe.py": "76401217b9ab5c5fd967065dfb9e2185e1114058064ee80d30479567ede4cb0b",
     "text_export_user_v1_evidence.py": "0e758a742a65e1b48dd15c7284977ca7b75aae6da4fc52da7dfc4b75bc7701e5",
     "union-live.mjs": "3840d57e05edad771504157d95e842dd25b9b51b6407f04ae5a5113f4a8050ba",
@@ -473,5 +473,13 @@
     "sha256": "282939430558498b87b844b1db117e1073f67d966c9a689b27910082bef5e14a",
     "run_directory": ".dock/node17/native-observer-smoke/20260913-145112-3a826200"
   },
-  "user_v1": null
+  "user_v1": {
+    "path": "docs/plans/loginom-dock/17-text-export-user-v1-component-success.json",
+    "sha256": "77491ca449479ba01008fd1ab2e4565197292d87804410bb726daeb81a25205b",
+    "run_directory": ".dock/node17/user-v1-component/20260913-161159-ac299abe"
+  },
+  "observer_diagnostic": {
+    "path": "docs/plans/loginom-dock/17-text-export-download-diagnosis.json",
+    "sha256": "0aa32305c06a7a67862ba845c96ae38923a2817d64bc5b0d5266836a2dccb6b4"
+  }
 }
