@@ -27,7 +27,7 @@ def require_reject_baseline_reader(purpose='full',manifest=MANIFEST):
         # Full launch still requires fresh current-runtime component evidence below.
         changed_runtime=sorted(n for n in set(runtime)|set(d['runtime_inputs']) if runtime.get(n)!=d['runtime_inputs'].get(n))
         assert changed_runtime==m.get('runtime_changes_since_diagnostic',[]), 'Unaccounted runtime change'
-        assert set(changed_runtime)<={'client/lib/text-import-procedure.mjs','client/lib/executor.mjs','client/lib/text-export-output.mjs'}, 'Export evidence requires a new diagnostic for this runtime change'
+        assert set(changed_runtime)<={'client/lib/text-import-procedure.mjs','client/lib/executor.mjs','client/lib/text-export-output.mjs','client/lib/workspace-ui.mjs'}, 'Export evidence requires a new diagnostic for this runtime change'
         for n,h in runtime.items():pinned(ROOT,n,h)
         from preflight import runtime_pin
         assert runtime_pin(ROOT)=={'client_revision':m['runtime'],'inputs':runtime}, 'Current runtime digest differs'

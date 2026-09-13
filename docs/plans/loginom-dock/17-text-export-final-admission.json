@@ -5,7 +5,7 @@
   "account": "test-2",
   "storage_directory": "/test-2",
   "handler_source": "2524921058b29db0e79e9a188ec7bb8fa9ef9d8c",
-  "runtime": "cd471237bdf5bc67bc668a02b3c5d1ad118b3e9fcfc74a235f10449ac5c1e01f",
+  "runtime": "c9972b58cfcb36fdedad6fa495424259243c4e9204d4e28909d33653810c7c3d",
   "runtime_inputs": {
     "examples/memory-plugin-shared/lib/batch-send.mjs": "2e5903703bb5c07a9d91fbd4e11020a7a5d8b677fd90f0c67170f17e9604a5bb",
     "examples/memory-plugin-shared/lib/capture-utils.mjs": "f82dd380fbf7faadaff0629638a0ca7d182b93a7981541b522efe3f5f970f1c9",
@@ -160,13 +160,14 @@
     "client/lib/union-readback.mjs": "7d49ef1f84b347539c424fa691c6ca8f8d1fb7cd7b42b1565104023a619d45ca",
     "client/lib/user-results.mjs": "413a6c9365789d7cd19c831137a52577ac3a9f2e6ea33609a2609983fa166b2a",
     "client/lib/user-workflow.mjs": "9819322cd98acd9df3d47bd9241cd4982f8ba4e643899a72872c8169b7491167",
-    "client/lib/workspace-ui.mjs": "82258b62faebff14b62ce33adca56d98c28bf5faee115370fe7990d69bcd3653",
+    "client/lib/workspace-ui.mjs": "1b0869c22b99d8fce04fe48a7fbd92acb2f61664bd0a0a83155e9298e8132ad6",
     "client/lib/workspace.mjs": "7e9c9f4dd6bf3b6bdecb614516fa864d42618ba474a196157082b6bb9062d8b5"
   },
   "runtime_changes_since_diagnostic": [
     "client/lib/executor.mjs",
     "client/lib/text-export-output.mjs",
-    "client/lib/text-import-procedure.mjs"
+    "client/lib/text-import-procedure.mjs",
+    "client/lib/workspace-ui.mjs"
   ],
   "harness_inputs": {
     "artifact-transport-check.mjs": "bbbb1fb4abbe7ff2b3c463f9bf51a9811455c9856ceefa929e2e7f9e803f296d",
@@ -201,7 +202,7 @@
     "filter_node_acceptance.py": "dae0d8652486b07898a1670c2182439f82c0598e54a5aa655e57f9ffbd98f2fb",
     "filter_persistence_semantics.py": "24556f6273484a566d50da554a4caafc4485b32c7b33ed9efb520045412edbb3",
     "filter_upload_probe.py": "978f237febd7a04c378ca6c8e2d93cb55ecdbf795b93486612c12aaecf10f700",
-    "fixtures/text-export/contract.json": "238bec90f2ff6b9a896cb4bcb7561ed7d6262ef0b6d037ac43b9c7e0f0b584c0",
+    "fixtures/text-export/contract.json": "dd9faca97c95143df5aab237ccab9ee7a4f28cc9088bcd04e3dcef633a4125e0",
     "fixtures/text-export/empty.json": "dd946d48a5b834365b1afcf88fd68ba9573ae27ddf3579cf2ad71f68791e8ac2",
     "fixtures/text-export/escaping.json": "ef8f41c3a8708c3918739478295fc8b31e6aef3364ca12240b579f8d869be2f0",
     "fixtures/text-export/expected/changed.bin": "290c4d0cec7895f80f95436030da5f4355dc47d0adbdd04ab17590274f8d4ff4",
@@ -433,7 +434,7 @@
     "text_export_observer_evidence.py": "5b463c084cee5c13158119e4192a8ac059cb0428de3be92d0f3818302c611db1",
     "text_export_observer_run.py": "5f1802984e818f3bb5a075a95d8e400f40dbaf0db37eb13ca30b36a07b1e9df6",
     "text_export_origin.py": "20ebc438cf5c3c4ec1e3959f68d5c3d9a1aa93244d6f0bd9f524d3751ec84ca3",
-    "text_export_readiness.py": "00bc2391668b7c4ebb306d7d6a638988dfecc964b81f5388c43bc523a9c5640a",
+    "text_export_readiness.py": "807f4c835c0cf4f05dc8cc30e13cf225b8f3290662c61477bb4b08b149928021",
     "text_export_upload_probe.py": "ab2915618608672d40578a873378fe6c6f332b63f9e41c2f5c2739c5415db75f",
     "text_export_user_v1_evidence.py": "0e758a742a65e1b48dd15c7284977ca7b75aae6da4fc52da7dfc4b75bc7701e5",
     "union-live.mjs": "3840d57e05edad771504157d95e842dd25b9b51b6407f04ae5a5113f4a8050ba",
@@ -489,9 +490,9 @@
     "run_directory": ".dock/node17/native-observer-smoke/20260913-145112-3a826200"
   },
   "user_v1": {
-    "path": "docs/plans/loginom-dock/17-text-export-save-virtual-component-success.json",
-    "sha256": "f76440c403731d24b26beb9a7e590ee91e75a936d20bb0c578bbab1ca4f55469",
-    "run_directory": ".dock/node17/user-v1-component/20260913-224754-cbf8ef54"
+    "path": "docs/plans/loginom-dock/17-text-export-wizard-point-component-success.json",
+    "sha256": "cd6d0788ae5e418b1b977de98df4435f9d478e34e4b356095097b972552ac4c6",
+    "run_directory": ".dock/node17/user-v1-component/20260913-235110-fb8639df"
   },
   "observer_diagnostic": {
     "path": "docs/plans/loginom-dock/17-text-export-download-diagnosis.json",
