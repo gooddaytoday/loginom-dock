@@ -7668,3 +7668,15 @@ cleanup=false сохранены. Новый live diagnosis не выполня�
 
 [Отчёт](missing-values-autonomous-acceptance-5-2026-09-13.md),
 [pins и квитанции](missing-values-autonomous-acceptance-5-pins-2026-09-13.json).
+
+## Node14 — диагностика UI_REFERENCE_STALE, 13 сентября 2026
+
+Установлен отказ повторного выбора тела источника Граница после закрытия
+редактора порта, до создания target. Два новых живых прохода успешны;
+DOM-замена подтверждена, исходная гонка не воспроизведена. Код не менялся,
+retry не добавлялся, inner NOT_APPLIED и outer AMBIGUOUS сохранены раздельно.
+Сессия закрыта, собственных процессов0; 318 старых квитанций совпали.
+Hermes не запускался, run5 остаётся FAIL. Дальнейшая работа по назначению.
+
+[Диагностика и ограничения](missing-values-stale-target-diagnosis-2026-09-13.md),
+[pins](missing-values-stale-target-diagnosis-pins-2026-09-13.json).
