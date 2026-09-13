@@ -1,3 +1,17 @@
+# Узел17: bootstrap и enrollment завершены, actor probe назначен
+
+Реальные cwd/branch/base/HEAD и изоляция подтверждены задачей17; coordinator
+проверил completed/idle bootstrapхода. PinnedNode24.19.0 отличается отshell22.23.1;
+для дальнейшей работы явно использовать закреплённый бинарник.
+Штатный enroll_task завершился status=enrolled, общийPeer и routeHash совпали,
+capturedTurnCount0; actorAccessVerified=false/newCaptureVerified=false ещё ожидаются.
+В той же задаче назначен только registeredMCP health/find/read probe;
+ход `01a09a39-d833-7a63-bd34-b5c25f549c22` active подтверждён.
+Далее при успехе — live discovery/детализация и разработка17; процесс регистрации
+больше не требует ручного добавления проекта пользователем.
+
+---
+
 # Исправлен способ регистрации проекта, создана задача17 — 13 сентября 2026
 
 Прежнее утверждение о необходимости ручного добавления проекта было ошибочным.
