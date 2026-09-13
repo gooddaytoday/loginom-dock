@@ -183,7 +183,7 @@
       "group": "Трансформация",
       "lane": 1,
       "order": 1,
-      "status": "in_progress",
+      "status": "accepted_in_branch",
       "subplan_number": 11,
       "subplan_path": "docs/plans/loginom-dock/11-replacement.md",
       "first_scope": "Сохранить подплан 11: замена по внутренней таблице, поддержанные правила и признак _Replaced.",
@@ -205,9 +205,11 @@
       "help_path": "data/processors/transformation/substitution/README.md",
       "assigned_account": "test-2",
       "palette_status": "observed_2026_09_12",
-      "acceptance_status": "not_accepted",
+      "acceptance_status": "accepted_in_branch",
       "help_source_uri": "viking://resources/loginom-dock/sources/loginom-help/data/processors/transformation/substitution/README.md",
-      "source_review_scope": "Каталожный путь Help; детальная сверка режима обязательна при подготовке подплана. Обзор источников не равен живой приёмке."
+      "source_review_scope": "Каталожный путь Help; детальная сверка режима обязательна при подготовке подплана. Обзор источников не равен живой приёмке.",
+      "accepted_branch_head": "dc0eadde4ede29cb9b548c53046a1be083ca8953",
+      "acceptance_report": "docs/loginom-dock/node11-branch-acceptance-2026-09-13.json"
     },
     {
       "component_id": "component.exports.Text",
@@ -215,9 +217,9 @@
       "group": "Экспорт",
       "lane": 1,
       "order": 2,
-      "status": "queued",
-      "subplan_number": null,
-      "subplan_path": null,
+      "status": "prepared_waiting_app_project",
+      "subplan_number": 17,
+      "subplan_path": "docs/plans/loginom-dock/17-text-export.md",
       "first_scope": "Экспорт одной таблицы в CSV/TSV с явными кодировкой, заголовком и разделителем; новый файл в выбранном каталоге.",
       "scope_basis": "engineering_proposal_requires_live_confirmation",
       "complexity_band": "M",
@@ -234,13 +236,14 @@
         "null_empty",
         "write_destination"
       ],
-      "suggested_branch_slug": "codex/exports-text",
-      "branch_state": "proposed_not_created",
+      "suggested_branch_slug": "codex/node-17-text-export",
+      "branch_state": "created_permanent_worktree",
       "help_path": "data/integration/export/txt-csv.md",
       "palette_status": "observed_2026_09_12",
       "acceptance_status": "not_accepted",
       "help_source_uri": "viking://resources/loginom-dock/sources/loginom-help/data/integration/export/txt-csv.md",
-      "source_review_scope": "Каталожный путь Help; детальная сверка режима обязательна при подготовке подплана. Обзор источников не равен живой приёмке."
+      "source_review_scope": "Каталожный путь Help; детальная сверка режима обязательна при подготовке подплана. Обзор источников не равен живой приёмке.",
+      "assigned_account": "test-2"
     },
     {
       "component_id": "component.imports.Excel",
@@ -2802,27 +2805,9 @@
     }
   },
   "finalized_at": "2026-09-13T00:04:38.014661+03:00",
-  "current_execution_note": {
-    "all_four_streams": "node12 accepted in unmerged scoped branch after versioned122/122 reassessment; stream2 node16 development dispatched after bootstrap and registered shared-memory actor PASS; node14 approval-blocked before model; node11/13 retain shared-integration gates",
-    "dispatch": "Automatic same-task review/fixes, then new task/worktree/branch after all gates; separate user command for merging",
-    "previous_incident_probe": {
-      "verified_by": "coordinator curl without credentials",
-      "endpoint": "https://loginom.duckdns.org/mcp",
-      "tcp_connect_seconds": 0.019282,
-      "tls_completed": false,
-      "elapsed_seconds": 8.002798,
-      "http_code": 0,
-      "exit_code": 28,
-      "error": "SSL connection timeout",
-      "root_cause": "not established",
-      "checked_at": "2026-09-13T00:04:38.012878+03:00"
-    },
-    "updated_date": "2026-09-13",
-    "report": "docs/loginom-dock/dock-availability-2026-09-13.md",
-    "checkpoint": "docs/loginom-dock/agent-handoff.md"
-  },
+  "current_execution_note": "Stream1 node11 accepted in branch; node17 Text export environment prepared, waiting saved app project, no developer task yet. Other streams retain current phases in coordinator registry.",
   "active_component_by_lane": {
-    "1": "component.transform.Replace",
+    "1": "component.exports.Text",
     "2": "component.transform.ColumnFlipping",
     "3": "component.transform.DateTimeReform",
     "4": "component.preprocessing.DataRecovery"

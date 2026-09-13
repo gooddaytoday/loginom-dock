@@ -1,3 +1,33 @@
+# Узел11 принят; узел17 подготовлен, ожидается проект приложения — 13 сентября 2026
+
+[Узел11 принят в ветке](node11-branch-acceptance-2026-09-13.json): отдельная
+переоценка frozenrun20260913-122247-a862a34d дала59/59PASS; verifier9ddb33ed,
+report/head dc0eadde. Помощник сверил stage-specific saveконтракт,11артефактов,
+252/253harness,392sourcefiles,17/36test receipts и тот же неизменённый evaluator.
+Нового Hermes/UI/review не было, старый57/59FAIL сохранён. test-2 освобождён,
+старые ветка/задача/пакет сохранены. Mainmerge/push/production/plugin не выполнялись.
+
+Следующий узел потока1 — [17. Экспорт текста](../plans/loginom-dock/17-text-export.md).
+Созданы постоянный `.worktrees/node-17-text-export`, ветка
+`codex/node-17-text-export` от принятой a3b419bde8a660e1905284ee62a46362d5a49e09.
+Runtime paths этой базы совпали с main; непрослитый11 не перенесён.
+SourceMCP, отдельныйDockHOME, test-2,/test-2, Node24.19.0, read-only dependencies,
+свежие AGENTS/runbook и предварительный discovery-план подготовлены.
+Memoryprepare прошёл: pending registration7bdef4fd-e366-485d-a83f-51eef03085da,
+routeHash b80f0999335b31280f00859bbb97af683b5377adcdb3c11b4b6e7b2741b7041b.
+State/cursor/task ещё не создавались. UI/live/fullmemoryaccess не проверены.
+
+Блокер: доступные purpose-built инструменты не имеют add-project, а CUA вернул
+«Computer Use is not allowed to use the app com.openai.codex for safety reasons».
+Ограничение не обходилось другим GUI-драйвером/правкой внутреннего appstate.
+Пользователь должен добавить подготовленную папку как savedproject Codex.
+Затем list_projects → новая ordinary local bootstrap task Astra medium →
+completed evidence/hooks/enrollment → actor health/find/read → live discovery,
+детализация17 и разработка. Задачу не создавать в main или старомчате11.
+Следующие XLSX import/export остаются отдельными будущими узлами.
+
+---
+
 # Пользователь разрешил ограниченный variant прототип узла16 — 13 сентября 2026
 
 На конкретный вопрос о read-only эксперименте test-1, максимум50×8 и отсутствии
