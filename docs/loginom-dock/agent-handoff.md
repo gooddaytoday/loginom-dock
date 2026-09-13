@@ -1,3 +1,48 @@
+# Узел14 завершил input_mapping recovery и готовит приёмку — 13 сентября 2026
+
+Обработано итоговое событие14. Проверены completed/idle хода
+`01a098a5-65c8-7f00-99d8-a96936db4eca`, code
+`c32a5d5e163fe174afba59abce973ac405742cdc` и report-only HEAD
+`c9da8d712485f6262a205eb13f86fb8b2365b482`. Отчёт в ветке14:
+`docs/loginom-dock/missing-values-recovery-2026-09-13.md`.
+
+Ключевые receipts подтвердили живое восстановление исходного input_mapping
+после потери ответа Done: та же сессия/runtime/operation ID, attempt2 SUCCEEDED,
+inspect2→2, replay81→81, один входной Done и один Execute. Полные15 ячеек3×5
+совпали с независимым expected,6 подмен evidence отклонены. При изменённом mapping
+исходный pending сохранился без Execute; третья проба после исчерпания бюджета
+отказала без действий18→18. Runtime pin
+`a9db4113ac69d38d7227e971ece3652acf3e1bf836723e6e577917eda916406f`,156 файлов.
+Полные1432 client PASS/1 SKIP, целевые51 и Python3 — результаты разработчика,
+координатор повторно наборы не запускал. CSV bytes в recovery заново не сверялись.
+
+Новая live terminal failure в этом этапе не вызывалась: предыдущая доказательная
+база N14-R2 относится к a63586fe, текущие регрессии проверены тестами.
+Configure recovery13 не закрыто: общие readReceipt/phase completion дают точки
+расширения, но input_mapping verifier ограничен своей фазой. Код между ветками
+не переносился. Полный автономный PASS, native save test-4 и новый candidate
+всё ещё не получены; сохранение и геометрия диагностического окна этого не заменяют.
+
+В той же задаче на Astra medium назначена acceptance-preparation без Hermes:
+`node14:acceptance-preparation:1:c32a5d5e163fe174afba59abce973ac405742cdc`.
+Ход `01a098c7-5829-72b3-a212-351347a960e6` подтверждён active/inProgress.
+Нужно подготовить проверяемый Git source packet/команды VPS build-stage,
+естественную полную goal, fixtures/expected, auditor и source launch/preflight.
+Плановая immutable версия — `2026.09.13-node14-test4.1-candidate`; её отсутствие
+перед сборкой должен проверить координатор. Обе save roots только `/test-4`.
+Старый диагностический каталог без test-4 не использовать для имитации native save.
+После packet coordinator выполнит отдельный build/stage/readback и вернёт pins,
+затем потребуется native-save/full-candidate проверка перед автономным запуском.
+
+Разработчику переданы подтверждённые уроки11/12: явный порядок checkpoint и
+независимого reopening, доказанная изоляция рабочей сессии вместо len(metadata),
+реальная геометрия именно Hermes-окна и штатный approval для сетевого запуска.
+Слот Hermes остаётся12;14 его не занимал. Повторного review, новых узлов,
+merge/push/deploy/activation и обновления общего клиента нет. Реестр обновлён,
+дальше итоговые события без таймера. OpenViking healthy.
+
+---
+
 # Узел12 получил ответ и новый слот после сбоя precheck — 13 сентября 2026
 
 По запросу пользователя проверено ожидание12. Его candidate/preflight готовы,
