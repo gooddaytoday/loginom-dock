@@ -7,6 +7,7 @@ import {readFile} from 'node:fs/promises';
 import {makeWorkspaceUiCode} from '../../client/lib/workspace-ui.mjs';
 import {makeNativeOutputDownloadCode} from '../../client/lib/executor.mjs';
 import {createNodeTargetBrowserAdapter} from '../../client/lib/node-target-browser.mjs';
+import {observeResponse} from './text-export-observer-response.mjs';
 import {need,same,checkStep,checkActionLedger} from './text-export-observer-policy.mjs';
 const hash=v=>createHash('sha256').update(v).digest('hex');
 const one=xs=>{need(xs.length===1,'Unique observed control required');return xs[0];};
@@ -28,19 +29,28 @@ export async function waitObserved({sample,accept,guard,sleep=ms=>delay(ms),inte
   guard();await sleep(interval);guard();}
 }
 const owner=s=>({tab_tid:s.workflow_ref?.tab_tid,prefix:s.workflow_ref?.prefix});
-export function createNativeObserver({invoke,artifactRoot,record=async()=>{},clock=()=>performance.now()}){
+export function createNativeObserver({invoke,artifactRoot,record=async()=>{},recordResponse=async()=>{},cancellationSignal,clock=()=>performance.now()}){
  return async({context:c,readId,deadline,downloadPath,signal})=>{
+  if(cancellationSignal)signal=AbortSignal.any([signal,cancellationSignal]);
   const ledger=[],seenRefs=new Set(),base={expected_origin:c.origin,expected_build:'7.4.2'};
   const guard=()=>{signal.throwIfAborted();need(clock()<deadline,'Observer deadline');};
   const run=async(step,code)=>{
    guard();checkStep(step,c);
    if(step.kind==='root')need(seenRefs.has(step.ref),'Unknown observation root');
    need(ledger.length<512,'Observer action count exceeded');
-   const start=clock();await record({phase:'prepared',seq:ledger.length+1,step,code_sha256:hash(code),run_id:c.run_id,session_id:c.session_id,mono_start:start});guard();
-   const response=await invoke({code,signal,timeout:Math.max(1,Math.floor(deadline-clock()))});guard();
-   const result=parseBrowserResult(response);
-   if(result.status!==undefined)need(result.status==='SUCCEEDED','Native step incomplete');
-   if(['files','home','folder','return'].includes(step.kind))need(result.cleanup_complete===true&&result.output?.gesture_applied===true,'Navigation cleanup unknown');
+   const start=clock();await record({phase:'prepared',seq:ledger.length+1,step,code_sha256:hash(code),run_id:c.run_id,session_id:c.session_id,mono_start:start});
+   let result;
+   try{
+    result=await observeResponse({invoke,parse:parseBrowserResult,guard,clock,signal,deadline,code,record:recordResponse,
+     binding:{seq:ledger.length+1,step_kind:step.kind,run_id:c.run_id,session_id:c.session_id,read_id:readId,mono_start:start},
+     validate:r=>{
+      if(r.status!==undefined)need(r.status==='SUCCEEDED','Native step incomplete');
+      if(['files','home','folder','return'].includes(step.kind))need(r.cleanup_complete===true&&r.output?.gesture_applied===true,'Navigation cleanup unknown');
+     }});
+   }catch(error){
+    await record({phase:'failure',seq:ledger.length+1,step:{kind:step.kind},code_sha256:hash(code),run_id:c.run_id,session_id:c.session_id,read_id:readId,mono_start:start,mono_end:clock(),deadline_ms:deadline,cancelled:signal.aborted,cleanup_complete:null,pending_ui_actions:null});
+    throw error;
+   }
    for(const e of result.output?.ui?.elements??[])seenRefs.add(e.ref);
    const entry={seq:ledger.length+1,run_id:c.run_id,session_id:c.session_id,mono_start:start,mono_end:clock(),step,code_sha256:hash(code),response:result,cleanup_complete:true};
    await record({phase:'completed',...entry});guard();ledger.push(entry);

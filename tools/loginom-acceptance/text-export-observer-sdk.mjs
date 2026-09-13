@@ -61,7 +61,7 @@ export function installObserverSdk({Client,Server,CallToolRequestSchema,runDirec
      const req={name:'browser_run_code_unsafe',arguments:{code}};permits.add(req);
      return browser.callTool(req,undefined,{signal:extra?.signal?AbortSignal.any([signal,extra.signal]):signal,timeout});
     };
-    const native=createNativeObserver({invoke:call,artifactRoot,clock,record:e=>append(join(artifactRoot,'observer-actions.jsonl'),JSON.stringify(e)+'\n')});
+    const native=createNativeObserver({invoke:call,artifactRoot,clock,cancellationSignal:extra?.signal,recordResponse:e=>append(join(artifactRoot,'observer-responses.jsonl'),JSON.stringify(e)+'\n'),record:e=>append(join(artifactRoot,'observer-actions.jsonl'),JSON.stringify(e)+'\n')});
     gate=createReadObserverGate({artifactRoot,clock,append:async line=>{need(!violated,'Unknown observer action was attempted');await append(join(artifactRoot,'observer.jsonl'),line);chain=sha(line.trimEnd());},
      observe:async options=>{const r=await native(options);need(!violated,'Unknown observer action was attempted');return r;},
      dispatch:async body=>{
