@@ -16,8 +16,8 @@ python3 - "$dock_archive" "$dock_source_manifest" "$dock_build" <<'PY'
 import hashlib,json,sys,tarfile
 from pathlib import Path
 archive,manifest,out=map(Path,sys.argv[1:]);proof=json.loads(manifest.read_text())
-assert hashlib.sha256(archive.read_bytes()).hexdigest()==proof['archive_sha256']=='e7a2103be3679abd0907ed6454f39adf062db0f68808f01da101308b64299ab9'
-assert proof['source']['source_commit']=='7de7f23e4adbff0819df6c7e970589f93df4882b' and proof['source']['build_inputs_match_commit'] is True
+assert hashlib.sha256(archive.read_bytes()).hexdigest()==proof['archive_sha256']=='396026de516792499c9d21f00981ea0044d9d47fced7f052b65c307150ebbf50'
+assert proof['source']['source_commit']=='b05715340937f9c828e03bc6ec7a88f3adf086da' and proof['source']['build_inputs_match_commit'] is True
 with tarfile.open(archive) as f:
  for m in f.getmembers():
   assert not m.name.startswith('/') and '..' not in Path(m.name).parts and not m.issym() and not m.islnk()

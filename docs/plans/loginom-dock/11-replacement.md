@@ -1,6 +1,8 @@
 # 11. Замена значений по внутренней таблице
 
-Статус: **followup_complete / awaiting_coordinator**, 13 сентября 2026.
+Статус: **integration_complete_focused_pass / awaiting_coordinator**, 13 сентября 2026.
+[Разрешённый перенос Save As выполнен](11-saveas-integration-results-2026-09-13.md):
+executor38/38 и focused component10/10 PASS. Нужны новая сборка/candidate и слот11.
 [Исправления A1/A2/A3 и новые pins](11-acceptance-followup-2026-09-13.md) готовы;
 первоначальная автономная приёмка остаётся FAIL. Требуются новая сборка/stage,
 учёт общего save/reopen fix узла12 и новый слот Hermes.

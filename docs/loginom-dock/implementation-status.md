@@ -1,3 +1,15 @@
+# Узел11: перенос Save As завершён — 13 сентября 2026
+
+**integration_complete_focused_pass / awaiting_coordinator**.
+Разрешённые runtime-hunk и race test сохранены в `b0571534`: executor38/38 PASS;
+новый собственный Main→Typed, checkpoint и overwrite→close/reopen прошли,
+независимый компонентный аудит10/10 PASS, полный Typed6×11 подтверждён.
+[Отчёт интеграции и новые pins](../plans/loginom-dock/11-saveas-integration-results-2026-09-13.md).
+Нужны новая VPS-сборка/stage/readback и отдельный слот Hermes11. Исходный FAIL55/59
+и A1–A3 сохранены; нового Hermes, server changes, main/push/activation не было.
+
+---
+
 # Узел11: пакет интеграции Save As готов — 13 сентября 2026
 
 `integration_package_ready / awaiting_user_authorization`: определены два файла

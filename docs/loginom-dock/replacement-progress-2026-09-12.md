@@ -532,3 +532,17 @@ race test. `git apply --check` подтвердил чистое примене�
 Код не менялся, тесты/браузер/Hermes не запускались. Статус
 `integration_package_ready / awaiting_user_authorization`.
 [Пакет и план проверки test-2](../plans/loginom-dock/11-saveas-integration-package-2026-09-13.md).
+
+
+## 2026-09-13 — saveas-integration:1:direct-user
+
+Пакет55ccc7b6 применён ровно в двух согласованных файлах из0e11a3fb;
+source commit `b0571534`, runtime `8d6d4b3c…`. Executor38 PASS.
+Focused test-2 smoke Main→Typed: checkpoint keepOpen, overwrite SaveAs→настоящее
+close/reopen, повторное выполнение и полный Typed6×11; component audit10/10 PASS.
+Main потребовал прежние source/settings и использовал existing import wizard;
+Typed выполнился с пустыми parameters/mappings, configure effect_possible=false.
+Собственный пакет закрыт штатно без пересохранения после выполнения; процессов нет.
+Исходный FAIL/A1–A3 сохранены, полный аудит не повторялся, Hermes не запускался.
+Новые pins и архив392 файла подготовлены для следующего stage по решению координатора.
+[Отчёт и ограничения](../plans/loginom-dock/11-saveas-integration-results-2026-09-13.md).

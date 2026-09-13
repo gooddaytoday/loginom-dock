@@ -1,3 +1,8 @@
+> Пакет разрешён пользователем и выполнен командой
+> `node11:saveas-integration:1:direct-user-20260913`.
+> [Результат и новые pins](11-saveas-integration-results-2026-09-13.md).
+> Ниже сохранён первоначальный план переноса.
+
 # Узел 11: минимальный пакет интеграции Save As
 
 Статус: **integration_package_ready / awaiting_user_authorization**.

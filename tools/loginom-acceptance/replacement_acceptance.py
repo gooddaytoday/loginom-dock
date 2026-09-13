@@ -21,8 +21,8 @@ from replacement_lifecycle_evidence import checkpoint
 from replacement_upload_probe import FIXTURES, descriptors, prompt as render_prompt, validate_catalog
 WORK=Path(__file__).resolve().parent
 ROOT=WORK.parents[1]
-CODE='7de7f23e4adbff0819df6c7e970589f93df4882b'
-RUNTIME='3b21e8f0c52820b058caf9c02bb00d006d7bf9b451891ec27646f8018e46e00e'
+CODE='b05715340937f9c828e03bc6ec7a88f3adf086da'
+RUNTIME='8d6d4b3cd7f5d19a3ac1e9ac6537ff8219f97f9898326227df3f3ae55dcb1380'
 DOCK_SKILL='afa295bf48dc48da5d3c995665a06ef2190ff620bae3243d46557e0371536790'
 FIX=WORK/'fixtures/replacement'
 load=lambda name:json.loads((FIX/name).read_text())
