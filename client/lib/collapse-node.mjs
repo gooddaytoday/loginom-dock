@@ -6,10 +6,12 @@ import {configureCollapseOutput} from './collapse-output.mjs';
 import {collapseConfigurationReadback} from './collapse-readback.mjs';
 import {collapseParametersSchema} from './node-api.mjs';
 import {configureCollapseInlineMapping} from './collapse-inline-mapping.mjs';
+import {checkCollapseExistingInput} from './collapse-existing-input.mjs';
 export function createCollapseNodeSupport(config){return createTabularTransformNodeSupport(config,{
  nativeFullOutput:true,
  type:'transform.collapse_columns',mode:'unpivot',revision:'collapse-v1-internal-1',readback:collapseConfigurationReadback,parameterSchema:collapseParametersSchema,
  validate:validateCollapseParameters,validateInput:validateCollapseInputParameters,preflight:preflightCollapseSource,
+ beforeInput:(options,ctx,config)=>checkCollapseExistingInput(options,ctx,config,{recheck:true}),
  configurationObservation:{condition:'collapse configuration page',readCollapse:true,ready:s=>s.wizard?.stage==='collapse'&&s.node_collapse?.verified===true},
  async configure(channel,p,{request}){
   const changed=await configureCollapse(channel,p,{newNode:request.target.kind==='new'});if(request.finish==='close')return changed;

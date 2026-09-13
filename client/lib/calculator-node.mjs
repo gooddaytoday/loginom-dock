@@ -115,6 +115,7 @@ export function createTabularTransformNodeSupport({targetOrigin,targetBuild},imp
       return verified({not_applicable:true,mappings:[]});
      }
      enter(ctx);
+     if(implementation?.beforeInput)await implementation.beforeInput(options,ctx,{targetOrigin,targetBuild});
      if(implementation?.configureInputs)return implementation.configureInputs(channel,mappings,ctx,operation.nodeApply.request,finishWizard);
      await channel.openInputPort(0);
      const ready=s=>s.wizard?.stage==='input_mapping'&&s.node_mapping?.verified===true;
