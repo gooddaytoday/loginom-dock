@@ -1,3 +1,19 @@
+# Node14: подготовка автономной приёмки передана — 13 сентября 2026
+
+Подготовлены архив десяти tracked source файлов точного c32a5d5e для VPS,
+естественный goal,9 pinned fixtures/14 expected стадий, независимый auditor и
+reader всех12 финальных результатов. Harness commit `2bb2bcd6`; production
+runtime a9db4113… не менялся. Source preflight395 inputs и реальный подписочный
+preflight Sol/low прошли без модели; Python514/514 PASS. Прямая смена файла у
+того же импорта проверена на текущем runtime, полный4×5 совпал.
+
+[Отчёт и оставшиеся gates](missing-values-preparation-2026-09-13.md).
+Ожидаются coordinator VPS stage/readback новой версии test4, отдельный native-save
+preflight, слот Hermes и полный независимый reopen. Приёмка не завершена;
+общий save/reopen дефект при подтверждении остаётся у владельца12.
+
+---
+
 # Node14: development input_mapping recovery проверено — 13 сентября 2026
 
 В ветке `codex/node-14-missing-values`, code SHA

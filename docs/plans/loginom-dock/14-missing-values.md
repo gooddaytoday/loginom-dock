@@ -13,6 +13,9 @@ Done восстановлен в том же ID/runtime/session с полной 
 фиксирует границы: это только input_mapping Node14, не configure recovery13.
 Native save /test-4, immutable candidate и Hermes ожидают отдельного допуска
 координатора. Повторного полного review не назначено.
+Подготовка автономной приёмки сохранена в harness commit `2bb2bcd6`:
+[packet, goal, auditor, live gap и gates](../../loginom-dock/missing-values-preparation-2026-09-13.md).
+Production runtime не менялся; VPS stage/native save/Hermes/full reopen ещё впереди.
 Навигация: [реестр](README.md), [общие требования новой волны](next-wave.md).
 Зависимости: [03 — общий node.apply](03-text-import.md),
 [05 — тип/вид поля](05-field-parameters.md), [09 — обычный Hermes](09-hermes-user-diagnostics.md).
