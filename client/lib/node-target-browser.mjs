@@ -99,7 +99,7 @@ async function mutateGraph(page, task, read) {
     if(p?.document!==document||p.id!==request.document_id||!r||tab.length!==1||tab[0]!==r.tab||!tab[0].classList.contains('x-tab-active')||root.length!==1||p.nodeTargetDomEpochs?.objects.get(root[0])!==epoch)throw new Error('Node target document/workflow/DOM epoch changed');
   },{request:task.request,epoch:task.effect.before.dom_epoch});
   const find=value=>page.locator('[data-tid='+JSON.stringify(value)+']');
-  const wait=async(name,probe)=>{const end=Math.min(task.deadline,Date.now()+15000);while(remaining() && Date.now()<end){await ensureContext();const v=await probe();if(v)return v;await page.waitForTimeout(Math.min(80,remaining()));}throw new Error('Readiness timeout: '+name);};
+  const wait=async(name,probe,reserve=0)=>{const end=Math.min(task.deadline-reserve,Date.now()+15000);while(remaining() && Date.now()<end){await ensureContext();const v=await probe();if(v)return v;await page.waitForTimeout(Math.max(0,Math.min(80,end-Date.now())));}throw new Error('Readiness timeout: '+name);};
   const targetTid=async ref=>page.evaluate(id=>{
     const d=bg.app.Application.FInstance.FMainForm.Items.Workspace.getActiveTab().Controller.FController.FDiagram;
     const matches=d.FNodes.FCollection.filter(n=>n.FGuid===id);if(matches.length!==1)throw new Error('Node disappeared');
@@ -175,8 +175,12 @@ async function mutateGraph(page, task, read) {
           if(top&&(top===e||e.contains(top)))return {x:q.x,y:q.y};}}
         throw new Error('Owned link has no reachable curve point');
       });
-      effectPossible=true;await page.mouse.click(hit.x,hit.y);
-      await find(linkTid+';TargetBend').waitFor({state:'visible',timeout:remaining()});
+      // Selection can fail to appear. Leave time to return its ambiguous receipt
+      // before the enclosing transport deadline, without repeating the gesture.
+      if(remaining()<=1000)throw new Error('Insufficient deadline for owned link selection');
+      await ensureContext();effectPossible=true;await page.mouse.click(hit.x,hit.y);
+      const bend=find(linkTid+';TargetBend');
+      await wait('owned_link_selection_visible',async()=>await bend.count()===1&&await bend.isVisible(),1000);
       const selected=await page.evaluate(()=>{const d=bg.app.Application.FInstance.FMainForm.Items.Workspace.getActiveTab().Controller.FController.FDiagram;
         return d.FmxGraph.getSelectionCells().map(c=>({edge:c.edge===true,tid:d.FmxGraph.view.getState(c)?.shape?.node?.getAttribute('data-tid')}));});
       if(selected.length!==1 || selected[0].edge!==true || selected[0].tid!==linkTid)throw new Error('Deletion selection includes another object');
