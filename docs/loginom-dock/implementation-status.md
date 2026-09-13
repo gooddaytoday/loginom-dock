@@ -7520,3 +7520,10 @@ reactivation, граф и полный3×5. Потерянный ответ со
 отдельный reopen4×5+120×5 прошли независимый component audit; полный8-file user-v1
 prepare прошёл. Runtime a9db4113… сохранён. Полная автономная приёмка12 результатов
 не запускалась; до отдельной команды координатора Hermes не запускать.
+
+### Node14 — autonomous acceptance 1: approval blocked
+
+[Статус попытки](missing-values-autonomous-acceptance-1-blocked-2026-09-13.md):
+свежий preflight прошёл, но auto-review отклонил запуск до процесса. Модель и
+полный12-result reopen не запускались; pins неизменны. Нужна прямая авторизация
+пользователя; повторная попытка без неё не выполняется.
