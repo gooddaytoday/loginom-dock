@@ -1,3 +1,12 @@
+# Node17: acceptance observer — локальная часть, native gate не закрыт
+
+Назначение `node17:acceptance-read-observer:1:77de0909`: добавлены отдельные
+observer core/verifier и их негативные проверки (8 Node + 12 Python PASS).
+Runtime/source сохранены. Native adapter и SDK integration остановлены:
+нет подтверждённого чтения текущих export/source settings из закрытого графа
+без открытия мастера. Readiness остаётся false; live/Hermes не запускались.
+[Checkpoint и ограниченный план дальнейшей проверки](../plans/loginom-dock/17-text-export-read-observer.md).
+
 # Text export: разработка кандидата завершена — 13 сентября 2026
 
 Текущий acceptance blocker: [reject-baseline read](../plans/loginom-dock/17-text-export-reject-baseline-gate.md).
