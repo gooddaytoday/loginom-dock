@@ -1,3 +1,22 @@
+# Узел14: NULL исправлен, import refusal verifier назначен — 13 сентября 2026
+
+Source814f3146/report841d6443: native picker выбирает точный NULL,
+вместо case-insensitive typing/blur→null. Координатор сверил diff,48evidence
+и focused audit3×5/12Null/exactNULL, cleanup. Полная цель ещё не принята.
+Автоматически согласована строгая import-specific no-effect refusal схема из
+worktree14 docs/loginom-dock/node14-import-placement-refusal-proposal-2026-09-13.md.
+Только imports.text/delimited/new, verified artifact/grant, actual graphs/geometry,
+NOT_APPLIED/cleanup/pendingnull и semantic successor после публичной доставки.
+Общие defaults и27/9/12/save/reopen gates не ослаблять. Missing graph proof
+получать новой dedicated live, не дописывать к frozen FAIL. Ранее выполненный
+upload не скрывать утверждением об отсутствии всех эффектов операции.
+Ход01a09a70-f390-79a2-b10a-3157838bf1dd active, Astra medium. Новые source/runtime/
+harness pins и acceptance комплект подготовить; Hermes/VPS/main/plugin не назначены.
+Неизменённый immutable каталог допускает reuse только после проверки байтов.
+Все входящие обработаны.
+
+---
+
 # Узел16: hardening проверен, контракт назначен — 13 сентября 2026
 
 Диагностический dc93af3f:6prototype/18evidence/5frontend hashes и lifecycle
