@@ -24,7 +24,8 @@ def verify_run_observer(directory,run,replace_request):
         events=[json.loads(x) for x in raw];past=events[:count]
         assert all(e['session_id']==session['sessionId'] and e['runtime_revision']==session['clientRevision'] for e in past)
         prepared=one([(i,e) for i,e in enumerate(events) if e.get('phase')=='node_apply_prepared' and e.get('operation_id')==replace_request['operation_id']]);assert prepared[0]>=count and prepared[1]['request']==replace_request
-        wire=actual['request'];assert wire['method']=='tools/call' and wire['params']['name']=='dock_node_apply' and wire['params']['arguments']==replace_request
+        wire=actual['request'];assert wire['method']=='tools/call' and wire['params']['name']=='dock_node_apply' and {**wire['params']['arguments'],'workflow_ref':replace_request['workflow_ref']}==replace_request
+        assert wire['params']['arguments']['workflow_ref'] in [replace_request['workflow_ref'],{'workflow_id':replace_request['workflow_ref']['workflow_id']}]
         destination=replace_request['parameters']['destination'];assert destination==f"/test-2/Dock-export-{run['run_id']}-csv.csv" and replace_request['parameters']['overwrite']=='replace'
         original_i,original=one([(i,e) for i,e in enumerate(past) if e.get('phase')=='completed' and any(f.get('destination')==destination for f in e.get('outcome',{}).get('output',{}).get('output',{}).get('file_artifacts',[]))])
         f=one(original['outcome']['output']['output']['file_artifacts']);node=original['outcome']['output']['node'];assert original['outcome']['status']=='SUCCEEDED' and f['freshness_basis']=='native_absence_check_and_completed_execution'

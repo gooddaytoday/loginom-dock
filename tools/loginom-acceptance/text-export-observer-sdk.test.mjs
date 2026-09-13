@@ -28,3 +28,5 @@ test('binding refuses stale source, foreign run and unterminated operation ancho
 test('unknown gestures never enter the native builder allowlist',()=>{const f=syntheticBinding(),c=bindObserver({...f,overallDeadline:performance.now()+60000});for(const kind of ['Configure','Finish','Execute','save','upload','reload','press','evaluate','scroll'])assert.throws(()=>checkStep({kind},c));});
 
 test('lower-level SDK request cannot bypass the observer allowlist',async t=>{const r=await run(t,{illegalCallAt:3,illegalDirect:true});assert.equal(r.illegalBlocked,true);assert.equal(r.dispatched,0);assert.equal(r.hook.violated,true);});
+
+test('issued compact workflow ref stays unchanged on the wire and binds full journal identity',async t=>{const r=await run(t,{compactWorkflow:true});assert.equal(r.error,null);assert.equal(r.dispatched,1);});
