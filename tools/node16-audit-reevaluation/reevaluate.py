@@ -50,3 +50,24 @@ def build(run):
   return native(e,ps,op,key)
  v.native_case=native_case;v.bind_restart=bind_restart
  return v
+
+def report(run,independent=None):
+ run=Path(run);v=build(run);request=json.loads((run/'request.json').read_text());evidence=json.loads((run/'evidence.json').read_text())
+ saved=json.loads((run/'original-export-hashes.json').read_text())
+ for name,digest in saved.items():
+  if sha(run/name)!=digest:raise ValueError('Original raw export/audit was changed: '+name)
+ result=v.audit(request,evidence,(run/'scenario.txt').read_text(),independent)
+ return {'scope':'explicitly versioned reevaluation of the original model run','verifier_version':VERSION,'run_id':RUN_ID,
+  'original_execution_harness_unchanged':True,'original_files_sha256':saved,
+  'original_auditor_sha256':request['harness_inputs']['collapse_node_acceptance.py'],
+  'independent_verifier_sha256':{p.name:sha(p) for p in Path(__file__).parent.glob('*.py')},
+  'projection_delta':['Remove only schema.header_tid from expected internal projection','Remove sample.display_text only when equal to that same cell value','Compare projected values with JSON type-sensitive equality'],
+  'explicit_case_binding':{'reconfigured':{'original':RUN_ID+':reconfigured','final':RUN_ID+':reconfigured-final','requires':'original no-effect + identical cached replay + refused resume + same source execution + identical final target/parameters + saved checkpoint'}},
+  'original_audit_preserved':True,'result':result}
+
+if __name__=='__main__':
+ import argparse
+ p=argparse.ArgumentParser();p.add_argument('run',type=Path);p.add_argument('--output',type=Path,required=True);p.add_argument('--independent',type=Path);args=p.parse_args()
+ result=report(args.run,json.loads(args.independent.read_text()) if args.independent else None)
+ args.output.write_text(json.dumps(result,ensure_ascii=False,indent=2)+'\n')
+ print(json.dumps({'version':VERSION,'full_goal_passed':result['result']['passed'],'checks':result['result']['checks']},ensure_ascii=False))
