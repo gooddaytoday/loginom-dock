@@ -567,3 +567,15 @@ persistence-проверки из-за контракта первого сох�
 Ожидается решение координатора, полная приёмка не пройдена.
 
 ---
+
+# Узел11: frozen run переоценён PASS59/59 — 13 сентября 2026
+
+Исправлен только диагностический persistence verifier: стадии нового draft
+fail/пустой прежний путь и overwrite replace/точный предыдущий путь связаны явно.
+Verifier `9ddb33ed`;17 focused и36 family tests PASS. Отдельный аудит тех же
+замороженных evidence прошёл59/59 с provenance execution/new verifier.
+[Отчёт и все59 checks](../plans/loginom-dock/11-persistence-reassessment-2026-09-13.md).
+Исходный FAIL57/59 сохранён; Hermes/browser/product runtime не запускались/не менялись.
+Ожидается решение координатора; следующий узел не начат.
+
+---
