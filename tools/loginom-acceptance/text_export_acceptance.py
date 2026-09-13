@@ -16,6 +16,7 @@ from node_public_acceptance_evidence import paired_public_calls,verify_public_de
 from artifact_delivery_evidence import verify_delivered_import_output
 from prepare_binding import verified_prepare_v1
 from existing_import_evidence import _verify_existing_import_output
+from text_export_import_contract import verify_unchanged_import_request
 from import_output_evidence import verify_text_import_output
 from node_configuration_evidence import verify_configuration_readback
 from text_export_upload_probe import CONTRACT,MANIFEST_URI,MANIFEST_SHA,FIXTURES,prompt,descriptors
@@ -43,11 +44,11 @@ def export_check(outcome,case,events,directory,destination):
 def preserved(before,after,request,*,new_session=False):
     b=before['output'];a=after['output'];rb=b['configuration']['readback'];ra=a['configuration']['readback']
     assert request['target']['kind']=='existing' and request['inputs']==[] and request['mappings']==[] and set(request['parameters'])=={'destination'}
-    assert b['node']['node_id']==a['node']['node_id'] and b['node']['document_id']!=a['node']['document_id']
+    assert b['node']['node_id']==a['node']['node_id'] and (b['node']['document_id']!=a['node']['document_id'] or (b['node'].get('workflow_id') and a['node'].get('workflow_id') and b['node']['workflow_id']!=a['node']['workflow_id']))
     assert rb['input_mapping']==ra['input_mapping']
     assert {k:v for k,v in rb['settings'].items() if k!='destination'}=={k:v for k,v in ra['settings'].items() if k!='destination'}
     if b['execution']['status']=='completed':assert b['execution']['execution_id']!=a['execution']['execution_id']
-    return {'passed':True,'same_guid_mapping_settings':True,'new_document':True}
+    return {'passed':True,'same_guid_mapping_settings':True,'new_document_or_workflow':True}
 
 def audit_external(run_dir,baseline,external_dir,prefix):
     """External manifest identifies raw receipts, not self-reported PASS flags."""
@@ -105,7 +106,8 @@ def audit_directory(directory,external_dir=None):
         for r in imports:
             op=r['parameters']['source']['upload_operation_id'].removesuffix(':upload');calls=[c for c in evidence['calls'] if c['tool'] not in (PREFIX+'dock_artifact_deliver',PREFIX+'dock_artifact_delivery_status') or c['arguments'].get('operation_id')==op];ids={(c['session_id'],c['tool_call_id']) for c in calls};subset=dict(evidence,calls=calls,tools=[t for t in evidence['tools'] if (t['session_id'],t['tool_call_id']) in ids]);delivery=verify_public_delivery(subset,r,prepared);name={'Main':'main.csv','Typed':'typed.csv','Wide':'wide.csv'}[r['target']['label']];checks['delivery_'+name]=delivery;assert delivery['passed']
             checks['delivered_source_'+name]=verify_delivered_import_output(ev,r,(WORK/'fixtures/text-export/input'/name).read_bytes(),delivery['delivery'],CONTRACT['runtime']);assert checks['delivered_source_'+name]['passed']
-            again=one([q for q in requests if q['target']['type']=='imports.text' and q['target']['kind']=='existing' and q['target']['ref']['node_id']==outcomes[r['operation_id']]['output']['node']['node_id']]);assert again['parameters']=={} and again['mappings']==[]
+            again=one([q for q in requests if q['target']['type']=='imports.text' and q['target']['kind']=='existing' and q['target']['ref']['node_id']==outcomes[r['operation_id']]['output']['node']['node_id']])
+            checks['persisted_request_'+name]=verify_unchanged_import_request(ev,r,again,outcomes[r['operation_id']]['output']['node'],(WORK/'fixtures/text-export/input'/name).read_bytes())
             checks['persisted_source_'+name]=_verify_existing_import_output(ev,r,again,(WORK/'fixtures/text-export/input'/name).read_bytes(),reopened_package=True);assert checks['persisted_source_'+name]['passed']
         exp=[r for r in requests if r['target']['type']=='exports.text'];check('export_count',len(exp)==14)
         prefix='/test-2/Dock-export-'+request['run_id'];roles=[('csv','csv.csv'),('typed','typed.csv'),('wide','wide.tsv'),('empty','empty.csv'),('zero','zero.csv'),('tsv','tsv.tsv'),('reject','csv.csv'),('csv','csv.csv'),('done','done.csv'),('close','closed.csv'),('changed','reopen-changed.csv'),('typed','reopen-typed.csv'),('wide','reopen-wide.tsv'),('zero','reopen-zero.csv')]

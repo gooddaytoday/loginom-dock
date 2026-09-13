@@ -1,3 +1,21 @@
+# Node17: v4 —52 модельные проверки PASS, свежий оригинал ожидается
+
+Run8 переоценён с отдельным provenance исходных283harness blobs: все модельные проверки импортов,11 файловых результатов, reject observer,4 сохранённых экспортов и3 saves прошли. Исправлены проверочные контракты imports/origin и доказана цепочка owned draft→save/close/reopen→тот же native GUID/граф без подмены draft-only флага ownership. **37 Python PASS**. Полный PASS не объявлен: независимая persistence оригинала остаётся закрытым gate; координатор проверяет фактическое read-only состояние. Новый Hermes и повторное открытие не выполнялись. [Итог v4](../plans/loginom-dock/17-text-export-reevaluation-v4.md).
+
+---
+
+# Node17: v3-переоценка импортов и origin, полная приёмка не закрыта
+
+Адресно исправлены контракт пустых настроек существующего импорта и временная привязка origin. В отдельной переоценке run8 прошли три импорта после reopen, семь выполненных экспортов до reopen и reject-baseline observer. **34 Python PASS**. Исходный frozen FAIL и283harness hashes сохранены. Оставлены закрытыми owner gate (`open_package` возвращает `ownership_verified=false` по реализации) и независимая persistence оригинала. Новый Hermes и повторное открытие не выполнялись. [Подробности и provenance](../plans/loginom-dock/17-text-export-import-origin-v3.md).
+
+---
+
+# Node17: full8 — модель завершилась, независимая приёмка заблокирована
+
+Run `20260914-000803-18fad485` / candidate `908c9b7d`: 22 nodeops, save/reopen/final checkpoint и observer dispatch=1; exit0, timeout=false, собственные PID отсутствуют. Frozen runtime/harness/skill/auth неизменны. Полный аудит **FAIL**: требование `parameters={}` для повторного импорта противоречит обработчику, требующему `source,settings`. Модель передала прежние source ID и пустой settings. Свежий оригинал дополнительно открылся только для чтения; копией проверка не заменена. Полный PASS и готовность к слиянию не заявлены. [Причины, доказательства и следующий шаг](../plans/loginom-dock/17-text-export-full8-blocker.md).
+
+---
+
 # Node17: full7 FAIL локализован, исправлена точка открытия мастера
 
 Девять операций прошли; смена CSV→TSV остановилась до открытия/выполнения.
