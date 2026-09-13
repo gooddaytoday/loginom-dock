@@ -40,6 +40,13 @@ def verified_candidate():
     return dict(manifest_uri=CANDIDATE_URI,manifest_sha256=CANDIDATE_SHA,slot=SLOT,session_id=prep['sessionId'],model_started=False)
 
 
+def current_slot():
+    state=ROOT.parents[1]/'.dock/node-streams-20260912/state.json'
+    slot=json.loads(state.read_text()).get('hermes_slot')
+    if not isinstance(slot,dict) or slot.get('node')!=16 or slot.get('thread_id')!='01a0992c-6ce0-7f10-bd53-9bf92ed7ae8a' or slot.get('candidate_sha256')!=CANDIDATE_SHA or slot.get('provider')!='openai-codex' or slot.get('model')!='gpt-5.6-sol' or slot.get('reasoning')!='low' or slot.get('status') in ('released','completed','failed'):
+        raise ValueError('Coordinator slot is not currently reserved for node16')
+    return slot
+
 def sha(p):return hashlib.sha256(p.read_bytes()).hexdigest()
 def frozen():
     m=json.loads((KIT/'manifest.json').read_text())
@@ -62,7 +69,7 @@ def fixture_paths():return sorted((KIT/'fixtures').glob('*.csv'))
 def prompt(package,directory,run_id):
     text=(KIT/'hermes-goal.md').read_text()
     text=text.replace('# Замороженное задание будущего запуска — не запускать до допуска', '# Выполните полное задание в Loginom сейчас',1)
-    text='Допуск оператора уже выдан: кандидат '+CANDIDATE_SHA+' проверен, слот '+SLOT+' выделен. Выполните все действия ниже сейчас, без дополнительного подтверждения. Историческое условие ожидания допуска выполнено.\n\n'+text
+    text='Допуск оператора уже выдан: кандидат '+CANDIDATE_SHA+' проверен, эксклюзивный слот выделен. Выполните все действия ниже сейчас, без дополнительного подтверждения. Историческое условие ожидания допуска выполнено.\n\n'+text
     for p,a in zip(fixture_paths(),fixtures(run_id,directory)):text=text.replace(p.name,a['name'])
     text+='\nИдентификаторы итоговых операций: '+', '.join(run_id+':'+k for k in json.loads((KIT/'expected.json').read_text()))+'. Отдельные операции: '+', '.join(run_id+':'+k for k in ['done','close','negative-conflict','negative-missing','negative-empty','loss'])+'. Для отрицательного отсутствующего поля используйте __MissingField__. При потере ответа сохраняйте исходную операцию.\n'
     text+='\nДля независимого открытия сохраните каждый из десяти итоговых вариантов отдельным пакетом в этом каталоге: Dock-collapse-'+run_id+'-<имя случая>.lgp. В каждом пакете один сценарий с одной парой текстовый импорт → Свёртка; промежуточные варианты не должны перезаписывать окончательные сохранённые случаи. Идентификаторы финального сохранения: '+', '.join(run_id+':save-'+k for k in json.loads((KIT/'expected.json').read_text()))+'.\n'
@@ -93,7 +100,8 @@ def admission(args):
         if args is not None and (getattr(args,'manifest_uri',None)!=CANDIDATE_URI or getattr(args,'manifest_sha256',None)!=CANDIDATE_SHA):raise ValueError('Exact coordinator candidate arguments required')
         if args is not None and getattr(args,'model_profile','chatgpt-sol')!='chatgpt-sol':raise ValueError('Only approved Sol profile allowed')
         gates['candidate-stage-and-readback']='PASS';gates['candidate-source-rehearsal']='PASS'
-        gates['coordinator-hermes-slot']='RESERVED:'+SLOT
+        slot=current_slot();verified['slot']=slot['slot_id']
+        gates['coordinator-hermes-slot']='RESERVED:'+slot['slot_id']
         gates['resource']='PASS' if free>=10*1024**3 else 'OPEN_INSUFFICIENT_10_GIB'
         gates['runner-collapse-goal-integration']='ADMITTED_FOR_CURRENT_CANDIDATE'
     except (OSError,ValueError,KeyError,TypeError,StopIteration) as ex:errors.append(str(ex))

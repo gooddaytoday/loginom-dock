@@ -219,7 +219,7 @@ def audit(request,evidence,prompt,independent):
     check('negatives_done_close_loss',lambda:obligations(request,evidence,pairs(evidence),independent))
     check('full_new_session_persistence_source',lambda:(need(set(results)==set(EXPECTED),'Missing original cases'),persistence(request,evidence,independent,results)))
     # No input JSON can flip an unimplemented native source-proof producer to PASS.
-    check('admission',lambda:need(admission.admission(None)['ready'],'Live/candidate/resource/readonly/runner admission remains OPEN'))
+    check('admission',lambda:need(request.get('collapse_admission',{}).get('ready') is True and request['collapse_admission'].get('runtime')==admission.RUNTIME and request['collapse_admission'].get('candidate',{}).get('manifest_sha256')==admission.CANDIDATE_SHA and request['collapse_admission'].get('candidate',{}).get('slot'),'Original model launch was not admitted'))
     passed=all(c['passed'] for c in checks.values())
     return dict(scope='collapse-node-complete FULL goal',passed=passed,subplan_complete=passed,hermes_acceptance=passed,checks=checks,prepared_cases_are_acceptance=False)
 if __name__=='__main__':

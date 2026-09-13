@@ -24,8 +24,12 @@ class CollapseAdmissionTest(unittest.TestCase):
    with self.assertRaisesRegex(ValueError,'Invalid acceptance budget'):run.validate_inputs(invalid)
  def test_exact_candidate_admitted_and_wrong_profile_blocked(self):
   args=SimpleNamespace(manifest_uri=a.CANDIDATE_URI,manifest_sha256=a.CANDIDATE_SHA,model_profile='chatgpt-sol')
-  self.assertTrue(a.admission(args)['ready'])
+  with patch.object(a,'current_slot',return_value={'slot_id':a.SLOT}):self.assertTrue(a.admission(args)['ready'])
   args.model_profile='xiaomi-mimo';self.assertFalse(a.admission(args)['ready'])
+ def test_reassigned_slot_blocks_launch(self):
+  args=SimpleNamespace(manifest_uri=a.CANDIDATE_URI,manifest_sha256=a.CANDIDATE_SHA)
+  with patch.object(a,'current_slot',side_effect=ValueError('another node owns slot')):
+   self.assertFalse(a.admission(args)['ready'])
  def test_missing_real_rehearsal_cannot_admit(self):
   args=SimpleNamespace(manifest_uri=a.CANDIDATE_URI,manifest_sha256=a.CANDIDATE_SHA)
   with patch.object(a,'verified_candidate',side_effect=ValueError('missing raw preparation')):
