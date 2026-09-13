@@ -7505,3 +7505,14 @@ Run 20260913-060514-47b236af завершён, 16 node operations SUCCEEDED,
 Также выявлены требования аудитора к sample_rows=10 для 8 строк и opening
 receipt для пустого settings. Исходники не изменялись, слот освобождён.
 [Полный отчёт](../plans/loginom-dock/node12-acceptance-preparation-1/attempt-20260913-060514.md).
+
+### Узел 12 — точечный follow-up проверен напрямую
+
+Source 0e11a3fb: подтверждена гонка закрытия меню Save As после overwrite;
+существующее ожидание save-flow перенесено перед ветвлением keepOpen/reopen.
+Persisted imports теперь проверяются только после настоящего save/reopen binding;
+пустой settings допустим, дополнительных открытий мастера от Hermes нет.
+Full read принимает полные 8 строк; persisted schema сравнивается независимо.
+Native34/34, параметры6/6, подмены13/13; клиент1404 PASS/1 SKIP, Python524 PASS.
+Старый failed run неизменён и остаётся FAIL. Новый Hermes не запускался.
+[Отчёт, pins и комплект node12.2](../plans/loginom-dock/node12-acceptance-preparation-2/README.md).
