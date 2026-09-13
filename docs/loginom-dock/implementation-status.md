@@ -7622,3 +7622,17 @@ SQLite quick_check=ok, DB/WAL/journals unchanged,71pairs/10717events. Код в�
 Своих процессов0, второйrun/ручное достраивание/изменения кода не выполнялись.
 Source7bef361c/runtime71f73d81/harness256/candidatecadd80df unchanged.
 [Отчёт, ограничения и38 evidence receipts](missing-values-autonomous-acceptance-4-2026-09-13.md).
+
+
+## Node14 — диагностика REMOVE_LINK, 13 сентября 2026
+
+В назначении `node14:remove-link-diagnosis:1:67865596` исправлено исчерпание
+deadline при ожидании выделения удаляемой связи (`611a9f0c`). 42/42 focused
+tests и 11/11 проверок живых доказательств прошли. Runtime `68e8e7a7…`,
+свежая source-сессия завершена. Причина исходного сбоя выделения run4 не
+воспроизведена; run4 остаётся FAIL с исходным partial REMOVE_LINK pending и
+cleanup=false. Hermes не запускался, full-goal приёмка не завершена. Следующий
+kit требует новых pins и отдельного слота координатора.
+
+[Диагностика, границы и возобновление](missing-values-remove-link-diagnosis-2026-09-13.md),
+[проверки и контрольные суммы](missing-values-remove-link-diagnosis-pins-2026-09-13.json).
