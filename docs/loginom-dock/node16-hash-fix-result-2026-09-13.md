@@ -60,3 +60,16 @@ Tar SHA256: `d795ee74825b270d152d9ba253e4b6218047af5a2ca91e17efb192b0677e6a08`.
 полный Hermes goal → 10 независимых свежих открытий и current-run loss audit.
 Старый stage/rehearsal не признаётся допуском нового runtime. Main, сервер и
 общий установленный plugin не менялись. Node16/subplan/hermes_acceptance=false.
+
+## Candidate3: новый допуск
+
+Координатор назначил `node16:hermes-full:4:b0709ec0` и слот
+`node16-hermes-20260913-3b74bd5f`. Candidate manifest SHA256
+`3b74bd5f23b400542dcdcb300495406541a5e298feef4c7caeefd3c6c6f4284f`;
+server stage/readback 4 PASS, без activation. Свежая actual MCP user-v1 сессия
+`badf4b51-7932-44f5-ad62-bac26a96dc4a` в
+`.dock/node16/candidate3-rehearsal-20260913` подтвердила READY7.4.2, runtimee4e9,
+manifest/action/selectors и только выделенный storage root. Окно1508×862,
+outer1508×949 при available1512×949; viewport=null/start-maximized.
+Проверочный bridge/browser закрыт, процессов этой сессии нет. Обновлены только
+служебные stage/admission/harness pins, production source не менялся.

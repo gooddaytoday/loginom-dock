@@ -1,13 +1,13 @@
 {
-  "checked_at": "2026-09-13T17:53:39.446980+00:00",
-  "build_directory": "/opt/loginom-dock/releases/20260913-node16-721cf71f-candidate",
-  "source_commit": "721cf71f341bd978385a1dae41279ead08499ac9",
+  "checked_at": "2026-09-13T20:40:52.868966+00:00",
+  "build_directory": "/opt/loginom-dock/releases/20260913-node16-b0709ec0-candidate",
+  "source_commit": "b0709ec0f6f820a8988f4683297388894813935e",
   "stage": {
-    "catalog_uri": "viking://resources/loginom-dock/catalogs/executor-preview/releases/2026.09.13-node16-721cf71f-candidate",
-    "catalog_version": "2026.09.13-node16-721cf71f-candidate",
-    "manifest_sha256": "97809b7a970c7d2af1f802087c1422ef39a26882034c92d4d36cbefbad2799e2",
-    "action_catalog_sha256": "53f574f4b1aae52b52bab5b0f0eb78199ddde19cd4bd0c57e73b419713394027",
-    "selector_catalog_sha256": "f3848941a39e7b63d41a94e4a101c4bbba1ace4606a1d45bcc56cb0942cdc2bc",
+    "catalog_uri": "viking://resources/loginom-dock/catalogs/executor-preview/releases/2026.09.13-node16-b0709ec0-candidate",
+    "catalog_version": "2026.09.13-node16-b0709ec0-candidate",
+    "manifest_sha256": "3b74bd5f23b400542dcdcb300495406541a5e298feef4c7caeefd3c6c6f4284f",
+    "action_catalog_sha256": "3737302121b31721cbe0a444fa17d97ba678bbdeafd3ba6a56d6643c53034506",
+    "selector_catalog_sha256": "0130e5d3c8dba1b85073602c866d925da06c986f36f014503bcc0917c9654f2d",
     "e2e_commit": "2cad5602158fd2e4836d821d644a2b8d92f571a2",
     "staged": true,
     "activated": false
@@ -15,30 +15,30 @@
   "files": [
     {
       "name": "actions.json",
-      "uri": "viking://resources/loginom-dock/catalogs/executor-preview/releases/2026.09.13-node16-721cf71f-candidate/actions.json",
+      "uri": "viking://resources/loginom-dock/catalogs/executor-preview/releases/2026.09.13-node16-b0709ec0-candidate/actions.json",
       "bytes": 34297,
-      "sha256": "53f574f4b1aae52b52bab5b0f0eb78199ddde19cd4bd0c57e73b419713394027",
+      "sha256": "3737302121b31721cbe0a444fa17d97ba678bbdeafd3ba6a56d6643c53034506",
       "readback_equal": true
     },
     {
       "name": "selectors.json",
-      "uri": "viking://resources/loginom-dock/catalogs/executor-preview/releases/2026.09.13-node16-721cf71f-candidate/selectors.json",
+      "uri": "viking://resources/loginom-dock/catalogs/executor-preview/releases/2026.09.13-node16-b0709ec0-candidate/selectors.json",
       "bytes": 22380,
-      "sha256": "f3848941a39e7b63d41a94e4a101c4bbba1ace4606a1d45bcc56cb0942cdc2bc",
+      "sha256": "0130e5d3c8dba1b85073602c866d925da06c986f36f014503bcc0917c9654f2d",
       "readback_equal": true
     },
     {
       "name": "source-index.json",
-      "uri": "viking://resources/loginom-dock/catalogs/executor-preview/releases/2026.09.13-node16-721cf71f-candidate/source-index.json",
+      "uri": "viking://resources/loginom-dock/catalogs/executor-preview/releases/2026.09.13-node16-b0709ec0-candidate/source-index.json",
       "bytes": 3757,
-      "sha256": "0394f60e110aa5c1167848886235cc19f4a495958894ee605f67ae61cf38a78a",
+      "sha256": "9fb127c8a60d05599d03ca3118e37fba3ccb4d7514d49553b871eb4102f9e247",
       "readback_equal": true
     },
     {
       "name": "manifest.json",
-      "uri": "viking://resources/loginom-dock/catalogs/executor-preview/releases/2026.09.13-node16-721cf71f-candidate/manifest.json",
+      "uri": "viking://resources/loginom-dock/catalogs/executor-preview/releases/2026.09.13-node16-b0709ec0-candidate/manifest.json",
       "bytes": 719,
-      "sha256": "97809b7a970c7d2af1f802087c1422ef39a26882034c92d4d36cbefbad2799e2",
+      "sha256": "3b74bd5f23b400542dcdcb300495406541a5e298feef4c7caeefd3c6c6f4284f",
       "readback_equal": true
     }
   ],
@@ -49,5 +49,38 @@
   },
   "health_status": 200,
   "activated": false,
-  "full_autonomous_acceptance_passed": false
+  "full_autonomous_acceptance_passed": false,
+  "local_packet_verification": {
+    "source_sha": "b0709ec0f6f820a8988f4683297388894813935e",
+    "runtime": "e4e9ecbea5242cd403351fb5e4d5feaec38d18edfb7355f520985b752bed78a3",
+    "files": 184,
+    "source_tar_sha256": "d795ee74825b270d152d9ba253e4b6218047af5a2ca91e17efb192b0677e6a08",
+    "manifest_sha256": "b9d4db257d419c997171f1bbdd58a5908ebefe536659b7967910b17e1c61e82a",
+    "delta_from_candidate2": [
+      "client/lib/collapse-existing-input.mjs",
+      "client/lib/collapse-existing-input-pins.mjs",
+      "client/lib/collapse-existing-input-browser.mjs"
+    ],
+    "later_current_document_changes": [
+      "docs/plans/loginom-dock/16-collapse-columns.md"
+    ],
+    "archive_equals_recorded_commit": true,
+    "live_evidence_hashes_verified": 12,
+    "passed": true
+  },
+  "harness_pins_sha256": "c4aa349cd86a576548be0c21d72e6fcb117eb67f38f9a57da09b27bc6ea195a7",
+  "harness_inputs_verified": 271,
+  "source_runtime": "e4e9ecbea5242cd403351fb5e4d5feaec38d18edfb7355f520985b752bed78a3",
+  "package_root": "/test-1/node16-20260913-a56c2488",
+  "compatibility": {
+    "loginom": "7.4.2",
+    "platform": "macOS",
+    "browser": "Chromium"
+  },
+  "limitations": [
+    "Fresh actual user-v1 rehearsal pending",
+    "Full autonomous acceptance pending",
+    "Original run3 FAIL retained",
+    "No activation, merge, deployment or shared plugin update"
+  ]
 }
