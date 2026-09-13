@@ -217,7 +217,7 @@
       "group": "Экспорт",
       "lane": 1,
       "order": 2,
-      "status": "preparing",
+      "status": "in_progress",
       "subplan_number": 17,
       "subplan_path": "docs/plans/loginom-dock/17-text-export.md",
       "first_scope": "Экспорт одной таблицы в CSV/TSV с явными кодировкой, заголовком и разделителем; новый файл в выбранном каталоге.",
@@ -246,7 +246,8 @@
       "assigned_account": "test-2",
       "thread_id": "01a09a36-695b-7da0-b7ca-1ec521afa17e",
       "project_id": "78f34082-0f13-45c6-b826-3892eb164556",
-      "preparation_phase": "bootstrap"
+      "preparation_phase": "development",
+      "shared_memory_actor_verified": true
     },
     {
       "component_id": "component.imports.Excel",

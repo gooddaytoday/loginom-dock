@@ -1,3 +1,35 @@
+# Узлы14/16: следующие ограниченные фазы назначены — 13 сентября 2026
+
+14: packet83dc0db5 проверен помощником и собран на VPS как immutable test4.2.
+[Stage/readback](node14-candidate-v2-stage-2026-09-13.json):4/4файла совпали,
+manifest cadd80dfd8490f40c851475008a1ccd68d7a617dbcf6a77de25034ff8da7b2ad;
+production/current неизменны, activated=false. В прежней задаче назначен свежий
+preflight без модели, ход01a09a47-2311-7f93-b8a8-cc40abc2d460 active.
+Полная цель ещё не принята; Hermes слот не выдан.
+
+16: ограниченный прототип bff616f3 проверен, observed cases PASS, полный variant
+контракт BLOCKED. Пользователь прямо разрешил дополнительную изолированную
+проверку конкуренции/обрыва/типов/дат. В прежней задаче назначен ход
+01a09a46-31df-7e40-af84-ba5c83777748, Astra medium, active подтверждён.
+Без public integration; [точное решение](node16-variant-prototype-decision.md).
+
+Все поступившие события обработаны; оба результата помощников учтены.
+Периодический мониторинг не создавался; mainmerge/push/plugin не выполнялись.
+
+---
+
+# Узел17: общая память проверена, разработка запущена — 13 сентября 2026
+
+Registered MCP health/find(actor)/exact read прошли в задаче
+`01a09a36-695b-7da0-b7ca-1ec521afa17e`. После completed назначены live discovery,
+детализация подплана и разработка «Экспорт текста» на Astra medium; ход
+`01a09a3b-c47f-77e3-ae23-b20cbaeb16ff` подтверждён active/inProgress.
+Отдельные worktree/ветка/test-2 сохранены. Первое извлечение нового знания
+в общую память ещё нужно проверить после содержательной фазы.
+Штатный CLI способ добавления проекта восстановлен и внесён в runbook.
+
+---
+
 # Узел17: bootstrap и enrollment завершены, actor probe назначен
 
 Реальные cwd/branch/base/HEAD и изоляция подтверждены задачей17; coordinator

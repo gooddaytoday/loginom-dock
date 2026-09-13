@@ -1,6 +1,6 @@
 # 17. Экспорт — Текстовый файл
 
-Статус: подготовка отдельного узла потока1; live discovery и детальный подплан
+Статус: разработка назначена в отдельной задаче потока1; live discovery и детальный подплан
 ещё не выполнены. Код handler не разрабатывать до сверки реального мастера,
 Help и E2E и фиксации подтверждённых границ ниже.
 
@@ -50,3 +50,13 @@ memory registration7bdef4fd-e366-485d-a83f-51eef03085da. Проект добав
 Только затем — live discovery/детализация и разработка.
 Следовать [runbook](node-workflow-runbook.md). Main/merge/push/deploy/sharedplugin
 не менять; следующий узелXLSX import получит свою новую задачу после приёмки17.
+
+Старт подтверждён: bootstrap/enrollment и registered actor health/find/read прошли.
+Разработка назначена ходом `01a09a3b-c47f-77e3-ae23-b20cbaeb16ff`, Astra medium.
+Новое извлечение проектного знания проверить после содержательной фазы.
+
+Координатор разрешил минимальный host-owned output lease поверх существующих
+artifacts/download: точный destination/execution, свежий native file identity,
+полные bytes/SHA и durable cleanup receipt. Input upload guards не ослаблять.
+Нового транспорта/универсального downloader нет. Reject по умолчанию, replace
+только явно для выделенного файла; реализацию и негативные проверки ведёт поток1.
