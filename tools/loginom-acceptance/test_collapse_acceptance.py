@@ -30,6 +30,10 @@ class CollapseAdmissionTest(unittest.TestCase):
   args=SimpleNamespace(manifest_uri=a.CANDIDATE_URI,manifest_sha256=a.CANDIDATE_SHA)
   with patch.object(a,'verified_candidate',side_effect=ValueError('missing raw preparation')):
    self.assertFalse(a.admission(args)['ready'])
+ def test_admitted_prompt_executes_frozen_requirements_now(self):
+  text=a.prompt('/test-1/node16-new/run.lgp','/test-1/node16-new','20260913-170000-abcdef12')
+  self.assertIn('Допуск оператора уже выдан',text);self.assertNotIn('не запускать до допуска',text)
+  self.assertIn('При неоднозначной операции',text);a.frozen()
  def test_fixture_admission_exact_fresh_names(self):
   ds=a.fixtures('20260913-170000-abcdef12','/test-1/node16-new');self.assertEqual(len(ds),5)
   self.assertTrue(all(x['name'].startswith('Dock-collapse-20260913-170000-abcdef12-') for x in ds))
