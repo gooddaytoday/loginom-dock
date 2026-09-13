@@ -5,7 +5,7 @@ FIXTURES = {
  'input.csv': ('0e0151318f8307267dc1ed61b396c869303331dc8f1831cac8b7b5a73d2e2e4b', 124),
  'partial-input.csv': ('e195cdcbcc187601a822f31e26fc7d55f9507c66c51cb9e9d799d785649a1123', 67),
 }
-VERSION='2026.09.13-node11.1-candidate'
+VERSION='2026.09.13-node11.2-candidate'
 PROPOSED_URI='viking://resources/loginom-dock/catalogs/executor-preview/releases/'+VERSION+'/manifest.json'
 def validate_catalog(uri,digest,directory):
     if directory!='/test-2' or storage_segments(directory)!=['test-2']:raise ValueError('Node 11 requires explicit /test-2')

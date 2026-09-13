@@ -16,8 +16,8 @@ python3 - "$dock_archive" "$dock_source_manifest" "$dock_build" <<'PY'
 import hashlib,json,sys,tarfile
 from pathlib import Path
 archive,manifest,out=map(Path,sys.argv[1:]);proof=json.loads(manifest.read_text())
-assert hashlib.sha256(archive.read_bytes()).hexdigest()==proof['archive_sha256']=='8fe1faca81c16291fff2b704b7f20388edb3432fe0513243a3cdb2bae632096c'
-assert proof['source']['source_commit']=='91dee921e9e17343d53bf20fd7ca5f3b19f8de7a' and proof['source']['build_inputs_match_commit'] is True
+assert hashlib.sha256(archive.read_bytes()).hexdigest()==proof['archive_sha256']=='e7a2103be3679abd0907ed6454f39adf062db0f68808f01da101308b64299ab9'
+assert proof['source']['source_commit']=='7de7f23e4adbff0819df6c7e970589f93df4882b' and proof['source']['build_inputs_match_commit'] is True
 with tarfile.open(archive) as f:
  for m in f.getmembers():
   assert not m.name.startswith('/') and '..' not in Path(m.name).parts and not m.issym() and not m.islnk()
@@ -29,7 +29,7 @@ for item in proof['source']['files']:
 PY
 "$dock_node" "$dock_build/source/deploy/loginom-dock/build-action-catalog.mjs" \
   --input "$dock_build/source/executor/catalog" --out "$dock_build/catalog" \
-  --candidate --version 2026.09.13-node11.1-candidate --compatibility "$dock_build/compatibility.json" --loginom-build 7.4.2 \
+  --candidate --version 2026.09.13-node11.2-candidate --compatibility "$dock_build/compatibility.json" --loginom-build 7.4.2 \
   --package-root /test-2 > "$dock_build/catalog-build-report.json"
 python3 "$dock_build/source/deploy/loginom-dock/publish-action-catalog.py" \
   --build "$dock_build/catalog" --stage --validate-only

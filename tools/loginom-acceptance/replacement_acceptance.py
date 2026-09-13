@@ -13,6 +13,7 @@ from existing_import_evidence import _verify_existing_import_output
 from node_apply_save_chain import verify_save_chain
 from node_apply_reopen_binding import verify_reopen_binding
 from user_result_evidence import normalize_user_evidence
+from replacement_session_evidence import verify_session_evidence
 from replacement_evidence_audit import audit as operation_audit
 from replacement_persistence_evidence import verify_persistence
 from replacement_configuration_evidence import normalized
@@ -20,8 +21,8 @@ from replacement_lifecycle_evidence import checkpoint
 from replacement_upload_probe import FIXTURES, descriptors, prompt as render_prompt, validate_catalog
 WORK=Path(__file__).resolve().parent
 ROOT=WORK.parents[1]
-CODE='91dee921e9e17343d53bf20fd7ca5f3b19f8de7a'
-RUNTIME='b99b922033e87b7580f14c2eec8cd0744c23bab29ee45b2548212cdac8c394ca'
+CODE='7de7f23e4adbff0819df6c7e970589f93df4882b'
+RUNTIME='3b21e8f0c52820b058caf9c02bb00d006d7bf9b451891ec27646f8018e46e00e'
 DOCK_SKILL='afa295bf48dc48da5d3c995665a06ef2190ff620bae3243d46557e0371536790'
 FIX=WORK/'fixtures/replacement'
 load=lambda name:json.loads((FIX/name).read_text())
@@ -104,17 +105,7 @@ def audit_directory(directory,pin):
     result=audit(request,evidence,(directory/'scenario.txt').read_text(),pin)
     hashes=request['harness_inputs'];result['checks']['harness_files']=dict(passed=bool(hashes) and all((WORK/n).is_file() and hashlib.sha256((WORK/n).read_bytes()).hexdigest()==v for n,v in hashes.items()))
     result['checks']['current_runtime']=dict(passed=runtime_pin(ROOT)==request['runtime_source_pin'])
-    sessions=list((directory/'private/dock-state/sessions').glob('*/session.json'))
-    metadata_ok=False
-    if len(sessions)==1:
-        meta=json.loads(sessions[0].read_text());profile=Path(meta.get('profile','')).resolve();skill=Path(meta.get('skillPath',''))
-        metadata_ok=(meta.get('agent')=='hermes' and meta.get('adapterRevision')=='0.1.0-rc.4-acceptance'
-          and meta.get('clientRevision')==RUNTIME and meta.get('skillRevision')==DOCK_SKILL
-          and skill.is_file() and hashlib.sha256(skill.read_bytes()).hexdigest()==DOCK_SKILL
-          and profile==sessions[0].parent.resolve()/'browser-profile'
-          and meta.get('browserViewport','missing') is None and meta.get('browserWindowMode')=='maximized'
-          and meta.get('chromiumRevision')=='1243' and meta.get('chromiumVersion')=='153.0.8010.12')
-    result['checks']['isolated_session_pins']=dict(passed=metadata_ok)
+    result['checks']['isolated_session_pins']=verify_session_evidence(directory,request,evidence,pin,DOCK_SKILL)
     return report(result['checks'])
 if __name__=='__main__':
     p=argparse.ArgumentParser();p.add_argument('--run-dir',type=Path,required=True);p.add_argument('--candidate-pin',type=Path,required=True);a=p.parse_args();r=audit_directory(a.run_dir,json.loads(a.candidate_pin.read_text()));out=a.run_dir/'replacement-acceptance-audit.json'
