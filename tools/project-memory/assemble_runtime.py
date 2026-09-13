@@ -51,6 +51,6 @@ if __name__ == '__main__':
     definition = Path(__file__).resolve().parent
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--source', type=Path, default=Path('/Users/kartamyshev/Git/openviking/integrations/codex-mcp-adapter'))
-    parser.add_argument('--output', type=Path, default=definition.parents[1] / '.dock/shared-project-memory/runtime/20260913.3')
+    parser.add_argument('--output', type=Path, default=definition.parents[1] / '.dock/shared-project-memory/runtime/20260913.5')
     args = parser.parse_args()
     assemble(args.source, args.output, definition)

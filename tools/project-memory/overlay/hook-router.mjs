@@ -9,6 +9,7 @@ import {
   computeOfficialPluginPin, DEFAULT_LEGACY_STATE_DIR,
 } from './project-routing.mjs';
 import { deriveWorkspacePeerId } from './vendor/workspace-peer.mjs';
+import { loadEnrollment, requireEnrolledTask, observeBootstrap } from './enrollment-routing.mjs';
 
 export const HOOK_SCRIPTS = Object.freeze({
   SessionStart: 'session-start-commit.mjs',
@@ -126,13 +127,28 @@ function writeReceipt(context, route) {
 }
 
 export async function runHook(event, {
-  raw, cwd = process.cwd(), routing = loadProjectRouting(),
+  raw, cwd = process.cwd(), routing,
   parentEnv = process.env, stdout = process.stdout, stderr = process.stderr,
   legacyStateDir = DEFAULT_LEGACY_STATE_DIR, spawnImpl = spawn,
+  enrollmentLoader = loadEnrollment,
+  enrollmentSetup = false,
+  enrollmentsOnly = false,
 } = {}) {
   if (!Object.hasOwn(HOOK_SCRIPTS, event)) fail('Unsupported hook event.');
   const context = parseHookInput(raw, cwd);
-  const route = resolveProjectRoute(context.cwd, routing);
+  const enrollment = enrollmentLoader(context.cwd);
+  if (enrollmentsOnly && !enrollment)
+    return { event, skipped: 'not-independently-enrolled', routeEstablished: false, captureVerified: false };
+  const legacyRoute = enrollmentsOnly ? null : resolveProjectRoute(context.cwd, routing ?? loadProjectRouting());
+  if (enrollment && legacyRoute) fail('Workspace has conflicting legacy and independent routes.');
+  const initializing = enrollmentSetup && event === 'SessionStart' &&
+    enrollment?.record.status === 'enrolling' && enrollment.record.threadId === context.threadId;
+  if (enrollment && enrollment.record.status !== 'active' && !initializing) {
+    observeBootstrap(enrollment, context, JSON.parse(raw.toString()), event);
+    return { event, skipped: 'enrollment-pending', routeEstablished: false, captureVerified: false };
+  }
+  if (!initializing) requireEnrolledTask(enrollment, context.threadId);
+  const route = enrollment?.route || legacyRoute;
   // Root-checkout hooks are also discovered in linked worktrees. Leave all
   // unmapped tasks, including the coordinator, to their existing plugin.
   if (!route) return { event, skipped: 'unmapped-workspace', routeEstablished: false, captureVerified: false };
@@ -188,13 +204,14 @@ async function runChild(event, pluginRoot) {
 
 async function main() {
   if (process.argv[2] === '--child') return runChild(process.argv[3], process.argv[4]);
-  if (process.argv.length !== 3) fail('Usage: hook-router.mjs <hook event>');
+  if (process.argv.length !== 3 && !(process.argv.length === 4 && process.argv[3] === '--enrollments-only'))
+    fail('Usage: hook-router.mjs <hook event> [--enrollments-only]');
   const chunks = []; let size = 0;
   for await (const chunk of process.stdin) {
     size += chunk.length; if (size > MAX_STDIN) fail('Hook input exceeds the size limit.');
     chunks.push(chunk);
   }
-  await runHook(process.argv[2], { raw: Buffer.concat(chunks) });
+  await runHook(process.argv[2], { raw: Buffer.concat(chunks), enrollmentsOnly: process.argv[3] === '--enrollments-only' });
 }
 
 if (process.argv[1] && existsSync(process.argv[1]) && realpathSync(process.argv[1]) === SELF) main().catch(error => {

@@ -2573,9 +2573,22 @@
       "policy": "docs/loginom-dock/shared-project-memory.md",
       "target_peer": "-Users-kartamyshev-Git-loginom-dock",
       "preserve_separate_sessions": true,
-      "routing_status": "20260913.3 active for node11–14; registered actor access verified; fresh task enrollment not implemented",
-      "future_node_enrollment_ready": false,
-      "future_node_enrollment_gate": "Independent registration preserving active route hashes, pending bootstrap, fresh enrollment, registered actor checks before development; verify without global reload"
+      "routing_status": "20260913.3 active for node11–14; independent 20260913.5 enrollment installed; first fresh app-task bootstrap/actor/capture checks pending",
+      "future_node_enrollment_gate": "Prepare exact cwd/config, completed real bootstrap observation, fresh normal hook trust and app metadata receipts, activate bound task, registered actor health/find/read before development; first-phase capture/extraction read-back; no global reload",
+      "future_node_enrollment": {
+        "generation": "20260913.5",
+        "mechanism_implemented": true,
+        "installed": true,
+        "bootstrap_ready": true,
+        "first_fresh_app_task_verified": false,
+        "per_task_registered_actor_gate_required": true,
+        "first_phase_capture_extraction_gate_required": true,
+        "legacy_routes_unchanged": true,
+        "global_reload_required_by_installation": false,
+        "procedure": "tools/project-memory/README.md",
+        "evidence": "docs/loginom-dock/memory-enrollment-2026-09-13.json",
+        "checked_at": "2026-09-13T02:04:08.039041+00:00"
+      }
     },
     "runbook": "docs/plans/loginom-dock/node-workflow-runbook.md"
   },

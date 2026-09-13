@@ -5,8 +5,11 @@
 - Start here: `docs/loginom-dock/agent-handoff.md` (reading order, code map,
   user decisions, known follow-up work). For every new node and coordinator
   resumption, follow `docs/plans/loginom-dock/node-workflow-runbook.md`: preparation,
-  shared-memory enrollment, phase gates, isolation and completion events. Future
-  node enrollment is not implemented yet; do not expand the active v1 route list.
+  shared-memory enrollment, phase gates, isolation and completion events. Independent
+  enrollment generation 20260913.5 is implemented and installed; use the per-task
+  preparation/bootstrap/activation gate in `tools/project-memory/README.md`.
+  The first fresh app-task access/capture verification is still pending; do not
+  expand the active v1 route list or treat installation as a task's admission.
 - Production paths, access, build/deploy/rollback and current inventory:
   `docs/loginom-dock/operations.md`. Verify live state before server changes;
   repository HEAD, deployed server and installed client may have different revisions.
@@ -33,8 +36,9 @@
 - Before substantial work, check memory health and the injected context. Use
   `find` or `search` in list mode with `peer_scope="actor"`. The main checkout
   uses the project URI above; verified migrated node11–14 worktrees use the same
-  shared Peer. Unmapped worktrees keep their path-derived Peer until coordinator
-  enrollment. Verify the effective route when the path changes.
+  shared Peer. A prepared new workspace has memory blocked until coordinator
+  enrollment; do not use an own-worktree fallback during bootstrap. Other unmapped
+  workspaces retain their existing route. Verify the route when the path changes.
   Retrieve relevant global User memory separately within actor scope as needed.
   The shared-project read/write transition is explicitly authorized below. Other
   cross-project retrieval still requires permission; never set a global Peer override.
@@ -73,6 +77,15 @@
   were verified on completed node11/12 probes; verify each ongoing phase after
   completion. New worktrees still require coordinator preparation and verification.
   Do not manually reroute hooks/MCP or use global remember for project capture.
+- New workspaces use independent private enrollment records keyed by exact cwd,
+  generation 20260913.5. Each route hash covers only that workspace. The frozen
+  v1 registry and node11–14 MCP runtimes/configs/receipts remain unchanged.
+  Root hooks preserve the five v3 definitions and add five enrollment-only v5
+  definitions; the latter skip existing tasks. Normal hook trust and compatibility
+  were verified without global reload. A real completed bootstrap observation,
+  fresh host/trust receipts and exclusive task ownership are required before
+  activation. Registered actor health/find/read precedes development; verify the
+  first new capture/extraction afterwards. Never reset or reassign an old cursor.
 - Each task/session, branch, browser and capture cursor stays separate. Existing
   histories and memory records are preserved. The coordinator switches at a
   completed phase boundary; never reset cursors or run duplicate capture paths.
