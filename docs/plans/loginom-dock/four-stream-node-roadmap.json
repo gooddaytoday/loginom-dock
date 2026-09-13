@@ -217,7 +217,7 @@
       "group": "Экспорт",
       "lane": 1,
       "order": 2,
-      "status": "prepared_waiting_app_project",
+      "status": "preparing",
       "subplan_number": 17,
       "subplan_path": "docs/plans/loginom-dock/17-text-export.md",
       "first_scope": "Экспорт одной таблицы в CSV/TSV с явными кодировкой, заголовком и разделителем; новый файл в выбранном каталоге.",
@@ -243,7 +243,10 @@
       "acceptance_status": "not_accepted",
       "help_source_uri": "viking://resources/loginom-dock/sources/loginom-help/data/integration/export/txt-csv.md",
       "source_review_scope": "Каталожный путь Help; детальная сверка режима обязательна при подготовке подплана. Обзор источников не равен живой приёмке.",
-      "assigned_account": "test-2"
+      "assigned_account": "test-2",
+      "thread_id": "01a09a36-695b-7da0-b7ca-1ec521afa17e",
+      "project_id": "78f34082-0f13-45c6-b826-3892eb164556",
+      "preparation_phase": "bootstrap"
     },
     {
       "component_id": "component.imports.Excel",
@@ -2805,7 +2808,7 @@
     }
   },
   "finalized_at": "2026-09-13T00:04:38.014661+03:00",
-  "current_execution_note": "Stream1 node11 accepted in branch; node17 Text export environment prepared, waiting saved app project, no developer task yet. Other streams retain current phases in coordinator registry.",
+  "current_execution_note": "Stream1 node11 accepted; node17 savedproject created via codex app PATH and separate bootstrap task active. Shared memory actor gate remains before development.",
   "active_component_by_lane": {
     "1": "component.exports.Text",
     "2": "component.transform.ColumnFlipping",

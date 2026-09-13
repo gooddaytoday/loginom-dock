@@ -44,9 +44,9 @@ Shared file-artifacts контракт принадлежит потоку1. Р�
 ## Старт задачи
 
 Подготовлены source MCP/свойDockHOME, read-only dependency symlinks и pending
-memory registration7bdef4fd-e366-485d-a83f-51eef03085da. Задача ещё не создана:
-папку нужно добавить как сохранённый проект приложения. После этого координатор
-создаёт отдельную bootstrap-задачу, включает enrollment и проверяет actor
-health/find/read. Только затем — live discovery/детализация и разработка.
+memory registration7bdef4fd-e366-485d-a83f-51eef03085da. Проект добавлен штатным `codex app <worktree>`; создана отдельная bootstrap-задача
+`01a09a36-695b-7da0-b7ca-1ec521afa17e`, project78f34082-0f13-45c6-b826-3892eb164556.
+После completed координатор включает enrollment и проверяет actor health/find/read.
+Только затем — live discovery/детализация и разработка.
 Следовать [runbook](node-workflow-runbook.md). Main/merge/push/deploy/sharedplugin
 не менять; следующий узелXLSX import получит свою новую задачу после приёмки17.
