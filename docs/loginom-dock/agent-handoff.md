@@ -1,3 +1,17 @@
+# Узел13: R2 принят ограниченно, готовится полная приёмка — 13 сентября 2026
+
+5a4c46fc: exact11files/18hunks R2 transfer выполнен, terminal live test-3 PASS.
+Координатор сверил35hashes integration/evidence/harness,15negative, repeat/resume
+1057→1057→1057 и восстановленный4×8/источник/cleanup. Новый persistence не заявлен.
+В реестре уже completed review1/reportd316b2f4 и fix1; повторное review запрещено,
+несмотря на full_review OPEN в последнем developer report. Назначены сверка
+remaining gates и новый pinned candidate/полный acceptance комплект accepted10rowgoal.
+Ход01a09a7a-b83e-7c93-b6dd-5adb1bb25c4c active, Astra medium. Archive для VPS
+подготовить либо доказать immutable reuse; модель/слот/Hermes ещё не назначены.
+Полный узел не принят; main/plugin не меняются. Все входящие обработаны.
+
+---
+
 # Узел17: ограниченная прокрутка палитры согласована — 13 сентября 2026
 
 Exact export TreeText вне viewport; coordinator проверил existing create effect

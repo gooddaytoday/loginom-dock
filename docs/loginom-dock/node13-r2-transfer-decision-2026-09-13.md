@@ -22,3 +22,11 @@ Missing-values schema, input-mapping recovery и новый target-placement н�
 в ветку13 и live проверку под test-3. Разрешены только указанные11файлов/18hunks
 и соответствующий R2 gate. Перед применением повторно сверить target blobs и
 dry-check. Mainmerge, общий плагин и Hermes этим не разрешены.
+
+## Выполнение разрешённого переноса
+
+Коммит5a4c46fc: точный перенос выполнен;35hashes evidence/harness/integration
+сверены координатором. R2 terminal/live и15negative PASS, после восстановления
+источника свежие4×8, repeat/resume1057→1057→1057. Новый persistence не заявлен.
+Далее назначена подготовка полной автономной приёмки; повторное review не требуется
+и не разрешается, поскольку review1/fix1 уже completed в реестре.
