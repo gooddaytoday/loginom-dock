@@ -1,5 +1,36 @@
 # Узел 12 — комплект кандидата после точечного follow-up
 
+## Допуск кандидата 12.2 — 13 сентября 2026
+
+Новый preflight **PASS**, зарегистрированное Dock MCP прочитало настоящий manifest;
+его SHA `d0c9a5bedc170754dd251c982508e0ad8568d300091eda0027962c496df62adf`
+совпал с серверными байтами. URI:
+`viking://resources/loginom-dock/catalogs/executor-preview/releases/2026.09.13-node12.2-candidate/manifest.json`.
+Координатор выполнил VPS build/stage/readback; activated:false. Реальные pins
+сохранены в pins.json и [новой квитанции](candidate-preflight-2.json).
+
+Проверены 153 runtime, 243 harness и 386 source build inputs, goal и native skill.
+Штатный launch.sh preflight прошёл: Hermes0.21.0, существующая подписка
+openai-codex/gpt-5.6-sol/low, без обновления токенов и fallback.
+Отдельный штатный check-tools.mjs прошёл initialize/list_tools: все11 обязательных
+инструментов доступны. Первая диагностическая попытка была отклонена из-за прав
+0755 на собственной state-папке; после приведения к штатным0700 проверка прошла.
+Исходная квитанция отказа сохранена; код и ограничения защиты не изменялись.
+
+Preflight receipt: `.dock/node12-followup-1/candidate-preflight.json`.
+MCP и серверные подтверждения: `.dock/node12-candidate-preflight-2/`.
+Эти preflight receipts не перезаписывать. Source archive/source-files.json описывают
+неизменный source commit0e11a3fb; документальные pins не входят в runtime/harness
+или source build input map, пересборка исходного архива не требуется.
+
+Ни модель, ни браузерные действия не запускались. Реальная usage identity,
+геометрия окна и полный16-operation goal проверяются только в новом автономном run
+после отдельного слота координатора. Прежний FAIL103/112 сохраняется.
+
+Ниже — исторический отчёт follow-up до серверной сборки; его указания «ещё не stage»
+относятся к тому завершённому ходу, а актуальный допуск приведён выше.
+
+
 Команда `node12:acceptance-followup:1:cc24a1f5e07f78076c901965a028b67858272754`.
 Исправление было закоммичено: `0e11a3fb24ca40a9f855008d2b0d1856d6f771ad`.
 Прямой native-аудит Codex **34/34 PASS**, проверка параметров **6/6 PASS**,
