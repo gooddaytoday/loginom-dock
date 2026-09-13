@@ -41,5 +41,44 @@
     "developer_reported": "session and saved package restored; shared memory works; bounded DataTypes-off probe next",
     "changes_preserved": true,
     "new_review_or_acceptance": false
+  },
+  "types_off_probe": {
+    "checked_at": "2026-09-13T08:25:06.666639+00:00",
+    "evidence_directory": ".worktrees/node-16-collapse-columns/.dock/node16/live-1789278261737",
+    "evidence_sha256": {
+      "preview-bound-evidence.json": "40cbb4f11d0ea798be12539627074fc6e19f68e532c1205c6de52769b2b2a14a",
+      "preview-local-types-off.json": "57eff98fefe9a279d4cd560bc82064d4b08a74e4e397226f783d6ed4e4a40b1d",
+      "excluded-execute.json": "9d202c83543f183719780c3ed3fc37798a555a3295f0d183d6d988f7b48cd7e2",
+      "mapping-failure.json": "43db1cb3f3fe5ecaa886dc02d11f950e3faae19b6104508bb5b5e3ee34d811c2",
+      "import-types.json": "c4bfe02d018f355c8313664d09e0b794014c443ce3e5cadefd7918fcc74e93c0"
+    },
+    "node_guid": "b0378a62-24a4-4a3e-9882-707594b98ce6",
+    "output_port_guid": "4ba0e2c2-69ad-3a32-bbdc-75714efe7a51",
+    "port": 0,
+    "row_count": 15,
+    "generated_DataTypes_absent_in_output_schema": true,
+    "variant_type": 6,
+    "integer_real_same_ui_value_records": [
+      705,
+      706
+    ],
+    "string_distinguished_record": 704,
+    "date_milliseconds_verified": 123,
+    "supported_conclusion": "The inspected loaded Table/Preview data lack an independent native integer/real discriminator with DataTypes excluded. This does not establish impossibility of every Loginom UI path.",
+    "full_variant_io_accepted": false,
+    "new_read_transport_selected": false,
+    "raw_rpc_added": false,
+    "developer_report": ".worktrees/node-16-collapse-columns/docs/loginom-dock/collapse-variant-blocker-2026-09-13.md",
+    "developer_guidance_id": "node16:variant-blocker-response:1:types-off-1789278261737",
+    "remaining_work": "Continue independent handler and narrowly verified exclusion label normalization; prepare concrete source/transport option without invoking native API",
+    "independent_read_only_check": {
+      "same_value_not_same_record": true,
+      "records_differ_in_names_labels_ids": true,
+      "date_ms_confirmed": true,
+      "frontend_decoder_sources_found_in_inspected_node16_and_client_paths": false,
+      "earlier_type_loss_layer_established": false,
+      "new_rpc_justified_by_this_evidence": false,
+      "scope": "Saved evidence and source file inventory only; no browser, RPC, tests or mutations"
+    }
   }
 }
