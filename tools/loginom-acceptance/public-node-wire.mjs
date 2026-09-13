@@ -1,3 +1,5 @@
+import {userResultSchema} from '../../client/lib/user-results.mjs';
+import {nodeResultReply} from '../../client/lib/node-result-reply.mjs';
 // Operator harness: real MCP request/response handling around the same public
 // dispatcher used by bridge.mjs. Remote connection/pinning is tested separately.
 import {Client} from '../../client/node_modules/@modelcontextprotocol/sdk/dist/esm/client/index.js';
@@ -9,15 +11,16 @@ import {appendFile,writeFile} from 'node:fs/promises';
 
 export async function createPublicNodeWire(runtime,{directory,browserSequence}) {
  const server=new Server({name:'dock-public-node-live-qa',version:'1'},{capabilities:{tools:{}}});
- const definitions=runtime.tools.filter(t=>isNodeApiTool(t.name)||t.name==='dock_action_run');
+ const definitions=[...runtime.tools.filter(t=>isNodeApiTool(t.name)||t.name==='dock_action_run'),{name:'qa_user_node_status',description:'Operator-only verification of the actual compact node result',inputSchema:{type:'object',properties:{operation_id:{type:'string'}},required:['operation_id'],additionalProperties:false},outputSchema:userResultSchema}];
  server.setRequestHandler(ListToolsRequestSchema,async()=>({tools:definitions}));
  server.setRequestHandler(CallToolRequestSchema,async(request,extra)=>{
   const {name,arguments:args={}}=request.params;
   try {
+   if(name==='qa_user_node_status')return nodeResultReply(runtime.nodeApplyStatus(args.operation_id),{userProfile:true});
    const result=isNodeApiTool(name)?await dispatchNodeApi(runtime,name,args,{signal:extra.signal}):name==='dock_action_run'
     ?await runtime.run(args.action_key,args.parameters,{operationId:args.operation_id,signal:extra.signal}):null;
    if(!result)throw Error('Unsupported operator wire tool');
-   return {content:[{type:'text',text:JSON.stringify(result)}],structuredContent:result};
+   return nodeResultReply(result);
   }catch(error){return {isError:true,content:[{type:'text',text:String(error.message)}]};}
  });
  const client=new Client({name:'codex-operator-public-node-qa',version:'1'});
@@ -35,6 +38,7 @@ export async function createPublicNodeWire(runtime,{directory,browserSequence}) 
   return result;
  };
  return {call,runtime:{...runtime,
+  readUserNodeResult:id=>call('qa_user_node_status',{operation_id:id}),
   deliverArtifact:request=>call('dock_artifact_deliver',request),
   resumeArtifactDelivery:request=>call('dock_artifact_delivery_resume',request),
   artifactDeliveryStatus:id=>call('dock_artifact_delivery_status',{operation_id:id}),

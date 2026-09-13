@@ -16,7 +16,7 @@ function fake(mode){
  const document={querySelector:q=>q.includes('ConsoleForm')?tree:q.includes('DataSetForm')?preview:tab};
  const manager={FPreviewVisible:true,FPreviewForm:{FCurrentPreviewNode:node,FCurrentPreviewPort:port},FShowDataLastCall:{Node:node,Port:port}};
  const card={Controller:{Node:{data:{node:workflow}},FController:{FPreviewManager:manager}}};
- const env={document,location:{origin:'http://test'},bg:{app:{Version:'7.4.2',WorkFlowTreeNode:Workflow,PackageTreeNode:Package,Application:{FInstance:{FMainForm:{Items:{Workspace:{getActiveTab:()=>card}}}}}}},Ext:{getCmp:id=>id==='preview'?{Controller:dc}:{getStore:()=>({getRoot:()=>root,isLoading:()=>false})}},Uint8Array,DataView,TextDecoder,setTimeout,clearTimeout};
+ const env={document,location:{origin:'http://test'},bg:{app:{Version:'7.4.2',WorkFlowTreeNode:Workflow,PackageTreeNode:Package,Application:{FInstance:{FMainForm:{Items:{Workspace:{getActiveTab:()=>card}}}}}}},Ext:{getCmp:id=>id==='preview'?{Controller:dc}:{getStore:()=>({getRoot:()=>root,isLoading:()=>false})}},Uint8Array,DataView,TextDecoder,TextEncoder,setTimeout,clearTimeout};
  env.__loginomDockPreparationV1={document,id:'d',receipts:new Map([['r',{phase:'verified',workflowId:'w',tab,nodeTargetWorkflowNode:workflow,packageNode:pack}]])};
  const b={method:321,interface:116,port:0,offset:0,rows:1,columns:[0],execution:{status:'completed',execution_id:'d:1:2'},document_id:'d',workflow_id:'w',tab_tid:'tab',prefix:'TF',node_id:'n',port_guid:'p',origin:'http://test',source:{owner:0,object:9},schema:[{name:'Scalar',label:'Scalar',type:6}],row_count:1};
  const context=vm.createContext(env);
@@ -60,4 +60,9 @@ test('a native transport failure retires the diagnostic session without claiming
  const f=fake('deferred'),p=readFixedVariant(f.page,f.b,decodeVariantFrame);const rejected=assert.rejects(p,/transport error/);f.finish(true);await rejected;
  const s=await variantDiagnosticStatus(f.page);assert.equal(s.retired,true);assert.equal(s.pending,0);assert.equal(s.nativeCancelled,false);assert.equal(s.releasedRequests,1);assert.equal(s.releasedResponses,0);
  await assert.rejects(()=>readFixedVariant(f.page,f.b,decodeVariantFrame),/retired/);
+});
+
+test('byte budget refuses before dispatch/append and never publishes over limit',async()=>{
+ const tiny=fake();await assert.rejects(()=>readFixedVariant(tiny.page,tiny.b,decodeVariantFrame,{maxBytes:60}),/byte budget/);assert.equal(tiny.counters.sent,0);
+ const append=fake();await assert.rejects(()=>readFixedVariant(append.page,append.b,decodeVariantFrame,{maxBytes:600}),/byte budget/);const s=await variantDiagnosticStatus(append.page);assert.equal(s.published,false);assert.equal(s.pending,0);assert.equal(append.counters.released,2);
 });

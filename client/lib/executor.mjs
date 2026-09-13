@@ -2041,6 +2041,9 @@ export function createActionRuntime({ pinned, execute, artifactStore, allowCandi
           };
           operation.nodeApplyDrivers=nodeApplyDriverFactory({operation,execute:executeNodeScript,onRecord,now,
             receiptOptions:(id,key,signature)=>receiptOptions(operation,id,key,signature),
+            nodeHistory:()=>[...operations.values()].filter(o=>o!==operation&&o.action.capability==='node.apply')
+              .map(o=>structuredClone({request:o.parameters,outcome:o.outcome,cleanup_confirmed:o.cleanupConfirmed})),
+            exclusiveNodeOperation:()=>running===true&&pending===operation&&operation.nodeApply?.pending?.phase==='read',
             verifiedUploads:()=>[...operations.values()].filter(o=>o.action.capability==='artifact.upload'
               && o.outcome?.status==='SUCCEEDED'&&o.cleanupConfirmed===true)
               .map(o=>structuredClone({operation_id:o.id,artifact:o.checkpoint.artifact,outcome:o.outcome}))});

@@ -1,7 +1,9 @@
 # 16. Свёртка столбцов
 
-Статус: **development / exact variant_io blocked**. Независимая часть обработчика
-реализована в отдельной ветке; полный узел не принят.
+Статус: **development / bounded exact-full source wiring**. Полное точное чтение
+выхода подключено для проверенного собственного статического импорта;
+автономная приёмка всего узла ещё не выполнена.
+[Текущий этап и ограничения](../../loginom-dock/node16-exact-wiring-result-2026-09-13.md).
 [Отчёт разработки](../../loginom-dock/collapse-columns-development-2026-09-13.md),
 [конкретный blocker чтения](../../loginom-dock/collapse-variant-blocker-2026-09-13.md).
 [Проверка пустого результата после открытия](../../loginom-dock/collapse-empty-persistence-2026-09-13.md),

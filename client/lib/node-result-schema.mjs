@@ -1,3 +1,4 @@
+import {nativeCellSchema,nativePortProperties} from './variant-native-schema.mjs';
 // Public result data, including partial effects. Validation is not an independent
 // acceptance audit: a valid schema alone never proves the user's goal complete.
 const str={type:'string'},bool={type:'boolean'},integer={type:'integer',minimum:0};
@@ -10,14 +11,16 @@ const error=object({code:str,message:str,cause:object({code:str,message:str})},[
 const phase=values('validate','source','workflow','target','input_mapping','open','configure','node_finish','output_mapping','finish','execute','read');
 const execution=object({status:values('not_requested','pending','completed','cancelled'),execution_id:nullable(str),stop_verified:bool},['status','execution_id']);
 const receipt=object({phase,receipt_id:str,status:values('pending','verified','not_requested'),effect_possible:bool});
-const cell=object({type:str,is_null:bool,value:{type:['string','number','boolean','null']},decimal:str,
- representation:str,precision:str,display_text:str,timezone:str},['type','is_null','precision']);
+const legacyCell=object({type:str,is_null:bool,value:{type:['string','number','boolean','null']},decimal:str,
+ representation:str,precision:{type:'string',pattern:'^(?!exact_native$)'},display_text:str,timezone:str},['type','is_null','precision']);
+const cell={anyOf:[legacyCell,nativeCellSchema]};
 const column=object({index:integer,name:str,label:str,type:str,header_tid:str,data_kind:str},['index','name','label','type'],true);
-const port=object({port:integer,port_guid:str,fresh:bool,freshness_basis:str,execution_id:str,
+const port=object({...nativePortProperties,port:integer,port_guid:str,fresh:bool,freshness_basis:str,execution_id:str,
  table:object({view_guid:str,port_guid:str,table_tid:str}),schema:array(column),row_count:integer,
  sample:{type:'array',items:array(cell),maxItems:10},sample_rows:{type:'integer',minimum:0,maximum:10},sample_complete:bool,
  precision:object({numbers_verified:bool,limitations:array(str),strings:str}),table_schema_id:str,filter_enabled:bool},
  ['port','port_guid','fresh','execution_id','schema','row_count','sample','sample_rows','sample_complete','precision'],true);
+export const nodeOutputPortSchema=port;
 const output=object({status:values('not_refreshed','partial','complete'),evidence_ref:nullable(str),execution_id:str,ports:array(port),
  verified:bool,cleanup_complete:bool,effect_possible:bool,no_output_requested:bool},['status','evidence_ref'],true);
 const readbackColumn=object({index:integer,name:str,label:str,type:str,data_kind:str,used:bool});

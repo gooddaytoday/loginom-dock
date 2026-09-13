@@ -1,3 +1,15 @@
+# Node16: bounded exact-full подключён к исходникам — 13 сентября 2026
+
+Этап `node16:exact-wiring:1:7e1bbab9` завершён: private static provenance,
+native полный результат до50×8, строгий user-v1, общий MCP serializer и budgets.
+1477PASS/1SKIP/0FAIL; независимый аудит7public cases/244cells PASS, полное
+save/newsession/reexecute сравнение PASS;3native change negatives PASS.
+Даты только native_serial_only; server atomicity/ABA/cancel не заявлены.
+Hermes и полная приёмка узла ещё не выполнены; shared plugin/main не менялись.
+[Итог и ограничения](node16-exact-wiring-result-2026-09-13.md).
+
+---
+
 # Node16: проект exact variant контракта подготовлен — 13 сентября 2026
 
 Предложены cell_type/native bytes, отдельные coverage/binding/consistency и bounded

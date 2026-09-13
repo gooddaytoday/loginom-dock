@@ -1,9 +1,9 @@
-// Diagnostic only. One fixed read method; no hooks, proxy overrides, or fallback.
-export async function readFixedVariant(page,b,decode,options={}) {
+// Private Collapse capability. Fixed321/interface116, no generic RPC or fallback.
+export async function readNativeVariant(page,b,decode,options={}) {
  return page.evaluate(async ({b,decoder,options})=>{
   const decode=eval("("+decoder+")");
   const v=(o,k)=>Object.getOwnPropertyDescriptor(o??{},k)?.value,need=(x,m)=>{if(!x)throw Error(m);};
-  need(b.port===0&&b.method===321&&b.interface===116&&Number.isInteger(b.offset)&&b.offset>=0&&Number.isInteger(b.rows)&&b.rows>0&&b.rows<=50&&Array.isArray(b.columns)&&b.columns.length>0&&b.columns.length<=8&&new Set(b.columns).size===b.columns.length,'fixed bounds');
+  need(b.port===0&&b.method===321&&b.interface===116&&Number.isInteger(b.offset)&&b.offset>=0&&Number.isInteger(b.rows)&&b.rows>=0&&b.rows<=50&&b.offset===0&&b.rows===b.row_count&&Array.isArray(b.columns)&&b.columns.length>0&&b.columns.length<=8&&new Set(b.columns).size===b.columns.length,'fixed bounds');
   need(b.execution.status==='completed'&&b.execution.execution_id.startsWith(b.document_id+':'),'completed execution');
   const prep=globalThis.__loginomDockPreparationV1;
   need(prep?.document===document&&prep.id===b.document_id&&bg.app.Version==='7.4.2'&&location.origin===b.origin,'document/build');
@@ -23,6 +23,19 @@ export async function readFixedVariant(page,b,decode,options={}) {
    need(parts.length===2&&String(processRoot.internalId)===parts[0],'execution root changed');
    const records=[];const walk=ns=>{need(records.length+ns.length<=2000,'execution bound');for(const r of ns){need(!r.data.loading,'execution loading');records.push(r);walk(r.childNodes??[]);}};walk(processRoot.childNodes);
    const groups=records.filter(r=>String(r.data.id)===parts[1]);need(groups.length===1&&groups[0].data.Status===3&&groups[0].data.ErrorDetails===''&&groups[0].data.loaded===true,'execution incomplete');
+   const sourceNode=model.FDiagram.FNodes.FCollection.find(n=>n.FGuid===b.static_source.node_id);
+   need(sourceNode?.FIconCls==='bg-vendor-icon-importtextfile'&&sourceNode.FStatus===1&&sourceNode.FRunning===false,'static source active');
+   const sourceParts=b.static_source.execution_id.slice(b.document_id.length+1).split(':');
+   need(sourceParts.length===2&&sourceParts[0]===parts[0],'static source execution root');
+   const sourceProcesses=records.filter(r=>r.data.ModelNode===sourceNode.data);
+   need(sourceProcesses.some(r=>String(r.data.id).startsWith(sourceParts[1]+'.')&&r.data.Status===3&&r.data.ErrorDetails==='')
+    &&!sourceProcesses.some(r=>Number(String(r.data.id).split('.')[0])>Number(sourceParts[1])),'stale static source execution');
+   const graphNodes=model.FDiagram.FNodes.FCollection;
+   need(graphNodes.filter(n=>n.FIconCls==='bg-vendor-icon-importtextfile').length===1
+    &&graphNodes.filter(n=>n!==node&&n!==sourceNode).every(n=>n.FIconCls==='bg-vendor-icon-modelvariables'&&n.FStatus===0&&n.FRunning===false),'unknown/dynamic graph source');
+   const graphLinks=[...model.FDiagram.FmxGraph.container.querySelectorAll('[data-tid]')].map(e=>e.dataset.tid).filter(t=>t.includes('|'));
+   need(graphLinks.length===1&&graphLinks[0]===b.prefix+';Graph;'+sourceNode.FLabel.FRawValue+'|Output_Data-0|'+node.FLabel.FRawValue+'|Input_Data-0','static topology changed');
+   need(model.FCreateDraggedNodeStarted===false&&model.FDraggingOverGraph===false&&!model.FDraggedNode,'concurrent graph interaction');
    const ownProcesses=records.filter(r=>r.data.ModelNode===node.data);
    need(ownProcesses.some(r=>String(r.data.id).startsWith(parts[1]+'.')&&r.data.Status===3&&r.data.ErrorDetails===''),'execution node owner');
    need(!ownProcesses.some(r=>Number(String(r.data.id).split('.')[0])>Number(parts[1])),'stale execution');
@@ -33,18 +46,26 @@ export async function readFixedVariant(page,b,decode,options={}) {
    need(dc.FModelNode===node.data&&ds===v(dt,'FDataSource')&&v(v(store,'proxy'),'dataSource')===ds&&v(helper,'FBaseProxy')===ds,'datasource binding');
    need(v(identity,'$OW')===b.source.owner&&v(identity,'$O')===b.source.object,'datasource identity changed');
    need(v(identity,'$I')===116&&Number.isInteger(v(identity,'$OW'))&&v(identity,'$OW')>=0&&Number.isInteger(v(identity,'$O')),'interface116');
-   need(v(helper,'$FCacheInitialized')===true&&v(helper,'$FData')&&v(helper,'$FDataChangeCookie')&&v(helper,'$FStateChangeCookie')&&!store.loading,'loaded cache');
+   need(!store.loading,'loaded cache');
+   if(b.row_count===0){
+    const proxy=v(store,'proxy'),names=v(proxy,'FDataFieldNames'),getters=v(proxy,'FValueGetters');
+    need(v(dc,'FTotalRowCount')===0&&v(proxy,'FTotalRowCount')===0&&v(store,'totalCount')===0
+     &&Array.isArray(names)&&JSON.stringify(names)===JSON.stringify(b.schema.map(c=>c.name))
+     &&Array.isArray(getters)&&getters.length===b.schema.length&&getters.every(g=>typeof g==='function')
+     &&Object.keys(v(proxy,'pendingOperations')).length===0&&Object.keys(v(store,'pageRequests')).length===0
+     &&v(helper,'$FCacheInitialized')===false&&v(helper,'$FData')===null,'empty native count/schema attestation');
+   }else need(v(helper,'$FCacheInitialized')===true&&v(helper,'$FData')&&v(helper,'$FDataChangeCookie')&&v(helper,'$FStateChangeCookie'),'loaded cache');
    const schema=v(v(v(dc,'FColumnInfosStore'),'data'),'items').map(r=>{const d=v(r,'data');return {name:d.Name,label:d.DisplayName,type:d.DataType};});
-   need(JSON.stringify(schema)===JSON.stringify(b.schema)&&schema.length<=8&&!schema.some(f=>f.name==='DataTypes'),'schema/DataTypes-off');
+   need(JSON.stringify(schema)===JSON.stringify(b.schema)&&schema.length<=8&&b.columns.length===schema.length,'schema');
    const count=v(dt,'FTotalRowCount');need(count===b.row_count&&count===v(helper,'$FRowCount')&&b.offset+b.rows<=count&&b.columns.every(c=>Number.isInteger(c)&&c>=0&&c<schema.length),'row/column bounds');
-   return {processRoot,processFingerprint,node,port,dc,dt,ds,store,helper,cache:v(helper,'$FData'),identity,owner:v(identity,'$OW'),object:v(identity,'$O'),schema:JSON.stringify(schema),count};
+   return {sourceNode,sourceData:sourceNode.data,graphFingerprint:JSON.stringify(graphLinks),processRoot,processFingerprint,node,port,dc,dt,ds,store,helper,cache:v(helper,'$FData'),identity,owner:v(identity,'$OW'),object:v(identity,'$O'),schema:JSON.stringify(schema),count};
   };
   need(Object.keys(options).every(k=>['operationId','timeoutMs','requireAtomicSnapshot','maxBytes'].includes(k)),'diagnostic option allowlist');
   need(options.requireAtomicSnapshot!==true,'atomic snapshot unavailable for fixed321');
   const maxBytes=options.maxBytes??1048576;need(Number.isSafeInteger(maxBytes)&&maxBytes>=60&&maxBytes<=1048576,'byte budget');
   const timeoutMs=options.timeoutMs??10000;
   need(Number.isInteger(timeoutMs)&&timeoutMs>=1&&timeoutMs<=30000,'deadline bounds');
-  const key='__loginomDockVariantDiagnosticV1';
+  const key='__loginomDockCollapseNativeV1';
   const state=globalThis[key]??(globalThis[key]={document,active:null,last:null,poisoned:false,used:new Set()});
   need(state.document===document&&!state.poisoned&&!state.active,'diagnostic session busy or retired; close own browser');
   const initial=snapshot(),equal=s=>Object.keys(initial).every(k=>initial[k]===s[k]);
@@ -97,23 +118,23 @@ export async function readFixedVariant(page,b,decode,options={}) {
    } finally {releaseResponse(response);if(!callbackOwns)releaseRequest();}
   }
   live();need(equal(snapshot()),'final stale binding');
-  const result={method:321,interface:116,document_id:b.document_id,execution:b.execution,node_id:b.node_id,port_guid:b.port_guid,port:0,source:{owner:initial.owner,object:initial.object},row_count:initial.count,schema:b.schema,cells:output,owner_rechecked:true,cache_identity_rechecked:true,consistency:'observed_local_only',atomic_snapshot_verified:false,native_cancellation_supported:false};
+  const result={empty_count_attested:b.row_count===0,read_id:op.id,workflow_id:b.workflow_id,package_id:b.package_id,method:321,interface:116,document_id:b.document_id,execution:b.execution,node_id:b.node_id,port_guid:b.port_guid,port:0,source:{owner:initial.owner,object:initial.object},row_count:initial.count,schema:b.schema,cells:output,owner_rechecked:true,cache_identity_rechecked:true,consistency:'observed_local_only',atomic_snapshot_verified:false,native_cancellation_supported:false};
   need(new TextEncoder().encode(JSON.stringify(result)).length<=maxBytes,'final serialization byte budget');op.status='completed';op.published=true;return result;
   }catch(e){if(op.status==='running')op.status='failed';if(op.requests>0)state.poisoned=true;throw e;}finally{clearTimeout(timer);delete op.stop;state.last=op;state.active=null;}
  },{b,decoder:decode.toString(),options});
 }
 
 // Local diagnostic latch only. No native RPC, transport patch or server cancellation.
-export async function cancelFixedVariant(page,operationId) {
+export async function cancelNativeVariant(page,operationId) {
  return page.evaluate(id=>{
-  const s=globalThis.__loginomDockVariantDiagnosticV1;
+  const s=globalThis.__loginomDockCollapseNativeV1;
   if(!s||s.document!==document||s.active?.id!==id)return {cancelled:false};
   return {cancelled:s.active.stop('cancelled'),native_cancelled:false};
  },operationId);
 }
-export async function variantDiagnosticStatus(page) {
+export async function nativeVariantStatus(page) {
  return page.evaluate(()=>{
-  const s=globalThis.__loginomDockVariantDiagnosticV1;
+  const s=globalThis.__loginomDockCollapseNativeV1;
   if(!s||s.document!==document)return null;
   const o=s.active??s.last;if(!o)return null;
   const {stop,...record}=o;return {...record,retired:s.poisoned};

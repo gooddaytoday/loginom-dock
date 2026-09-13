@@ -7,6 +7,7 @@ import {collapseConfigurationReadback} from './collapse-readback.mjs';
 import {collapseParametersSchema} from './node-api.mjs';
 import {configureCollapseInlineMapping} from './collapse-inline-mapping.mjs';
 export function createCollapseNodeSupport(config){return createTabularTransformNodeSupport(config,{
+ nativeFullOutput:true,
  type:'transform.collapse_columns',mode:'unpivot',revision:'collapse-v1-internal-1',readback:collapseConfigurationReadback,parameterSchema:collapseParametersSchema,
  validate:validateCollapseParameters,validateInput:validateCollapseInputParameters,preflight:preflightCollapseSource,
  configurationObservation:{condition:'collapse configuration page',readCollapse:true,ready:s=>s.wizard?.stage==='collapse'&&s.node_collapse?.verified===true},

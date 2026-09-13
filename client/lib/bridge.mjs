@@ -1,3 +1,4 @@
+import {nodeResultReply} from './node-result-reply.mjs';
 import { Server } from '@modelcontextprotocol/sdk/server/index.js';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { StdioClientTransport, getDefaultEnvironment } from '@modelcontextprotocol/sdk/client/stdio.js';
@@ -19,7 +20,7 @@ import { createExecutionJournal } from './execution-journal.mjs';
 import { createRecoveryContext } from './recovery-context.mjs';
 import { outcomeVerification } from './outcome-verification.mjs';
 import { createHostArtifactAdmission } from './host-artifacts.mjs';
-import { compactNodeResult, compactActionResult, userResultSchema, compactKnowledgeBundle, userWorkflowInstructions } from './user-results.mjs';
+import { compactActionResult, userResultSchema, compactKnowledgeBundle, userWorkflowInstructions } from './user-results.mjs';
 import { recordLocalDiagnostics } from './local-diagnostics.mjs';
 import { createUserWorkflowBindings, userNodeTool } from './user-workflow.mjs';
 
@@ -247,8 +248,7 @@ export async function createBridge(config, session) {
               }
               const result=await dispatchNodeApi(actionRuntime,request.params.name,args,{signal:extra.signal});
               await logResult(request.params.name,result);
-              const delivered=userProfile?compactNodeResult(result):result;
-              return {content:[{type:'text',text:JSON.stringify(delivered)}],structuredContent:delivered};
+              return nodeResultReply(result,{userProfile});
             };
             // Local lifecycle calls must remain available while another request is
             // awaiting browser work. The runtime owns exclusion through cleanup.

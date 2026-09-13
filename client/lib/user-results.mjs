@@ -1,3 +1,4 @@
+import {nodeOutputPortSchema} from './node-result-schema.mjs';
 const pick = (value, keys) => Object.fromEntries(keys.filter(key => value?.[key] !== undefined).map(key => [key, value[key]]));
 export const userResultSchema = {
   type: 'object', required: ['result_version', 'operation_id'], additionalProperties: false,
@@ -11,7 +12,7 @@ export const userResultSchema = {
     node: { anyOf: [{ type: 'null' }, { type: 'object', required: ['document_id', 'workflow_id', 'node_id'], additionalProperties: false,
       properties: { document_id: { type: 'string' }, workflow_id: { type: 'string' }, node_id: { type: 'string' } } }] },
     configuration: { type: 'object' },
-    execution: { type: ['object', 'null'] }, package_saved: { type: 'boolean' }, output: { type: 'object' },
+    execution: { type: ['object', 'null'] }, package_saved: { type: 'boolean' }, output: { type: 'object', properties:{ports:{type:'array',items:{type:'object',allOf:[{if:{anyOf:['exact_table','read_coverage','read_consistency','cell_precision','binding'].map(k=>({required:[k]}))},then:{...nodeOutputPortSchema,required:[...nodeOutputPortSchema.required,'exact_table','read_coverage','read_consistency','cell_precision','binding']}}]}}}, additionalProperties:true },
     error: { type: ['object', 'null'] }, limitations: { type: 'array', items: { type: 'string' } },
   },
 };
@@ -20,10 +21,10 @@ export function compactNodeResult(result) {
   const outcome = result.outcome, node = outcome?.output, data = node?.output;
   const output = data ? pick(data, ['status', 'evidence_ref', 'execution_id', 'no_output_requested']) : {};
   if (data?.ports) output.ports = data.ports.map(port => {
-    const value = pick(port, ['port', 'port_guid', 'fresh', 'execution_id', 'schema', 'row_count', 'sample', 'sample_rows', 'sample_complete', 'precision', 'table']);
+    const value = pick(port, ['port', 'port_guid', 'fresh', 'execution_id', 'schema', 'row_count', 'sample', 'sample_rows', 'sample_complete', 'precision', 'table', 'exact_table', 'read_coverage', 'read_consistency', 'cell_precision', 'binding', 'limitations']);
     value.schema = value.schema.map(column => pick(column, ['index', 'name', 'label', 'type', 'data_kind']));
     value.sample = value.sample.map(row => row.map(cell => {
-      const compact = pick(cell, ['type', 'value', 'decimal', 'representation', 'display_text', 'precision', 'is_null', 'timezone']);
+      const compact = pick(cell, ['type', 'value', 'decimal', 'representation', 'display_text', 'precision', 'is_null', 'timezone', 'cell_type', 'native']);
       if (compact.value === compact.display_text) delete compact.display_text;
       return compact;
     }));

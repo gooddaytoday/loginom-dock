@@ -54,7 +54,10 @@ export function validateNodeApplyRequest(request, handlers) {
       }
     }
   }
-  object(request.read, ['ports','sample_rows','require_exact_numbers']);
+  object(request.read, ['ports','sample_rows','require_exact_numbers',...(Object.hasOwn(request.read??{},'coverage')?['coverage']:[])]);
+  requireValue(request.read.coverage===undefined||['full','sample'].includes(request.read.coverage),'Invalid output coverage');
+  if(request.read.coverage==='full')requireValue(request.target.type==='transform.collapse_columns'&&request.finish==='execute'
+    &&JSON.stringify(request.read.ports)==='[0]','Full native output requires executed Collapse output 0');
   requireValue(Array.isArray(request.read.ports) && request.read.ports.length <= 16
     && new Set(request.read.ports).size === request.read.ports.length
     && request.read.ports.every(p=>Number.isInteger(p) && p>=0 && p<100)
