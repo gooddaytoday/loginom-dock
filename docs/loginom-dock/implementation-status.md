@@ -1,3 +1,20 @@
+# Node17: native observer исправлен — candidate evidence-ready
+
+Назначение `node17:observer-navigation-origin-fix:1:e74d14d2` выполнено только
+в harness. Checkpoint `79e648b2`: ожидание свежих roots/path/owner после одного
+жеста в исходном дедлайне; origin связан с browser/preparation evidence и
+фактическим profile/build/platform/browser, без подстановки requested URL.
+19 Node и 16 Python проверок прошли. Один новый diagnostic smoke
+`20260913-145112-3a826200` прошёл: observer 1464 ms, download 1, actual dispatch 1,
+replace prepared 1, baseline/replacement 124 байта полностью совпали с эталоном.
+Native proof и outer auditor прошли; отклонены 24 proof + 12 origin + 9 event
+негативных вариантов. Runtime155/harness265 неизменны; браузер закрыт, процессов
+сессии нет, серверный logout не подтверждён. Старый INCOMPLETE ниже исторический.
+Статус только candidate evidence-ready: Hermes не запускался, user-v1 не доказан,
+полный goal22/3/save-reopen не принят, admission остаётся закрыт. Следующий trigger
+принадлежит координатору: оценка evidence и отдельное выделение Hermes Sol/low.
+[Отчёт и pins](../plans/loginom-dock/17-text-export-navigation-origin-fix.md).
+
 # Node17: native observer smoke остановлен до download/replace
 
 Один smoke в новой test-2 session проверил native baseline124 bytes/golden и
