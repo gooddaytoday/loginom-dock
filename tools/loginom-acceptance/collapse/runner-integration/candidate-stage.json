@@ -1,13 +1,13 @@
 {
-  "checked_at": "2026-09-13T20:40:52.868966+00:00",
-  "build_directory": "/opt/loginom-dock/releases/20260913-node16-b0709ec0-candidate",
-  "source_commit": "b0709ec0f6f820a8988f4683297388894813935e",
+  "checked_at": "2026-09-13T21:41:10.555407+00:00",
+  "build_directory": "/opt/loginom-dock/releases/20260914-node16-8cd5c281-candidate",
+  "source_commit": "8cd5c2811a216b45ae50a16a4ed1930e4e87fa59",
   "stage": {
-    "catalog_uri": "viking://resources/loginom-dock/catalogs/executor-preview/releases/2026.09.13-node16-b0709ec0-candidate",
-    "catalog_version": "2026.09.13-node16-b0709ec0-candidate",
-    "manifest_sha256": "3b74bd5f23b400542dcdcb300495406541a5e298feef4c7caeefd3c6c6f4284f",
-    "action_catalog_sha256": "3737302121b31721cbe0a444fa17d97ba678bbdeafd3ba6a56d6643c53034506",
-    "selector_catalog_sha256": "0130e5d3c8dba1b85073602c866d925da06c986f36f014503bcc0917c9654f2d",
+    "catalog_uri": "viking://resources/loginom-dock/catalogs/executor-preview/releases/2026.09.14-node16-8cd5c281-candidate",
+    "catalog_version": "2026.09.14-node16-8cd5c281-candidate",
+    "manifest_sha256": "0badbd69238af677d85da3ac9bc8a52fc889f303fcdd8c06bb75ff8773ee5514",
+    "action_catalog_sha256": "5a41c9ded1febfb780d2b3db4bb28a525cde5d5c914fe6a4d1c1ef17d0ed07bb",
+    "selector_catalog_sha256": "86efd1585ace2b818f2c21028feb07993d7e874779c43b520a971f770b59a0ab",
     "e2e_commit": "2cad5602158fd2e4836d821d644a2b8d92f571a2",
     "staged": true,
     "activated": false
@@ -15,30 +15,30 @@
   "files": [
     {
       "name": "actions.json",
-      "uri": "viking://resources/loginom-dock/catalogs/executor-preview/releases/2026.09.13-node16-b0709ec0-candidate/actions.json",
+      "uri": "viking://resources/loginom-dock/catalogs/executor-preview/releases/2026.09.14-node16-8cd5c281-candidate/actions.json",
       "bytes": 34297,
-      "sha256": "3737302121b31721cbe0a444fa17d97ba678bbdeafd3ba6a56d6643c53034506",
+      "sha256": "5a41c9ded1febfb780d2b3db4bb28a525cde5d5c914fe6a4d1c1ef17d0ed07bb",
       "readback_equal": true
     },
     {
       "name": "selectors.json",
-      "uri": "viking://resources/loginom-dock/catalogs/executor-preview/releases/2026.09.13-node16-b0709ec0-candidate/selectors.json",
+      "uri": "viking://resources/loginom-dock/catalogs/executor-preview/releases/2026.09.14-node16-8cd5c281-candidate/selectors.json",
       "bytes": 22380,
-      "sha256": "0130e5d3c8dba1b85073602c866d925da06c986f36f014503bcc0917c9654f2d",
+      "sha256": "86efd1585ace2b818f2c21028feb07993d7e874779c43b520a971f770b59a0ab",
       "readback_equal": true
     },
     {
       "name": "source-index.json",
-      "uri": "viking://resources/loginom-dock/catalogs/executor-preview/releases/2026.09.13-node16-b0709ec0-candidate/source-index.json",
+      "uri": "viking://resources/loginom-dock/catalogs/executor-preview/releases/2026.09.14-node16-8cd5c281-candidate/source-index.json",
       "bytes": 3757,
-      "sha256": "9fb127c8a60d05599d03ca3118e37fba3ccb4d7514d49553b871eb4102f9e247",
+      "sha256": "33381d857c1469c4aa73f14c6a36f227e9da21ad81a79508bfd86e21a3a385e9",
       "readback_equal": true
     },
     {
       "name": "manifest.json",
-      "uri": "viking://resources/loginom-dock/catalogs/executor-preview/releases/2026.09.13-node16-b0709ec0-candidate/manifest.json",
+      "uri": "viking://resources/loginom-dock/catalogs/executor-preview/releases/2026.09.14-node16-8cd5c281-candidate/manifest.json",
       "bytes": 719,
-      "sha256": "3b74bd5f23b400542dcdcb300495406541a5e298feef4c7caeefd3c6c6f4284f",
+      "sha256": "0badbd69238af677d85da3ac9bc8a52fc889f303fcdd8c06bb75ff8773ee5514",
       "readback_equal": true
     }
   ],
@@ -51,26 +51,23 @@
   "activated": false,
   "full_autonomous_acceptance_passed": false,
   "local_packet_verification": {
-    "source_sha": "b0709ec0f6f820a8988f4683297388894813935e",
-    "runtime": "e4e9ecbea5242cd403351fb5e4d5feaec38d18edfb7355f520985b752bed78a3",
+    "source_sha": "8cd5c2811a216b45ae50a16a4ed1930e4e87fa59",
+    "runtime": "17b0ede0035452a2e9481a3ba007b97a8d1b1b47fdd13ffd4e9153b90dc8daed",
     "files": 184,
-    "source_tar_sha256": "d795ee74825b270d152d9ba253e4b6218047af5a2ca91e17efb192b0677e6a08",
-    "manifest_sha256": "b9d4db257d419c997171f1bbdd58a5908ebefe536659b7967910b17e1c61e82a",
-    "delta_from_candidate2": [
-      "client/lib/collapse-existing-input.mjs",
-      "client/lib/collapse-existing-input-pins.mjs",
-      "client/lib/collapse-existing-input-browser.mjs"
-    ],
-    "later_current_document_changes": [
+    "source_tar_sha256": "51ed89fd470839c6931c49f17a2f22a52f1b9249c09821f7e814a61b23a12cb2",
+    "manifest_sha256": "f434cf802b196b0939bc93e6d5b7208be6f183cbd6624e59851889981333e3e7",
+    "delta_from_candidate3": [
+      "client/lib/text-import-procedure.mjs",
       "docs/plans/loginom-dock/16-collapse-columns.md"
     ],
+    "later_current_document_changes": [],
     "archive_equals_recorded_commit": true,
-    "live_evidence_hashes_verified": 12,
+    "live_evidence_hashes_verified": 7,
+    "harness_inputs_verified": 272,
+    "harness_pins_sha256": "bb80a1a432c99aaede5818e21ef12ee0a1fadc9288a05d9ad60e42e84f7d28f6",
     "passed": true
   },
-  "harness_pins_sha256": "c4aa349cd86a576548be0c21d72e6fcb117eb67f38f9a57da09b27bc6ea195a7",
-  "harness_inputs_verified": 271,
-  "source_runtime": "e4e9ecbea5242cd403351fb5e4d5feaec38d18edfb7355f520985b752bed78a3",
+  "source_runtime": "17b0ede0035452a2e9481a3ba007b97a8d1b1b47fdd13ffd4e9153b90dc8daed",
   "package_root": "/test-1/node16-20260913-a56c2488",
   "compatibility": {
     "loginom": "7.4.2",
@@ -80,7 +77,7 @@
   "limitations": [
     "Fresh actual user-v1 rehearsal pending",
     "Full autonomous acceptance pending",
-    "Original run3 FAIL retained",
-    "No activation, merge, deployment or shared plugin update"
+    "Original run4 FAIL retained",
+    "No activation, merge or shared plugin update"
   ]
 }

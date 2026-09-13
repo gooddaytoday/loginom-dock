@@ -12,10 +12,10 @@ SOURCE='8cd5c2811a216b45ae50a16a4ed1930e4e87fa59'
 RUNTIME='17b0ede0035452a2e9481a3ba007b97a8d1b1b47fdd13ffd4e9153b90dc8daed'
 # Native per-session raw bytes/topology producer; bare receipt documents remain unsupported.
 READONLY_PRODUCER='collapse_native_sessions_v1'
-CANDIDATE_URI='viking://resources/loginom-dock/catalogs/executor-preview/releases/2026.09.13-node16-b0709ec0-candidate/manifest.json'
-CANDIDATE_SHA='3b74bd5f23b400542dcdcb300495406541a5e298feef4c7caeefd3c6c6f4284f'
-SLOT='node16-hermes-20260913-3b74bd5f'
-REHEARSAL=ROOT/'.dock/node16/candidate3-rehearsal-20260913'
+CANDIDATE_URI='viking://resources/loginom-dock/catalogs/executor-preview/releases/2026.09.14-node16-8cd5c281-candidate/manifest.json'
+CANDIDATE_SHA='0badbd69238af677d85da3ac9bc8a52fc889f303fcdd8c06bb75ff8773ee5514'
+SLOT='node16-hermes-20260914-0badbd69'
+REHEARSAL=ROOT/'.dock/node16/candidate4-rehearsal-20260914'
 STAGE=WORK/'collapse/runner-integration/candidate-stage.json'
 
 def verified_candidate():

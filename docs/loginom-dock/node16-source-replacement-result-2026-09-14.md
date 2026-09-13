@@ -91,3 +91,16 @@ production-файл и ранее закоммиченный план `16-collap
 не соответствует новому source. Затем необходимы полный модельный goal,
 десять независимых свежих открытий и current-run loss audit. Main, сервер и
 общий установленный plugin в этом этапе не менялись.
+
+## Candidate4: допуск к пятому полному запуску
+
+Координатор выдал phase `node16:hermes-full:5:8cd5c281`, слот
+`node16-hermes-20260914-0badbd69`, candidate SHA256
+`0badbd69238af677d85da3ac9bc8a52fc889f303fcdd8c06bb75ff8773ee5514`.
+Свежий actual MCP private user-v1/executor-replay rehearsal
+`.dock/node16/candidate4-rehearsal-20260914`, session
+`ba858355-4955-4445-b1e3-9e71ce9b9f1d`: READY7.4.2, точные runtime/manifest/
+action/selectors и разрешённый storage root подтверждены. Окно1508×862,
+outer1508×949 при available1512×949, viewport=null/start-maximized.
+Bridge/browser закрыты; отсутствие процессов этой сессии проверено.
+Обновлены stage/admission/harness pins. Production source8cd5c281 неизменен.
