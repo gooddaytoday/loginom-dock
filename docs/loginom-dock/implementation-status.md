@@ -7680,3 +7680,16 @@ Hermes не запускался, run5 остаётся FAIL. Дальнейша
 
 [Диагностика и ограничения](missing-values-stale-target-diagnosis-2026-09-13.md),
 [pins](missing-values-stale-target-diagnosis-pins-2026-09-13.json).
+
+## Node14 — расширенный контекст stale, 13 сентября 2026
+
+Единственная новая копия прошла 14 операций, затем остановилась на повторном
+выборе Базы в mv-note-only: inner UI_REFERENCE_STALE/NOT_APPLIED/no-effect,
+outer AMBIGUOUS/cleanup=false. Смена ref при неизменном data-tid подтверждена
+снимками; раздельная причина checkedHandle неизвестна — наблюдатель был
+ограничен Границей. Целевой boundary и полный контекст не достигнуты.
+12/12 проверок доказательств, 7918 строк JSONL, 347 старых квитанций проверены.
+Код не менялся, модель не запускалась, сессия закрыта. Run5 остаётся FAIL.
+
+[Отчёт и scope возможного продолжения](missing-values-stale-full-context-diagnosis-2026-09-13.md),
+[pins](missing-values-stale-full-context-diagnosis-pins-2026-09-13.json).
