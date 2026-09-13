@@ -1,3 +1,27 @@
+# Capture17 работает; итоговое знание ожидает следующую фазу — 13 сентября 2026
+
+799messages/4completed official extractions и общийPeer подтверждены, следов
+ENOSPC в extraction нет. Итоговый корректно атрибутированный Text export lesson
+ещё не подтверждён: последнее извлечение пересказало historical nodes11–14.
+Разработчику уточнён node17/source context, следующий read/find gate после
+completed review17/official extraction. Это ожидание события, не периодический
+опрос. Подробности в disk-pressure-2026-09-13.md.
+Все инфраструктурные события отвечены, helper результат учтён.
+
+---
+
+# Disk pressure снят, узел17 перешёл к review — 13 сентября 2026
+
+[Инцидент](disk-pressure-2026-09-13.md): Data100%/116MiB, ENOSPC14/16/17.
+Координатор удалил только7.5GiB регенерируемого npm download cache; df7.9GiB
+подтверждён повторно, dependencies/evidence/runtime не менялись. Потоки14/16
+получили same-phase инструкции проверить записи и не повторять unknown effects.
+17development110da29a/reporta0912da9 completed; назначено единственное review
+Astra medium в той же задаче, ход01a09aa3-f66d-7420-a27c-c83c98605df3 active.
+Первую official shared phase capture проверяет read-only helper; ручныхcapture нет.
+
+---
+
 # Узел13: кандидат собран и назначен live preflight — 13 сентября 2026
 
 [Stage/readback](node13-candidate-stage-2026-09-13.json): version
