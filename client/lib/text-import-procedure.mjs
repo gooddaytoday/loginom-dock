@@ -238,8 +238,28 @@ async function configureImport(channel, parameters, owner,fieldsOnly,patch) {
     state.wizard.import_columns?.initial_layout?.status==='rendered_definition_layout');
   if(patch&&!columnBaseline)await capturePatchSchema();
   for (const [name, text] of Object.entries(parameters.format)) {
-    const s = await read('text_import_format'), f = field(s, name);
-    if (f.value !== text) await act(s, { verb: 'set_wizard_field', ref: f.input_ref, text });
+    let s = await read('text_import_format'); const f = field(s, name);
+    if (f.value === text) continue;
+    // Native editable combo resolves typed NULL to the first case-insensitive
+    // match (null) on blur. Select the exact observed built-in, never retype it.
+    if (name === 'null_marker' && ['null', 'NULL'].includes(text)) {
+      const rootRef = s.wizard.root_ref;
+      const owns = e => e.wizard_combo?.field && (e.wizard_combo.field.scope ?? 'import_format') === 'import_format'
+        && e.wizard_combo.field.name === name && e.wizard_combo.field.owner_ref === f.owner_ref
+        && e.wizard_combo.field.root_ref === rootRef;
+      const picker = one(s.ui.elements.filter(e => owns(e) && e.wizard_combo.kind === 'picker'),
+        'Exact Null marker picker unavailable');
+      await act(s, {verb:'click', ref:picker.ref});
+      s = await read('text_import_format', 'exact Null marker option visible', state =>
+        state.ui.elements.filter(e => owns(e) && e.wizard_combo.kind === 'option' && e.wizard_combo.label === text).length === 1);
+      const option = one(s.ui.elements.filter(e => owns(e) && e.wizard_combo.kind === 'option' && e.wizard_combo.label === text),
+        'Exact Null marker option unavailable');
+      await act(s, {verb:'select_wizard_option', ref:option.ref});
+      const after = field(await read('text_import_format', 'exact Null marker applied', state =>
+        state.wizard.settings.fields[name]?.value === text), name);
+      requireValue(after.value === text && after.owner_ref === f.owner_ref && after.input_ref === f.input_ref,
+        'Null marker field or case changed after selection');
+    } else await act(s, { verb: 'set_wizard_field', ref: f.input_ref, text });
   }
   let parsedColumns;
   if(patch) {
