@@ -1,3 +1,42 @@
+# Доработки приёмки11 завершены; ожидается диагноз сохранения12 — 13 сентября 2026
+
+Проверены completed/idle хода`01a098ba-bbe0-7682-8c2b-f07208d9ee15` и отчёт
+`11-acceptance-followup-2026-09-13.md` в ветке11. Code
+`7de7f23e4adbff0819df6c7e970589f93df4882b`, HEAD harness/report
+`7c2f766ea2cac03a6ad0e3e954e585d90603ac7a`, runtime
+`3b21e8f0c52820b058caf9c02bb00d006d7bf9b451891ec27646f8018e46e00e`.
+
+A1: goal явно разделил сохранение открытого пакета и последующее close/reopen.
+A2: рабочая session связана с public prepare/journal/metadata и полными pins;
+extra precheck требует доказанного initialize/list_tools происхождения и
+отсутствия исполнения. A3: геометрия читается внутри prepare того же браузера,
+передаётся в public/metadata/journal; механизм проверен живым Codex smoke.
+Будущий Hermes обязан дать собственную квитанцию. Старый FAIL55/59 и8 SHA
+артефактов сохранены; старой extra session недостаёт нового origin proof,
+checkpoint по-прежнему отсутствует. Исторический FAIL не пересмотрен.
+Разработчик сообщил1407 client PASS/1 SKIP,41 harness PASS,7/7 saved-evidence
+групп и18/18 negative; повторный запуск наборов координатором не выполнялся.
+
+Все392 файла source archive побайтно сверены с Git blobs;253 harness-файла
+и SHA карты совпали. Все8 старых artifact SHA/размеров повторно проверены. Архив SHA
+`e7a2103be3679abd0907ed6454f39adf062db0f68808f01da101308b64299ab9`.
+Нужна новая VPS-сборка; предложенный `2026.09.13-node11.2-candidate`
+ещё не staged и фактического manifest SHA нет. Goal SHA
+`d283e683fe61298a9273365ca485d63e16fb582d08b45d42dfefb70c65952a9c`;
+harness input-map SHA`4ec0ac41998acdffdb939c2c18d2246224b5d6a90ad7789ae248e272a52c205b`.
+Полный комплект: `docs/loginom-dock/replacement-acceptance-followup-2026-09-13.json`
+в worktree11. Общий save/reopen переход11 не менял, чужой код не брал.
+
+Статус11 — awaiting-save-reopen-diagnosis. Разработчику отправлено подтверждение
+итога и указание завершить ожидание без polling. Новая сборка/слот удержаны до
+результата12: сначала установить причину и применимость его overwrite→close/open
+сбоя. Необходимость переноса кода ещё не доказана; интеграция не разрешена.
+При изменении source после отдельного решения комплект/pins потребуется обновить.
+Текущий слот Hermes свободен. Нового review/прогона/узла, merge/push/deploy/stage/
+activation/обновления общего клиента нет. Реестр и контрольная точка обновлены.
+
+---
+
 # Узел12: автономный FAIL и точечная доработка приёмки — 13 сентября 2026
 
 Вторая назначенная попытка (первая с реально стартовавшим Hermes)
