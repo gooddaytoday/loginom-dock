@@ -124,3 +124,10 @@ Configure-only возвращает `execution=not_requested`, `output=not_refre
 Независимый auditor проверяет полный выход и сохранённые настройки отдельно;
 отклоняет подмены метода, порога, активного поля, среднего и старого запуска.
 Наличие оставшихся Null отражается в результате; не обещать полную очистку по summary.
+
+## Native candidate preflight — 2026-09-13
+
+[Проверка подготовки](../../loginom-dock/missing-values-native-candidate-preflight-2026-09-13.md)
+завершена на неизменном c32a5d5e / a9db4113…: packet11, startup8, native checkpoint,
+новый document и полный независимый component output124×5. Все12 финальных
+случаев остаются в полном goal; автономный запуск ещё не выполнен и требует слота.

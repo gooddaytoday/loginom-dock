@@ -8,7 +8,7 @@ def build(root,out):
  out.mkdir(parents=True,exist_ok=False,mode=0o700)
  def git(*args):return subprocess.check_output(['git','-C',str(root),*args])
  assert git('rev-parse',CODE).decode().strip()==CODE
- files={};pending=['deploy/loginom-dock/build-action-catalog.mjs','deploy/loginom-dock/publish-action-catalog.py']+[f'executor/catalog/{n}.json' for n in ('actions','selectors','source-index','compatibility')]
+ files={};pending=['executor/capability-abi.json','deploy/loginom-dock/build-action-catalog.mjs','deploy/loginom-dock/publish-action-catalog.py']+[f'executor/catalog/{n}.json' for n in ('actions','selectors','source-index','compatibility')]
  while pending:
   name=pending.pop()
   if name in files:continue

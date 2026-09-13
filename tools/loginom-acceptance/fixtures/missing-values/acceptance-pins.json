@@ -29,10 +29,6 @@
       "bytes": 31,
       "sha256": "f40de0413c97876ad2503fcaaee30fe80ec9b24ecbcb7d190bc0d7777d7fceb0"
     },
-    "reordered.csv": {
-      "bytes": 114,
-      "sha256": "ff57991ae4a425cc0c9d21117e94881c3b569be254bab997a71ebc90aed7efe6"
-    },
     "changed.csv": {
       "bytes": 101,
       "sha256": "692978e3cf352f40782d6e88040acb19b940cfdab13b7e060e933582b6810dee"
@@ -1993,7 +1989,7 @@
       ],
       "max_nulls_percent": 100,
       "real_tolerance": "0.00000000000001",
-      "source_sha256": "ff57991ae4a425cc0c9d21117e94881c3b569be254bab997a71ebc90aed7efe6"
+      "source_sha256": "cbbc3082eec87d3d811838f45bacf59f444c5b0ff7e76bad78da2f4be24baac3"
     },
     "source-before": {
       "schema": [

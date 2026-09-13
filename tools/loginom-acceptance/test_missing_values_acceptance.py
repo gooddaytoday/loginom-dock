@@ -13,8 +13,14 @@ class MissingAcceptance(unittest.TestCase):
  def test_all_missing_does_not_invent_a_mean_or_constant(self):
   x=expected(next(c for c in CASES if c['id']=='all-null'));self.assertGreater(x['remaining_nulls'][3],0);self.assertIsNone(x['rows'][0][3])
  def test_explicit_artifact_scope_and_unique_run_names(self):
-  a=descriptors('20260913-120000-1234abcd','/test-4');self.assertEqual(len(a),9);self.assertEqual(len({x['name'] for x in a}),9)
+  a=descriptors('20260913-120000-1234abcd','/test-4');self.assertEqual(len(a),8);self.assertEqual(len({x['name'] for x in a}),8)
   with self.assertRaises(ValueError):descriptors('20260913-120000-1234abcd','/test-1')
+ def test_reordered_reuses_precision_without_changing_expected_cells(self):
+  case=next(c for c in CASES if c['id']=='reordered');current=expected(case)
+  historical=expected(dict(case,fixture='reordered.csv',input_order=case['input_order']))
+  self.assertEqual({k:v for k,v in current.items() if k!='source_sha256'},{k:v for k,v in historical.items() if k!='source_sha256'})
+  self.assertEqual(len([c for c in CASES if c['final']]),12)
+  self.assertEqual(current['schema'][0]['label'],'Same');self.assertEqual(current['schema'][-1]['label'],'Same')
  def fixture(self):
   from missing_values_goal import PIN
   prep={'sessionId':'work','workspace':{'document_id':'d'}};meta=[dict(sessionId='work',workspaceReady=True,clientRevision=PIN),dict(sessionId='precheck',workspaceReady=False,archiveActive=False,targetIdentity=None)]

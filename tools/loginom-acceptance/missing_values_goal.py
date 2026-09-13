@@ -7,7 +7,7 @@ WORK=Path(__file__).parent
 VERSION='2026.09.13-node14-test4.1-candidate'
 MANIFEST_URI='viking://resources/loginom-dock/catalogs/executor-preview/releases/'+VERSION+'/manifest.json'
 PIN='a9db4113ac69d38d7227e971ece3652acf3e1bf836723e6e577917eda916406f'
-FILES=['core.csv','precision.csv','skew.csv','boundary.csv','one-in-120.csv','all-null.csv','empty.csv','reordered.csv','changed.csv']
+FILES=['core.csv','precision.csv','skew.csv','boundary.csv','one-in-120.csv','all-null.csv','empty.csv','changed.csv']
 SCHEMA=[dict(name=n,label=n,type='real' if n=='Amount' else 'string' if n=='Note' else 'integer',data_kind='Непрерывный' if n in ('Amount','Count') else 'Дискретный') for n in ('Id','Amount','Count','Note','Untouched')]
 # Every label survives in the saved package. The main/source-change intermediate
 # results are additionally mandatory and cannot be replaced by their final values.
@@ -21,14 +21,16 @@ CASES=[
  dict(id='rounded-zero',label='Округлённый ноль',source='Сто двадцать',fixture='one-in-120.csv',threshold=0,value='MISSING',existing=False,final=True),
  dict(id='all-null',label='Полностью пустые поля',source='Все пропуски',fixture='all-null.csv',threshold=100,value='MISSING',existing=False,final=True),
  dict(id='empty',label='Пустой результат',source='Без строк',fixture='empty.csv',threshold=100,value='MISSING',existing=False,final=True),
- dict(id='reordered',label='Переставленные поля',source='Перестановка',fixture='reordered.csv',threshold=100,value='MISSING',existing=False,final=True),
+ dict(id='reordered',label='Переставленные поля',source='Перестановка',fixture='precision.csv',input_order=['Note','Untouched','Count','Id','Amount'],threshold=100,value='MISSING',existing=False,final=True),
  dict(id='source-before',label='Смена источника',source='Изменяемый источник',fixture='core.csv',threshold=100,value='MISSING',existing=False,final=False),
  dict(id='source-after',label='Смена источника',source='Изменяемый источник',fixture='changed.csv',threshold=100,value='MISSING',existing=True,final=True),
 ]
 def expected(case):
  data=(WORK/'fixtures/missing-values'/case['fixture']).read_bytes();raw=list(csv.reader(io.StringIO(data.decode()),delimiter=';',quotechar='"'));names=raw.pop(0)
+ if case.get('input_order'):
+  order=[names.index(n) for n in case['input_order']];raw=[[r[i] for i in order] for r in raw];names=case['input_order']
  schema=[dict(next(f for f in SCHEMA if f['name']==n)) for n in names]
- if case['fixture']=='reordered.csv':
+ if case.get('id')=='reordered':
   for f in schema:
    if f['name'] in ('Amount','Note'):f['label']='Same'
  rows=[[None if c=='NULL' else c for c in r] for r in raw];fields={n:dict(method='constant',value=case['value']) if n=='Note' else dict(method='mean') for n in case.get('fields',['Amount','Count','Note'])}

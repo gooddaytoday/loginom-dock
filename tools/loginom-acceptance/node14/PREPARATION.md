@@ -19,7 +19,7 @@
 | Перестановка/одинаковые Same | Development/recovery полный3×5 | Отдельный источник/узел, фиксированный mapping с autosync=false |
 | Новый/существующий | Development проверены refs/связи | Создание и изменения тех же GUID; полный список результатов сохраняется |
 | Смена CSV, fresh execution без перенастройки Missing | Новая проверка текущего pin: полный4×5, средняя20, те же source/target GUID | Отдельный «Смена источника» с core→changed в том же импорте; preserve{} target |
-| Сохранённое состояние / повторное выполнение | Старый manual Save As+reopen3×5; native checkpoint/test-4 не проверен | Hermes один финальный checkpoint; затем отдельный новый browser/document и все12 финальных результатов без перенастройки |
+| Сохранённое состояние / повторное выполнение | Native checkpoint/test-4 проверен в component-диагностике; полный goal остаётся отдельной автономной приёмкой | Hermes один финальный checkpoint; затем отдельный новый browser/document и все12 финальных результатов без перенастройки |
 | Ошибка исполнения/cleanup | a63586fe live terminal failed; полный набор регрессий | Targeted development gate, скрытой инъекции в natural goal нет |
 | Lost reply исходной input_mapping | c32a5d5e same ID/session recovery; mismatch/locked/budget refusals | Targeted development gate, не моделировать сбой силами Hermes |
 | Повтор ID, incompatible field/method | Development negative/replay evidence | Не повторять неизвестный эффект; обычная цель не требует искусственных отказов |
@@ -30,7 +30,7 @@
 проверяющего. Прежний3×5 никогда не подставляется вместо полного goal.
 
 В goal сохранены12 финальных Missing-узлов и9 импортов,14 содержательных этапов
-выполнения плюс Done/Close/проверка отмены. Исходные9 CSV и14 независимых expected
+выполнения плюс Done/Close/проверка отмены. После candidate-preflight используются8 уникальных CSV и14 независимых expected
 закреплены в `fixtures/missing-values/acceptance-pins.json`; oracle использует
 Decimal, округление Integer half-away-from-zero и подтверждённую целую долю
 пропусков. Он не импортирует обработчик и не читает результат для вычисления expected.
@@ -140,3 +140,25 @@ reader ещё не прошли end-to-end на будущем candidate — о�
 обученное состояние/повторный расчёт из нового native checkpoint остаются
 обязательным этапом после stage. Отдельный Train не добавлен в supported API.
 Новые методы/типы и configure recovery13 не реализованы.
+
+
+## Candidate preflight 2026-09-13: исправление admission
+
+Девять startup CSV были отвергнуты штатным `admitStartupArtifacts` до браузера:
+максимум восемь. Ограничение production не изменено. `reordered.csv` — точная
+перестановка данных `precision.csv`; теперь оба импорта используют один pinned
+precision CSV, а порядок Note,Untouched,Count,Id,Amount и метки Same задаются
+явно во входном сопоставлении «Переставленных полей». Выходной oracle3×5 совпадает
+с прежним целиком; меняется только SHA исходного файла. Исторический CSV сохранён
+для проверки эквивалентности, но не передаётся как девятый artifact.
+
+Остаются9 импортов,12 сохранённых Missing Values результатов,14 содержательных
+этапов и Done/Close/preserve. Никакой semantic case не удалён. Проверка реального
+admission копирует все8 pinned файлов через production API, сверяет выдачу8
+артефактов; отрицательная проверка всё ещё отклоняет9. Входное сопоставление
+проверяется по публичной схеме API. Старые preflight и9-file failure не перезаписаны.
+
+Для отдельной component-диагностики reader имеет `--component-run`: допуск
+вычисляется из реальных исходных journals, проверенных source/node результатов
+и native save trace. Это не `--pre-audit` полного goal, не моделируемый Hermes
+usage и не автономный PASS. Обычный `--pre-audit` сохраняет полный gate.

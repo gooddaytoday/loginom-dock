@@ -3,18 +3,18 @@
 Выполняет координатор после проверки отсутствия версии
 `2026.09.13-node14-test4.1-candidate`. Исполнитель Node14 не публикует её.
 Источник каталога — ровно `c32a5d5e163fe174afba59abce973ac405742cdc`.
-`build_packet.py` создаёт tar только из десяти tracked файлов: два штатных
-скрипта, четыре JSON каталога и четыре модуля зависимостей. Секреты, профили,
+`build_packet.py` создаёт tar только из одиннадцати tracked файлов: два штатных
+скрипта, четыре JSON каталога, capability-abi.json для publisher и четыре модуля зависимостей. Секреты, профили,
 .env, node_modules, рабочая .dock и незакоммиченные файлы не включаются.
 
 Создание/проверка пакета на Mac (новый, несуществующий каталог):
 
 ```sh
-python3 tools/loginom-acceptance/node14/build_packet.py --out .dock/node14-acceptance-packet-v1
+python3 tools/loginom-acceptance/node14/build_packet.py --out .dock/node14-acceptance-packet-v2
 ```
 
 Передать `catalog-source.tar` и `source-manifest.json`. На VPS в выделенном
-пустом каталоге сверить SHA архива с manifest и все десять файлов после извлечения.
+пустом каталоге сверить SHA архива с manifest и все одиннадцать файлов после извлечения.
 Не извлекать поверх checkout/production. Убедиться, что manifest.json и остальные
 файлы новой immutable версии отсутствуют в Dock. Частично существующая версия
 требует разбора координатором; новую версию не выбирать молча.
@@ -59,3 +59,7 @@ actions/selectors/source-index SHA и manifest.compatibility. Плановый U
 `viking://resources/loginom-dock/catalogs/executor-preview/releases/2026.09.13-node14-test4.1-candidate/manifest.json`;
 до серверного readback его существование и SHA не считаются подтверждёнными.
 После этого отдельно разрешаются native save test-4 и полный candidate preflight.
+
+Исходный10-file архив сохранён как evidence: builder import прошёл, но publisher
+не нашёл executor/capability-abi.json до validation/stage. Версия2 включает ABI
+из того же c32a5d5e; проверяется также publisher --help/import после извлечения.

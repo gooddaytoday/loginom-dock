@@ -7512,3 +7512,11 @@ reactivation, граф и полный3×5. Потерянный ответ со
 Запрос отдельного каталога для `/test-4` передан координатору ранее, публикация
 не выполнялась. Native save_checkpoint и Hermes не приняты. Review запускает
 координатор отдельной командой; merge/deploy/общий клиент не менялись.
+
+### Node14 — native candidate preflight, 2026-09-13
+
+[Отчёт native-save/startup](missing-values-native-candidate-preflight-2026-09-13.md):
+исправлены packet11 и startup8 без production-изменений. Native checkpoint и
+отдельный reopen4×5+120×5 прошли независимый component audit; полный8-file user-v1
+prepare прошёл. Runtime a9db4113… сохранён. Полная автономная приёмка12 результатов
+не запускалась; до отдельной команды координатора Hermes не запускать.
