@@ -7,10 +7,11 @@ import {constants} from 'node:fs';
 import {createReadObserverGate} from './text-export-read-observer.mjs';
 import {createNativeObserver} from './text-export-observer-native.mjs';
 import {bindObserver} from './text-export-observer-binding.mjs';
+import {refuseDiagnosticDispatch} from './text-export-download-diagnosis-policy.mjs';
 import {need} from './text-export-observer-policy.mjs';
 const sha=s=>createHash('sha256').update(s).digest('hex');
 async function append(path,line){const f=await open(path,constants.O_WRONLY|constants.O_APPEND|constants.O_CREAT|constants.O_NOFOLLOW,0o600);try{await f.writeFile(line);await f.sync();}finally{await f.close();}}
-export function installObserverSdk({Client,Server,CallToolRequestSchema,runDirectory,stateDirectory,run,overallDeadline,clock=()=>performance.now()}){
+export function installObserverSdk({Client,Server,CallToolRequestSchema,runDirectory,stateDirectory,run,overallDeadline,diagnosisOnly=false,clock=()=>performance.now()}){
  const originals={connect:Client.prototype.connect,callTool:Client.prototype.callTool,request:Client.prototype.request,set:Server.prototype.setRequestHandler};
  let browser=null,sessionDirectory=null,exclusive=false,violated=false,serverInstalled=false,publicActive=false,gate=null,chain=null,actualSeq=0;
  const permits=new WeakSet();
@@ -66,6 +67,7 @@ export function installObserverSdk({Client,Server,CallToolRequestSchema,runDirec
      observe:async options=>{const r=await native(options);need(!violated,'Unknown observer action was attempted');return r;},
      dispatch:async body=>{
       need(!violated&&!extra?.signal?.aborted,'Observer owner/cancel changed');
+      await refuseDiagnosticDispatch({diagnosisOnly,run,request:body,record:e=>append(join(artifactRoot,'diagnostic-stop.jsonl'),JSON.stringify({...e,session_id:session.sessionId,mono_ms:clock(),after_observer_chain_sha256:chain})+'\n')});
       // This host anchor is written immediately before invoking the original
       // handler. Transport/result uncertainty never becomes a success receipt.
       const event={seq:++actualSeq,run_id:run.run_id,session_id:session.sessionId,operation_id:body.params.arguments.operation_id,after_observer_chain_sha256:chain,mono_ms:clock(),before_product_dispatch:true,request:body,journal_prefix_sha256:sha(journal),journal_line_count:journal.trimEnd().split('\n').length};
