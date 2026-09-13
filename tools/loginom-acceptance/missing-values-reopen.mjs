@@ -17,7 +17,7 @@ if(diagnostic&&process.argv.includes('--pre-audit'))throw Error('Choose componen
 // save receipts. It does not consume a synthetic Hermes/pre-audit success flag.
 const report=diagnostic?JSON.parse(execFileSync('python3',[new URL('./missing_values_component.py',import.meta.url).pathname,'--run',arg('--component-run')],{encoding:'utf8',maxBuffer:16*1024*1024})):JSON.parse(await fs.readFile(arg('--pre-audit'),'utf8'));
 const plan=report.reopen_plan;
-if(!plan||(!diagnostic&&Object.entries(report.checks).some(([k,v])=>k!=='independent_reopen_present'&&!v.passed))||!plan.package_path.startsWith('/test-4/packages/')||plan.runtime_revision!=='bdddbd1b922f99b0f8db4a6fa47b7e7c89315b4f5632d914531fdd6befaea77e')throw Error('Verified working phase required before independent reopen');
+if(!plan||(!diagnostic&&Object.entries(report.checks).some(([k,v])=>k!=='independent_reopen_present'&&!v.passed))||!plan.package_path.startsWith('/test-4/packages/')||plan.runtime_revision!=='71f73d81d758c746bd2111c93de08691c85aebddf80a411f294b8ed3f56ab4ff')throw Error('Verified working phase required before independent reopen');
 const dir=resolve(arg('--out')),config=JSON.parse(await fs.readFile(arg('--config'),'utf8'));await fs.mkdir(dir,{recursive:false});await fs.mkdir(join(dir,'runtime'));await fs.symlink(join(homedir(),'.loginom-dock/runtime/browsers'),join(dir,'runtime/browsers'));
 const redactor=createRedactor([config.api_key]);const save=async(name,value)=>fs.writeFile(join(dir,name),JSON.stringify(redactor.redact(value),null,2)+'\n',{mode:0o600,flag:'wx'});
 const remote=new Client({name:'node14-independent-reopen',version:'1'}),browser=new Client({name:'node14-independent-browser',version:'1'});let session;

@@ -5,7 +5,7 @@ operation, native save, model identity and independent reopen.
 """
 from copy import deepcopy
 import math
-from evidence import PREFIX
+from evidence import PREFIX, KNOWLEDGE_TOOLS
 from json_digest import javascript_digest
 from node_procedure_evidence import verify_internal_sequence
 from node_public_acceptance_evidence import paired_public_calls
@@ -96,7 +96,10 @@ def graph_proof(events,r):
     assert len(baseline['nodes'])<=200 and len(baseline['links'])<=400 and isinstance(baseline['foreign_links'],list)
     assert len({n['ref']['node_id'] for n in baseline['nodes']})==len(baseline['nodes'])
     for n in baseline['nodes']:assert n['ref']['document_id']==r['document_id'] and n['ref']['workflow_id']==r['workflow_ref']['workflow_id']
-    one([n for n in baseline['nodes'] if n['ref']==r['inputs'][0]['source']])
+    if r['target']['type']=='imports.text':
+        assert r['mode']=='delimited' and r['target']['kind']=='new' and r['inputs']==[]
+    else:
+        one([n for n in baseline['nodes'] if n['ref']==r['inputs'][0]['source']])
     for i,(a,o) in enumerate(zip(attempts,observations)):
         e=a['effect'];proof=o['refusal'];receipt=proof['receipt']
         assert rows.index(a)<rows.index(o) and (i==0 or rows.index(observations[i-1])<rows.index(a))
@@ -118,6 +121,9 @@ def classify(evidence,*,runtime_revision,manifest_sha256):
     """Return an audited partition. No unproved prepared operation is skipped."""
     try:
         events=evidence['events'];pairs,errors=paired_public_calls(evidence);assert not errors
+        allowed=KNOWLEDGE_TOOLS|{PREFIX+n for n in ('dock_prepare','dock_action_describe','dock_workspace_observe','dock_diagnostics','dock_operation_inspect','dock_node_apply','dock_node_status','dock_node_wait','dock_artifact_deliver','dock_artifact_delivery_status','dock_action_run')}
+        assert all(c['tool'] in allowed for c,t in pairs)
+        assert all(c['arguments'].get('action_key') in ('package.save_checkpoint','package.save_as') for c,t in pairs if c['tool']==PREFIX+'dock_action_run')
         node_tools={PREFIX+n for n in ('dock_node_apply','dock_node_wait','dock_node_status')}
         assert all(t['result'].get('result_version')=='user-v1' for c,t in pairs if c['tool'] in node_tools)
         declarations=[e for e in events if e.get('phase')=='node_apply_prepared'];assert declarations
@@ -134,6 +140,11 @@ def classify(evidence,*,runtime_revision,manifest_sha256):
             if end['outcome']['status']=='SUCCEEDED':
                 checkpoint=one(checkpoints);assert end['outcome']['output']==checkpoint['result'] and checkpoint['result']['status']=='SUCCEEDED'
                 successful[op]=r;continue
+            if r['target']['type']=='imports.text':
+                from import_placement_refusals import prove
+                assert checkpoints==[]
+                refusals[op]=prove(evidence,pairs,r,d,end)
+                continue
             assert checkpoints==[] and r['target']['kind']=='new' and r['target']['type']=='preprocessing.data_recovery' and r['mode']=='impute'
             permitted={'prepared','completed','node_apply_prepared','node_observation_completed','node_observation_sample','node_phase_prepared','node_phase_completed','node_phase_refused','node_step_completed','node_step_prepared','node_step_refresh_authorized','node_target_checkpoint','node_target_effect_prepared','node_target_refusal_observed','missing_values_preflight_completed','verification_delivered'}
             assert all(e.get('phase') in permitted for e in rows)
@@ -182,7 +193,7 @@ def classify(evidence,*,runtime_revision,manifest_sha256):
         # Recovery remains forbidden. Inspect is only admissible for a refused
         # operation, after its terminal result, and must attest exact resolution.
         for c,t in pairs:
-            if c['tool'] in {PREFIX+n for n in ('dock_node_resume','dock_node_cancel','dock_node_stop','dock_operation_recover')}:
+            if c['tool'] in {PREFIX+n for n in ('dock_node_resume','dock_node_cancel','dock_node_stop','dock_operation_recover','dock_artifact_delivery_resume')}:
                 raise ValueError('Unsupported recovery call')
             if c['tool']==PREFIX+'dock_operation_inspect':
                 op=c['arguments']['operation_id'];assert c['arguments']==dict(operation_id=op) and op in ends

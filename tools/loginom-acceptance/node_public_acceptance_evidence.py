@@ -86,9 +86,9 @@ def verify_public_nodes_and_saves(evidence, requests, save_ids, *, allow_validat
             failures.append('public_node_journal:'+operation_id)
             continue
         outcome = ends[0].get('outcome', {})
-        if (outcome.get('status') != ('FAILED' if operation_id in terminal_outcomes else 'SUCCEEDED')
+        if (outcome.get('status') != (terminal_outcomes[operation_id].get('status') if operation_id in terminal_outcomes else 'SUCCEEDED')
                 or outcome.get('cleanup_complete') is not True
-                or operation_id in terminal_outcomes and outcome!=terminal_outcomes[operation_id]):
+                or operation_id in terminal_outcomes and (outcome!=terminal_outcomes[operation_id] or outcome.get('status') not in ('FAILED','NOT_APPLIED'))):
             failures.append('public_node_terminal_success:'+operation_id)
         settled, last_row = False, -1
         for index, (call, reply) in enumerate(node_pairs):
