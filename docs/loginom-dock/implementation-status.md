@@ -1,3 +1,18 @@
+# Node16: подготовлен комплект полной приёмки — 13 сентября 2026
+
+Назначение `node16:acceptance-preparation:1:77385e36`. Handler/runtime не менялись.
+Заморожены10таблиц ожиданий,5CSV, полный goal и независимый case auditor;
+21адресный тест, offline replay3results/164cells и5negative mutations PASS.
+[Kit и bounded diagnostic план](../../tools/loginom-acceptance/collapse/acceptance-kit/README.md),
+[машинный checkpoint](../../tools/loginom-acceptance/collapse/acceptance-kit/preparation-result.json).
+Все live/resource/admission gates OPEN. Не хватает Collapse goal в штатном runner;
+default catalog7.5alpha не соответствует target7.4.2, подготовлен явный профиль
+и source-packet manifest только для coordinator-owned stage. Нужна независимая
+проверка server CSV до записи в новой сессии. Никакие browser/model/VPS запуски
+не выполнялись; это подготовка, не readiness и не Hermes acceptance.
+
+---
+
 # Node16: исправлены R16-1–3 после одного review — 13 сентября 2026
 
 Private upload lineage отклоняет устаревший/неопределённый источник; native read
