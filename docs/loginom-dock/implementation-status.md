@@ -7468,3 +7468,23 @@ credentials не изменялись.
 Подробности и точные доказательства — [checkpoint node12](duplicates-progress-2026-09-12.md).
 Это завершение разработки, не автономная приёмка подплана: ревью/Hermes не запускались,
 отдельный candidate не опубликован; VPS build, install, push и merge не выполнялись.
+
+## 2026-09-13 — узел 12, N12-R1 закрыт; подготовлен автономный этап
+
+Координатор принял один раунд исправлений N12-R1 (`ce10e177`, HEAD `7bf88255`);
+прежнее ожидание ревью для узла 12 больше не актуально. Подготовлены pins,
+независимые полные expected, исходный архив для VPS, инструкции build/stage и
+изолированная команда Hermes Sol/low. 14 профильных и 4 preflight теста прошли,
+source/runtime совпали с фиксированным commit.
+[Комплект и границы приёмки](../plans/loginom-dock/node12-acceptance-preparation-1/README.md).
+Stage/readback закреплён за координатором, candidate URI/SHA и слот ещё не выданы.
+Hermes не запускался; автономной приёмки, merge/push/install/deploy нет.
+
+### Узел 12 — candidate preflight пройден
+
+Координатор выполнил VPS stage/readback `2026.09.13-node12.1-candidate`,
+manifest SHA `1a5a46312501d20ec7e23a2db12ed95bf34d784ead45628b12cdcf1492a276ce`;
+activated=false. Полный локальный launch preflight прошёл, зарегистрированный
+Dock read подтвердил SHA манифеста. Runtime/harness/native skill неизменны.
+Сценарий Hermes не запускался, слот ожидается после узла 11.
+[Сводка](../plans/loginom-dock/node12-acceptance-preparation-1/candidate-preflight-summary.json).
