@@ -1,3 +1,19 @@
+# Узел13: кандидат собран и назначен live preflight — 13 сентября 2026
+
+[Stage/readback](node13-candidate-stage-2026-09-13.json): version
+2026.09.13-node13-acceptance.1-5a4c46fc-candidate, manifest
+db38f7f249c0c051d8b77a22e0ac80a817ecb96a9820bfb0f74b8199a496c634.
+9builder inputs source5a4c46fc и archive сверены; сборка на VPS,4/4readbackPASS.
+Для publisher отдельно добавлены exact source publisher/ABI; первый запуск
+ошибся относительным ABI путём до публикации, исправлено без rebuild.
+Production/current неизменны, activatedfalse.
+Ход01a09a8d-bc63-7950-a663-3c8cceb70ae3 active/Astra medium: current candidate,
+native/direct-open и адресные regression gates без модели; исторические R1/R3
+не считать доказательством новогоruntime молча. Final admission подготовить,
+Hermes слот не выдан и занят14. Нет review/main/plugin. Все входящие обработаны.
+
+---
+
 # Узел14: следующий полный Hermes назначен; узел17 получил ответ — 13 сентября 2026
 
 Scoped import verifier7bef361c/reportac7ce151 проверен помощником:
