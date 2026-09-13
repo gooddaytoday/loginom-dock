@@ -1,3 +1,20 @@
+# Узел14: приёмка3 FAIL, диагностика импорта назначена — 13 сентября 2026
+
+Run20260913-132939-0384fe0b: actual openai-codex/Sol/low,25API,
+full audit FAIL,5/27операций и5/9импортов,0save. Import-allnull configure NULL
+не подтвердил settlement исходного мастера: AMBIGUOUS/pending/cleanup=false.
+Кроме того import placement refusal не входит в текущий Missing Values allowance.
+14/14receipts сверены, старыйFAIL сохранён. Completed и свежая process check
+10:44:08UTC подтвердили выход; слот Hermes освобождён.
+
+По новой политике автоматического согласования назначена узкая live диагностика
+и исправление подтверждённой причины импорта в своей test-4 среде. Ход
+01a09a5e-9f05-7f33-bac2-ddc8ca45380e active. Blanket refusal allowance и ослабление
+полной цели запрещены; отдельное import-specific предложение идёт координатору.
+Новый Hermes/review/VPS/main/plugin не назначены. Все входящие обработаны.
+
+---
+
 # Автоматическое согласование рабочих шагов разрешено — 13 сентября 2026
 
 Пользователь разрешил координатору подтверждать дальнейшие рабочие шаги
