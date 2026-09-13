@@ -1,3 +1,59 @@
+# Узел12 получил ответ и новый слот после сбоя precheck — 13 сентября 2026
+
+По запросу пользователя проверено ожидание12. Его candidate/preflight готовы,
+HEAD8475e8ad и все153 runtime/239 harness файлов совпали с pins. Старый Hermes11
+уже завершился: process-check02:58UTC не обнаружил acceptance/Hermes CLI,
+постоянные gateway оставлены. Слот11 отозван сообщением активному разработчику
+после завершённого run, а не отобран у работающей модели.
+
+Первый назначенный запуск12 `20260913-060042-78fec37f` остановился
+`FAILED_BEFORE_MODEL`, `model_started:false`: MCP initialize/list_tools precheck
+не прошёл. Та же read-only проверка вне sandbox прошла available=true/missing=[].
+Конкретная низкоуровневая причина не установлена. Полный аудитор был вызван,
+но evidence.json отсутствует до старта модели; честный результат —
+`BLOCKED_MISSING_EVIDENCE`, не PASS. Проверены отчёт/receipt и completed/idle;
+документированный итог в ветке12 — commit0489736380341838d8602cc470c21dd0536d61cd,
+`docs/plans/loginom-dock/node12-acceptance-preparation-1/attempt-20260913-060042.md`.
+Повторная host process-check03:03:40UTC также не нашла acceptance/Hermes CLI.
+
+Узлу12 выдан новый слот `node12-hermes-20260913-1a5a4631-r2` и одна повторная
+попытка через штатный require_escalated approval для сетевого/браузерного запуска.
+Это изменение условий исполнения после диагностики; отказ approval обходить
+запрещено. Candidate/runtime/harness и полный goal прежние, старый FAIL сохранён.
+Команда `node12:autonomous-acceptance:2:1a5a46312501d20ec7e23a2db12ed95bf34d784ead45628b12cdcf1492a276ce`;
+ход `01a098b9-647c-7520-a9ba-2266d1a4ac13` подтверждён active/inProgress.
+Это подтверждение принятой команды, запуск самой модели пока отдельно не проверен.
+Hermes остаётся openai-codex/gpt-5.6-sol/low; разработчик Astra medium.
+
+Одновременно обработаны два итоговых события:
+
+- Узел11: report-only commitdd95a3b0c96e1873b4cd3ef36ea83e88863bea23 и полный
+  FAIL55/59 проверены. Нет отдельного checkpoint перед save_as/reopening;
+  аудитор ошибочно считает бездействующий precheck metadata-каталог второй
+  рабочей сессией. Геометрия исходного Hermes-окна не подтверждена независимо.
+  Все11 node operationsSUCCEEDED и postrun выходы не заменяют полный FAIL.
+  В той же задаче назначен узкий acceptance follow-up: ясный двухэтапный goal,
+  проверка session↔prepare/journal с доказанным бездействием precheck и
+  отрицательными случаями, измерение точного будущего Hermes-окна. Команда
+  `node11:acceptance-followup:1:dd95a3b0c96e1873b4cd3ef36ea83e88863bea23`, ход
+  `01a098ba-bbe0-7682-8c2b-f07208d9ee15` подтверждён active. Hermes11 не выдан.
+- Узел13: единственное ревью завершено, report-only commit
+  d316b2f41bb444825a1009cf4b2905d1dcff914b проверен. Назначен единственный
+  fix-round собственного N13-R3: независимая проверка запрошенных output labels
+  сквозных/сохранённых вычисленных полей. Ход
+  `01a098b7-450c-79f0-b3c5-cccc1548609c` подтверждён active. N13-R1 configure
+  recovery и N13-R2 terminal failure остаются общими зависимостями владельца14;
+  input_mapping recovery не доказывает configure, код14 в13 отсутствует.
+  Узел14 уведомлён, его текущее задание не расширено. Скрытого заимствования
+  кода/слияния нет. Повторное полное ревью не назначалось.
+
+Слоты/история/идемпотентные команды записаны в локальном реестре. Следующее
+продолжение — по итоговым событиям, без периодического опроса. Ни один узел ещё
+не объявлен принятым; новые узлы не запускались. Merge/push main, production
+activation и обновление общего клиента не выполнялись. OpenViking healthy.
+
+---
+
 # Узел13 завершил разработку и передан на одно ревью — 13 сентября 2026
 
 Прочитан `docs/loginom-dock/node-13-development-report.md` в worktree13,
