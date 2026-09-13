@@ -21,9 +21,16 @@ def require_reject_baseline_reader(purpose='full',manifest=MANIFEST):
         report=pinned(ROOT,m['diagnostic']['path'],m['diagnostic']['sha256']);d=json.loads(report.read_text())
         assert d['candidate_evidence_ready'] is True and d['result_profile']=='diagnostic'
         assert d['checks']['passed'] is True and d['checks']['outer']['passed'] is True
-        runtime=d['runtime_inputs'];assert runtime==m['runtime_inputs']
+        runtime=m['runtime_inputs']
+        # Historical export/observer evidence retains its original runtime. The
+        # current candidate may include the documented import editor dependency fix.
+        changed_runtime=sorted(n for n in set(runtime)|set(d['runtime_inputs']) if runtime.get(n)!=d['runtime_inputs'].get(n))
+        assert changed_runtime==m.get('runtime_changes_since_diagnostic',[]), 'Unaccounted runtime change'
+        assert set(changed_runtime)<={'client/lib/text-import-procedure.mjs'}, 'Export evidence requires a new diagnostic for this runtime change'
         for n,h in runtime.items():pinned(ROOT,n,h)
-        assert d['handler_source']==m['handler_source'] and d['runtime']==m['runtime']
+        from preflight import runtime_pin
+        assert runtime_pin(ROOT)=={'client_revision':m['runtime'],'inputs':runtime}, 'Current runtime digest differs'
+        assert d['handler_source']==m['handler_source']
         old=d['harness_inputs'];current=m['harness_inputs']
         required=set(old)|{p.name for p in WORK.iterdir() if p.suffix in ('.mjs','.py')}
         assert set(current)==required, 'Incomplete frozen harness inventory'
@@ -37,7 +44,7 @@ def require_reject_baseline_reader(purpose='full',manifest=MANIFEST):
             r=ROOT/latest['run_directory'];assert r.resolve().is_relative_to(ROOT)
             for n,h in latest['evidence_sha256'].items():pinned(r,n,h)
             recorded=json.loads((r/'request.json').read_text())
-            assert recorded['runtime_source_pin']['client_revision']==m['runtime']
+            assert recorded['runtime_source_pin']['client_revision']==d['runtime']
             assert all(recorded['harness_inputs'][n]==current[n] for n in protected+['text-export-observer-response.mjs'])
             assert latest['evidence_checks_passed'] and latest['download']['passed'] and latest['actual_dispatch_count']==0
             records=[json.loads(x) for x in (r/'observer/observer.jsonl').read_text().splitlines()]

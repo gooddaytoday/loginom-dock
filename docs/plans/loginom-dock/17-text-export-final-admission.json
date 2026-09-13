@@ -5,7 +5,7 @@
   "account": "test-2",
   "storage_directory": "/test-2",
   "handler_source": "2524921058b29db0e79e9a188ec7bb8fa9ef9d8c",
-  "runtime": "347615cbae29323d80b57488b794ecce607b5b9e0d2fbe86aa88b7460241311c",
+  "runtime": "2897649a8d2120d25e4c80af8af2c6cdd834023b5bda1a1bd5baf073c6e9ba32",
   "runtime_inputs": {
     "examples/memory-plugin-shared/lib/batch-send.mjs": "2e5903703bb5c07a9d91fbd4e11020a7a5d8b677fd90f0c67170f17e9604a5bb",
     "examples/memory-plugin-shared/lib/capture-utils.mjs": "f82dd380fbf7faadaff0629638a0ca7d182b93a7981541b522efe3f5f970f1c9",
@@ -149,7 +149,7 @@
     "client/lib/text-import-limits.json": "ece19a544d7ef481c708e3464b9f8dfb3d22fcda0344c7ffc6f101108e8c4f54",
     "client/lib/text-import-limits.mjs": "981523caf834bf107a2f00b89b5b2067c96cff06ac19c4d80d8587fc00edbb80",
     "client/lib/text-import-node.mjs": "eeaa2c3768893ca808b4f1b84d0109d0fe3edc24af0b0e7c71705c817ffcaba2",
-    "client/lib/text-import-procedure.mjs": "1cc9904e900b92fc802c71dd2c9148d96ac059f9355a13f831275982b5a71647",
+    "client/lib/text-import-procedure.mjs": "ac6c1da1c37c7bd4070c06c6e2a8f147e8d0f2881598d03286fe5bdf9aca4ced",
     "client/lib/text-import-readback.mjs": "e3bbaabd859d1b579ff7fca34cc4aaa8901452630462313f470841038fbacf5b",
     "client/lib/union-context.mjs": "f044e8e30a13795745ba7881491adddf5f19e405b61282e60068acf3b6e030b5",
     "client/lib/union-mappings.mjs": "b8aa25fd8857b838e52adac062df0e39ea14b838f3f511907fb790bfd4579862",
@@ -163,6 +163,9 @@
     "client/lib/workspace-ui.mjs": "82258b62faebff14b62ce33adca56d98c28bf5faee115370fe7990d69bcd3653",
     "client/lib/workspace.mjs": "7e9c9f4dd6bf3b6bdecb614516fa864d42618ba474a196157082b6bb9062d8b5"
   },
+  "runtime_changes_since_diagnostic": [
+    "client/lib/text-import-procedure.mjs"
+  ],
   "harness_inputs": {
     "artifact-transport-check.mjs": "bbbb1fb4abbe7ff2b3c463f9bf51a9811455c9856ceefa929e2e7f9e803f296d",
     "artifact_conflict_evidence.py": "b3e1b84f9f7b45cb4ba565c28b6b7b3de4d44c74cc9314093213baa3e789e10b",
@@ -196,7 +199,7 @@
     "filter_node_acceptance.py": "dae0d8652486b07898a1670c2182439f82c0598e54a5aa655e57f9ffbd98f2fb",
     "filter_persistence_semantics.py": "24556f6273484a566d50da554a4caafc4485b32c7b33ed9efb520045412edbb3",
     "filter_upload_probe.py": "978f237febd7a04c378ca6c8e2d93cb55ecdbf795b93486612c12aaecf10f700",
-    "fixtures/text-export/contract.json": "546ae00fa6984d37977698b7bfd383363ff0c9631d98bbc095ef0bbda4458e7e",
+    "fixtures/text-export/contract.json": "4cdf1220458b5486938a55eda3320fe9cdc89d5486a0987675b8922e18e7830f",
     "fixtures/text-export/empty.json": "dd946d48a5b834365b1afcf88fd68ba9573ae27ddf3579cf2ad71f68791e8ac2",
     "fixtures/text-export/escaping.json": "ef8f41c3a8708c3918739478295fc8b31e6aef3364ca12240b579f8d869be2f0",
     "fixtures/text-export/expected/changed.bin": "290c4d0cec7895f80f95436030da5f4355dc47d0adbdd04ab17590274f8d4ff4",
@@ -211,7 +214,7 @@
     "fixtures/text-export/input/wide.csv": "c106b1287d098b5b1905cccb3fd9bbb0c92213f384408eee3c1242ad2fb09d55",
     "fixtures/text-export/typed.json": "a16021d45d1e80883979a4a1bd19627225c111861ad28c1fec33c878d828dabd",
     "fixtures/text-export/wide.json": "2eb17d046fb5bcd25e40d06bc54c8a8721eb59bb4ff263c3ee1c98e2950305fa",
-    "freeze-text-export-admission.py": "d0a4fc9e66df1f7b93b974b809dd0f1679d4a0d8bab871735fd7d90f6da1e6bd",
+    "freeze-text-export-admission.py": "cdf9cc0dc5be88e1218d0a293353125956c5c75a8858b3be0f8814f6fba14954",
     "goals/text-export-node-complete.txt": "5db16d49554a80afceedcbad2f9a836378377650bcec1d27c4768638a29b46b6",
     "grouping_configuration_evidence.py": "046167117ee92c12f5bce35d4b01072b7df8f26779ba9217de8ab7f2ee832f6d",
     "grouping_goal_contract.py": "2043488e9e8a2f0026cd928587f03dd566f58aa3b2b38814119bfd17aa2ee95a",
@@ -387,7 +390,7 @@
     "test_text_export_acceptance.py": "ac1a4ef4af2417b9b2e967ccb40438e890a5d54b12ff59b00db20d74fe1765a1",
     "test_text_export_observer_evidence.py": "82b0992007cf6e8008d31203eab319150339a094acef7bf7b24e31fdfe39126a",
     "test_text_export_origin.py": "a2ee8c615a1105cd6244d3aa173f6c7436b37ddc790b8e0f2b40d54e82c10c37",
-    "test_text_export_readiness.py": "966c3bb79c0b10cc7c70d6dae5385e11ff8bb57bc6404e570957340c51e14902",
+    "test_text_export_readiness.py": "5a81878d926f0918046dc05461cbafb8a5751108639828a6d6a1d152f91354aa",
     "test_text_export_user_v1.py": "6f37f390dfb7afe14da5043bc02cf67944571bd6cfa1b533cbe0ece5534bea43",
     "test_union_acceptance.py": "9a27f7c38d0fb7f42e7d00c2ecfce0c438deccf64bbf2ee283048eef9826c9be",
     "test_union_oracle.py": "b1b23b517bd256543439decb1beffea2363b4f6e8d9459e059596218f575cf00",
@@ -426,7 +429,7 @@
     "text_export_observer_evidence.py": "ee7a6aed596de434d6efe9e2d3903a91c7107611e0b7e9b684d0a8907e1ee1bd",
     "text_export_observer_run.py": "5f1802984e818f3bb5a075a95d8e400f40dbaf0db37eb13ca30b36a07b1e9df6",
     "text_export_origin.py": "20ebc438cf5c3c4ec1e3959f68d5c3d9a1aa93244d6f0bd9f524d3751ec84ca3",
-    "text_export_readiness.py": "aff8615d32439749a7bf6df7122c502ba7da5aeed23811dd0b3f8cab86b51376",
+    "text_export_readiness.py": "f37ac6e100c1273ac0d993c0dc49f137d613dd27bd3cc6b185ea356c69db6ecd",
     "text_export_upload_probe.py": "ab2915618608672d40578a873378fe6c6f332b63f9e41c2f5c2739c5415db75f",
     "text_export_user_v1_evidence.py": "0e758a742a65e1b48dd15c7284977ca7b75aae6da4fc52da7dfc4b75bc7701e5",
     "union-live.mjs": "3840d57e05edad771504157d95e842dd25b9b51b6407f04ae5a5113f4a8050ba",
@@ -448,6 +451,7 @@
   },
   "changed_since_diagnostic": [
     "audit-native-text-export-observer.py",
+    "fixtures/text-export/contract.json",
     "run.py",
     "test_text_export_acceptance.py",
     "test_text_export_readiness.py",

@@ -18,7 +18,7 @@ class RejectBaselineReadinessTests(unittest.TestCase):
     def test_real_candidate_manifest_rejects_target_runtime_harness_and_goal_mutations(self):
         if not MANIFEST.exists():self.skipTest('Freeze manifest not written yet')
         original=json.loads(MANIFEST.read_text())
-        mutations=[lambda m:m.update(profile='diagnostic'),lambda m:m.update(account='test-1'),lambda m:m['runtime_inputs'].update({'client/lib/bridge.mjs':'0'*64}),lambda m:m['harness_inputs'].pop('text-export-observer-client.mjs'),lambda m:m.update(goal_sha256='0'*64),lambda m:m['diagnostic'].update(sha256='0'*64),lambda m:m.update(changed_since_diagnostic=[])]
+        mutations=[lambda m:m.update(runtime='0'*64),lambda m:m.update(runtime_changes_since_diagnostic=[]),lambda m:m['runtime_inputs'].update({'client/lib/text-export-node.mjs':'0'*64}),lambda m:m.update(profile='diagnostic'),lambda m:m.update(account='test-1'),lambda m:m['runtime_inputs'].update({'client/lib/bridge.mjs':'0'*64}),lambda m:m['harness_inputs'].pop('text-export-observer-client.mjs'),lambda m:m.update(goal_sha256='0'*64),lambda m:m['diagnostic'].update(sha256='0'*64),lambda m:m.update(changed_since_diagnostic=[])]
         with tempfile.TemporaryDirectory() as d:
             p=Path(d)/'manifest.json'
             for change in mutations:

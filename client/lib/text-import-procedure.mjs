@@ -139,6 +139,26 @@ export function bindImportSourceColumns(requested,observed) {
   });
 }
 
+// Reuse the shared pre-gesture recovery: only an unchanged, fully bound cell
+// may receive a refreshed ref after a proven no-effect epoch refusal.
+export async function openImportColumnEditor(channel,initial,index,property) {
+  requireValue(['type','data_kind'].includes(property),'Unsupported import editor property');
+  const describe=state=>{
+    const w=state.wizard,field=w?.import_columns?.fields?.find(f=>f.index===index);
+    requireValue(w?.stage==='text_import_format'&&w.owner_context?.status==='observed'
+      &&w.owner_context.node?.tid&&w.owner_context.path?.length&&field?.status==='observed','Import editor owner unobserved');
+    const cell=one(state.ui.elements.filter(e=>e.ref===field.cell_refs?.[property]),'Import editor cell changed');
+    requireValue(cell.tid&&cell.allowed_actions?.includes('double_click'),'Import editor action unavailable');
+    return {root:w.root_tid,owner:{node:w.owner_context.node.tid,path:w.owner_context.path.map(({tid,label})=>({tid,label}))},
+      field:Object.fromEntries(['index','name','label','type','data_kind','used'].map(k=>[k,field[k]])),
+      page:w.import_columns.page??w.import_columns.definition_coverage,property,cell_tid:cell.tid};
+  };
+  const expected=describe(initial);
+  return channel.perform({condition:'open bound import column '+index+'/'+property,initialObservation:initial,
+    ready:state=>same(describe(state),expected),identity:describe,
+    resolve:state=>({verb:'double_click',ref:state.wizard.import_columns.fields.find(f=>f.index===index).cell_refs[property]})});
+}
+
 async function configureImport(channel, parameters, owner,fieldsOnly,patch) {
   (patch?validateTextImportPatch:fieldsOnly?validateTextImportFieldsRequest:validateTextImportRequest)(parameters);
   parameters=structuredClone(parameters);
@@ -317,7 +337,7 @@ async function configureImport(channel, parameters, owner,fieldsOnly,patch) {
         }
         requireValue(s.ui.elements.find(e=>e.ref===c.cell_refs[property])?.interaction?.state==='point_observed','Import column reveal budget exceeded');
       }
-      await act(s, { verb: 'double_click', ref: c.cell_refs[property] });
+      await openImportColumnEditor(channel,s,i,property);
       const editing = await read('text_import_format', 'column editor: ' + i + '/' + property, state => {
         const e = state.wizard.import_column_editor;
         return e?.status === 'observed' && e.index === i && e.property === property
