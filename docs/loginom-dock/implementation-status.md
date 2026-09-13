@@ -7588,3 +7588,20 @@ allnull3×5 и12Null/schema/NULL PASS. Runtime71f73d81…56ab4ff,156/395 inputs.
 [Отчёт и предложение по import refusal](node14-import-configure-followup-2026-09-13.md).
 Allowance не расширен; full goal/старые FAIL13+14 receipts сохранены. Hermes
 не запускался; все4диагностические сессии закрыты. Нужен новый pinned комплект.
+
+## Узел 14: import placement refusal verifier — 2026-09-13
+
+По фазе `node14:import-refusal-verifier:1:841d6443` реализован строгий scoped proof
+для imports.text/delimited/new. Источник связан с artifact/grant и исходной
+upload/download byte verification; отказанный node.apply остаётся NOT_APPLIED,
+без эффекта внутри операции, с cleanup и без pending. Ранний upload имел эффект
+в хранилище и проверяется отдельно. Преемник допускается только после durable/public
+settlement с изменением ID/position. Full-goal gates и строгие defaults сохранены.
+
+Свежая source live-сессия: отказ→новыйID→успех, native save,114pairs/1264events,
+scoped audit и данные обоих импортов PASS.43 итоговых теста PASS; процессы завершены.
+Код7bef361c, runtime71f73d81, harness256/abda1811. Candidate2/cadd80df повторно
+прочитан:4/4 bytes match. Подготовлен комплект следующего run без Hermes;
+27successful/9imports/12final/native save/independent reopen остаются обязательными.
+Старые FAIL сохранены; следующий запуск требует слота координатора.
+[Отчёт и pins](node14-import-refusal-verifier-2026-09-13.md).
