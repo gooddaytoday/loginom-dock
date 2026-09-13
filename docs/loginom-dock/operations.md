@@ -1,3 +1,37 @@
+# Кандидат узла12 собран на VPS и проверен — 13 сентября 2026
+
+Подготовительный ход узла12 завершён;624 файла архива сверены с Git objects
+commit `7bf88255562c59cd32397be3f68c4ec85cb55b38`. На VPS проверены health,
+импортированный E2E и прежний Node24.19.0 с SHA
+`bc17c508ffeed0ec622934f9b7fa72f8e78da65350e63c3eceb56fa688aa5e12`.
+Новая версия отсутствовала; выполнены отдельные build, validate, stage/readback.
+
+- Версия: `2026.09.13-node12.1-candidate`.
+- Manifest URI: `viking://resources/loginom-dock/catalogs/executor-preview/releases/2026.09.13-node12.1-candidate/manifest.json`.
+- Manifest SHA: `1a5a46312501d20ec7e23a2db12ed95bf34d784ead45628b12cdcf1492a276ce`.
+- VPS evidence: `/opt/loginom-dock/releases/20260913-node12.1-candidate/`;
+  `build-report.json`, `stage-report.json`, `coordinator-readback.json`.
+- Все4 опубликованных файла повторно прочитаны и побайтно совпали со сборкой.
+  Обе операции сохранения разрешают только `/test-1/packages`.
+  Compatibility: Loginom7.4.2, macos/chromium; E2E
+  `2cad5602158fd2e4836d821d644a2b8d92f571a2`, `stale_actions:[]`.
+- `staged:true`, `activated:false`. Действующий server release и отсутствие
+  preview/current остались прежними; сервер/общий клиент не обновлялись.
+
+При проверке подготовительного script исправлена только команда в переданной
+копии: `publish-action-catalog.py --validate-only` требует также `--stage`.
+Исходники runtime/harness не менялись. Разработчику передана поправка для
+воспроизводимости и фактические pins; поручен полный preflight без запуска
+Hermes и commit документов подготовки. Новый ход
+`01a0989a-1f11-7c83-993f-c30dc753df78` подтверждён active/inProgress.
+Очередь Hermes11→12; слот12 не выдан.
+Это проверка каталога, не автономная приёмка узла. Новые узлы/merge/push не запускались.
+
+[Проверенная сводка](node12-candidate-2026-09-13.json). Локальные исходники и
+readback: `.dock/node12-candidate-20260913` в основном checkout.
+
+---
+
 # Диагностика доступности координатором — 13 сентября 2026
 
 Пользователь разрешил координатору при недоступности Dock самостоятельно заходить
