@@ -48,5 +48,6 @@ export const collapseInputSources={
   "message.set_MessageType": "function(value) {\n\t\t\tthis.$FData[$rpc_TBGMessageDynamicData.$FMessageTypeOffset] = value;\n\t\t}",
   "message.set_ObjectOwnerID": "function(value) {\n\t\t\tBitConverter.FromInt32(value, this.$FData, $rpc_TBGMessageDynamicData.$FObjectOwnerIDOffset);\n\t\t}",
   "message.set_ObjectID": "function(value) {\n\t\t\tBitConverter.FromInt32(value, this.$FData, $rpc_TBGMessageDynamicData.$FObjectIDOffset);\n\t\t}",
-  "message.set_MethodID": "function(value) {\n\t\t\tBitConverter.FromInt32(value, this.$FData, $rpc_TBGMessageDynamicData.$FMethodIDOffset);\n\t\t}"
+  "message.set_MethodID": "function(value) {\n\t\t\tBitConverter.FromInt32(value, this.$FData, $rpc_TBGMessageDynamicData.$FMethodIDOffset);\n\t\t}",
+  "TIBGTuneColumnDefs_Proxy.get_PresentUsageTypes": "function() {\n\t\t\treturn $bg_rpc_TIBGColumnInfos_Proxy.prototype.get_PresentUsageTypes.call(this);\n\t\t}"
 };

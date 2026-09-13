@@ -41,8 +41,13 @@ export async function readCollapseInputBrowser({binding,sources,budgetMs,runtime
   const columns=await object(ds,'get_Columns','TIBGTuneDataSource_Proxy'),defs=await object(ds,'get_ColumnDefs','TIBGTuneDataSource_Proxy');
   const count=await call(columns,'get_Count','TIBGColumns_Proxy'),definitionCount=await call(defs,'get_Count','TIBGTuneColumnDefs_Proxy');
   need(Number.isInteger(count)&&count>=0&&count<=1000&&definitionCount===count,'complete bounded effective input');
-  const usage=await call(columns,'get_PresentUsageTypes','TIBGColumns_Proxy');need(Number.isInteger(usage)&&usage>=0&&usage<=65535,'usage mask');
-  const schemaBytes=async()=>{const bytes=await call(ds,'GetColumnsHash','TIBGTuneDataSource_Proxy',[usage]);need(bytes instanceof Uint8Array&&bytes.length<=65536&&(count===0||bytes.length>0),'native schema fingerprint');return Array.from(bytes);};
+  const usage=await call(columns,'get_PresentUsageTypes','TIBGColumns_Proxy');
+  const definitionUsage=await call(defs,'get_PresentUsageTypes','TIBGTuneColumnDefs_Proxy');
+  need([usage,definitionUsage].every(v=>Number.isInteger(v)&&v>=0&&v<=65535),'usage mask');
+  // Before first execution, effective columns can retain Undefined while the
+  // saved definitions already carry Information/Transposed. Hash both sets.
+  const hashedUsage=usage|definitionUsage;
+  const schemaBytes=async()=>{const bytes=await call(ds,'GetColumnsHash','TIBGTuneDataSource_Proxy',[hashedUsage]);need(bytes instanceof Uint8Array&&bytes.length<=65536&&(count===0||bytes.length>0),'native schema fingerprint');return Array.from(bytes);};
   const hashBefore=await schemaBytes(),active=await call(ds,'get_Active','TIBGTuneDataSource_Proxy');need(typeof active==='boolean','active state');
   const scan=async()=>{
    const fields=[];
@@ -58,8 +63,9 @@ export async function readCollapseInputBrowser({binding,sources,budgetMs,runtime
   const fields=await scan(),again=await scan(),hashAfter=await schemaBytes();
   need(JSON.stringify(fields)===JSON.stringify(again)&&JSON.stringify(hashBefore)===JSON.stringify(hashAfter),'schema changed while reading');
   need(await call(columns,'get_Count','TIBGColumns_Proxy')===count&&await call(defs,'get_Count','TIBGTuneColumnDefs_Proxy')===count&&await call(ds,'get_Active','TIBGTuneDataSource_Proxy')===active,'schema count/activity changed');
+  need(await call(columns,'get_PresentUsageTypes','TIBGColumns_Proxy')===usage&&await call(defs,'get_PresentUsageTypes','TIBGTuneColumnDefs_Proxy')===definitionUsage,'usage masks changed');
   result={verified:true,document_id:binding.document_id,workflow_id:binding.workflow_ref.workflow_id,node_id:node.FGuid,build:'7.4.2',binding:before,
-   fields,native_schema_bytes:hashBefore,active,complete:true,source:'retained_tune_input_columns_and_definitions',atomic_snapshot:false,
+   fields,native_schema_bytes:hashBefore,usage_types:{columns:usage,definitions:definitionUsage,hashed:hashedUsage},active,complete:true,source:'retained_tune_input_columns_and_definitions',atomic_snapshot:false,
    native_objects:{socket:{...socket.$},datasource:{...ds.$}},mutation_calls:0};
  } catch(e){error=e;}
  finally {

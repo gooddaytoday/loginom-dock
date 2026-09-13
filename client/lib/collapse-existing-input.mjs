@@ -15,9 +15,10 @@ export function validateCollapseInputSnapshot(snapshot,request,expected) {
  const fields=snapshot.fields;need(Array.isArray(fields)&&fields.length<=1000&&new Set(fields.map(f=>f.name)).size===fields.length&&new Set(fields.map(f=>f.id)).size===fields.length&&new Set(fields.map(f=>f.source_name)).size===fields.length,'complete unique effective fields');
  need(fields.every((f,i)=>f.index===i&&Number.isSafeInteger(f.id)&&f.id>=0&&typeof f.name==='string'&&f.name.length>0&&f.name.length<240&&typeof f.source_name==='string'&&f.source_name.length>0&&types[f.type]),'invalid effective input field');
  need(Array.isArray(snapshot.native_schema_bytes)&&snapshot.native_schema_bytes.length<=65536&&(fields.length===0||snapshot.native_schema_bytes.length>0)&&snapshot.native_schema_bytes.every(b=>Number.isInteger(b)&&b>=0&&b<=255),'native schema bytes');
+ need(snapshot.usage_types&&['columns','definitions','hashed'].every(k=>Number.isInteger(snapshot.usage_types[k])&&snapshot.usage_types[k]>=0&&snapshot.usage_types[k]<=65535)&&(snapshot.usage_types.columns|snapshot.usage_types.definitions)===snapshot.usage_types.hashed,'native usage masks');
  const input=request.inputs.find(i=>i.input===0);
  if(input)need(input.source.node_id===snapshot.binding.source&&input.source.document_id===snapshot.document_id&&input.source.workflow_id===snapshot.workflow_id,'requested input differs from saved source');
- const stable={document_id:snapshot.document_id,workflow_id:snapshot.workflow_id,node_id:snapshot.node_id,binding:snapshot.binding,fields,native_schema_bytes:snapshot.native_schema_bytes,active:snapshot.active};
+ const stable={document_id:snapshot.document_id,workflow_id:snapshot.workflow_id,node_id:snapshot.node_id,binding:snapshot.binding,fields,native_schema_bytes:snapshot.native_schema_bytes,usage_types:snapshot.usage_types,active:snapshot.active};
  const signature=createHash('sha256').update(JSON.stringify(stable)).digest('hex');
  if(expected)need(signature===expected,'stale effective input snapshot');
  const mapping=request.mappings.find(m=>m.direction==='input'&&m.port===0);
