@@ -19,6 +19,7 @@ from evidence import export_history, clean
 from preflight import preflight, runtime_pin
 from destinations import storage_segments, render_goal
 import upload_probe
+import collapse_acceptance
 import union_upload_probe
 import union_review_upload_probe
 import join_upload_probe
@@ -159,6 +160,14 @@ def validate_inputs(args):
 
 def execute(args):
     os.umask(0o077)
+    if getattr(args,'goal',None)==collapse_acceptance.GOAL_ID:
+        # Deliberately before auth/config reads, dependency checks and subprocesses.
+        admission=collapse_acceptance.admission(args)
+        if not args.run:
+            write(args.output,admission)
+            print(json.dumps({k:v for k,v in admission.items() if k!='harness_inputs'}))
+            return 0
+        collapse_acceptance.require_admission(args)
     validate_inputs(args)
     profile=getattr(args,'model_profile','chatgpt-sol')
     provider,model=('xiaomi','mimo-v2.5') if profile=='xiaomi-mimo' else ('openai-codex','gpt-5.6-sol')
@@ -206,6 +215,8 @@ def execute(args):
             fixture=WORK / join_fixture_dir / name
             if sha(fixture)!=expected_sha or fixture.stat().st_size!=expected_bytes:raise ValueError('Join fixture changed')
             harness_inputs[join_fixture_dir+'/'+name]=sha(fixture)
+    if goal_id==collapse_acceptance.GOAL_ID:
+        harness_inputs.update(collapse_acceptance.harness_pins())
     info = {"schema_version": 2, "loginom_url": loginom_url, "storage_directory":getattr(args,"storage_directory",None), "scope": "source_runtime", "model_started": False,
             "provider": provider, "model": model, "reasoning_effort": reasoning, "hermes_version": "0.21.0",
             "model_profile": profile, "provider_selection": "explicit CLI; effective usage identity checked after the run",
@@ -222,6 +233,9 @@ def execute(args):
             "budget": {"timeout_seconds": args.timeout, "max_turns": args.max_turns},
             "series": {"planned_attempts": 1, "variant": fault, "pass_criteria": "union_review_acceptance.py full scenario contract" if goal_id=="union-review-complete" else "union_node_acceptance.py full scenario contract" if goal_id=="union-node-complete" else "join_node_acceptance.py full scenario contract" if goal_id in ("join-node-complete","join-review-complete") else "filter_node_acceptance.py full scenario contract" if goal_id == 'filter-node-complete' else "reform_node_acceptance.py full scenario contract" if goal_id == 'reform-node-complete' else "sales_sorting_acceptance.py full scenario contract" if goal_id == 'sales-sorting-complete' else "grouping_node_acceptance.py full scenario contract" if goal_id == 'grouping-node-complete' else "calculator_node_acceptance.py full scenario contract" if goal_id == 'calculator-node-complete' else "node_apply_acceptance.py full scenario contract" if goal_id == 'node-apply-complete' else "audit.py declared variant contract"},
             "manifest_uri": args.manifest_uri, "manifest_sha256": args.manifest_sha256}
+    if goal_id==collapse_acceptance.GOAL_ID:
+        info['collapse_admission']=admission
+        info['series']['pass_criteria']='collapse_node_acceptance.py FULL goal + independent new session; CASE_PASS is insufficient'
     if profile == 'chatgpt-sol':
         info['auth_policy'] = AUTH_POLICY
         with tempfile.TemporaryDirectory(prefix='dock-auth-guard-') as guard_temp:
@@ -258,6 +272,9 @@ def execute(args):
         prompt=join_probe.prompt(goal.read_text(),package,args.storage_directory,run_id)
     if goal_id == 'data-pipeline':
         prompt=data_pipeline.prompt(goal.read_text(),package,args.storage_directory,run_id)
+    if goal_id==collapse_acceptance.GOAL_ID:
+        info['input_artifacts']=collapse_acceptance.fixtures(run_id,args.storage_directory)
+        prompt=collapse_acceptance.prompt(package,args.storage_directory,run_id)
     write(run / "scenario.txt", prompt)
     write(run / "request.json", info)
     # No key is persisted in the child config. Dock reads its own explicit config.
@@ -273,6 +290,9 @@ def execute(args):
     if goal_id in ('join-node-complete','join-review-complete','union-node-complete','union-review-complete'):
         for file,artifact in zip(join_probe.FIXTURES,info['input_artifacts']):
             command.extend(['--input-artifact',json.dumps({**artifact,'sourcePath':str(WORK / join_fixture_dir / file)},ensure_ascii=False)])
+    if goal_id==collapse_acceptance.GOAL_ID:
+        for path,artifact in zip(collapse_acceptance.fixture_paths(),info['input_artifacts']):
+            command.extend(['--input-artifact',json.dumps({**artifact,'sourcePath':str(path)},ensure_ascii=False)])
     # Hermes oneshot otherwise snapshots tools after 15s, even while this
     # server is still connecting. A measured cold start took 16.5s; use the
     # same bounded wait as the declared MCP connection budget.
@@ -302,6 +322,7 @@ def execute(args):
             raise ValueError("MCP tool precheck failed")
         if runtime_pin(REPO) != frozen or not harness_unchanged(harness_inputs):
             raise ValueError("Source changed before model launch")
+        if goal_id==collapse_acceptance.GOAL_ID:collapse_acceptance.require_admission(args)
         write(hermes_home / "auth.json", connection_values)
         env = environment(model_env, hermes_home, run)
         argv = [str(args.hermes), "--provider", provider, "--model", model, "--reasoning", reasoning,
@@ -325,7 +346,7 @@ def execute(args):
                 os.killpg(child.pid, signal.SIGKILL); child.wait(timeout=15)
         usage_path = run / "private/usage.json"
         usage = json.loads(usage_path.read_text()) if usage_path.exists() else {}
-        calls, tool_results = export_history(hermes_home, secrets)
+        calls, tool_results = export_history(hermes_home, secrets, retain_raw_tools=goal_id==collapse_acceptance.GOAL_ID)
         evidence = {"schema_version": 1, "run_id": run_id, "export_complete": True,
                     "runtime_source_unchanged": runtime_pin(REPO) == frozen,
                     "harness_unchanged": harness_unchanged(harness_inputs),
@@ -347,6 +368,9 @@ def execute(args):
             evidence['efficiency'] = node_efficiency(evidence)
             write(run / 'efficiency.json', evidence['efficiency'])
         write(run / "evidence.json", clean(evidence, secrets))
+        if goal_id==collapse_acceptance.GOAL_ID:
+            import collapse_node_acceptance
+            write(run/'collapse-audit.json',collapse_node_acceptance.audit(info,evidence,prompt,None))
         status = "EXPORTED_PENDING_AUDIT"
         return 0
     finally:
@@ -383,7 +407,7 @@ def main():
     parser.add_argument("--require-delivered-context", action="store_true",
                         help="Require automatic E2E/Help delivery bound to a failure and journal before successful continuation")
     parser.add_argument("--model-profile",choices=["chatgpt-sol","xiaomi-mimo"],default="chatgpt-sol")
-    parser.add_argument("--goal", choices=["union-review-complete", "union-node-complete", "join-review-complete", "join-node-complete", "prepare-workspace", "basic-graph", "auto-link-retain", "auto-link-remove", "palette-inventory", "checkbox-roundtrip", "context-menu-checkbox", "root-checkbox", "file-storage-inspect", "file-upload-probe", "file-upload-verify", "data-pipeline", "import-roundtrip", "calculator-roundtrip", "node-import-roundtrip", "node-apply-complete", "calculator-node-complete", "grouping-node-complete", "sales-sorting-complete", "reform-node-complete", "filter-node-complete"], default="basic-graph")
+    parser.add_argument("--goal", choices=["collapse-node-complete", "union-review-complete", "union-node-complete", "join-review-complete", "join-node-complete", "prepare-workspace", "basic-graph", "auto-link-retain", "auto-link-remove", "palette-inventory", "checkbox-roundtrip", "context-menu-checkbox", "root-checkbox", "file-storage-inspect", "file-upload-probe", "file-upload-verify", "data-pipeline", "import-roundtrip", "calculator-roundtrip", "node-import-roundtrip", "node-apply-complete", "calculator-node-complete", "grouping-node-complete", "sales-sorting-complete", "reform-node-complete", "filter-node-complete"], default="basic-graph")
     parser.add_argument("--allow-manual-reopen", action="store_true")
     args = parser.parse_args()
     if args.fault=="save_reopen" and not args.allow_manual_reopen:

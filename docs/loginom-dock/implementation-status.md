@@ -1,3 +1,18 @@
+# Node16: зарегистрирована цель полного аудита, запуск закрыт — 13 сентября 2026
+
+Назначение `node16:acceptance-runner-integration:1:1d6cdc31`. В acceptance run.py
+добавлена collapse-node-complete, fixture admission и FULL outer auditor.
+27локальных тестов PASS; component replay60cells/6negative PASS с явно synthetic
+transport/model_run=false. CLI preflight BLOCKED до auth/config/processes.
+Handler/source77385e36 и runtime db6d9571 не менялись. Нет readonly-byte producer,
+не закрыты topology/readback/loss bridge, live/candidate/resource/slot gates.
+Никакие prepared CASE_PASS не считаются приёмкой. [Отчёт и интерфейсы](../../tools/loginom-acceptance/collapse/runner-integration/README.md),
+[машинный итог](../../tools/loginom-acceptance/collapse/runner-integration/result.json).
+Старый kit freeze сохранён; текущие harness pins закреплены отдельно.
+Node16 и Hermes **не приняты**; memory summary об обратном ошибочно.
+
+---
+
 # Node16: подготовлен комплект полной приёмки — 13 сентября 2026
 
 Назначение `node16:acceptance-preparation:1:77385e36`. Handler/runtime не менялись.
