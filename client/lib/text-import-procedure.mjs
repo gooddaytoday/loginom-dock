@@ -231,6 +231,7 @@ async function configureImport(channel, parameters, owner,fieldsOnly,patch) {
     requireValue(field(s, name, true).value === desired, 'Source value was not applied: ' + name);
   }
   const sourceReadback = (await read('text_import_file')).wizard.import_source;
+  const sourcePathChanged=patch&&sourceBaseline.fields.source_path.value!==sourceReadback.fields.source_path.value;
   if(patch)requireValue(Object.keys(sourceBaseline.fields).filter(k=>!Object.hasOwn(parameters.source,k))
     .every(k=>sourceReadback.fields[k]?.value===sourceBaseline.fields[k].value),'Unrequested source parameter changed');
   await next('text_import_file', 'text_import_format');
@@ -266,6 +267,22 @@ async function configureImport(channel, parameters, owner,fieldsOnly,patch) {
     const after=(await read('text_import_format')).wizard.settings;
     requireValue(Object.keys(formatBaseline.fields).filter(k=>!Object.hasOwn(parameters.format,k))
       .every(k=>after.fields[k]?.value===formatBaseline.fields[k].value),'Unrequested format parameter changed');
+    if(sourcePathChanged) {
+      // With automatic columns disabled, changing the file keeps the old
+      // configured definitions. Refresh only this explicitly replaced source;
+      // reconcile below restores retained settings by name, not old position.
+      // Loginom Help / import/txt and E2E sColumnDefsTuning.toolbar.RefreshAll.
+      const suffix='ImportTextFileParamsWizard;ColumnDefsTuning;btnRefreshAll';
+      const before=await read('text_import_format','replacement source definitions refresh available',state=>
+        state.ui.elements.filter(e=>e.tid===state.wizard.root_tid+';'+suffix&&e.allowed_actions?.includes('click')).length===1);
+      await act(before,{verb:'click',ref:control(before,suffix,'click')});
+      const refreshed=await read('text_import_format','replacement source definitions refreshed',state=>
+        state.wizard.import_columns?.initial_layout?.status==='rendered_definition_layout');
+      requireValue(Object.keys(before.wizard.settings.fields).every(k=>
+        refreshed.wizard.settings.fields[k]?.status==='observed'&&refreshed.wizard.settings.fields[k].truncated!==true
+        &&refreshed.wizard.settings.fields[k].value===before.wizard.settings.fields[k].value),
+        'Source schema refresh changed parsing settings');
+    }
     const parsedSchema=await readImportDefinitionPages(channel,{ready:state=>same(identity(state.wizard?.owner_context),identity(currentOwner))});
     parsedColumns=parsedSchema.fields;
     parameters.columns=reconcileImportColumnPatch(columnBaseline.fields,parsedSchema.fields,parameters.columns,{schemaChangeRequested:
@@ -432,7 +449,7 @@ async function configureImport(channel, parameters, owner,fieldsOnly,patch) {
       'Configured import definitions differ');
     return {verified:true,cleanup_complete:true,effect_possible:true,source:sourceReadback,
       format:formatted.wizard.settings,columns:schema.fields,schema_id:schema.schema_id,
-      ...(patch?{preservation:{source_before:sourceBaseline,format_before:formatBaseline,columns_before:columnBaseline.fields}}:{}),
+      ...(patch?{preservation:{source_before:sourceBaseline,format_before:formatBaseline,columns_before:columnBaseline.fields,source_schema_refreshed:sourcePathChanged}}:{}),
       settings_applied:false,reopen_performed:false,next_stage:'output_mapping',package_saved:false,execution_started:false};
   }
   const mapping = await next('text_import_format', 'output_mapping');
