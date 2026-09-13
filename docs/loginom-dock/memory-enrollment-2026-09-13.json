@@ -68,7 +68,7 @@
     }
   ],
   "global_mcp_reload": false,
-  "new_app_task_created": false,
+  "new_app_task_created": true,
   "schema_version": 1,
   "mechanism_implemented": true,
   "mechanism_installed": true,
@@ -89,11 +89,19 @@
   "runtime_files_verified": 18,
   "registered_coordinator_memory_health": "healthy",
   "first_fresh_app_task": {
-    "created": false,
-    "bootstrap_verified": false,
-    "registered_actor_access_verified": false,
+    "created": true,
+    "bootstrap_verified": true,
+    "registered_actor_access_verified": true,
     "capture_extraction_verified": false,
-    "next_gate": "Verify in the first eligible new node task before development; after its first phase verify capture/extraction and exact read-back"
+    "next_gate": "After substantive development phase verify extracted project knowledge exact URI/read-back and scoped retrieval",
+    "node": 16,
+    "thread_id": "01a0992c-6ce0-7f10-bd53-9bf92ed7ae8a",
+    "capture_cursor_observed": 29,
+    "capture_transport_verified": true,
+    "extraction_completed": true,
+    "extracted_memory_changes": 0,
+    "new_project_knowledge_verified": false,
+    "first_capture_evidence": "docs/loginom-dock/node16-start-2026-09-13.json"
   },
   "legacy_registry_unchanged": true,
   "legacy_worker_configs_unchanged": true,

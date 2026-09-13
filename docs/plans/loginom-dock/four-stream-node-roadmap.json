@@ -3,7 +3,7 @@
   "kind": "four_stream_node_roadmap",
   "date": "2026-09-12",
   "status": "planned_queue_with_active_assignments",
-  "scope": "70 ещё не принятых компонентов; автоматическое назначение по итоговым событиям после допуска. Это план, не результат приёмки новых handlers.",
+  "scope": "70 исходных позиций очереди; узел12 принят в отдельной неслитой ветке, узел16 начал разработку. main и установленный клиент остаются с прежними восемью принятыми типами.",
   "precedence_notes": [
     "Последнее уточнение 13.09.2026: отключить периодический опрос; разработчики сообщают о завершении этапа и необходимых действиях при блокере. Автоматическое продолжение запускается по сообщениям, heartbeat сначала приостановлен, затем удалён пользователем.",
     "Уточнение пользователя 13.09.2026: ревью и доработки Astra/medium в той же задаче; после одного раунда доработок повторное ревью не запускать. Это отменяет прежние xhigh и повторное ревью.",
@@ -33,8 +33,9 @@
     "total": 70,
     "statuses": {
       "in_progress": 4,
-      "queued": 63,
-      "conditional_reserve": 3
+      "queued": 62,
+      "conditional_reserve": 3,
+      "accepted_in_branch": 1
     },
     "lanes": {
       "1": {
@@ -42,28 +43,36 @@
         "in_progress": 1,
         "queued": 16,
         "conditional_reserve": 3,
-        "rough_effort_points_excluding_reserve": 60
+        "rough_effort_points_excluding_reserve": 60,
+        "preparing": 0,
+        "accepted_in_branch": 0
       },
       "2": {
         "total": 18,
         "in_progress": 1,
-        "queued": 17,
+        "queued": 16,
         "conditional_reserve": 0,
-        "rough_effort_points_excluding_reserve": 62
+        "rough_effort_points_excluding_reserve": 62,
+        "preparing": 0,
+        "accepted_in_branch": 1
       },
       "3": {
         "total": 18,
         "in_progress": 1,
         "queued": 17,
         "conditional_reserve": 0,
-        "rough_effort_points_excluding_reserve": 60
+        "rough_effort_points_excluding_reserve": 60,
+        "preparing": 0,
+        "accepted_in_branch": 0
       },
       "4": {
         "total": 14,
         "in_progress": 1,
         "queued": 13,
         "conditional_reserve": 0,
-        "rough_effort_points_excluding_reserve": 59
+        "rough_effort_points_excluding_reserve": 59,
+        "preparing": 0,
+        "accepted_in_branch": 0
       }
     }
   },
@@ -840,7 +849,7 @@
       "group": "Исследование",
       "lane": 2,
       "order": 1,
-      "status": "in_progress",
+      "status": "accepted_in_branch",
       "subplan_number": 12,
       "subplan_path": "docs/plans/loginom-dock/12-duplicates.md",
       "first_scope": "Сохранить подплан 12: разметка дубликатов и противоречий без удаления исходных строк.",
@@ -862,9 +871,13 @@
       "help_path": "data/processors/scrutiny/duplicates.md",
       "assigned_account": "test-1",
       "palette_status": "observed_2026_09_12",
-      "acceptance_status": "not_accepted",
+      "acceptance_status": "accepted_scoped_unmerged",
       "help_source_uri": "viking://resources/loginom-dock/sources/loginom-help/data/processors/scrutiny/duplicates.md",
-      "source_review_scope": "Каталожный путь Help; детальная сверка режима обязательна при подготовке подплана. Обзор источников не равен живой приёмке."
+      "source_review_scope": "Каталожный путь Help; детальная сверка режима обязательна при подготовке подплана. Обзор источников не равен живой приёмке.",
+      "accepted_branch_head": "e609e645fec2f3a86fa72f017c981799aa5598db",
+      "acceptance_evidence": "docs/loginom-dock/node12-branch-acceptance-2026-09-13.json",
+      "merged": false,
+      "shared_plugin_updated": false
     },
     {
       "component_id": "component.transform.ColumnFlipping",
@@ -872,7 +885,7 @@
       "group": "Трансформация",
       "lane": 2,
       "order": 2,
-      "status": "queued",
+      "status": "in_progress",
       "subplan_number": 16,
       "subplan_path": "docs/plans/loginom-dock/16-collapse-columns.md",
       "first_scope": "Сохранить подплан 16: информационные/транспонируемые поля, оба режима пустых значений и точный variant.",
@@ -892,12 +905,19 @@
         "null_empty"
       ],
       "suggested_branch_slug": "codex/node-16-collapse-columns",
-      "branch_state": "proposed_not_created",
+      "branch_state": "created_permanent_worktree",
       "help_path": "data/processors/transformation/collapse-columns.md",
       "palette_status": "observed_2026_09_12",
       "acceptance_status": "not_accepted",
       "help_source_uri": "viking://resources/loginom-dock/sources/loginom-help/data/processors/transformation/collapse-columns.md",
-      "source_review_scope": "Каталожный путь Help; детальная сверка режима обязательна при подготовке подплана. Обзор источников не равен живой приёмке."
+      "source_review_scope": "Каталожный путь Help; детальная сверка режима обязательна при подготовке подплана. Обзор источников не равен живой приёмке.",
+      "thread_id": "01a0992c-6ce0-7f10-bd53-9bf92ed7ae8a",
+      "project_id": "a5df758e-6136-46d6-bde4-6b543090461f",
+      "worktree": ".worktrees/node-16-collapse-columns",
+      "base_commit": "a3b419bde8a660e1905284ee62a46362d5a49e09",
+      "preparation_phase": "completed_actor_verified",
+      "development_turn_id": "01a09933-04c7-7383-a7ce-2a77892f9492",
+      "shared_memory_actor_verified": true
     },
     {
       "component_id": "component.transform.ColUnionData",
@@ -2766,9 +2786,9 @@
       "order": 2
     },
     "2": {
-      "component_id": "component.transform.ColumnFlipping",
-      "name": "Свёртка столбцов",
-      "order": 2
+      "component_id": "component.transform.ColUnionData",
+      "name": "Соединение (таблицы по позиции)",
+      "order": 3
     },
     "3": {
       "component_id": "component.transform.CrossTable",
@@ -2783,7 +2803,7 @@
   },
   "finalized_at": "2026-09-13T00:04:38.014661+03:00",
   "current_execution_note": {
-    "all_four_streams": "Last confirmed checkpoint: node11/12 correction completed awaiting candidate/Hermes; node13/14 development resumed after user restart; all four shared-memory actor access verified",
+    "all_four_streams": "node12 accepted in unmerged scoped branch after versioned122/122 reassessment; stream2 node16 development dispatched after bootstrap and registered shared-memory actor PASS; node14 approval-blocked before model; node11/13 retain shared-integration gates",
     "dispatch": "Automatic same-task review/fixes, then new task/worktree/branch after all gates; separate user command for merging",
     "previous_incident_probe": {
       "verified_by": "coordinator curl without credentials",
@@ -2800,5 +2820,11 @@
     "updated_date": "2026-09-13",
     "report": "docs/loginom-dock/dock-availability-2026-09-13.md",
     "checkpoint": "docs/loginom-dock/agent-handoff.md"
+  },
+  "active_component_by_lane": {
+    "1": "component.transform.Replace",
+    "2": "component.transform.ColumnFlipping",
+    "3": "component.transform.DateTimeReform",
+    "4": "component.preprocessing.DataRecovery"
   }
 }

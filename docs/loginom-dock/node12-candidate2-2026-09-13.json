@@ -51,5 +51,8 @@
   "audit_passed": 112,
   "audit_total": 118,
   "acceptance_report_commit": "59062bff9520a90c1e616bd72a680ce393fd3ded",
-  "followup": "Strict identity-only import verifier correction on immutable saved live evidence"
+  "followup": "Strict identity-only import verifier correction on immutable saved live evidence",
+  "branch_acceptance_status": "accepted_scoped_by_separate_versioned_reassessment",
+  "branch_acceptance_evidence": "docs/loginom-dock/node12-branch-acceptance-2026-09-13.json",
+  "original_frozen_audit_preserved": true
 }
