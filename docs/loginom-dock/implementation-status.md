@@ -7708,3 +7708,18 @@ goal/fixtures/auditor сохранены, preflight PASS. Модель не за
 
 [Исправление, ограничения и точный план запуска](missing-values-source-selection-fix-2026-09-13.md),
 [pins](missing-values-source-selection-fix-pins-2026-09-13.json).
+
+## Node14 — шестая автономная приёмка, 13 сентября 2026
+
+Run `20260913-221602-99120ff2` Sol/low: 24 SUCCEEDED, 1 NOT_APPLIED,
+1 FAILED placement, 1 AMBIGUOUS; save0, полный аудит FAIL. Пороги40/41/42
+пройдены. Новый stale — тело целевого узла Смена источника после output
+mapping, этап finish, n144; opt-in source preflight здесь ещё не действует.
+Внутренний no-effect и внешний AMBIGUOUS сохранены раздельно. Model/launcher
+exit0, timed_out=false; полный штатный экспорт, 90/90 calls/replies.
+Собственные процессы0; локальная квитанция освобождения слота сохранена.
+Продолжается автономная узкая диагностика целевого finishGraph, без нового
+Hermes до готовности и выделения слота.
+
+[Отчёт](missing-values-autonomous-acceptance-6-2026-09-13.md),
+[pins](missing-values-autonomous-acceptance-6-pins-2026-09-13.json).
