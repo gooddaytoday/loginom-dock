@@ -1,6 +1,6 @@
 // Diagnostic only. One fixed read method; no hooks, proxy overrides, or fallback.
-export async function readFixedVariant(page,b,decode) {
- return page.evaluate(async ({b,decoder})=>{
+export async function readFixedVariant(page,b,decode,options={}) {
+ return page.evaluate(async ({b,decoder,options})=>{
   const decode=eval("("+decoder+")");
   const v=(o,k)=>Object.getOwnPropertyDescriptor(o??{},k)?.value,need=(x,m)=>{if(!x)throw Error(m);};
   need(b.port===0&&b.method===321&&b.interface===116&&Number.isInteger(b.offset)&&b.offset>=0&&Number.isInteger(b.rows)&&b.rows>0&&b.rows<=50&&Array.isArray(b.columns)&&b.columns.length>0&&b.columns.length<=8&&new Set(b.columns).size===b.columns.length,'fixed bounds');
@@ -39,17 +39,48 @@ export async function readFixedVariant(page,b,decode) {
    const count=v(dt,'FTotalRowCount');need(count===b.row_count&&count===v(helper,'$FRowCount')&&b.offset+b.rows<=count&&b.columns.every(c=>Number.isInteger(c)&&c>=0&&c<schema.length),'row/column bounds');
    return {processRoot,processFingerprint,node,port,dc,dt,ds,store,helper,cache:v(helper,'$FData'),identity,owner:v(identity,'$OW'),object:v(identity,'$O'),schema:JSON.stringify(schema),count};
   };
+  need(Object.keys(options).every(k=>['operationId','timeoutMs','requireAtomicSnapshot'].includes(k)),'diagnostic option allowlist');
+  need(options.requireAtomicSnapshot!==true,'atomic snapshot unavailable for fixed321');
+  const timeoutMs=options.timeoutMs??10000;
+  need(Number.isInteger(timeoutMs)&&timeoutMs>=1&&timeoutMs<=30000,'deadline bounds');
+  const key='__loginomDockVariantDiagnosticV1';
+  const state=globalThis[key]??(globalThis[key]={document,active:null,last:null,poisoned:false,used:new Set()});
+  need(state.document===document&&!state.poisoned&&!state.active,'diagnostic session busy or retired; close own browser');
   const initial=snapshot(),equal=s=>Object.keys(initial).every(k=>initial[k]===s[k]);
+  const op={id:options.operationId??'read-'+Date.now(),status:'running',pending:0,requests:0,releasedRequests:0,releasedResponses:0,lateResponses:0,published:false,nativeCancelled:false};
+  need(typeof op.id==='string'&&op.id.length>0&&op.id.length<=128,'operation id');
+  need(state.used.size<128&&!state.used.has(op.id),'operation id reused or diagnostic session limit');state.used.add(op.id);
+  state.active=op;
+  const deadline=Date.now()+timeoutMs;
+  let stopPending;
+  op.stop=reason=>{if(op.status!=='running')return false;op.status=reason;state.poisoned=true;stopPending?.();return true;};
+  const timer=setTimeout(()=>op.stop('deadline_exceeded'),timeoutMs);
+  const live=()=>{if(Date.now()>=deadline)op.stop('deadline_exceeded');need(op.status==='running',op.status+'; native cancellation unproven');};
+  try {
   const output=[];
   for(let row=b.offset;row<b.offset+b.rows;row++)for(const column of b.columns){
-   need(equal(snapshot()),'stale owner/schema/cache before read');
-   const session=v(initial.ds,'$S');let request,response;
+   live();need(equal(snapshot()),'stale owner/schema/cache before read');
+   const session=v(initial.ds,'$S');let request,response,callbackOwns=false;
+   const releaseRequest=()=>{if(request){request.Release();request=null;op.releasedRequests++;}};
+   const releaseResponse=x=>{if(x){x.Release();op.releasedResponses++;}};
    try{
     request=session.$M.GetDynamicData();request.set_StaticDataSize(32);
     request.InitializeMethodCallMessage(initial.owner,initial.object,321,0);
     request.WriteParameter(0,row);request.WriteParameter$a(8,column);
     // false avoids exception-object unmarshalling through another remote interface.
-    response=await new Promise((resolve,reject)=>session.DispatchMessageAsync(request,false).continueWith(t=>{try{resolve(t.getAwaitedResult());}catch(e){reject(e);}}));
+    response=await new Promise((resolve,reject)=>{
+     op.pending++;op.requests++;callbackOwns=true;
+     stopPending=()=>reject(Error(op.status+'; native cancellation unproven; close own browser'));
+     try {session.DispatchMessageAsync(request,false).continueWith(t=>{
+      let received;
+      try {received=t.getAwaitedResult();
+       if(op.status!=='running'){op.lateResponses++;releaseResponse(received);releaseRequest();return;}
+       callbackOwns=false;resolve(received);
+      }catch(e){callbackOwns=false;releaseResponse(received);releaseRequest();reject(e);}
+      finally{op.pending--;stopPending=null;}
+     });}catch(e){op.pending--;callbackOwns=false;stopPending=null;reject(e);}
+    });
+    live();
     need(equal(snapshot()),'stale owner/schema/cache after read');
     need(response.get_MessageType()===1,'non-value response; no exception unmarshalling');
     need(response.get_MessageID()===request.get_MessageID(),'response ID mismatch');
@@ -60,9 +91,27 @@ export async function readFixedVariant(page,b,decode) {
     need([1,3,4,5,7,8,11,20].includes(tag),'unknown/interface tag');
     const decoded=decode(payload,size);
     output.push({row,column,tag,payload:payload.slice(0,decoded.consumed_bytes),frame_size:size,decoded,message_id:response.get_MessageID()});
-   } finally {response?.Release();request?.Release();}
+   } finally {releaseResponse(response);if(!callbackOwns)releaseRequest();}
   }
-  need(equal(snapshot()),'final stale binding');
-  return {method:321,interface:116,document_id:b.document_id,execution:b.execution,node_id:b.node_id,port_guid:b.port_guid,port:0,source:{owner:initial.owner,object:initial.object},row_count:initial.count,schema:b.schema,cells:output,owner_rechecked:true,cache_identity_rechecked:true};
- },{b,decoder:decode.toString()});
+  live();need(equal(snapshot()),'final stale binding');op.status='completed';op.published=true;
+  return {method:321,interface:116,document_id:b.document_id,execution:b.execution,node_id:b.node_id,port_guid:b.port_guid,port:0,source:{owner:initial.owner,object:initial.object},row_count:initial.count,schema:b.schema,cells:output,owner_rechecked:true,cache_identity_rechecked:true,consistency:'observed_local_only',atomic_snapshot_verified:false,native_cancellation_supported:false};
+  }catch(e){if(op.status==='running')op.status='failed';if(op.requests>0)state.poisoned=true;throw e;}finally{clearTimeout(timer);delete op.stop;state.last=op;state.active=null;}
+ },{b,decoder:decode.toString(),options});
+}
+
+// Local diagnostic latch only. No native RPC, transport patch or server cancellation.
+export async function cancelFixedVariant(page,operationId) {
+ return page.evaluate(id=>{
+  const s=globalThis.__loginomDockVariantDiagnosticV1;
+  if(!s||s.document!==document||s.active?.id!==id)return {cancelled:false};
+  return {cancelled:s.active.stop('cancelled'),native_cancelled:false};
+ },operationId);
+}
+export async function variantDiagnosticStatus(page) {
+ return page.evaluate(()=>{
+  const s=globalThis.__loginomDockVariantDiagnosticV1;
+  if(!s||s.document!==document)return null;
+  const o=s.active??s.last;if(!o)return null;
+  const {stop,...record}=o;return {...record,retired:s.poisoned};
+ });
 }

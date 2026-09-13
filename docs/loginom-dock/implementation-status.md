@@ -1,3 +1,13 @@
+# Node16: изолированный variant hardening проверен — 13 сентября 2026
+
+Добавлен lifecycle прототипа: deadline/cancel, запрет поздней публикации и повторного
+чтения после сбоя. Live deactivation, cancellation с поздним ответом, offline/socket
+разрыв с pending deadline и очисткой проверены. 19 tests, independent audit и
+14 negative evidence substitutions PASS. Подтверждены свежие DST gap/fold и
+диапазон0100–9999; int32/real32 в UI нормализованы к tags20/5. Full variant_io
+**BLOCKED**: atomic snapshot и server cancellation не доказаны. Public handlers
+и shared plugin не менялись. Подробности: [hardening report](collapse-variant-hardening-result-2026-09-13.md).
+
 # Node16: ограниченный variant-прототип проверен — 13 сентября 2026
 
 После прямого разрешения пользователя fixed method321/interface116 прочитал

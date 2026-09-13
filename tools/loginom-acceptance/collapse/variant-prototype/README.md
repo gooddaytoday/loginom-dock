@@ -46,3 +46,26 @@ The verified run and limitations are documented in
 Do not invoke with a different model/provider, account, method, interface, build,
 shared profile, arbitrary proxy or missing execution proof. Do not integrate this
 reader or broaden its scope without a separate decision.
+
+Hardening (isolated user authorization `node16:variant-hardening:1:direct-user-20260913`):
+`readFixedVariant` accepts only `{operationId, timeoutMs, requireAtomicSnapshot}`.
+The local operation latch permits one read at a time, rejects reused IDs, and retires
+this diagnostic page after cancellation/deadline or a failure after RPC dispatch. `cancelFixedVariant(page,id)`
+changes only that latch. `variantDiagnosticStatus(page)` returns bounded counters,
+never session credentials. These are diagnostic state, not capture/transport hooks.
+A late response releases its request/response buffers without decoding, publishing
+or continuing to another cell. While no response arrives the native request buffer
+remains owned by the callback; timeout is NOT cleanup or native cancellation proof.
+Close the owned browser/process before another diagnostic session after retirement.
+
+The result explicitly says `atomic_snapshot_verified:false` and
+`consistency:observed_local_only`; requesting an atomic snapshot rejects before RPC.
+Local identity comparisons cannot exclude an unobserved server ABA change. The
+fixed method alone supplies no server revision/snapshot token. The public exact
+variant contract remains blocked regardless of these diagnostic hardening checks.
+
+`hardening-audit.py DATES_RUN [DISCONNECT_RUN [DEACTIVATION_RUN]]` independently
+checks the new observed bytes, fresh DST/range UI, late cancellation cleanup and
+optional local disconnect/deactivation evidence, with destructive substitutions.
+See `docs/loginom-dock/collapse-variant-hardening-result-2026-09-13.md` for the
+exact observed scope and remaining atomic/native-cancellation limitations.
