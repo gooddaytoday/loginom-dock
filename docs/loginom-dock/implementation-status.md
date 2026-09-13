@@ -1,3 +1,9 @@
+# Узел 13: подготовлен новый комплект полной приёмки
+
+[Отчёт](node-13-acceptance-candidate-preparation-1.md): source 5a4c46fc / runtime 2488fdaa, неизменённые 10 строк, exact source archive для VPS, current skill/frontend/environment pins и guarded launcher. Review1/fix1 completed; повторный review не назначен. Полная автономная приёмка остаётся открытой до candidate/live gates и отдельного слота Hermes. В этой фазе модель, браузер, VPS build/stage/activation не запускались.
+
+---
+
 # Узел13: R2 terminal failure интегрирован и проверен — 13 сентября 2026
 
 Применён разрешённый patch47830abe… (11 файлов/18 hunks) из a63586fe… без

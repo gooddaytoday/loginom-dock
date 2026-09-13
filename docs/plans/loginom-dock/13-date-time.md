@@ -1,21 +1,10 @@
 # 13. Дата и время
 
-Вход исправлен до10 строк: [актуальные pins и schema proof](../../loginom-dock/node-13-acceptance-input-limit-fix-1.md).
+Текущий статус: review1 и fix1 завершены; R1 configure, manual-output, R2 terminal и R3 приняты в своих bounded границах. Полная автономная цель ещё не принята.
 
-Подготовлены [входы приёмки и admission scaffold](../../loginom-dock/node-13-acceptance-input-preparation-1.md);
-новый полный live/Hermes прогон не запускался, R1/R2 остаются OPEN.
+Подготовлен [новый комплект candidate](../../loginom-dock/node-13-acceptance-candidate-preparation-1.md) на source 5a4c46fc / runtime 2488fdaa, с неизменённой целью на 10 строк. Требуются VPS build/readback, current candidate admission, live direct-open gate и отдельный слот Hermes. Повторный review не назначен и не требуется этим комплектом.
 
-Статус на 2026-09-13: **reviewed; fix round 1 complete; N13-R3 closed**.
-N13-R1/R2 открыты как зависимости общей части 14, R2 live Date/time unconfirmed.
-[Отчёт доработки](../../loginom-dock/node-13-fix-1.md): свежий 4×27 и strict
-persistence PASS, Python 519 PASS, negatives 89/89 + 8/8. Hermes не запускался.
-Новый разрешённый поток от 2026-09-12; [отчёт проверок](../../loginom-dock/node-13-development-report.md).
-Следующая аналитическая группа, вне обязательного набора V4. Обработчик ещё
-не принят; [checkpoint разработки](../../loginom-dock/node-13-checkpoint.md).
-Старые [наработки пилота](../../loginom-dock/parallel-node-pilot.md) остаются
-историческими и не подтверждают готовность нового потока.
-[Общие условия и приёмка](next-wave.md), [реестр](README.md).
-Зависимости: 01–03; для итогового отчёта — [07. Группировка](07-grouping.md).
+[Checkpoint](../../loginom-dock/node-13-checkpoint.md), [review1](../../loginom-dock/node-13-review-1.md), [evidence map](../../loginom-dock/node13-acceptance-preparation/evidence-map.json). Старые FAIL и прежние source/live результаты сохраняют исходные границы.
 
 ## Результат и границы
 

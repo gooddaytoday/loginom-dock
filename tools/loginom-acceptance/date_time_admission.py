@@ -62,6 +62,9 @@ def check(admission, base):
     verify('final_runtime', lambda: admission['runtime_source_pin'] == runtime_pin(ROOT))
     verify('source_commit', lambda: admission['source_commit'] == subprocess.check_output(['git', 'rev-parse', 'HEAD'], cwd=ROOT, text=True).strip())
     verify('source_archive', lambda: digest((base/admission['source_archive']['path']).resolve()) == admission['source_archive']['sha256'])
+    verify('local_environment_pin', lambda: receipt(admission['environment_pin'],base)['runtime_source_pin'] == admission['runtime_source_pin'])
+    verify('remote_skill_frontend_pin', lambda: bool(receipt(admission['remote_pin'],base)['frontend']['files'])
+           and bool(receipt(admission['remote_pin'],base)['skill']['revision']))
     verify('catalog_bytes', lambda: admission['catalog']['manifest_uri'].startswith('viking://resources/loginom-dock/catalogs/')
            and 'parallel-pilot' not in admission['catalog']['manifest_uri']
            and digest((base/admission['catalog']['manifest_path']).resolve()) == admission['catalog']['manifest_sha256'])

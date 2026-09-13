@@ -1,5 +1,15 @@
 # Узел 13: checkpoint разработки
 
+## Текущее состояние — candidate preparation завершена
+
+[Комплект полной приёмки](node-13-acceptance-candidate-preparation-1.md) подготовлен на source 5a4c46fc / runtime 2488fdaa. Review1 и fix1 completed; повторный review не назначен. R1/manual/R2/R3 приняты в границах evidence map. Полный 10-row goal ещё не принят.
+
+Новый catalog version предложен только для test-3; точный source archive и manifest готовы для VPS координатора. Модель/браузер не запускались, слот свободен. Остались candidate stage/readback, current native/direct-open/regression gates и отдельный admission/слот.
+
+## История предыдущих фаз
+
+Все OPEN/не применялся ниже относятся к состоянию соответствующей прошлой фазы; текущие решения указаны выше. Старые FAIL не переобозначены.
+
 ## R2 integration — целевой live gate завершён
 
 По отдельному разрешению применён точный patch47830abe… из a63586fe…:

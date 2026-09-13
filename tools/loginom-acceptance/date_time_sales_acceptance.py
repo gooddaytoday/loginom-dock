@@ -19,7 +19,14 @@ from node_configuration_evidence import verify_configuration_readback
 from date_time_goal_oracle import GOAL, FIXTURES, IMPORT_SCHEMA, artifact, render
 from date_time_goal_evidence import LABELS, TYPES, PARENTS, checkpoint, one, output_checks, save_checkpoint
 from date_time_persistence import events_at, operation, opened_path, public_success, semantic_configuration
-from date_time_admission import check as admission_check, digest, INPUTS
+from date_time_admission import check as admission_check, digest, INPUTS, receipt
+
+
+def prepared_pins_match(prepared, remote):
+    return (prepared.get('skillRevision') == remote['skill']['revision']
+        and prepared.get('loginomUrl') == remote['frontend']['url']+'?testable=true'
+        and prepared.get('workspace', {}).get('target') == dict(profile_id='loginom-7.4.2-macos-chromium-ru',
+            loginom_build='7.4.2',platform='macos',browser='chromium'))
 
 
 def report(checks):
@@ -173,6 +180,7 @@ def audit(request, evidence, prompt, admission, admission_base, diagnostic_index
         prepared = verified_prepare_v1(early, PREFIX, delivery_start['session_id'], before)
         if prepared is None:
             raise ValueError('owned_prepare')
+        check('prepared_remote_pins', prepared_pins_match(prepared,receipt(admission['remote_pin'],admission_base)))
         check('single_pinned_session', all(e.get('session_id') == prepared['sessionId']
             and e.get('runtime_revision') == admission['runtime_source_pin']['client_revision']
             and e.get('manifest_sha256') == admission['catalog']['manifest_sha256'] for e in events))
