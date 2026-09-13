@@ -180,3 +180,12 @@ import-allnull остановился AMBIGUOUS/configure на подтверж�
 NULL; inspect оставил pending без recovery. Полный аудит FAIL,12 результатов
 и save/reopen отсутствуют. Source/goal/harness и предыдущие FAIL сохранены.
 Дальнейшая диагностика/повтор требуют отдельного назначения; процессов нет.
+
+
+### Import NULL follow-up — 2026-09-13
+
+[Source814f3146](../../loginom-dock/node14-import-configure-followup-2026-09-13.md)
+исправил выбор точного NULL вместо печати+Tab; native расхождение регистра
+воспроизведено, fresh allnull3×5 PASS,336regression PASS. Import-specific
+refusal proof предложен координатору отдельно, не реализован. Старые FAIL
+сохранены; новый Hermes/acceptance pins в этой фазе не назначались.

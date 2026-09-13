@@ -7578,3 +7578,13 @@ FAIL13/13 сохранены. Candidate staged координатором, activ
 25 API calls; полный export31/31/3396 сохранён, собственные процессы завершены.
 [Отчёт и pins](missing-values-autonomous-acceptance-3-2026-09-13.md).
 Старый FAIL13/13 и source/harness/goal сохранены. Второй прогон не запускался.
+
+
+## Узел14: import NULL follow-up — 2026-09-13
+
+Подтверждена подмена typed NULL→null при Tab в native combo. Source814f3146
+выбирает точный наблюдаемый пункт;16focused/336regression PASS, fresh live
+allnull3×5 и12Null/schema/NULL PASS. Runtime71f73d81…56ab4ff,156/395 inputs.
+[Отчёт и предложение по import refusal](node14-import-configure-followup-2026-09-13.md).
+Allowance не расширен; full goal/старые FAIL13+14 receipts сохранены. Hermes
+не запускался; все4диагностические сессии закрыты. Нужен новый pinned комплект.
