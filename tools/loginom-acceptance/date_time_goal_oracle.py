@@ -56,7 +56,8 @@ def expected(data):
     rows = source_rows(data)
     result = dict(source=dict(schema=IMPORT_SCHEMA, rows=[[r[c['name']] for c in IMPORT_SCHEMA] for r in rows]),
                   initial=table(projection(False), rows), calendar=table(projection(), rows),
-                  empty=table(projection(), []), excluded=[dict(name='DateB', label='DateB', type='datetime', excluded=True)])
+                  empty=table(projection(), []), excluded=[dict(name='DateB', label='DateB', type='datetime', excluded=True)],
+                  excluded_sources=[dict(name='DateB', label='Дата', type='datetime')])
     for period in ('month', 'quarter'):
         groups = {}
         for row in rows:
@@ -82,7 +83,7 @@ def artifact(run_id):
         raise ValueError('run_id')
     data = (FIXTURES/'sales.csv').read_bytes()
     return dict(name='Dock-date-time-'+run_id+'-sales.csv', bytes=len(data),
-                sha256=hashlib.sha256(data).hexdigest(), upload=dict(directory='/test-3', overwrite='fail'))
+                sha256=hashlib.sha256(data).hexdigest(), upload=dict(directory='/test-3', overwrite='reject'))
 
 
 def render(run_id):

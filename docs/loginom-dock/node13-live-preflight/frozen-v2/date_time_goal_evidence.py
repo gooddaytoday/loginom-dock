@@ -7,7 +7,6 @@ from grouping_output_evidence import verify_grouping_output
 from row_filter_configuration_evidence import verify_filter_configuration
 from row_filter_output_evidence import verify_filter_output
 from node_configuration_evidence import verify_configuration_readback
-from date_time_excluded_evidence import verify_excluded
 
 LABELS = ('Продажи', 'Календарь', 'Месяцы', 'Кварталы', 'Нет продаж', 'Пустой календарь')
 TYPES = dict(zip(LABELS, ('imports.text', 'transform.date_time', 'transform.group_data',
@@ -84,7 +83,6 @@ def output_checks(events, request, label, initial=False, configuration=True):
                 rb = result['configuration']['readback']
                 excluded = [{k: f[k] for k in ('name', 'label', 'type', 'excluded')} for f in rb['output_mapping']['fields'] if f['excluded']]
                 im = rb['input_mapping']
-                checks['excluded_source_and_target'] = verify_excluded(events, request, expected)
                 checks['date_mapping'] = dict(passed=excluded == expected['excluded'] and rb['output_mapping']['autosync'] is False
                     and im['autosync'] is False and [(f['name'], f['label']) for f in im['fields']] ==
                     [('Id', 'Id'), ('DateA', 'Дата'), ('DateB', 'Дата'), ('Amount', 'Amount')])
@@ -144,51 +142,3 @@ def save_checkpoint(events, requests, path, revision):
             or any(t.get('event') in ('saved_package_closed', 'reopened_package_observed', 'overwrite_confirmed') for t in trace)):
         raise ValueError('save_trace_binding')
     return dict(passed=True, operation_id=start['operation_id'], package_persistence_verified=False)
-
-
-def done_checks(events, request, label):
-    """Configuration-only success is separate from the seven complete outputs."""
-    result = checkpoint(events, request)
-    config = audit_date(events, request)
-    rb = result['configuration']['readback']
-    expected = frozen()
-    excluded = [{k: f[k] for k in ('name', 'label', 'type', 'excluded')}
-                for f in rb['output_mapping']['fields'] if f['excluded']]
-    checks = dict(raw_configuration=config, excluded_source_and_target=verify_excluded(events, request, expected),
-        done_contract=dict(passed=label in ('Календарь', 'Пустой календарь')
-            and request['target']['kind'] == 'new' and request['finish'] == 'done'
-            and request['read']['ports'] == [] and result['cleanup_complete'] is True
-            and result['output']['ports'] == []
-            and result['execution'] == dict(status='not_requested', execution_id=None)),
-        frozen_projection=dict(passed=config.get('checks', {}).get('configuration', {}).get('projection')
-            == projection(label == 'Пустой календарь')),
-        mappings=dict(passed=excluded == expected['excluded'] and rb['output_mapping']['autosync'] is False
-            and rb['input_mapping']['autosync'] is False
-            and [(f['name'],f['label']) for f in rb['input_mapping']['fields']]
-            == [('Id','Id'),('DateA','Дата'),('DateB','Дата'),('Amount','Amount')]))
-    return dict(passed=all(c['passed'] for c in checks.values()), checks=checks)
-
-
-def split_retention(events, configured, executed):
-    """Same owned GUID and all settings; existing Execute may inspect but not repair."""
-    from date_time_persistence import semantic_configuration
-    from date_time_saved_import_evidence import readonly_wizard_mutations
-    from node_procedure_evidence import verify_internal_sequence
-    checks = {}
-    try:
-        before, after = checkpoint(events, configured), checkpoint(events, executed)
-        checks['request'] = dict(passed=configured['finish'] == 'done' and configured['target']['kind'] == 'new'
-            and executed['finish'] == 'execute' and executed['target']['kind'] == 'existing'
-            and executed['parameters'] == {} and executed['mappings'] == [] and executed['inputs'] == []
-            and executed['target']['ref'] == before['node'] == after['node'])
-        positions = {(e.get('phase'),e.get('operation_id')):i for i,e in enumerate(events)}
-        checks['order'] = dict(passed=positions[('node_checkpoint',configured['operation_id'])]
-            < positions[('node_apply_prepared',executed['operation_id'])])
-        checks['retained_configuration'] = dict(passed=semantic_configuration({'result':before})
-            == semantic_configuration({'result':after}))
-        sequence = verify_internal_sequence(events, executed['operation_id'], max_steps=4096)
-        failures = sequence['failures'] + readonly_wizard_mutations(sequence, allow_finish=True)
-        checks['no_settings_repairs'] = dict(passed=not failures, failures=failures)
-    except (KeyError, ValueError, TypeError, IndexError) as error:
-        checks['complete_contract'] = dict(passed=False, reason=str(error))
-    return dict(passed=bool(checks) and all(c['passed'] for c in checks.values()), checks=checks)

@@ -17,7 +17,7 @@ from node_public_acceptance_evidence import verify_public_nodes_and_saves, verif
 from artifact_delivery_evidence import verify_delivered_import_output
 from node_configuration_evidence import verify_configuration_readback
 from date_time_goal_oracle import GOAL, FIXTURES, IMPORT_SCHEMA, artifact, render
-from date_time_goal_evidence import LABELS, TYPES, PARENTS, checkpoint, one, output_checks, save_checkpoint, done_checks, split_retention
+from date_time_goal_evidence import LABELS, TYPES, PARENTS, checkpoint, one, output_checks, save_checkpoint
 from date_time_persistence import events_at, operation, opened_path, public_success, semantic_configuration
 from date_time_admission import check as admission_check, digest, INPUTS, receipt
 
@@ -168,9 +168,7 @@ def audit(request, evidence, prompt, admission, admission_base, diagnostic_index
         check('knowledge_scope', all(knowledge_scope(c) for c in evidence['calls'] if c['tool'] in KNOWLEDGE_TOOLS))
         events = evidence['events']
         requests = [e['request'] for e in events if e.get('phase') == 'node_apply_prepared']
-        check('nine_requests_seven_execute_two_done', len(requests) == 9
-            and sum(r['finish'] == 'execute' for r in requests) == 7
-            and sum(r['finish'] == 'done' for r in requests) == 2)
+        check('seven_executed_node_operations', len(requests) == 7)
         created = {}; by_label = {n: [] for n in LABELS}; final = {}
         for r in requests:
             value = checkpoint(events, r)
@@ -184,19 +182,14 @@ def audit(request, evidence, prompt, admission, admission_base, diagnostic_index
             if r['target']['type'] != TYPES[label]:
                 raise ValueError('declared_type')
             by_label[label].append(r); final[label] = (r, value)
-        check('exact_goal_operations', set(created) == set(LABELS) and all(len(by_label[n]) == (3 if n == 'Календарь' else 2 if n == 'Пустой календарь' else 1) for n in LABELS))
+        check('exact_goal_operations', set(created) == set(LABELS) and all(len(by_label[n]) == (2 if n == 'Календарь' else 1) for n in LABELS))
         for label in LABELS:
             for i, r in enumerate(by_label[label]):
                 parent = PARENTS.get(label)
                 wanted = [] if parent is None else [dict(source=created[parent], input=0, output=0)]
                 check(label+str(i)+'_links', r['inputs'] == (wanted if i == 0 else []))
-                if label in ('Календарь', 'Пустой календарь') and i == 0:
-                    checks[label+'_done'] = done_checks(events, r, label)
-                else:
-                    checks[label+str(i)+'_output'] = output_checks(events, r, label, initial=label == 'Календарь' and i == 1)
-        first, initial_execution, changed = by_label['Календарь']
-        for label in ('Календарь', 'Пустой календарь'):
-            checks[label+'_split_retention'] = split_retention(events, *by_label[label][:2])
+                checks[label+str(i)+'_output'] = output_checks(events, r, label, initial=label == 'Календарь' and i == 0)
+        first, changed = by_label['Календарь']
         check('saved_computed_output_only_change', changed['parameters'] == {} and changed['inputs'] == []
               and final['Календарь'][1]['node'] == checkpoint(events, first)['node'])
         empty_filter = by_label['Нет продаж'][0]
@@ -231,9 +224,7 @@ def audit(request, evidence, prompt, admission, admission_base, diagnostic_index
     except (KeyError, TypeError, ValueError, IndexError, OSError, AttributeError) as error:
         checks['complete_contract'] = dict(passed=False, reason=str(error))
     required = {'source_bytes', 'public_calls', 'one_final_checkpoint', 'independent_persistence'} | {
-        label+str(i)+'_output' for label in LABELS for i in
-        (range(1,3) if label == 'Календарь' else range(1,2) if label == 'Пустой календарь' else range(1))}
-    required |= {label+suffix for label in ('Календарь', 'Пустой календарь') for suffix in ('_done','_split_retention')}
+        label+str(i)+'_output' for label in LABELS for i in range(2 if label == 'Календарь' else 1)}
     check('all_required_components', required <= set(checks))
     return report(checks)
 

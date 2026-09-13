@@ -1206,12 +1206,5 @@
         100
       ]
     ]
-  },
-  "excluded_sources": [
-    {
-      "name": "DateB",
-      "label": "Дата",
-      "type": "datetime"
-    }
-  ]
+  }
 }

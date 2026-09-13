@@ -1,3 +1,27 @@
+# Узел 13: candidate live-preflight, offline frozen-v4 и ресурсная пауза — 13 сентября 2026
+
+[Текущий отчёт](node-13-candidate-live-preflight-1.md). Candidate db38f7f2 и
+runtime 2488fdaa проверены без модели. R1/current-runtime и адресная persistence
+4×8 прошли. Public persisted-import в новой сессии отказал до UI; согласован
+диагностический read/cancel/download/graph-execute протокол для полного reopen.
+
+Полный frozen-v2 подтвердил import 10×4, но первый календарь получил
+30-минутный AMBIGUOUS/read, cleanup=false. Исходный pending и FAIL сохранены;
+свой несохранённый пакет отброшен, сессия закрыта. Согласован frozen-v3: два
+new/Done + семь Execute, без изменения шести узлов, схем и данных. Новый import
+10×4 прошёл независимый аудит; Done завершён за 1211,5 с, cleanup=true.
+Независимый Done-audit FAIL: source DateB/Дата отличается от служебной метки
+excluded target DateB/DateB; frozen-v3 ожидал Дата. Входы/FAIL сохранены.
+Перед Execute действует ресурсная пауза координатора (~1 GiB свободно);
+свой несохранённый Package1 и сеанс оставлены открытыми, новых тяжёлых
+шагов/сессий/export не запускать до решения. Разделение source/target-меток
+согласовано во frozen-v4: offline Done reassessment PASS, 8/8 подмен отвергнуты,
+публичная схема подтверждена; v3 FAIL не изменён. Python 546 PASS.
+Полные 10×27/save/reopen, живые отрицательные проверки нового протокола и
+admission ещё открыты. Hermes, review, main/push, VPS/activation не запускались.
+
+---
+
 # Узел 13: подготовлен новый комплект полной приёмки
 
 [Отчёт](node-13-acceptance-candidate-preparation-1.md): source 5a4c46fc / runtime 2488fdaa, неизменённые 10 строк, exact source archive для VPS, current skill/frontend/environment pins и guarded launcher. Review1/fix1 completed; повторный review не назначен. Полная автономная приёмка остаётся открытой до candidate/live gates и отдельного слота Hermes. В этой фазе модель, браузер, VPS build/stage/activation не запускались.

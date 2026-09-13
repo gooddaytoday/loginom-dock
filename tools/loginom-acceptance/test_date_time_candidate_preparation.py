@@ -12,6 +12,33 @@ from date_time_candidate_prepare import archive
 
 
 class CandidatePreparation(unittest.TestCase):
+    def test_native_service_icon_is_distinct_from_analytical_nodes(self):
+        from date_time_sales_acceptance import analytical_nodes
+        service=dict(type='bg-vendor-icon-modelvariables',label='Переменные сценария',inputs=[],outputs=[],ref=dict(node_id='service'))
+        node=dict(type='transform.date_time',label='Календарь',ref=dict(node_id='date'))
+        self.assertEqual(analytical_nodes(dict(nodes=[service,node],links=[])),[node])
+        for state in [dict(nodes=[service,service,node],links=[]),dict(nodes=[dict(service,label='other'),node],links=[]),
+                      dict(nodes=[service,node],links=[dict(source='service',target='date')])]:
+            with self.assertRaises(ValueError):analytical_nodes(state)
+        extra=dict(type='transform.calculator',label='extra',ref=dict(node_id='extra'))
+        self.assertEqual(analytical_nodes(dict(nodes=[service,node,extra],links=[])),[node,extra])
+
+    def test_frozen_artifact_uses_real_startup_admission_policy(self):
+        import subprocess
+        from date_time_goal_oracle import artifact, FIXTURES
+        from date_time_admission import ROOT
+        descriptor=artifact('20260913-120000-1234abcd')
+        descriptor['sourcePath']=str(FIXTURES/'sales.csv')
+        script="""import fs from 'node:fs/promises';import os from 'node:os';import path from 'node:path';
+        import {createArtifactStore,admitStartupArtifacts} from './client/lib/artifacts.mjs';
+        const d=JSON.parse(process.argv[1]),root=await fs.mkdtemp(path.join(os.tmpdir(),'node13-artifact-test-'));
+        try{const s=await createArtifactStore({directory:root});let rejected=false;
+        try{await admitStartupArtifacts(s,[{...d,upload:{...d.upload,overwrite:'fail'}}]);}catch{rejected=true;}
+        if(!rejected||s.list().length)throw Error('Invalid policy admitted');
+        const out=await admitStartupArtifacts(s,[d]);if(out.length!==1||out[0].upload.overwrite!=='reject')throw Error('Wrong policy');
+        }finally{await fs.rm(root,{recursive:true,force:true});}"""
+        subprocess.run([str(Path.home()/'.loginom-dock/current/runtime/node'),'--input-type=module','-e',script,json.dumps(descriptor)],cwd=ROOT,check=True,capture_output=True,text=True)
+
     def test_prepared_skill_target_and_frontend_are_bound(self):
         import copy
         from date_time_sales_acceptance import prepared_pins_match
