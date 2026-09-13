@@ -59,7 +59,7 @@
     "collapse/review-fix/provenance.json": "9282d219ba4677ccb3a97cbe61671e05f7ceed6eb4d6a0ea313650e928e26b7e",
     "collapse/runner-integration/readonly-source.schema.json": "7e2cb50a1dfb24562b1ed31f23611f6325968c03f6eebbd05a316ace17c3ed7c",
     "collapse-live.mjs": "eafe7236887f6dc3b096a7ece49abd62d206d5b5d01e2adc33da7a9ce960cef4",
-    "collapse_acceptance.py": "263e4586a2a002c8fa25bddbac8da2f4ad68bdbbf2ae4c9cb7ee6a81481919a5",
+    "collapse_acceptance.py": "525d7490d64b785bb13620f13975edfec0971233a762550a03482d5ba5ad395e",
     "collapse_node_acceptance.py": "f3734365eecbc55c03d022e983f2c812c8d444d978c84ec4d7310fb35b34d070",
     "data_pipeline.py": "99aff9b4978e9f0076f2f3dda197fb2b3af2c44da86c258acd8e70ee4e17d73c",
     "destinations.py": "b1fbe7d7d6c4b66346b025b402076a78261b531d314ca6304b317e7f8bcf4835",
@@ -273,7 +273,7 @@
     "collapse/runner-integration/check-tooling.py": "4e097c2490a415d08ca5b4ad80110e0fbacacf7f244563aac3382922b270c7af",
     "collapse/runner-integration/replay-components.py": "1d136adc3046b53743e16ded1120e59857c252a823260e36203f770a94d02e8d",
     "collapse/runner-integration/prepare-current-packet.py": "a633df413a08d67729e89b224a68cddf4cf8c2b38e7387c26615d023532ef140",
-    "collapse/runner-integration/candidate-stage.json": "82e62bb559cad1c01cfe5e717ca94879acf99ccd4410b0f0eb54e45e5863b972",
+    "collapse/runner-integration/candidate-stage.json": "dc5be3e203ddc10a0fdc9a46486e5e0a9668346ff10cd71997f4a036a5d12440",
     "collapse/native-gates/test_user_bindings.py": "24b18fdcffdeb2026b5c088e69cf4d53f2c7451e7a132a8d24e463432d249e14"
   }
 }
