@@ -1,3 +1,66 @@
+# Второй кандидат узла 12 проверен на VPS — 13 сентября 2026
+
+`2026.09.13-node12.2-candidate` собран из source
+`0e11a3fb24ca40a9f855008d2b0d1856d6f771ad` и размещён без активации.
+Manifest SHA: `d0c9a5bedc170754dd251c982508e0ad8568d300091eda0027962c496df62adf`.
+[Полный комплект проверенных pins](node12-candidate2-2026-09-13.json).
+
+Архив source содержит 628 файлов, включая executor/capability-abi.json;
+контрольная сумма `39876dd6a497762bf1ea2f8626d6d3dde2b2c279c564f964448c3adec4939192`.
+Сборка и stage выполнены на VPS Node 24.19.0; каталог и отчёты:
+`/opt/loginom-dock/releases/20260913-node12.2-candidate/`.
+Source inbox: `/opt/loginom-dock/releases/20260913-node12-preparation2/`.
+Локальная проверенная копия: `.dock/node12-candidate2-20260913/server-candidate/`.
+Все четыре catalog-файла совпали при server readback и после скачивания.
+Save roots обеих операций: `/test-1/packages`; Loginom 7.4.2 / macOS / Chromium;
+E2E revision `2cad5602`, stale_actions пуст.
+
+До и после stage сервер/current указывал на
+`/opt/loginom-dock/releases/20260904-landing-7b711846`;
+preview/current отсутствовал (404), current_catalog_sha256:null.
+Старые кандидаты сохранены. Новый developer preflight завершён PASS; квитанции
+проверены. Узлу 12 назначен отдельный слот нового полного Hermes-прогона;
+подтверждён старт хода разработчика, запуск модели и итог ещё не подтверждены.
+Сборка каталога не означает автономную приёмку или выпуск.
+
+---
+
+# Кандидат14 размещён; начата проверка native save — 13 сентября 2026
+
+На VPS собран, staged и повторно прочитан
+`2026.09.13-node14-test4.1-candidate`, source c32a5d5e. Manifest SHA
+`921f5d51e78cd190f1352900ee755fee9c2b614759b46b04595e3dc34537a483`.
+Все4 опубликованных файла побайтно совпали со сборкой и скачанным комплектом.
+Save roots обеих операций только `/test-4`; DataRecovery допущен, compatibility
+Loginom7.4.2/macos/chromium, E2E2cad5602, stale_actions:[].
+Current server и отсутствие preview/current сохранились; activated:false.
+[Проверенные pins](node14-candidate-2026-09-13.json).
+
+Первоначальный10-file source packet был неполон: publisher импортирует
+executor/capability-abi.json. Builder прошёл, публикация остановилась до записи.
+Координатор добавил11-й tracked файл из того же c32a5d5e, сохранив остальные
+байты и исходный пакет; validation/stage/readback прошли. Исправленный archive
+SHAff8f6ae7433da30824dcf38c0c3ad60ffd495d36d1980216e7dd29a062223504.
+Разработчику поручено исправить exporter и проверить загрузку publisher из
+изолированного архива. Один SSH отказ при передаче сменился успешным повтором;
+credentials/SSH-настройки не менялись, причина единичного отказа не установлена.
+
+VPS evidence: `/opt/loginom-dock/releases/20260913-node14-test4.1-candidate/`;
+source inbox: `20260913-node14-preparation`. Локально
+`.dock/node14-candidate-20260913/server-candidate/` хранит реальные байты/отчёты,
+`complete-source-packet/` — полный исправленный source packet.
+
+После completed/idle подготовки14 в той же задаче на Astra medium назначен
+native-save-candidate-preflight. Команда
+`node14:native-save-candidate-preflight:1:921f5d51e78cd190f1352900ee755fee9c2b614759b46b04595e3dc34537a483`;
+ход `01a098f0-5364-7d91-b517-bd22469f0ae8` подтверждён active/inProgress.
+Переданы фактические pins, поручены новый preflight, native checkpoint/test-4,
+отдельный reopen/полный output без настройки, live geometry wrapper и reader.
+Hermes14 не выдан; сборка каталога не означает принятие узла.
+Merge/push/deploy/current activation/обновление общего клиента не выполнялись.
+
+---
+
 # Кандидат узла11 размещён без активации — 13 сентября 2026
 
 Версия `2026.09.13-node11.1-candidate`, source code `91dee921` (389 tracked inputs),
