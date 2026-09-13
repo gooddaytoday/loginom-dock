@@ -1,3 +1,81 @@
+# Узел 14 завершил native-подготовку кандидата — 13 сентября 2026
+
+Ход `01a098f0-5364-7d91-b517-bd22469f0ae8` подтверждён completed/idle.
+Разработчик зафиксировал harness/goal/verifier в `3c999b30`, pins в `7d8a868a`.
+Production source `c32a5d5e` и runtime `a9db4113ac69d38d7227e971ece3652acf3e1bf836723e6e577917eda916406f`
+остались прежними. Каталог `2026.09.13-node14-test4.1-candidate` не пересобирался
+и не активировался. Отчёт и полные pins находятся в worktree узла 14:
+`docs/loginom-dock/missing-values-native-candidate-preflight-2026-09-13.md` и
+`missing-values-native-candidate-pins-2026-09-13.json`.
+
+Девять стартовых CSV заменены восемью уникальными без сокращения заявленного
+покрытия: «Перестановка» использует precision.csv с явным входным сопоставлением.
+Сохранены девять импортов, 12 конечных результатов и 14 содержательных этапов.
+Старый reordered.csv сохранён для проверки эквивалентности. Реальный prepare
+всех восьми artifacts прошёл в user-v1, session
+`69006a92-7487-4a34-9607-5bc81cd6727f`; отдельная precheck session осталась idle.
+Девятый файл по-прежнему отвергается штатным admission. Полный новый goal ещё не
+исполнялся автономно; схема и oracle сопоставления проверены отдельно.
+
+На отдельном компонентном сценарии package.save_checkpoint revision 2 сохранил
+`/test-4/packages/Node14-native-20260913-071823-64a944c0.lgp`.
+После отдельного закрытия новый reader document открыл пакет и выполнил прежние
+узлы с parameters:{}, inputs:[], mappings:[]. Полные результаты 4×5 и 120×5,
+620 ячеек, schema/config/policy/mappings/GUID/две связи/fresh executions проверены.
+После смены core→changed среднее стало 20 при сохранении GUID.
+Source bytes после reopen не скачивались заново; использованы прежние проверенные
+upload receipts и сохранённые path/format/schema. Component receipt имеет
+passed:true, full_goal_accepted:false, model_started:false.
+
+Geometry wrapper и отдельный reader проверили настоящие окна: viewport:null,
+inner 1508×862, outer 1508×949. В verifier добавлены проверки принадлежности
+output-port-close и диалога строковой константы; имеются отрицательные проверки.
+Изолированный экспортёр из 11 файлов теперь включает capability-abi.json;
+старый архив из 10 файлов и воспроизведённый отказ сохранены.
+
+Новые goal SHA `35a23e9aeb6a37c408e249aec54e12ca1f230cbc219392e5cabe9b6d4675a836`,
+fixture manifest `0f2927617fe47e84db3ae3500f735a560002c509a091dd7611aa9ca7f455b1cf`,
+harness `84d1e8c6ace5c0ddcc29c4d7cb3c94b67acf0e461e1dc1d2dd55e654be621417`.
+Разработчик сообщил 517 Python и 2 Node теста PASS; координатор их повторно не
+запускал. Полная автономная приёмка 12 результатов и её отдельный reopening
+остаются обязательными. Общий save_as overwrite→close узла 12 здесь не исправлялся
+и не проверялся.
+
+Координатор проверил SHA всех девяти evidence-файлов, 156 runtime и 248 harness
+входов, goal/fixture и фактический prepare.json/metadata полной загрузки.
+[Квитанция координатора](node14-native-preflight-2026-09-13.json).
+После итогового события узла 12, completed/idle и независимой проверки
+процессов 04:49:51 UTC его слот освобождён. Узлу 14 назначен единственный слот
+`node14-hermes-20260913-921f5d51`: один полный missing-values-complete на
+openai-codex / Sol / low, затем независимое reopening всех 12 результатов.
+Команда `node14:autonomous-acceptance:1:921f5d51e78cd190f1352900ee755fee9c2b614759b46b04595e3dc34537a483`.
+Старт хода разработчика `01a0991a-f2ea-7961-a4fc-2d06e90bd73b` подтверждён
+active/inProgress; старт самой модели и результат ещё не подтверждены.
+
+Узел 12 завершил run `20260913-072904-3cc4ad0e`: исходный frozen audit
+FAIL 112/118. Отчёт зафиксирован в `59062bff`; все 12 SHA артефактов совпали.
+Actual Sol/low, 42 API calls, exit0; фактическое окно этой session 1508×949,
+viewport:null, start-maximized. Все 16 операций и save/close/open прошли.
+Шесть import gates отвергли явное identity output mapping; три composite
+остановились до schema/full/native persistence checks, их успех ещё не доказан.
+
+Адресная сверка цели, initial requests и native readback подтвердила, что полное
+identity mapping сохраняет исходные name/label/order/type/data_kind/excluded и
+не запрещено заданием. После reopen settings:{}, inputs:[], mappings:[], GUID,
+source и свежие execution соответствуют ожидаемому. Узлу 12 в прежней задаче
+на Astra medium назначена узкая коррекция допуска только этого случая с
+отрицательными подменами и выполнением пропущенных проверок на прежнем evidence.
+Команда `node12:identity-import-auditor-followup:1:59062bff9520a90c1e616bd72a680ce393fd3ded`;
+ход `01a0991b-edd3-7a62-abc6-9b5456f69b80` подтверждён active/inProgress.
+Новый verifier/result фиксируются отдельно от исходного execution harness и
+frozen FAIL; проверка pins сохраняется. Новый Hermes12 не назначен. При нехватке
+сохранённого evidence нужен конкретный отчёт о недостающей живой проверке.
+
+Нового полного ревью, слияния, push, активации, изменения общего клиента и
+периодического мониторинга не выполнялось. Полная приёмка обоих узлов открыта.
+
+---
+
 # Узел 12 продолжил подготовку приёмки — 13 сентября 2026
 
 После исправления сохранения и проверок повторного открытия на VPS собран и
