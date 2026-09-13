@@ -1,5 +1,5 @@
 import {NodeReadinessTimeout} from './node-procedure.mjs';
-import {captureExecutionBaseline,identifyNewExecution,verifyCompletedExecution,selectExecutionChild,expectedExecutionStopProof,verifyCancelledExecution} from './node-execution-evidence.mjs';
+import {captureExecutionBaseline,identifyNewExecution,verifyCompletedExecution,verifyFailedExecution,selectExecutionChild,expectedExecutionStopProof,verifyCancelledExecution} from './node-execution-evidence.mjs';
 
 const requireValue=(v,m)=>{if(!v)throw new Error(m);};
 const one=(xs,message)=>{requireValue(xs.length===1,message);return xs[0];};
@@ -244,6 +244,7 @@ export function createNodeExecutionProcedure(channel,node) {
                 &&p.record_id===execution.group_record_id);
               requireValue(group,'Execution group replaced while waiting');
               if(group.state==='completed'&&group.error===false)return true;
+              if(group.progress_state?.state==='failed') {verifyFailedExecution(execution,s.node_processes);return true;}
               if(group.progress_state?.verified===true&&group.progress_state.terminal===true)
                 throw Error('Node execution ended without success: '+group.progress_state.state);
             }
@@ -264,6 +265,13 @@ export function createNodeExecutionProcedure(channel,node) {
         }
       }
       const group=one(s.node_processes.processes.filter(p=>p.process_id===execution.group_id&&p.record_id===execution.group_record_id),'Execution group replaced');
+      if(group.progress_state?.state==='failed') {
+        const receipt=verifyFailedExecution(execution,s.node_processes);
+        await act(s,'ConsoleForm;btnClose','click',fresh=>verifyFailedExecution(execution,fresh.node_processes));
+        await observe('failed execution console closed',s=>!consoleVisible(s));
+        await returnToExecutedWorkflow(channel,node);
+        return {...receipt,cleanup_complete:true,effect_possible:false};
+      }
       s=await revealChildren(s,group);
       const child=selectExecutionChild(execution,s.node_processes);
       const childTid=processControl(child);

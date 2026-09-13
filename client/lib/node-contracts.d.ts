@@ -53,7 +53,7 @@ export interface NodeApplyResult {
   /** A local node checkpoint never proves that the package was saved. */
   package_saved: false; cleanup_complete: boolean; warnings: string[];
   configuration?: {status: 'applied' | 'discarded'; readback?: TextImportConfigurationReadback | CalculatorConfigurationReadback | GroupingConfigurationReadback | SortingConfigurationReadback | MissingValuesConfigurationReadback | JoinConfigurationReadback};
-  checkpoint_kind?: 'local_node_checkpoint' | 'local_node_cancellation' | 'local_node_stopped';
+  checkpoint_kind?: 'local_node_checkpoint' | 'local_node_cancellation' | 'local_node_stopped' | 'local_node_failed';
   persisted_package_verified?: false; pending_phase?: PhaseName | null; error?: NodeError;
 }
 export interface TextImportConfigurationReadback {
@@ -117,7 +117,8 @@ export interface SortingConfigurationReadback {
   output_mapping: GroupingConfigurationReadback['output_mapping'];
 }
 export interface NodeError {code: string; message: string; cause?: {code: string; message: string}}
-export interface NodeExecution {status: 'not_requested' | 'pending' | 'completed' | 'cancelled'; execution_id: string | null; stop_verified?: boolean}
+export type NodeExecution = {status: 'not_requested' | 'pending' | 'completed' | 'cancelled'; execution_id: string | null; stop_verified?: boolean}
+  | {status: 'failed'; execution_id: string; failure_verified: true; root_id: string; group_id: string; group_record_id: string};
 export interface TableCell {
   type: string; is_null: boolean; precision: string;
   /** Exact integers are decimal strings; real values retain canonical decimal text. */

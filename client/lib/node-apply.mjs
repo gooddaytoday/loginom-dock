@@ -234,7 +234,22 @@ export async function applyNode({request, operation, handlers, drivers, record,
     if(request.finish==='execute') {
       state.execution={status:'pending',execution_id:finish.execution_id};
       const execution=await phase('execute',ctx=>drivers.waitExecution(ctx),{budget:request.budgets.execute_ms,mutation:false,
-        verify:value=>requireValue(value.execution_id===state.execution.execution_id && ['completed','cancelled'].includes(value.status) && (value.status!=='cancelled'||stopSignal?.aborted===true&&value.stop_verified===true&&value.owner_verified===true), 'Execution is neither freshly completed nor verified cancelled')});
+        verify:value=>requireValue(value.execution_id===state.execution.execution_id && ['completed','cancelled','failed'].includes(value.status)
+          && (value.status!=='cancelled'||stopSignal?.aborted===true&&value.stop_verified===true&&value.owner_verified===true)
+          && (value.status!=='failed'||value.failure_verified===true&&value.output_refreshed===false
+            &&['document_id','workflow_id','node_id'].every(k=>value.node?.[k]===state.node[k])&&id(value.root_id)&&id(value.group_id)&&id(value.group_record_id)
+            &&value.execution_id===state.node.document_id+':'+value.root_id+':'+value.group_id
+            &&value.error?.code==='NODE_EXECUTION_FAILED'&&typeof value.error.message==='string'&&value.error.message.trim().length>0&&value.error.message.length<=1000), 'Execution has no verified terminal outcome')});
+      if(execution.status==='failed') {
+        state.execution={status:'failed',execution_id:execution.execution_id,failure_verified:true,
+          root_id:execution.root_id,group_id:execution.group_id,group_record_id:execution.group_record_id};
+        const result={operation_id:operation.id,status:'FAILED',effect_possible:state.effect_possible,
+          phases:state.phases.map(({value,...p})=>p),node:state.node,execution:state.execution,output:state.output,
+          package_saved:false,cleanup_complete:true,warnings:[],configuration:{status:'applied'},
+          checkpoint_kind:'local_node_failed',persisted_package_verified:false,error:execution.error};
+        await acknowledge({phase:'node_checkpoint',signature,result});state.result=structuredClone(result);
+        return result;
+      }
       if(execution.status==='cancelled') {
         state.execution={status:'cancelled',execution_id:execution.execution_id,stop_verified:true};
         const result={operation_id:operation.id,status:'FAILED',effect_possible:state.effect_possible,

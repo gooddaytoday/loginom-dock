@@ -32,7 +32,9 @@ export function createNodeOperationRunner({run,validate,progress}) {
    const signature=digest({request,handler_revision:validate(request)}),old=jobs.get(request.operation_id);
    if(old) {
     if(old.signature!==signature)throw Error('Node operation ID was used with different parameters');
-    if(!resume||old.state==='running'||old.outcome?.status==='SUCCEEDED'||old.outcome?.output?.execution?.status==='cancelled')return snapshot(old);
+    if(!resume||old.state==='running'||old.outcome?.status==='SUCCEEDED'||old.outcome?.output?.execution?.status==='cancelled'
+      ||old.outcome?.status==='FAILED'&&old.outcome.cleanup_complete===true&&old.outcome.output?.execution?.status==='failed'
+        &&old.outcome.output.execution.failure_verified===true)return snapshot(old);
     if([...jobs.values()].some(job=>job.state==='running'))throw Error('Another node operation is running');
     return launch(request,signature,old.attempt+1,true);
    }

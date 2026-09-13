@@ -69,7 +69,8 @@ export async function readNodeProcesses(page,binding,readNode=readPreparedNodeCo
           &&(detailed==='completed')===(d.Status===3)&&!(terminal&&d.CanCancelProcess);
         const progress_state=statusValid?{verified:true,state:detailed,terminal,can_cancel:d.CanCancelProcess,
           source:'native_progress_record'}:{verified:false};
-        processes.push({process_id:id,record_id:record,parent_id:parent,state,error,rendered,selected,process_tid:path,
+        processes.push({process_id:id,record_id:record,parent_id:parent,state,error,
+          ...(error&&typeof d.ErrorDetails==='string'?{error_details:d.ErrorDetails.trim().slice(0,1000)}:{}),rendered,selected,process_tid:path,
           expander_tid,expanded,children_loaded:d.loaded===true,caption:typeof d.text==='string'?d.text.slice(0,240):null,progress_state,
           ...(owner&&d.ModelNode===owner.data?{owner:{verified:true,node_id:nodeId,source:'native_process_model_identity'}}:{})});
         if(Array.isArray(n.childNodes)&&n.childNodes.length)walk(n.childNodes,id);
