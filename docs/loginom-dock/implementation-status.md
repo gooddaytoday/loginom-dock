@@ -1,3 +1,21 @@
+# Node14: development input_mapping recovery проверено — 13 сентября 2026
+
+В ветке `codex/node-14-missing-values`, code SHA
+`c32a5d5e163fe174afba59abce973ac405742cdc`, восстановлен исходный node.apply
+после потери ответа завершённого входного Done: тот же runtime/session/ID,
+без повторного Done, затем один Execute и полный выход 3×5. Изменённый mapping,
+включая сохранившийся origin_type после возврата метки, корректно отказан;
+исходный pending не сбрасывался. Inspect и повтор результата без жестов.
+
+Клиент 1432 PASS / 1 SKIP, Python 3 PASS, независимая проверка 15 ячеек и
+шесть отрицательных подмен evidence. N14-R1/R2 сохранены; нового review не было.
+[Отчёт разработки recovery](missing-values-recovery-2026-09-13.md) содержит
+точные pins, доказательства и границы. Native save /test-4, immutable candidate
+и Hermes ждут отдельного допуска; узел не принят. Configure recovery13 не реализован.
+Ниже — исторические статусы соответствующих ревизий.
+
+---
+
 # Node14: замечания review исправлены в source — 13 сентября 2026
 
 В ветке `codex/node-14-missing-values` коммитом

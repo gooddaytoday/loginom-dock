@@ -5,9 +5,14 @@
 и проверены в живом Loginom, code SHA `a63586fe096f4fd7f17f346c391834d3e34bdaa4`.
 [Отчёт исправлений](../../loginom-dock/missing-values-fix-r1-2026-09-13.md)
 фиксирует tests, pins, terminal failure/cleanup и успешный запуск после восстановления CSV.
-Lost-reply recovery фазы input_mapping остаётся блокером; безопасный pending
-не засчитан как восстановление. Native save /test-4, immutable candidate и Hermes
-ожидают отдельного допуска координатора. Повторного полного review не назначено.
+Отдельная development recovery завершена: code SHA
+`c32a5d5e163fe174afba59abce973ac405742cdc`. Потерянный ответ завершённого input
+Done восстановлен в том же ID/runtime/session с полной проверкой mapping;
+изменённый mapping/locked graph безопасно отказаны без Execute.
+[Отчёт восстановления](../../loginom-dock/missing-values-recovery-2026-09-13.md)
+фиксирует границы: это только input_mapping Node14, не configure recovery13.
+Native save /test-4, immutable candidate и Hermes ожидают отдельного допуска
+координатора. Повторного полного review не назначено.
 Навигация: [реестр](README.md), [общие требования новой волны](next-wave.md).
 Зависимости: [03 — общий node.apply](03-text-import.md),
 [05 — тип/вид поля](05-field-parameters.md), [09 — обычный Hermes](09-hermes-user-diagnostics.md).
