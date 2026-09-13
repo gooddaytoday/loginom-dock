@@ -25,9 +25,62 @@ def pairs(e):
         need(unwrap(raw)==r['result'],'Raw reply differs from projected result')
     return ps
 
+def validation_error(reply):
+    result=reply['result'];need(result.get('isError') is True,'Not an MCP error')
+    value=result.get('error')
+    if value is None:
+        content=result.get('content',[]);need(bool(content),'Missing MCP error content');value=content[0]
+        if isinstance(value,dict) and value.get('type')=='text':value=value['text']
+    if isinstance(value,str):value=json.JSONDecoder().raw_decode(value)[0]
+    need(isinstance(value,dict),'Unstructured MCP error')
+    return value
+
+def validation_refusal(call,reply,events,accepted_ids,ps):
+    try:
+        normalized={**reply,'result':{'isError':True,'error':json.dumps(validation_error(reply))}}
+        return proven_validation_refusal(call,normalized,events,accepted_ids,ps)
+    except (ValueError,KeyError,TypeError):return False
+
+def bind_node_request(prepared,call,ps):
+    public=call['arguments']
+    if prepared==public:return
+    ref=public.get('workflow_ref',{})
+    need(set(ref)=={'workflow_id'},'Unknown public workflow projection')
+    candidates=[]
+    for c,r in ps:
+        if c['session_id']!=call['session_id'] or r['row']>=call['row']:continue
+        result=r['result'];refs=[]
+        if c['tool']==PREFIX+'dock_prepare' and result.get('prepared') is True:
+            workspace=result.get('workspace',{})
+            if workspace.get('status')=='READY':refs.append(workspace)
+        elif c['tool']==PREFIX+'dock_action_run' and c['arguments'].get('action_key') in ('package.save_as','package.save_checkpoint') and result.get('status')=='SUCCEEDED':
+            refs.extend(result.get('output',{}).get('workflow_continuations',[]))
+        for owner in refs:
+            if owner.get('document_id')==public['document_id'] and owner.get('workflow_ref',{}).get('workflow_id')==ref['workflow_id']:
+                candidates.append((r['row'],owner['workflow_ref']))
+    need(bool(candidates),'Public workflow was not issued before node call')
+    issued=max(candidates,key=lambda x:x[0])[1]
+    need(prepared=={**public,'workflow_ref':issued},'Prepared request differs from issued public workflow/parameters')
+
+def saved_checkpoint(e,ps,op):
+    call,reply=one([(c,r) for c,r in ps if c['tool']==PREFIX+'dock_action_run' and c['arguments'].get('operation_id')==op],'Save public call')
+    saved=event(e,op,'completed')['outcome']
+    need(call['arguments']['action_key']=='package.save_checkpoint' and saved['status']=='SUCCEEDED' and saved['output']['save_completed'] and saved['output']['workflow_preserved'],'Saved checkpoint not proved')
+    need(call['arguments']['parameters']['path']==saved['output']['package_ref']['path'],'Save request path differs')
+    expected=saved['output']
+    if reply['result'].get('result_version')=='user-v1':
+        expected={k:v for k,v in expected.items() if k in ['package_ref','reopened','workflow_preserved','save_completed','persisted_content_verified','workflow_continuations']}
+        if 'workflow_continuations' in expected:expected['workflow_continuations']=[{k:v for k,v in x.items() if k in ['document_id','workflow_ref']} for x in expected['workflow_continuations']]
+    need(reply['result'].get('status')=='SUCCEEDED' and reply['result']['output']==expected,'Save public/journal mismatch')
+    return saved
+
 def node(e,ps,op):
-    call=one([c for c,r in ps if c['tool']==PREFIX+'dock_node_apply' and c['arguments'].get('operation_id')==op],'Node public start')
-    prepared=event(e,op,'node_apply_prepared');need(prepared['request']==call['arguments'],'Prepared request differs from public call')
+    starts=[(c,r) for c,r in ps if c['tool']==PREFIX+'dock_node_apply' and c['arguments'].get('operation_id')==op]
+    allocated=[(c,r) for c,r in starts if r['result'].get('state') in ('running','settled')]
+    call,_=one(allocated,'Node public start')
+    for c,r in starts:
+        if c is not call:need(validation_refusal(c,r,e['events'],{op},ps),'Unproved extra node request')
+    prepared=event(e,op,'node_apply_prepared');bind_node_request(prepared['request'],call,ps)
     replies=[r['result'] for c,r in ps if c['arguments'].get('operation_id')==op and r['result'].get('state')=='settled']
     need(bool(replies) and all(x==replies[0] for x in replies),'Node settled result absent/changed')
     body=replies[0];end=event(e,op,'completed')['outcome'];n=end['output']
@@ -95,9 +148,7 @@ def persistence(request,e,bundle,original):
         for field in ['source','format','columns','output_mapping']:need(imported['configuration']['readback'][field]==oldimport['configuration']['readback'][field],'Persisted import '+field)
         graph=bundle['graphs'][key];need(graph['before']==graph['after'] and bool(graph['before']['nodes']) and bool(graph['before']['links']),'Saved topology differs/missing')
         need(graph['before_document']==before['node']['document_id'] and graph['after_document']==after['node']['document_id'] and graph['raw_before_ref'] and graph['raw_after_ref'],'Topology raw ownership')
-        saveid=bundle['save_operations'][key];savecall,savereply=one([(c,r) for c,r in pairs(e) if c['tool']==PREFIX+'dock_action_run' and c['arguments'].get('operation_id')==saveid],'Save public call')
-        saved=event(e,saveid,'completed')['outcome'];need(saved['status']=='SUCCEEDED' and saved['output']['save_completed'] and saved['output']['workflow_preserved'],'Saved checkpoint not proved')
-        need(savereply['result']['output']==saved['output'],'Save public/journal mismatch')
+        saveid=bundle['save_operations'][key];saved=saved_checkpoint(e,pairs(e),saveid)
         need(saved['output']['package_ref']['path']==bundle['package_paths'][key],'Saved path differs')
         source=proof['source_profile']['source']
         readonly_receipt(bundle['readonly_sources'][key],run_id=request['run_id'],document_id=after['node']['document_id'],path=source['destination'],digest=source['sha256'],size=source['bytes'])
@@ -134,10 +185,7 @@ def native_session_persistence(request,e,bundle,original):
                 new_value=imported['configuration']['readback'][field];old_value=oldimport['configuration']['readback'][field]
                 need(format_equal(old_value,new_value) if field=='format' else new_value==old_value,'Persisted import '+field)
             saveid=bundle['save_operations'][key]
-            savecall,savereply=one([(c,r) for c,r in pairs(e) if c['tool']==PREFIX+'dock_action_run' and c['arguments'].get('operation_id')==saveid],'Original model save public call')
-            saved=event(e,saveid,'completed')['outcome']
-            need(saved['status']=='SUCCEEDED' and saved['output']['save_completed'] and saved['output']['workflow_preserved'],'Original saved checkpoint missing')
-            need(savereply['result']['output']==saved['output'],'Save public/journal mismatch')
+            saved=saved_checkpoint(e,pairs(e),saveid)
             need(saved['output']['package_ref']['path']==spec['package']['path'],'Original saved package differs')
         return True
     finally:
@@ -157,10 +205,11 @@ def negative(e,ps,op,kind):
     p=call['arguments']['parameters']
     need((kind=='conflict' and bool({f['name'] for f in p['information']}&{f['name'] for f in p['transposed']})) or (kind=='empty' and p['transposed']==[]) or (kind=='missing' and '__MissingField__' in [f['name'] for f in p['transposed']]),'Negative input wrong')
     if kind in ('conflict','empty'):
-        need(proven_validation_refusal(call,reply,e['events'],set(),ps),'Negative is not a proven unallocated MCP validation refusal')
-        error=json.JSONDecoder().raw_decode(reply['result']['error'])[0]
+        need(validation_refusal(call,reply,e['events'],set(),ps),'Negative is not a proven unallocated MCP validation refusal')
+        error=validation_error(reply)
         message=json.dumps(error.get('error',{}),ensure_ascii=False).lower()
-        need(('complete ordered collapse roles required' in message) if kind=='empty' else ('unknown, duplicate or conflicting collapse role' in message),'Wrong validation cause')
+        empty_cause=('complete ordered collapse roles required' in message or error.get('error',{}).get('message')=='Invalid parameters.parameters.transposed: array is too short')
+        need(empty_cause if kind=='empty' else ('unknown, duplicate or conflicting collapse role' in message),'Wrong validation cause')
     else:
         _,r=node(e,ps,op)
         need(r['status']=='NOT_APPLIED' and r['effect_possible'] is False and r['cleanup_complete'] is True,'Negative mutated state')

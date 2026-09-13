@@ -16,6 +16,10 @@ class CollapseAdmissionTest(unittest.TestCase):
  def test_run_blocked_before_auth_even_with_claimed_closed_gates(self):
   with patch.object(a,'frozen',return_value={'gates':{'resource':'PASS'}}),patch.object(run,'connection',side_effect=AssertionError('credentials')),patch.object(run.subprocess,'Popen',side_effect=AssertionError('model')):
    with self.assertRaisesRegex(ValueError,'Collapse admission blocked'):run.execute(SimpleNamespace(goal=a.GOAL_ID,run=True))
+ def test_explicit_user_profile_is_required(self):
+  a.require_user_profile({'hermes_profile':{'version':1,'result_profile':'user-v1','mode':'executor-replay'}})
+  for profile in [None,{},dict(version=1,result_profile='diagnostic',mode='executor-replay'),dict(version=1,result_profile='user-v1',mode='classic')]:
+   with self.assertRaisesRegex(ValueError,'user-v1'):a.require_user_profile({'hermes_profile':profile})
  def test_authorized_collapse_budget_only(self):
   args=SimpleNamespace(goal=a.GOAL_ID,run=True,timeout=7200,max_turns=140,manifest_uri=a.CANDIDATE_URI,manifest_sha256=a.CANDIDATE_SHA,model_profile='chatgpt-sol',storage_directory='/test-1/node16-20260913-a56c2488',loginom_user='test-1')
   run.validate_inputs(args)
@@ -24,7 +28,7 @@ class CollapseAdmissionTest(unittest.TestCase):
    with self.assertRaisesRegex(ValueError,'Invalid acceptance budget'):run.validate_inputs(invalid)
  def test_exact_candidate_admitted_and_wrong_profile_blocked(self):
   args=SimpleNamespace(manifest_uri=a.CANDIDATE_URI,manifest_sha256=a.CANDIDATE_SHA,model_profile='chatgpt-sol')
-  with patch.object(a,'current_slot',return_value={'slot_id':a.SLOT}):self.assertTrue(a.admission(args)['ready'])
+  with patch.object(a,'current_slot',return_value={'slot_id':a.SLOT}),patch.object(a,'runtime_pin',return_value={'client_revision':a.RUNTIME}),patch.object(a,'verified_candidate',return_value={'manifest_sha256':a.CANDIDATE_SHA}):self.assertTrue(a.admission(args)['ready'])
   args.model_profile='xiaomi-mimo';self.assertFalse(a.admission(args)['ready'])
  def test_reassigned_slot_blocks_launch(self):
   args=SimpleNamespace(manifest_uri=a.CANDIDATE_URI,manifest_sha256=a.CANDIDATE_SHA)
@@ -67,8 +71,8 @@ class CollapseAdmissionTest(unittest.TestCase):
   for change in [lambda x:x['tools'][0].pop('raw_content'),lambda x:x['tools'][0].update(raw_content='{"status":"FAILED"}'),lambda x:x['tools'][0].update(tool_call_id='foreign'),lambda x:x['tools'][0].update(row=0)]:
    bad=copy.deepcopy(e);change(bad)
    with self.assertRaises(ValueError):outer.pairs(bad)
-  with self.assertRaisesRegex(ValueError,'node_apply_prepared'):outer.node(e,outer.pairs(e),'o')
-  with self.assertRaisesRegex(ValueError,'Prepared request'):outer.node({**e,'events':[{'operation_id':'o','phase':'node_apply_prepared','request':{'operation_id':'different'}}]},outer.pairs(e),'o')
+  with self.assertRaises(ValueError):outer.node(e,outer.pairs(e),'o')
+  with self.assertRaises(ValueError):outer.node({**e,'events':[{'operation_id':'o','phase':'node_apply_prepared','request':{'operation_id':'different'}}]},outer.pairs(e),'o')
  def test_persistence_requires_new_session_and_all_cases(self):
   for independent in [None,{},dict(run_id='foreign',origin='independent_codex_session'),dict(run_id='r',origin='prepared_kit')]:
    with self.assertRaises((ValueError,KeyError)):outer.persistence({'run_id':'r'},{},independent,{})

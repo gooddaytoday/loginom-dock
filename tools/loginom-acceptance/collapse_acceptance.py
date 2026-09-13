@@ -8,8 +8,8 @@ KIT=WORK/'collapse/acceptance-kit'
 GOAL_ID='collapse-node-complete'
 # Coordinator-approved exact Null-marker transfer from node14 (814f3146).
 # The original kit's source metadata remains historical; cases/fixtures unchanged.
-SOURCE='621bf7a41657dfdc9da60c7510b9f212b8652d79'
-RUNTIME='e33dd667c8e7eba1edd96a13621aa7251874198e2340e2efede15baa3681b98b'
+SOURCE='721cf71f341bd978385a1dae41279ead08499ac9'
+RUNTIME='cd997be4f90452d92c36195d62ef709e1db9b47a2f518389d38ea457b9dbe6aa'
 # Native per-session raw bytes/topology producer; bare receipt documents remain unsupported.
 READONLY_PRODUCER='collapse_native_sessions_v1'
 CANDIDATE_URI='viking://resources/loginom-dock/catalogs/executor-preview/releases/2026.09.13-node16-621bf7a4-candidate/manifest.json'
@@ -24,12 +24,14 @@ def verified_candidate():
     if len(stage['files'])!=4 or not all(f['readback_equal'] for f in stage['files']):raise ValueError('Candidate readback incomplete')
     raw=json.loads((REHEARSAL/'operator-1.json').read_text())
     if raw.get('isError'):raise ValueError('Candidate prepare failed')
-    prep=json.loads(raw['content'][0]['text']);manifest=prep['executor']['session_manifest'];workspace=prep['workspace']
+    prep=json.loads(raw['content'][0]['text'])
+    if prep.get('result_version')!='user-v1':raise ValueError('Candidate rehearsal must use real user-v1 MCP')
+    manifest=prep['knowledge']['session_manifest'];workspace=prep['workspace']
     if not prep['prepared'] or workspace['status']!='READY' or not workspace['target_verified'] or workspace['target']['loginom_build']!='7.4.2':raise ValueError('Real candidate preparation missing')
     if manifest['actionManifestDigest']!=CANDIDATE_SHA or manifest['actionCatalogDigest']!=stage['stage']['action_catalog_sha256'] or manifest['selectorCatalogDigest']!=stage['stage']['selector_catalog_sha256']:raise ValueError('Prepared candidate pins differ')
     session=REHEARSAL/'dock-state/sessions'/prep['sessionId']
     metadata=json.loads((session/'session.json').read_text());browser=json.loads((session/'playwright.json').read_text())['browser']
-    if metadata['clientRevision']!=RUNTIME or browser['contextOptions']['viewport'] is not None or '--start-maximized' not in browser['launchOptions']['args']:raise ValueError('Candidate runtime/window config differs')
+    if metadata['clientRevision']!=RUNTIME or metadata.get('resultProfile')!='user-v1' or browser['contextOptions']['viewport'] is not None or '--start-maximized' not in browser['launchOptions']['args']:raise ValueError('Candidate runtime/profile/window config differs')
     window=workspace['window']
     if window['width']<window['available_width']*.9 or window['outer_height']<window['available_height']*.9:raise ValueError('Actual candidate window not expanded')
     describe=json.loads(json.loads((REHEARSAL/'operator-3.json').read_text())['content'][0]['text'])
@@ -46,6 +48,11 @@ def current_slot():
     if not isinstance(slot,dict) or slot.get('node')!=16 or slot.get('thread_id')!='01a0992c-6ce0-7f10-bd53-9bf92ed7ae8a' or slot.get('candidate_sha256')!=CANDIDATE_SHA or slot.get('provider')!='openai-codex' or slot.get('model')!='gpt-5.6-sol' or slot.get('reasoning')!='low' or slot.get('status') in ('released','completed','failed'):
         raise ValueError('Coordinator slot is not currently reserved for node16')
     return slot
+
+def require_user_profile(config):
+    profile=config.get('hermes_profile')
+    if not isinstance(profile,dict) or profile.get('version')!=1 or profile.get('result_profile')!='user-v1' or profile.get('mode')!='executor-replay':
+        raise ValueError('Collapse acceptance requires an explicit private Hermes user-v1 profile')
 
 def sha(p):return hashlib.sha256(p.read_bytes()).hexdigest()
 def frozen():

@@ -178,6 +178,7 @@ def execute(args):
     model_env=xiaomi_connection(args.hermes_home) if profile=='xiaomi-mimo' else {}
     connection_values = connection(args.hermes_home) if profile=='chatgpt-sol' else {'version':1,'providers':{}}
     dock = json.loads(args.dock_config.read_text())
+    if getattr(args,'goal',None)==collapse_acceptance.GOAL_ID:collapse_acceptance.require_user_profile(dock)
     loginom_url = getattr(args, 'loginom_url', None) or dock.get('loginom_url')
     if loginom_url is not None:
         validate_loginom_url(loginom_url)
