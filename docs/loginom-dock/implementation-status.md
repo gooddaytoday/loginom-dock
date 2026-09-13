@@ -1,3 +1,39 @@
+# Узел12: автономный FAIL и точечная доработка приёмки — 13 сентября 2026
+
+Вторая назначенная попытка (первая с реально стартовавшим Hermes)
+`20260913-060514-47b236af` завершилась:16 node operations SUCCEEDED,
+8 output audits PASS, полный audit **FAIL103/112**. Проверены completed/idle,
+report commit`cc24a1f5e07f78076c901965a028b67858272754`, SHA полного аудитора
+и final-checkpoint. Отчёт в ветке12:
+`docs/plans/loginom-dock/node12-acceptance-preparation-1/attempt-20260913-060514.md`.
+
+Checkpoint сохранён, но save_as после overwrite_confirmed остановился
+AMBIGUOUS/packages.close cardinality0: close/open/postcondition отсутствуют.
+Sticky mask наблюдалась лишь в последующей отдельной диагностике; причинная
+связь с исходным отказом пока не установлена. Три persisted-import gate требуют
+opening при settings:{}, четыре full-read gate требуют ровно10 запрошенных строк
+при полном NULL-наборе8. Эти условия аудитора требуют адресного разбора;
+успех содержимого с package_persistence_verified:false не заменяет reopening.
+Старый FAIL и исходные evidence сохранены; итогового принятия узла нет.
+
+Отдельная host process-check03:29:39UTC подтвердила отсутствие acceptance/Hermes
+CLI, gateway оставлены. Слот12-r2 освобождён, нового Hermes никому не назначено.
+В той же задаче на Astra medium назначена прямая диагностика и подтверждённые
+исправления save/reopen, persisted-import verifier обычного пути и completeness
+NULL8. Команда `node12:acceptance-followup:1:cc24a1f5e07f78076c901965a028b67858272754`;
+ход `01a098d0-5371-76b3-b759-a336da7b1a70` подтверждён active/inProgress.
+После изменений нужны новые pins и targeted live/negative evidence; старый
+reopening FAIL нельзя закрывать исправлением других auditor gates.
+
+Владелец конкретного общего save_as overwrite→close/open исправления —12;
+11/14 уведомлены и продолжают свои независимые задачи без дублирования этого
+перехода. Интеграция между ветками отдельно не разрешена. Узел11 готовит
+acceptance follow-up,13 выполняет один fix round,14 готовит source candidate.
+Нового full review, следующего узла, merge/push/deploy/activation и обновления
+общего плагина нет. Реестр/история слотов обновлены. OpenViking healthy.
+
+---
+
 # Узел14 завершил input_mapping recovery и готовит приёмку — 13 сентября 2026
 
 Обработано итоговое событие14. Проверены completed/idle хода
