@@ -489,3 +489,21 @@ Source archive389 файлов совпадает с91dee921. Candidate2026.09.1
 [Отчёт](../plans/loginom-dock/11-acceptance-preparation-2026-09-13.md).
 Следующий шаг — передать stage/readback и слот; ручной checkpoint N11-R1
 по-прежнему не доказывает persistence окончательной ревизии после reopening.
+
+## 13 сентября: первый Hermes завершён с полным FAIL, диагностика закончена
+
+Run20260913-054024-fef0b53e, candidate28434c4b61305eaa08c76db1dad470599852b48f333f734ad3e946687941ab37,
+код91dee921, подготовкаbe4d31bf. HermesSol/low:31APIcall,exit0,11/11nodeSUCCEEDED.
+Полный audit55/59,FAIL: отсутствует отдельный checkpoint перед save_as;
+аудитор считает пустую precheck metadata второй рабочей сессией. Геометрия
+исходного окна не подтверждена из-за CUA ScreenCaptureKit -3811.
+Postrun выводы обеих Замен, настройки и новые execution IDs проверены отдельно
+и не заменяют общийFAIL. Диагностическая сессияc8a8405c-c68e-4c1b-a795-1bbba83e7da0
+открыла пакет только для чтения, подтвердила4узла/2связи и своё окно1508×862.
+После устранения оставшегося avatar-menu mask пакет открыт, затем закрыт;
+Home,graphCount0,harness exit0. Собственных процессов нет.
+Слотnode11-hermes-20260913-28434c4b освобождён; координатор отозвал его и передал12
+командойnode11:slot-release-control:20260913-054024-fef0b53e. НовогоHermesнебыло.
+[Отчёт и следующие шаги](../plans/loginom-dock/11-autonomous-acceptance-2026-09-13.md).
+Goal/auditor/source не исправлялись в этом ходе: сначала решение координатора
+о двухэтапном save, metadata gate и измерении исходного окна.
