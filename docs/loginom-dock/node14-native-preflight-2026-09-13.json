@@ -54,5 +54,8 @@
   "full_goal_accepted": false,
   "acceptance_slot_id": "node14-hermes-20260913-921f5d51",
   "acceptance_developer_turn": "01a0991a-f2ea-7961-a4fc-2d06e90bd73b",
-  "acceptance_dispatch_verified": true
+  "acceptance_dispatch_verified": true,
+  "acceptance_status": "approval_blocked_before_process",
+  "approval_retry_performed": false,
+  "approval_direct_confirmation_required": true
 }
