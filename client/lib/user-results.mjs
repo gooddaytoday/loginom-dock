@@ -23,7 +23,7 @@ export function compactNodeResult(result) {
     const value = pick(port, ['port', 'port_guid', 'fresh', 'execution_id', 'schema', 'row_count', 'sample', 'sample_rows', 'sample_complete', 'precision', 'table']);
     value.schema = value.schema.map(column => pick(column, ['index', 'name', 'label', 'type', 'data_kind']));
     value.sample = value.sample.map(row => row.map(cell => {
-      const compact = pick(cell, ['value', 'display_text', 'precision', 'is_null', 'timezone']);
+      const compact = pick(cell, ['type', 'value', 'decimal', 'representation', 'display_text', 'precision', 'is_null', 'timezone']);
       if (compact.value === compact.display_text) delete compact.display_text;
       return compact;
     }));

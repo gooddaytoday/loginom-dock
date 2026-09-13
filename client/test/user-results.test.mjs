@@ -42,3 +42,8 @@ test('knowledge bundle retains parameter schemas and revision pins', () => {
   assert.equal(result.session_manifest.digest, 'pin');assert.deepEqual(result.node_types[0].parameter_schema, schema);
   assert.equal(result.node_types[0].cache_key, 'cache');assert.equal(result.node_types[0].source, undefined);
 });
+
+test('user-v1 retains exact scalar representation and an explicitly unverified variant without type guessing',()=>{
+ const sample=[[{type:'integer',value:'9223372036854775807',representation:'decimal_integer',precision:'exact_integer',is_null:false},{type:'real',value:1,decimal:'1E+00',representation:'binary64',precision:'17_significant_digits',is_null:false},{type:'variant',display_text:'1',representation:'formatted_display',precision:'unverified',is_null:false}]];
+ const r=compactNodeResult({operation_id:'x',outcome:{status:'SUCCEEDED',output:{output:{ports:[{sample,schema:[]}]}}}});assert.deepEqual(r.output.ports[0].sample,sample);assert.equal(validate(r).valid,true);
+});
