@@ -72,3 +72,18 @@ test('fresh return refuses changed package or tab before a second gesture',async
   assert.ok(r.error);assert.equal(r.dispatched,0);assert.equal(r.calls,14);
  }
 });
+function withFileReveal(xs){
+ for(const i of [6,7]){const s=xs[i].output;s.active_tab_ref='ui-storage';s.package_identity=null;const e=s.ui.elements[0];e.interaction.state='outside_viewport';e.scroll={ref:'ui-file-scroll',top:0,max_top:2075};}
+ const s=xs[7].output,e=s.ui.elements[0];
+ xs[8].trace=[{event:'download_file_revealed',applied:true,file_ref:e.ref,owner_ref:e.scroll.ref,from:0,to:400,max_top:2075,delta:400,document:s.dom_epoch.document},
+  {event:'download_reveal_confirmed',file_ref:e.ref,owner_ref:e.scroll.ref,max_top_before:2075,max_top_after:2075,document:s.dom_epoch.document,interaction:'point_observed',file_tid:e.tid,origin:s.origin,loginom_build:s.loginom_build,workflow_ref:s.workflow_ref,active_tab_ref:s.active_tab_ref,package_identity:s.package_identity,directory:s.file_storage.directory},
+  {event:'download_gesture_result',status:'SUCCEEDED',effect_possible:true,cleanup_complete:true,error_code:null}];return xs;
+}
+test('explicit exact-file reveal admits one bounded native owner scroll',async t=>{
+ const r=await run(t,{transformResponses:withFileReveal});assert.equal(r.error,null);assert.equal(r.dispatched,1);assert.equal(r.calls,14);
+});
+test('native file reveal refuses missing proof, foreign owner and excessive motion',async t=>{
+ for(const change of [r=>delete r.trace,r=>r.trace[0].delta=1001,r=>r.trace[0].owner_ref='foreign',r=>r.trace[1].document='foreign',r=>r.trace[1].max_top_after=9999,r=>r.trace.push(r.trace[0]),r=>r.trace[2].cleanup_complete=false]){
+  const r=await run(t,{transformResponses:withFileReveal,changeResponse:(r,i)=>{if(i===8)change(r);return r;}});assert.ok(r.error);assert.equal(r.dispatched,0);
+ }
+});

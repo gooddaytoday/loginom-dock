@@ -81,6 +81,26 @@ def return_binding(step):
         active_identity=s.get('active_identity'),package=s.get('package_identity'),
         target={k:e.get(k) for k in ['tid','label','kind','scope']})
 
+def verify_download_reveal(step,response):
+    import copy
+    from upload_verify import reveal_trace_valid
+    s,e=step['snapshot'],step['element'];declaration=step.get('reveal')
+    if e['interaction']['state']=='point_observed':
+        assert declaration is None
+        assert not any(x.get('event') in ['download_file_revealed','download_reveal_confirmed'] for x in response.get('trace',[]))
+        return
+    assert e['interaction']['state']=='outside_viewport'
+    scroll=e['scroll'];assert isinstance(scroll.get('ref'),str) and scroll['ref']
+    assert type(scroll['top']) is int and type(scroll['max_top']) is int and 0<=scroll['top']<=scroll['max_top']
+    assert declaration=={'file_ref':e['ref'],'owner_ref':scroll['ref'],'from':scroll['top'],'max_top':scroll['max_top'],'limit':1000}
+    adjusted=copy.deepcopy(response);trace=adjusted['trace']
+    assert len(trace)==3
+    moved,confirmed,_=trace
+    assert confirmed.pop('max_top_before')==moved['max_top']
+    after=confirmed.pop('max_top_after')
+    assert type(after) is int and after>=moved['to'] and abs(after-moved['max_top'])<=1
+    assert reveal_trace_valid(adjusted,adjusted,s,e['ref']),'Native reveal proof differs'
+
 def verify_action_ledger(ledger,c,before,after):
     assert 6<=len(ledger)<=512
     kinds=[e['step']['kind'] for e in ledger];assert kinds[0]==kinds[-1]=='graph'
@@ -125,7 +145,8 @@ def verify_action_ledger(ledger,c,before,after):
             if kind!='download' and not refused:assert response['output']['gesture_applied'] is True
             if kind=='folder':assert s['file_storage']['directory']=='/' and el['storage_entry']['kind']=='folder' and el['label']=='test-2'
             if kind=='download':
-                assert s['file_storage']['directory']=='/test-2' and el['label']==name and el['storage_entry']['bytes']==c['baseline']['bytes'] and el['interaction']['state']=='point_observed'
+                assert s['file_storage']['directory']=='/test-2' and el['label']==name and el['storage_entry']['bytes']==c['baseline']['bytes']
+                verify_download_reveal(step,response)
                 out=response['output'];assert out['suggested_name']==name and out['destination']==c['baseline']['destination'] and out['download_completed'] is True
                 assert response['observer_download_count']==1 and response['observer_listener_registered'] is True
                 assert out['output_binding']==dict(session_id=c['session_id'],document_id=c['identity']['document_id'],workflow_id=c['identity']['workflow_id'],node_id=c['identity']['node_id'],execution_id=c['baseline']['execution_id'],destination=c['baseline']['destination'],directory='/test-2')

@@ -8,7 +8,8 @@ need(process.argv.length===4&&process.argv[2]==='--assignment'&&process.argv[3]=
 const root=resolve('.'),work=join(root,'tools/loginom-acceptance');
 const admission=JSON.parse(execFileSync('/usr/bin/python3',[join(work,'text_export_readiness.py'),'user-v1-component'],{encoding:'utf8',timeout:30000}));
 const manifest=JSON.parse(await fs.readFile(join(root,'docs/plans/loginom-dock/17-text-export-final-admission.json'),'utf8'));
-const runId=new Date().toISOString().slice(0,19).replaceAll('-','').replace('T','-').replaceAll(':','')+'-'+randomBytes(4).toString('hex');
+const localTime=new Date(),pad=n=>String(n).padStart(2,'0');
+const runId=[localTime.getFullYear(),pad(localTime.getMonth()+1),pad(localTime.getDate())].join('')+'-'+[localTime.getHours(),localTime.getMinutes(),localTime.getSeconds()].map(pad).join('')+'-'+randomBytes(4).toString('hex');
 const runDir=join(root,'.dock/node17/user-v1-component',runId),stateDir=join(runDir,'private/dock-state');await fs.mkdir(join(stateDir,'runtime'),{recursive:true,mode:0o700});
 await fs.symlink(join(process.env.HOME,'.loginom-dock/runtime/browsers'),join(stateDir,'runtime/browsers'));
 const globalConfig=join(process.env.HOME,'.loginom-dock/config.json'),configPath=join(runDir,'private/user-v1-config.json'),globalConfigHash=hash(await fs.readFile(globalConfig));

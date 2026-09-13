@@ -26,15 +26,35 @@ export function checkStep(step,c){
   need(e.tid===tid,'Forbidden observer gesture');
   const verb=['folder','download'].includes(step.kind)?'double_click':'click';need(e.allowed_actions?.includes(verb),'Observer action unavailable');
   if(step.kind==='folder')need(s.file_storage?.directory==='/'&&e.storage_entry?.kind==='folder'&&e.label==='test-2','Foreign directory navigation');
-  if(step.kind==='download')need(s.file_storage?.directory===directory&&e.label===name&&e.storage_entry?.bytes===c.baseline.bytes&&e.interaction?.state==='point_observed','Exact visible file required; no implicit scroll');
+  if(step.kind==='download'){
+   need(s.file_storage?.directory===directory&&e.label===name&&e.storage_entry?.bytes===c.baseline.bytes,'Exact bound file required');
+   if(e.interaction?.state==='point_observed')need(step.reveal===undefined,'Unexpected file reveal');
+   else {
+    need(e.interaction?.state==='outside_viewport'&&e.scroll?.ref&&Number.isSafeInteger(e.scroll.top)&&Number.isSafeInteger(e.scroll.max_top)&&e.scroll.top>=0&&e.scroll.max_top>=e.scroll.top,'Bound vertical file scroll unavailable');
+    need(same(step.reveal,{file_ref:e.ref,owner_ref:e.scroll.ref,from:e.scroll.top,max_top:e.scroll.max_top,limit:1000}),'Explicit bounded file reveal required');
+   }
+  }
  }
  return true;
+}
+export function checkDownloadReveal(step,r){
+ const trace=r.trace??[],names=trace.map(e=>e.event),s=step.snapshot,e=step.element;
+ if(!step.reveal){need(!names.includes('download_file_revealed')&&!names.includes('download_reveal_confirmed'),'Unrequested reveal');return;}
+ need(same(names,['download_file_revealed','download_reveal_confirmed','download_gesture_result']),'Incomplete reveal proof');
+ const [m,c,g]=trace,b=step.reveal;
+ need(m.applied===true&&m.file_ref===b.file_ref&&m.owner_ref===b.owner_ref&&m.from===b.from&&m.max_top===b.max_top&&m.document===s.dom_epoch.document
+  &&Number.isInteger(m.delta)&&Math.abs(m.delta)>0&&Math.abs(m.delta)<=b.limit&&m.to===m.from+m.delta&&m.to>=0&&m.to<=m.max_top,'Reveal movement differs');
+ need(c.file_ref===e.ref&&c.owner_ref===b.owner_ref&&c.document===s.dom_epoch.document&&c.interaction==='point_observed'&&c.file_tid===e.tid
+  &&c.origin.replace(/\/$/,'')===s.origin.replace(/\/$/,'')&&c.loginom_build===s.loginom_build&&same(c.workflow_ref,s.workflow_ref)
+  &&c.active_tab_ref===s.active_tab_ref&&same(c.package_identity,s.package_identity)&&c.directory===s.file_storage.directory
+  &&c.max_top_before===m.max_top&&Number.isSafeInteger(c.max_top_after)&&c.max_top_after>=m.to&&Math.abs(c.max_top_after-m.max_top)<=1,'Reveal owner/readback differs');
+ need(g.status==='SUCCEEDED'&&g.effect_possible===true&&g.cleanup_complete===true&&g.error_code===null,'Reveal download gesture incomplete');
 }
 export function checkActionLedger(ledger,c){
  need(Array.isArray(ledger)&&ledger.length>=6&&ledger.length<=512,'Incomplete action ledger');
  for(const [i,e] of ledger.entries()){
   need(e.seq===i+1&&e.session_id===c.session_id&&e.run_id===c.run_id&&e.cleanup_complete===true&&e.mono_end>=e.mono_start&&(i===0||e.mono_start>=ledger[i-1].mono_end),'Action chain differs');
-  checkStep(e.step,c);need(/^[a-f0-9]{64}$/.test(e.code_sha256)&&e.response!==undefined,'Raw browser evidence missing');
+  checkStep(e.step,c);if(e.step.kind==='download')checkDownloadReveal(e.step,e.response);need(/^[a-f0-9]{64}$/.test(e.code_sha256)&&e.response!==undefined,'Raw browser evidence missing');
  }
  need(ledger[0].step.kind==='graph'&&ledger.at(-1).step.kind==='graph','Graph observations required');
  for(const kind of ['download','files'])need(ledger.filter(e=>e.step.kind===kind).length===1,'Exactly one '+kind+' required');

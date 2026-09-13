@@ -8,7 +8,7 @@ import {makeWorkspaceUiCode} from '../../client/lib/workspace-ui.mjs';
 import {makeNativeOutputDownloadCode} from '../../client/lib/executor.mjs';
 import {createNodeTargetBrowserAdapter} from '../../client/lib/node-target-browser.mjs';
 import {observeResponse} from './text-export-observer-response.mjs';
-import {need,same,checkStep,checkActionLedger,safeReturnRefusal,returnBinding} from './text-export-observer-policy.mjs';
+import {need,same,checkStep,checkActionLedger,safeReturnRefusal,returnBinding,checkDownloadReveal} from './text-export-observer-policy.mjs';
 const hash=v=>createHash('sha256').update(v).digest('hex');
 const one=xs=>{need(xs.length===1,'Unique observed control required');return xs[0];};
 export function parseBrowserResult(reply){
@@ -97,12 +97,12 @@ export function createNativeObserver({invoke,artifactRoot,record=async()=>{},rec
   need(s.file_storage?.directory==='/test-2','Exact storage not reached');
   const name=c.baseline.destination.split('/').at(-1);s=await row(name);
   const e=one(s.ui.elements.filter(e=>e.tid===s.workflow_ref.prefix+';FileStorageForm;colName_'+name&&e.label===name));
-  const step={kind:'download',snapshot:s,element:e};checkStep(step,c);
+  const step={kind:'download',snapshot:s,element:e,...(e.interaction?.state==='outside_viewport'?{reveal:{file_ref:e.ref,owner_ref:e.scroll?.ref,from:e.scroll?.top,max_top:e.scroll?.max_top,limit:1000}}:{})};checkStep(step,c);
   const task={...base,operation_id:'observer:'+readId,artifact:{artifact_id:readId,name},output_binding:{session_id:c.session_id,document_id:c.identity.document_id,workflow_id:c.identity.workflow_id,node_id:c.identity.node_id,execution_id:c.baseline.execution_id,destination:c.baseline.destination,directory:'/test-2'},expected_bytes:c.baseline.bytes,snapshot:s,file_ref:e.ref,observation_id:s.observation_id,download_path:downloadPath};
   const downloadCode=makeNativeOutputDownloadCode(task);
-  // Refuse implicit reveal/scroll above; count all downloads on this exact Page.
+  // A reveal requires the exact owner/limit declaration above and native proof below.
   const counted=`async page=>{let count=0;const listener=()=>{count++};page.on('download',listener);try{const result=await (${downloadCode})(page);return {...result,observer_download_count:count,observer_listener_registered:true};}finally{page.off('download',listener);}}`;
-  const downloaded=await run(step,counted);
+  const downloaded=await run(step,counted);checkDownloadReveal(step,downloaded);
   need(downloaded.cleanup_complete===true&&downloaded.observer_download_count===1&&downloaded.observer_listener_registered===true&&downloaded.output?.download_completed===true&&downloaded.output.suggested_name===name&&same(downloaded.output.output_binding,task.output_binding),'Native download binding incomplete');
   let returnOwner;
   for(let attempt=0;attempt<3;attempt++){

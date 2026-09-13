@@ -117,6 +117,23 @@ class ObserverEvidenceTests(unittest.TestCase):
         rows=fixture(1);rows[ret+3]['step']['snapshot']['package_identity']='foreign'
         with self.assertRaises(AssertionError):verify(rows)
 
+    def test_explicit_file_reveal_requires_independent_native_proof(self):
+        from text_export_observer_evidence import verify_download_reveal
+        step=copy.deepcopy(next(e['step'] for e in self.events[2]['payload']['action_ledger'] if e['step']['kind']=='download'))
+        s,e=step['snapshot'],step['element'];s['active_tab_ref']='ui-storage';s['package_identity']=None
+        e['interaction']['state']='outside_viewport';e['scroll']=dict(ref='ui-scroll',top=0,max_top=2075)
+        s['ui']['elements']=[copy.deepcopy(e)]
+        step['reveal']={'file_ref':e['ref'],'owner_ref':'ui-scroll','from':0,'max_top':2075,'limit':1000}
+        trace=[{'event':'download_file_revealed','applied':True,'file_ref':e['ref'],'owner_ref':'ui-scroll','from':0,'to':400,'max_top':2075,'delta':400,'document':s['dom_epoch']['document']},
+            dict(event='download_reveal_confirmed',file_ref=e['ref'],owner_ref='ui-scroll',max_top_before=2075,max_top_after=2075,document=s['dom_epoch']['document'],interaction='point_observed',file_tid=e['tid'],origin=s['origin'],loginom_build=s['loginom_build'],workflow_ref=s['workflow_ref'],active_tab_ref=s['active_tab_ref'],package_identity=None,directory=s['file_storage']['directory']),
+            dict(event='download_gesture_result',status='SUCCEEDED',effect_possible=True,cleanup_complete=True,error_code=None)]
+        verify_download_reveal(step,dict(trace=trace))
+        for index,key,value in [(0,'delta',1001),(0,'owner_ref','foreign'),(1,'document','foreign'),(1,'max_top_after',9999),(2,'cleanup_complete',False)]:
+            changed=copy.deepcopy(trace);changed[index][key]=value
+            with self.assertRaises(AssertionError):verify_download_reveal(step,dict(trace=changed))
+        step.pop('reveal')
+        with self.assertRaises(AssertionError):verify_download_reveal(step,dict(trace=trace))
+
     def test_nonmonotonic_and_nonfinite_times_are_refused(self):
         for time in [0,float('nan'),float('inf')]:
             self.events[2]['mono_ms']=time;self.persist();self.assertFalse(self.result())
