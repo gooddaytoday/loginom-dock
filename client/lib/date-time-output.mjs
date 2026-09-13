@@ -1,19 +1,25 @@
 import {DATE_TIME_OPERATIONS} from './date-time-parameters.mjs';
 import {ensureGroupingOutputSources} from './grouping-output-sources.mjs';
 import {configureOutputFields,configureOutputAutosync,reorderOutputFields} from './port-mapping-procedure.mjs';
+import {ensureDateTimeRequestedOutputs} from './date-time-output-additions.mjs';
 import {removeDateTimeOrphans} from './date-time-removal.mjs';
 const need=(v,m)=>{if(!v)throw Error('Date/time output: '+m);};
 const escape=s=>s.replace(/[.*+?^${}()|[\]\\]/g,'\\$&');
+export function resolveDateTimeGeneratedSource(c,field,t,sources){
+ const input=c.input_fields.find(i=>i.name===field.field.name),op=DATE_TIME_OPERATIONS[t.operation];need(input&&op,'configured input required');
+ const label=input.label+' ('+op.label+(op.type==='datetime'&&op.func!==16?', '+(op.flag==='DoDateTimeFirst'?'Первый день':'Последний день'):'')+')';
+ const pattern=new RegExp('^'+escape(input.name+'_'+op.suffix)+'_[0-9]+$');
+ const matches=sources.filter(source=>source.required&&source.type===op.type&&source.label===label&&pattern.test(source.name));
+ need(matches.length===1,'ambiguous generated source: '+field.field.name+' '+t.operation);return matches[0];
+}
 export function resolveDateTimeOutput(c,p,native,mapping={}){
  need(native?.verified&&native.inventory_complete&&native.source_identity_verified,'complete linked output required');
  const pairs=native.target_fields.map(f=>{const source=f.source??f.exclusion_source;need(source&&native.source_fields.some(s=>s.record_id===source.record_id),'output source missing');return {current:f,source,name:f.name,label:f.label,excluded:f.excluded};});
  need(new Set(pairs.map(p=>p.source.record_id)).size===native.source_fields.length&&pairs.length===native.source_fields.length,'output source bijection required');
  const assigned=new Set();
  for(const field of p.fields??[])for(const t of field.transformations){
-  const input=c.input_fields.find(i=>i.name===field.field.name),op=DATE_TIME_OPERATIONS[t.operation];need(input&&op,'configured input required');
-  const label=input.label+' ('+op.label+(op.type==='datetime'&&op.func!==16?', '+(op.flag==='DoDateTimeFirst'?'Первый день':'Последний день'):'')+')';
-  const pattern=new RegExp('^'+escape(input.name+'_'+op.suffix)+'_[0-9]+$');
-  const matches=pairs.filter(p=>p.source.required&&p.source.type===op.type&&p.source.label===label&&pattern.test(p.source.name));
+  const source=resolveDateTimeGeneratedSource(c,field,t,native.source_fields);
+  const matches=pairs.filter(p=>p.source.record_id===source.record_id);
   need(matches.length===1&&!assigned.has(matches[0].source.record_id),'ambiguous generated field: '+field.field.name+' '+t.operation);
   assigned.add(matches[0].source.record_id);Object.assign(matches[0],{name:t.name,label:t.label});
  }
@@ -31,6 +37,7 @@ export async function configureDateTimeOutput(channel,c,p,mapping={},options={})
  let initial=await channel.observe({condition:'date/time output mapping',readMappings:true,ready});initial=await ensureGroupingOutputSources(channel,initial);
  const originalAutosync=initial.node_mapping.autosync;
  const removal=await removeDateTimeOrphans(channel,initial,options.removed??[]);initial=removal.state;
+ const addition=await ensureDateTimeRequestedOutputs(channel,initial,c,p,resolveDateTimeGeneratedSource);initial=addition.state;
  const planned=resolveDateTimeOutput(c,p,initial.node_mapping,mapping),changes=[];
  if(p.fields!==undefined||mapping.fields){
   changes.push(await configureOutputFields(channel,{direction:'output',port:0,fields:planned.map(f=>({source:{kind:'configured_field',name:f.source.name},name:f.name,label:f.excluded?f.source.label:f.label,excluded:f.excluded}))},initial.node_mapping.source_fields.map(f=>({...f,used:true}))));
@@ -48,5 +55,5 @@ export async function configureDateTimeOutput(channel,c,p,mapping={},options={})
  const project=f=>({name:f.name,label:f.excluded?f.source.label:f.label,type:f.source.type,excluded:f.excluded,source:f.source.name});
  const actual=final.target_fields.map(f=>({...f,source:f.source??f.exclusion_source}));
  need(JSON.stringify(actual.map(project))===JSON.stringify([...planned.filter(f=>!f.excluded),...planned.filter(f=>f.excluded)].map(project)),'final output differs');
- return {verified:true,cleanup_complete:true,effect_possible:changes.length>0||removal.receipts.length>0,native_mapping:final,changes,removed:removal.receipts};
+ return {verified:true,cleanup_complete:true,effect_possible:changes.length>0||removal.receipts.length>0||addition.receipts.length>0,native_mapping:final,changes,added:addition.receipts,removed:removal.receipts};
 }

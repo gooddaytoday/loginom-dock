@@ -256,3 +256,29 @@ test('standalone output lifecycle validates its source before committing and pre
  else{const r=await configureSeparateOutputPort(channel,{direction:'output',port:0},configured);assert.equal(r.settings_applied,true);assert.equal(r.source_identity_verified,true);assert.equal(commits,1);}
  }
 });
+
+test('inline derived output preserves an existing exclusion without a separate-wizard gesture',async()=>{
+ const {configureOutputFields}=await import('../lib/port-mapping-procedure.mjs'),f=exclusionFixture();
+ f.native.source_fields[1].label='Дата';f.native.target_fields[1].label='Дата';
+ const configured=f.native.source_fields.map(s=>({...s,used:true}));
+ const mapping={direction:'output',port:0,fields:configured.map(s=>({source:{kind:'configured_field',name:s.name},excluded:s.name==='B'}))};
+ await configureOutputFields(f.channel,mapping,configured);
+ f.native.mapping_wizard='DerivedDataSourceMappingEngineOutputPortWizard';f.native.autosync=false;
+ const before=structuredClone(f.native),actions=f.count();
+ const result=await configureOutputFields(f.channel,mapping,configured);
+ assert.equal(result.effect_possible,false);assert.deepEqual(result.definition,before);assert.equal(f.count(),actions);
+ const newExclusion=structuredClone(mapping);newExclusion.fields[2].excluded=true;
+ await assert.rejects(configureOutputFields(f.channel,newExclusion,configured),/separate output wizard/);
+ assert.equal(f.count(),actions);assert.deepEqual(f.native,before);
+});
+
+test('inline derived reorder retains exclusion groups and native group indices',async()=>{
+ const {reorderOutputFields}=await import('../lib/port-mapping-procedure.mjs'),f=reorderFixture(true);
+ const observe=f.channel.observe,perform=f.channel.perform;
+ const adapt=s=>{s.node_mapping.mapping_wizard='DerivedDataSourceMappingEngineOutputPortWizard';for(const e of s.ui.elements)if(e.tid)e.tid=e.tid.replace('DerivedDataSourceOutputSocketWizard','DerivedDataSourceMappingEngineOutputPortWizard');return s;};
+ f.channel.observe=async o=>adapt(await observe({...o,ready:s=>o.ready(adapt(s))}));
+ f.channel.perform=async o=>perform({...o,ready:s=>o.ready(adapt(s)),resolve:s=>o.resolve(adapt(s))});
+ const result=await reorderOutputFields(f.channel,['t3','t1','t2','t0']);
+ assert.deepEqual(result.definition.target_fields.map(f=>[f.record_id,f.excluded,f.group_index]),[['t1',false,0],['t0',false,1],['t3',true,0],['t2',true,1]]);
+ assert.equal(f.actions(),4);
+});

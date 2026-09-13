@@ -130,7 +130,7 @@ export async function reorderOutputFields(channel,recordIds) {
   const baseline=state.node_mapping;
   if(!Array.isArray(recordIds)||recordIds.length!==baseline.target_fields.length||new Set(recordIds).size!==recordIds.length
     ||recordIds.some(id=>!baseline.target_fields.some(f=>f.record_id===id)))throw Error('Reorder requires every native output record exactly once');
-  const grouped=baseline.mapping_wizard==='DerivedDataSourceOutputSocketWizard';
+  const grouped=['DerivedDataSourceOutputSocketWizard','DerivedDataSourceMappingEngineOutputPortWizard'].includes(baseline.mapping_wizard);
   if(grouped) {
     if(baseline.target_fields.some(f=>typeof f.excluded!=='boolean'))throw Error('Native output groups required for reorder');
     const excluded=new Set(baseline.target_fields.filter(f=>f.excluded).map(f=>f.record_id));
@@ -211,7 +211,9 @@ export async function configureOutputFields(channel,mapping,configured) {
   const before=await channel.observe({condition:'complete native mapping before field edits',readMappings:true,ready});
   const resolved=resolveConfiguredOutputMapping(mapping,configured,before.node_mapping);
   if(resolved.fields===null)return {verified:true,effect_possible:false,cleanup_complete:true,edits:[],settings_applied:false};
-  const exclusions=resolved.fields.filter(f=>f.excluded),edits=[];
+  // An existing exclusion is preserved as native state; only a new exclusion
+  // requires the separately verified exclusion gesture.
+  const exclusions=resolved.fields.filter(f=>f.excluded&&f.current.excluded!==true),edits=[];
   if(exclusions.length&&before.node_mapping.mapping_wizard!=='DerivedDataSourceOutputSocketWizard')throw Error('Verified separate output wizard required for exclusions');
   // Validate the complete post-exclusion namespace before any mutation. Native
   // exclusion replaces the output record. Its service label defaults to the

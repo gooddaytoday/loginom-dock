@@ -1,3 +1,17 @@
+# Узел13: ручная выходная схема проверена — 13 сентября 2026
+
+Исправлено добавление quarter/hour существующего Date/time при autosync=false.
+Старые имена/связи и Amount excluded сохранены. Live bafafea6: public SUCCEEDED,
+config/raw/values/manual-schema PASS, **4×8**, repeat/resume без новых действий.
+Отдельный exact reopen df361bf1 без перенастройки: свежие4×8, persistence PASS.
+7/7 подмен доказательств отклонены. Client1472 PASS/1 SKIP; Python533 PASS.
+[Отчёт](node-13-manual-output-followup-1.md), [доказательства](node-13-manual-output-evidence.json).
+Прежние неуспехи ниже остаются историческими фактами своих ревизий.
+R2 не интегрирован; его live gate и Hermes остаются OPEN. Перенос/публикация,
+новый review и следующий узел не запускались.
+
+---
+
 # Узел13: целевое configure recovery проверено — 13 сентября 2026
 
 Реализовано Date/time-specific восстановление исходной configure после потерянного

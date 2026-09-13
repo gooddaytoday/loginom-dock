@@ -250,7 +250,7 @@ export function workspaceUiCapability(page, task, readNodeContext, captureProces
         const owner='[data-tid$=";WizrdMCF;ImportTextFilePreviewWizard;'+name+'"]';return [owner,owner+' input',owner+' textarea'];}),
       '[data-tid$=";WizrdMCF;ImportTextFilePreviewWizard;edtFirstLineAsTitle;ValueControl"]',
       '[data-tid$=";WizrdMCF;ImportTextFilePreviewWizard;edtFirstLineAsTitle;ValueControl;DisplayEl"]',
-      ...['ColumnsMappingEngineOutputPortWizard','DerivedDataSourceOutputSocketWizard','TuneDataSourceMappingWizard'].flatMap(form=>
+      ...['ColumnsMappingEngineOutputPortWizard','DerivedDataSourceOutputSocketWizard','DerivedDataSourceMappingEngineOutputPortWizard','TuneDataSourceMappingWizard'].flatMap(form=>
         ['grdTargetColumns;tbl','TargetFilter','rbTable','rbLinks','btnAutoSyncThroughColumns'].flatMap(name=>{
           const owner='[data-tid$=";WizrdMCF;'+form+';'+name+'"]';return [owner,owner+' input'];})),
       '[data-tid*=";WizrdMCF;ColumnsMappingEngineOutputPortWizard;grdTargetColumns;tbl;celleditor"]',
@@ -1419,7 +1419,7 @@ function readRenderedInputMapping(observation) {
       if(!portalBound && forms.length===1) {
         const form=forms[0],native=globalThis.Ext?.getCmp?.(form.id)?.Controller;
         const active=globalThis.bg?.app?.Application?.FInstance?.FMainForm?.Items?.Workspace?.getActiveTab?.()?.Controller?.FController;
-        const grids=['ColumnsMappingEngineOutputPortWizard','DerivedDataSourceOutputSocketWizard','TuneDataSourceMappingWizard']
+        const grids=['ColumnsMappingEngineOutputPortWizard','DerivedDataSourceOutputSocketWizard','DerivedDataSourceMappingEngineOutputPortWizard','TuneDataSourceMappingWizard']
           .flatMap(form=>tids.get(wizard.root_tid+';'+form+';grdTargetColumns;tbl')??[])
           .filter(grid=>wizardForms[0].contains(grid)&&visible(grid));
         const view=grids.length===1?globalThis.Ext?.getCmp?.(grids[0].id):null,store=view?.getStore?.();
@@ -2091,6 +2091,22 @@ function readRenderedInputMapping(observation) {
               dateTimeCells.set(refOf(cells[0]),{role:'output_delete',field_key:d.Name,record_id:String(r.internalId),grid_ref:refOf(grid),wizard_root_ref:wizard.root_ref});
           }
         }
+      }
+    }
+    // Expose only native-bound source cells for exact manual output creation.
+    if(!discoverRoots&&wizard.stage==='output_mapping')for(const form of ['DerivedDataSourceOutputSocketWizard','DerivedDataSourceMappingEngineOutputPortWizard']){
+      const base=wizard.root_tid+';'+form+';',modes=tids.get(base+'rbLinks')??[],grids=tids.get(base+'grdSourceColumns;tbl')??[];
+      if(modes.length!==1||!modes[0].classList.contains('x-form-cb-checked')||grids.length!==1)continue;
+      const grid=grids[0],view=globalThis.Ext?.getCmp?.(grid.id),store=view?.getStore?.(),records=store?.getData?.()?.items;
+      if(view?.el?.dom!==grid||store?.$className!=='Ext.data.Store'||store.isLoading?.()||!Array.isArray(records)||records.length>1000)continue;
+      const rows=[...grid.querySelectorAll('table.x-grid-item')];charge();if(rows.length>200)continue;
+      for(const row of rows){
+        const index=Number(row.getAttribute('data-recordindex')),r=records[index],d=r?.data;
+        if(!Number.isSafeInteger(index)||index<0||!r?.isModel||typeof d?.Name!=='string'||!d.Name
+          ||row.getAttribute('data-recordid')!==String(r.internalId)||row.getAttribute('data-boundview')!==grid.id)continue;
+        const cells=[...row.querySelectorAll('[data-tid]')].filter(e=>getTid(e)===base+'colSourceName_'+d.Name);
+        if(cells.length===1&&cells[0].textContent.trim()===d.DisplayName&&visible(cells[0])&&!sensitive(cells[0]))
+          dateTimeCells.set(refOf(cells[0]),{role:'output_source',field_key:d.Name,record_id:String(r.internalId),grid_ref:refOf(grid),wizard_root_ref:wizard.root_ref});
       }
     }
     const sortingCells=new Map();

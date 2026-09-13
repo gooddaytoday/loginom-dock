@@ -1,5 +1,25 @@
 # Узел 13: checkpoint разработки
 
+## Manual output follow-up — целевая проверка завершена
+
+Назначение `node13:manual-output-followup:1:b01f2e83ca6253087bba71150f078b9d9083f612`.
+Исправлено точечное добавление quarter/hour существующего Date/time при
+manual output/autosync=false с сохранением старых имён, связей и Amount excluded.
+Live bafafea6: public SUCCEEDED, config/raw/values/manual-schema PASS, **4×8**;
+7/7 подмен доказательств отклонены, repeat/resume991→991→991.
+Один save checkpoint `/test-3/N13-bafafea6.lgp`, отдельный exact reopen df361bf1:
+parameters={} / mappings=[], тот же GUID, свежие4×8, persistence PASS.
+Runtime `25706c0215637218f61d5c89cc47ded2dd2636e635e66ac79843152b154513cc`.
+Оба успешных сеанса и предыдущие диагностические сеансы закрыты exit0.
+Client1472 PASS/1 SKIP; Python533 PASS. Исходные FAIL сохранены в
+[отчёте](node-13-manual-output-followup-1.md),
+[доказательства](node-13-manual-output-evidence.json).
+
+R2 не применялся: подготовлен generator выбранных18 hunks/11 файлов источника
+a63586fe (полный SHA в плане R2); финальный transfer packet закрепляется на
+source-коммите этого исправления. Интеграция, R2 live gate, новая общая приёмка
+и Hermes требуют отдельного dispatch координатора. accepted10rowgoal/R3 не менялись.
+
 ## Configure recovery — целевая проверка завершена 13 сентября 2026
 
 Реализовано Date/time-specific восстановление исходной configure после потерянного

@@ -4272,7 +4272,7 @@ test('scrolled process window refuses detached, foreign and clipped row bindings
 });
 
 test('global output editor is typed only when its native record belongs to the active mapping',async()=>{
- for(const mappingForm of ['ColumnsMappingEngineOutputPortWizard','DerivedDataSourceOutputSocketWizard']) for(const mode of ['bound','foreign_record','foreign_wizard','wrong_index']) {
+ for(const mappingForm of ['ColumnsMappingEngineOutputPortWizard','DerivedDataSourceOutputSocketWizard','DerivedDataSourceMappingEngineOutputPortWizard']) for(const mode of ['bound','foreign_record','foreign_wizard','wrong_index']) {
   const page=new Page(),base='MF;TF-1;WizrdMCF;',wizard=page.add('div',base.slice(0,-1));
   const stem=base+mappingForm+';';page.add('button',stem+'btnAddMappingColumn','',undefined,wizard);
   const grid=page.add('div',stem+'grdTargetColumns;tbl','',undefined,wizard);grid.id='mapping-view';grid.attrs.id=grid.id;
