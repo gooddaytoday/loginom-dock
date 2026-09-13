@@ -15,9 +15,10 @@ Client1472 PASS/1 SKIP; Python533 PASS. Исходные FAIL сохранены
 [отчёте](node-13-manual-output-followup-1.md),
 [доказательства](node-13-manual-output-evidence.json).
 
-R2 не применялся: подготовлен generator выбранных18 hunks/11 файлов источника
-a63586fe (полный SHA в плане R2); финальный transfer packet закрепляется на
-source-коммите этого исправления. Интеграция, R2 live gate, новая общая приёмка
+Исходный коммит исправления `7d7f0bc2a23c8db5d57fbeb9ceb57d3a8ca29907`.
+R2 не применялся: [transfer packet](transfers/node13-r2/README.md) выбранных18
+hunks/11 файлов источника a63586fe закреплён на этом source-коммите.
+Финальный git apply --check PASS, payload и хэши проверены; перенос не разрешён. Интеграция, R2 live gate, новая общая приёмка
 и Hermes требуют отдельного dispatch координатора. accepted10rowgoal/R3 не менялись.
 
 ## Configure recovery — целевая проверка завершена 13 сентября 2026

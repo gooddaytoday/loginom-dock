@@ -3,6 +3,12 @@
 13 сентября 2026. Подготовлено в ветке `codex/node-13-date-time` по команде
 `node13:coordinator-reply-resume:1:20260913`. Это план; код узла14 не переносился.
 
+Подготовлен [выбранный transfer packet](transfers/node13-r2/README.md): 18 hunks
+из11 файлов, source/target blobs и SHA256 каждого hunk; source строго a63586fe…
+из этого плана, целевой source-коммит13 `7d7f0bc2a23c8db5d57fbeb9ceb57d3a8ca29907`.
+Финальный git apply --check прошёл без изменения целевых файлов. Подготовка
+пакета не является разрешением на перенос или завершением R2 live gate.
+
 ## Источник общей обработки
 
 Коммит владельца14: `a63586fe096f4fd7f17f346c391834d3e34bdaa4`

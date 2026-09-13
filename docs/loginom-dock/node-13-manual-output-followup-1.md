@@ -130,11 +130,18 @@ python3 tools/loginom-acceptance/date_time_persistence.py <configure-session-dir
 Create output при потере ответа. Дополнительный независимый manual-schema auditor
 проверяет исходные9/7, ровно две точечные вставки и сохранение исключений.
 
-R2 готовится как отдельный patch/manifest, без применения. Источник строго
+Исправление, аудиторы и отчёт зафиксированы коммитом
+`7d7f0bc2a23c8db5d57fbeb9ceb57d3a8ca29907`.
+
+[R2 transfer packet](transfers/node13-r2/README.md) подготовлен как отдельный
+patch/manifest, без применения. Источник строго
 `a63586fe096f4fd7f17f346c391834d3e34bdaa4`; только terminal failure из11 файлов.
-Предварительный dry-check прошёл после адаптации контекста d.ts и test; payload
-добавляемых/удаляемых строк остался точной копией источника. Финальная целевая база
-пакета должна быть source-коммитом этого исправления.
+Финальный dry-check на целевой базе `7d7f0bc2a23c8db5d57fbeb9ceb57d3a8ca29907`
+прошёл (exit0, рабочие файлы до/после совпали). Только контекст d.ts/test
+адаптирован; payload добавляемых/удаляемых строк совпал с выбранным источником.
+Пакет содержит source/target blobs, 18 исходных и 18 transfer hunk hashes.
+Patch SHA256 `47830abe656d8a5abed35e27ee4ca54fb8d46bb4e5b45ce4f47b2b6dc833a182`.
+`applied=false`, `transfer_authorized=false`. Новый target-placement fix14 исключён.
 
 Hermes, полное новое ревью, node15, перенос14→13, main/push/VPS/plugin/routing
 не выполнялись. Чужие AGENTS.md/.gitignore не включаются в коммиты follow-up.
