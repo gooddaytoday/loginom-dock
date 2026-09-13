@@ -103,3 +103,13 @@ source journal, node/source evidence и native-save/close receipts. Не соз�
 Общий overwrite→close случай `package.save_as` принадлежит Node12. Здесь был
 новый путь и `package.save_checkpoint`; исправление или прохождение overwrite
 не заявляется. Hermes не запускался; новый слот требует команды координатора.
+
+
+## Фиксация
+
+Harness и отчёт зафиксированы коммитом `3c999b30a483790d5367f9e78e7bc865e3a38cd3`.
+[Финальные pins](missing-values-native-candidate-pins-2026-09-13.json) содержат
+новые goal/fixture/harness SHA и SHA каждого основного receipt. Свежий source
+preflight подтвердил395 build inputs, совпадающих с этим коммитом, и прежние156
+runtime inputs; отдельный subscription/dependency preflight прошёл без модели.
+Исторические preparation pins и старые отрицательные receipts сохранены.
