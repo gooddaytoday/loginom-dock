@@ -1,3 +1,8 @@
+> 13 сентября: отдельный пересмотр неизменного run20260913-072904-3cc4ad0e
+> verifier identity-import-v1 прошёл **122/122**. Исходный frozen **FAIL112/118** сохранён.
+> Нового Hermes run не было; production/goal не менялись. Отчёт:
+> `docs/plans/loginom-dock/node12-identity-auditor-followup-1/README.md`.
+
 > 13 сентября: кандидат12.2 прошёл новый автономный run, но frozen аудит **FAIL112/118**.
 > Причина: три identity import mappings вне закреплённого scope аудитора (шесть gates).
 > Save/close/open и16 node operations прошли. Полная приёмка остаётся незавершённой.

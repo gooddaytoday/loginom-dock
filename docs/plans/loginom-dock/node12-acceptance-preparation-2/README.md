@@ -1,3 +1,8 @@
+> 13 сентября: отдельный пересмотр неизменного run20260913-072904-3cc4ad0e
+> verifier identity-import-v1 прошёл **122/122**. Исходный frozen **FAIL112/118** сохранён.
+> Нового Hermes run не было; production/goal не менялись. Отчёт:
+> `docs/plans/loginom-dock/node12-identity-auditor-followup-1/README.md`.
+
 # Узел 12 — комплект кандидата после точечного follow-up
 
 Последний результат: **автономная приёмка FAIL112/118**, run `20260913-072904-3cc4ad0e`.
