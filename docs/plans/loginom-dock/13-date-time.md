@@ -1,5 +1,7 @@
 # 13. Дата и время
 
+Вход исправлен до10 строк: [актуальные pins и schema proof](../../loginom-dock/node-13-acceptance-input-limit-fix-1.md).
+
 Подготовлены [входы приёмки и admission scaffold](../../loginom-dock/node-13-acceptance-input-preparation-1.md);
 новый полный live/Hermes прогон не запускался, R1/R2 остаются OPEN.
 

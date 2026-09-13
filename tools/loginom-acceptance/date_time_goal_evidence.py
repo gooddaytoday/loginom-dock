@@ -29,10 +29,11 @@ def checkpoint(events, request):
     return result
 
 
-def full_port(port, expected):
+def full_port(port, expected, execution_id):
     """No fixed requested sample size; returned count must equal total and oracle."""
     n = len(expected['rows'])
-    return (port.get('row_count') == n and port.get('sample_rows') == n
+    return (0 <= n <= 10 and port.get('fresh') is True and bool(execution_id)
+            and port.get('execution_id') == execution_id and port.get('row_count') == n and port.get('sample_rows') == n
             and len(port.get('sample', [])) == n and port.get('sample_complete') is True
             and not port.get('truncated', False)
             and [{k: c.get(k) for k in ('name', 'label', 'type')} for c in port.get('schema', [])] == expected['schema'])
@@ -68,12 +69,12 @@ def output_checks(events, request, label, initial=False, configuration=True):
     checks['ports'] = dict(passed=[p['port'] for p in ports] == wanted and request['read']['ports'] == wanted)
     if label == 'Нет продаж':
         tables = [dict(schema=table['schema'], rows=[]), table]
-        checks['full'] = dict(passed=len(ports) == 2 and all(full_port(p, t) for p, t in zip(ports, tables)))
+        checks['full'] = dict(passed=len(ports) == 2 and all(full_port(p, t, result['execution']['execution_id']) for p, t in zip(ports, tables)))
         checks['raw'] = verify_filter_output(events, request, table['schema'], [[], csv_dates(table)])
         if configuration:
             checks['configuration'] = verify_filter_configuration(events, request)
     else:
-        checks['full'] = dict(passed=len(ports) == 1 and full_port(ports[0], table))
+        checks['full'] = dict(passed=len(ports) == 1 and full_port(ports[0], table, result['execution']['execution_id']))
         if label in ('Календарь', 'Пустой календарь'):
             if configuration:
                 config = audit_date(events, request, fixture_rows=[] if label == 'Пустой календарь' else source_rows((FIXTURES/'sales.csv').read_bytes()))

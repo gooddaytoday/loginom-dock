@@ -30,7 +30,9 @@ def inputs_check():
     required |= {'goals/date-time-sales.txt', 'fixtures/date-time/sales.csv', 'fixtures/date-time/expected.json'}
     if not required <= set(manifest['files']):
         raise ValueError('auditor_dependency_inventory_incomplete')
-    frozen()
+    tables = frozen()
+    if any(len(t['rows']) > 10 for t in tables.values() if isinstance(t, dict) and 'rows' in t):
+        raise ValueError('fixture_exceeds_public_complete_sample_limit')
     return dict(passed=True, manifest_sha256=digest(INPUTS), files=len(manifest['files']))
 
 

@@ -1,10 +1,20 @@
 # Узел 13: checkpoint разработки
 
+## Исправление лимита входа — завершено
+
+По команде `node13:acceptance-input-limit-fix:1:881793e1f1d5b61f149112f3d6a29f72eb441b4e`
+комплект сокращён до10 строк без потери семантических cases. Public schema:
+8/8 результатов +8/8 чтений PASS, 11/12-строчные подмены отклонены4/4.
+Python533 PASS; новая frozen сумма407; все12 операций по двум датам сохранены.
+[Актуальный отчёт и pins](node-13-acceptance-input-limit-fix-1.md).
+881793e1/12строк — исторический несовместимый комплект, не основание для admission.
+R1/R2, direct-open end-to-end и Hermes остаются OPEN/NOT RUN.
+
 ## Подготовка входов приёмки — завершена 13 сентября 2026
 
 Команда `node13:acceptance-input-preparation:1:ed53b0189fa92dfc879015ee08580dcadf2c3cd2`.
-Подготовлены естественное ТЗ месячных/квартальных продаж, CSV 12×4, независимые
-frozen таблицы 12×27 / 0×27 / 8×3 / 6×3, полный auditor и отдельный guarded launcher.
+Подготовлены естественное ТЗ месячных/квартальных продаж, CSV 10×4, независимые
+frozen таблицы 10×27 / 0×27 / 8×3 / 6×3, полный auditor и отдельный guarded launcher.
 [Отчёт подготовки](node-13-acceptance-input-preparation-1.md) содержит хэши,
 рабочие команды, точный configure contract и матрицу admission.
 Shared R1/R2 остаются OPEN; final runtime/archive/catalog и слот не назначены.
