@@ -13,6 +13,7 @@ import { createObservationPages } from './observation-pages.mjs';
 import { makeWorkspaceBootstrapCode } from './workspace.mjs';
 import { createNodeProcedure } from './node-procedure.mjs';
 import { applyNode, validateNodeApplyRequest, reconcileNodeWorkflow } from './node-apply.mjs';
+import {reconcileInputMappingPhase} from './node-input-mapping-recovery.mjs';
 import { createNodeOperationRunner } from './node-operation-runner.mjs';
 import {nodeApiTools,deliveryApiTools} from './node-api.mjs';
 import { configureTextImportDraft, validateTextImportRequest } from './text-import-procedure.mjs';
@@ -1322,9 +1323,8 @@ export function createActionRuntime({ pinned, execute, artifactStore, allowCandi
       phase, parameters: structuredClone(operation.parameters), checkpoint: structuredClone(operation.checkpoint ?? null),
       deadline_at: operation.deadline ?? null, ...(outcome ? { outcome: structuredClone(outcome) } : {}) });
   };
-  const readReceipt = async operation => {
-    if (!operation.lastReceipt) return { state: 'missing' };
-    const reference = operation.lastReceipt;
+  const readReceipt = async (operation,reference=operation.lastReceipt) => {
+    if (!reference) return { state: 'missing' };
     const code = `async (page) => (${browserReceipt.toString()})(page, ${JSON.stringify({ receipt_namespace: receiptNamespace,
       receipt_id: reference.id, receipt_signature: reference.signature, receipt_read: true, operation_id: operation.id })})`;
     const value = await execute(code, { timeout: 10000 });
@@ -1423,6 +1423,12 @@ export function createActionRuntime({ pinned, execute, artifactStore, allowCandi
     // reconciliation. Unknown phases keep the gate until a phase-specific
     // verifier is available. A durable node checkpoint is safe to redeliver.
     if(running)return failed(operation,'OPERATION_STILL_PENDING','The local node operation is still running');
+    if(operation.nodeApply?.pending?.phase==='input_mapping'&&operation.nodeApplyDrivers?.inspectInputMapping){
+      running=true;
+      try{operation.inputMappingRecovery=await operation.nodeApplyDrivers.inspectInputMapping({readReceipt:ref=>readReceipt(operation,ref)});}
+      catch(error){operation.inputMappingRecovery={available:false,phase:'input_mapping',reason:String(error.message).slice(0,1000)};}
+      finally{running=false;}
+    }
     if(operation.nodeApply?.pending?.phase==='workflow'){
       running=true;
       try{
@@ -1539,6 +1545,12 @@ export function createActionRuntime({ pinned, execute, artifactStore, allowCandi
     if (!operation || pending !== operation) return { recovery_options: [], next_steps: base };
     base.unshift({ tool: 'dock_operation_inspect', arguments: { operation_id: operation.id },
       required_fields: [], requires: [], provides: ['completion_receipt', 'cleanup_state'] });
+    if(operation.action.capability==='node.apply'&&operation.nodeApply?.pending?.phase==='input_mapping'&&operation.inputMappingRecovery){
+      const recovery=operation.inputMappingRecovery;
+      if(recovery.available)base.push({tool:'dock_node_resume',arguments:structuredClone(operation.parameters),required_fields:[],
+        requires:['original_completed_input_done','same_prepared_graph','live_mapping_probe'],provides:['verified_input_mapping','continuation_of_original_operation']});
+      return {recovery_options:[],next_steps:base,input_mapping_recovery:structuredClone(recovery),internal_resume_available:false};
+    }
     if (operation.transportUncertain) return { recovery_options: [], next_steps: base };
     if(operation.action.capability==='node.apply')return {recovery_options:[],next_steps:base,
       internal_resume_available:operation.cleanupConfirmed===true&&!operation.nodeApply?.pending};
@@ -2019,6 +2031,19 @@ export function createActionRuntime({ pinned, execute, artifactStore, allowCandi
       if(operation&&operation.signature!==signature)throw new Error('operation_id was already used with different parameters or handler');
       if(pending&&pending!==operation)throw new Error('Another Dock operation remains pending');
       if(operation&&!resume)return inspectApply(operation);
+      if(resume&&operation?.nodeApply?.pending?.phase==='input_mapping'&&operation.nodeApplyDrivers?.recoverInputMapping){
+        running=true;
+        try{
+          await reconcileInputMappingPhase({operation,readReceipt:ref=>readReceipt(operation,ref),record:onRecord,now,signal});
+          operation.inputMappingRecovery=null;
+        }catch(error){
+          operation.inputMappingRecovery={available:false,phase:'input_mapping',reason:String(error.message).slice(0,1000)};
+          operation.outcome=nodeApplyOutcome(operation,{...operation.outcome.output,status:'AMBIGUOUS',
+            cleanup_complete:operation.nodeApply.cleanup_complete,pending_phase:operation.nodeApply.pending?.phase??null,
+            error:{code:'INPUT_MAPPING_RECOVERY_UNVERIFIED',message:operation.inputMappingRecovery.reason}});
+          await remember(operation,'recovery_unverified',operation.outcome);return structuredClone(operation.outcome);
+        }finally{running=false;}
+      }
       if(resume&&['workflow','target'].includes(operation?.nodeApply?.pending?.phase))await inspectApply(operation);
       if(resume&&(!operation||pending!==operation||operation.nodeApply?.pending||!operation.cleanupConfirmed))
         throw new Error('Resume requires the original inspected node checkpoint without an unresolved phase');

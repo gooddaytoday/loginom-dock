@@ -6,7 +6,7 @@ import {configureMissingValuesOutput,configureMissingValuesInlineMapping} from '
 import {missingValuesConfigurationReadback} from './missing-values-readback.mjs';
 import {missingValuesParametersSchema} from './node-api.mjs';
 export function createMissingValuesNodeSupport(config){return createTabularTransformNodeSupport(config,{
- type:'preprocessing.data_recovery',mode:'impute',revision:'missing-values-v1-internal-1',readback:missingValuesConfigurationReadback,parameterSchema:missingValuesParametersSchema,
+ type:'preprocessing.data_recovery',mode:'impute',revision:'missing-values-v1-internal-1',inputMappingRecovery:true,readback:missingValuesConfigurationReadback,parameterSchema:missingValuesParametersSchema,
  validate:validateMissingValuesParameters,validateInput:validateMissingValuesInputParameters,preflight:preflightMissingValuesSource,
  configurationObservation:{condition:'missing_values configuration page',readMissingValues:true,ready:s=>s.wizard?.stage==='missing_values'&&s.node_missing_values?.verified===true},
  async configure(channel,p,{request}){

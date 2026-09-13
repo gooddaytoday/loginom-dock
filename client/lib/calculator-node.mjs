@@ -1,4 +1,5 @@
 import {selectPreparedGraphNode} from './node-graph-selection.mjs';
+import {inputMappingOrigin,inputMappingState,inputMappingGraph,verifyInputMappingFinish,inputRecoveryBoundary,sameInputRecovery} from './node-input-mapping-recovery.mjs';
 import {verifyCalculatorInlineSync} from './calculator-inline-mapping.mjs';
 import {createNodeProcedure} from './node-procedure.mjs';
 import {withBrowserReceipt} from './executor.mjs';
@@ -43,18 +44,29 @@ export function createTabularTransformNodeSupport({targetOrigin,targetBuild},imp
   validate:implementation.validate,configure:(ctx,p,drivers)=>drivers.configureCalculator(ctx,p)});}
  const nodeApplyDriverFactory=options=>{
   const {operation,execute,onRecord,now,receiptOptions}=options;
-  let channel,activeSignal,configured,mapping,columns,executionDriver,executionReceipt,multipleOutputs;
+  let channel,activeSignal,configured,mapping,columns,executionDriver,executionReceipt,multipleOutputs,inputCheckpoint;
+  const graphForInput=async()=>inputMappingGraph(await operation.nodeTargetAdapter.observe({document_id:operation.nodeApply.request.document_id,
+   workflow_ref:operation.nodeApply.request.workflow_ref},operation.deadline),operation.nodeApply.node);
+  const recordInput=async(phase,details)=>{
+   const e={operation_id:operation.id,action_key:'node.apply',action_revision:operation.nodeApply.request.contract_revision,phase,...details};
+   const ack=await onRecord(e);requireValue(ack&&sameInputRecovery(e,Object.fromEntries(Object.keys(e).map(k=>[k,ack[k]]))),'Input recovery journal acknowledgement differs');
+  };
   const enter=ctx=>{activeSignal=ctx.signal;operation.deadline=ctx.deadline;
    channel??=createNodeProcedure({operation,execute,record:onRecord,now,maxSteps:4096,targetOrigin,targetBuild,
     signal:{throwIfAborted:()=>activeSignal?.throwIfAborted(),get aborted(){return activeSignal?.aborted;},get reason(){return activeSignal?.reason;}},preparedNodeContext:{document_id:ctx.document_id,workflow_ref:ctx.workflow_ref,node:ctx.node},
     wrapMutation:(code,r)=>withBrowserReceipt('('+code+')(page)',{...receiptOptions(r.id,r.action_key,r.signature),operation_id:r.id})});return channel;};
-  const finishWizard=async (mode,port=false,definition)=>{
+  const finishWizard=async (mode,port=false,definition,recovery)=>{
    const verb=mode==='execute'?'execute_wizard':'finish_wizard',key=mode==='execute'?'btnExecute':'btnDone';
    // Complete definition paging leaves the grid on its last addressed page.
    const offset=definition?Math.floor((definition.total_columns-1)/8)*8:0;
    const s=await channel.observe({condition:'calculator '+mode+' available',...(port?{outputColumnPage:{offset,limit:8}}:{}),ready:s=>s.wizard?.status==='observed'&&s.ui.elements.some(e=>e.tid===s.wizard.root_tid+';'+key&&e.allowed_actions.includes(verb))});
-   await channel.perform({condition:'calculator '+mode,initialObservation:s,ready:s=>s.wizard?.status==='observed',identity:s=>s.prepared_node_context,
-    resolve:s=>({verb,ref:control(s,key,verb).ref})});
+   if(recovery){
+    requireValue(s.wizard.stage==='input_mapping'&&sameInputRecovery(s.prepared_node_context,recovery.value.native_mapping.node_context),'Input mapping owner changed before Done');
+    recovery.wizard_root_ref=s.wizard.root_ref;await recordInput('node_input_mapping_commit_prepared',{checkpoint:recovery});
+   }
+   try{await channel.perform({condition:'calculator '+mode,initialObservation:s,ready:s=>s.wizard?.status==='observed',identity:s=>s.prepared_node_context,
+    resolve:s=>({verb,ref:control(s,key,verb).ref})});}
+   catch(error){if(recovery){recovery.finish_reference=structuredClone(operation.lastReceipt);await recordInput('node_input_mapping_finish_unresolved',{reference:recovery.finish_reference});}throw error;}
    const graph=await channel.observe({condition:'calculator returned to graph',ready:s=>s.wizard?.status==='absent'&&s.prepared_node_context?.surface==='graph'});
    return verified({effect_possible:true,mode,settings_applied:true,execution_started:false,node_context:graph.prepared_node_context});
   };
@@ -115,6 +127,7 @@ export function createTabularTransformNodeSupport({targetOrigin,targetBuild},imp
      }
      enter(ctx);
      if(implementation?.configureInputs)return implementation.configureInputs(channel,mappings,ctx,operation.nodeApply.request,finishWizard);
+     const recoveryGraph=implementation?.inputMappingRecovery?await graphForInput():null;
      await channel.openInputPort(0);
      const ready=s=>s.wizard?.stage==='input_mapping'&&s.node_mapping?.verified===true;
      let s=await channel.observe({condition:'calculator incoming port schema',readMappings:true,ready});
@@ -127,7 +140,9 @@ export function createTabularTransformNodeSupport({targetOrigin,targetBuild},imp
      s=await channel.observe({condition:'configured incoming port readback',readMappings:true,ready});
      const native_mapping=s.node_mapping,definition=await readOutputDefinitionPages(channel,{expectedCount:native_mapping.target_fields.length});
      requireValue(definition.fields.every((f,i)=>['name','label','type','data_kind'].every(k=>f[k]===native_mapping.target_fields[i][k])),'Incoming port definition differs');
-     const finish=await finishWizard('done',true,definition);
+     if(recoveryGraph)inputCheckpoint={node:structuredClone(ctx.node),origin:inputMappingOrigin(targetOrigin),build:targetBuild,graph:recoveryGraph,
+      mapping:inputMappingState(native_mapping,ctx.node),value:structuredClone({native_mapping,definition,changes,source_identity_verified:true}),attempts:0};
+     const finish=await finishWizard('done',true,definition,inputCheckpoint);
      return verified({effect_possible:true,native_mapping,definition,changes,finish,source_identity_verified:true});
     }
     enter(ctx);requireValue(configured,'Configured calculator missing');
@@ -203,7 +218,43 @@ export function createTabularTransformNodeSupport({targetOrigin,targetBuild},imp
     return verified({effect_possible:true,status:data.sample_complete?'complete':'partial',execution_id:ctx.execution.execution_id,evidence_ref:ctx.receipt_id,
      ports:[{port:0,port_guid:table.port_guid,fresh:true,execution_id:ctx.execution.execution_id,...data}],table_creation:table,format_proof:formatProof,format_restoration:formatRestoration,read_settings:readSettings,workflow_return:returned});
    },
+   ...(implementation?.inputMappingRecovery?{
+    async inspectInputMapping({readReceipt,signal}){
+     const state=inputRecoveryBoundary(operation,now);requireValue(inputCheckpoint?.finish_reference?.action_key==='ui.act','Original input Done reference unavailable');
+     activeSignal=signal;signal?.throwIfAborted();operation.deadline=Math.min(state.deadline,state.configure_deadline,state.pending.deadline,now()+45000);
+     requireValue(!inputCheckpoint.probe_pending,'Mapping inspection gesture remains unresolved; inspect the owned UI before further action');
+     verifyInputMappingFinish(inputCheckpoint,await readReceipt(inputCheckpoint.finish_reference));
+     requireValue(sameInputRecovery(await graphForInput(),inputCheckpoint.graph),'Input source or target changed after Done; restore the original graph before resume');
+     return {available:true,phase:'input_mapping',receipt_id:inputCheckpoint.finish_reference.id,
+      verification:'completed_input_done_requires_mapping_probe',execution_started:false};
+    },
+    async recoverInputMapping({readReceipt,signal}){
+     await this.inspectInputMapping({readReceipt,signal});
+     requireValue(inputCheckpoint.attempts<2,'Input mapping probe budget exhausted');
+     inputCheckpoint.attempts++;inputCheckpoint.probe_pending=true;
+     let opened=false,observed,cancelled;
+     try{
+      await channel.openInputPort(0);opened=true;
+      const s=await channel.observe({condition:'recovery reads committed input mapping without edits',readMappings:true,
+       ready:s=>s.wizard?.stage==='input_mapping'&&s.node_mapping?.verified===true});observed=s.node_mapping;
+     }finally{
+      if(opened){cancelled=await closePreparedWizard(channel);inputCheckpoint.probe_pending=false;}
+     }
+     await recordInput('node_input_mapping_recovery_checked',{observed,cancelled,expected:inputCheckpoint.mapping});
+     requireValue(sameInputRecovery(inputMappingState(observed,inputCheckpoint.node),inputCheckpoint.mapping),'Committed mapping differs; restore the declared mapping before retrying the same operation');
+     requireValue(sameInputRecovery(await graphForInput(),inputCheckpoint.graph),'Input graph changed during verification');
+     inputCheckpoint.probe_verified=true;
+     return verified({...structuredClone(inputCheckpoint.value),effect_possible:true,
+      finish:verified({effect_possible:true,mode:'done',settings_applied:true,execution_started:false,node_context:cancelled.node_context}),
+      recovery:{verified:true,finish_receipt_id:inputCheckpoint.finish_reference.id,observed_mapping:observed,probe_cancel:cancelled}});
+    },
+   }:{}),
    async verifyContinuation(state,{signal}={}){
+    if(state.input_mapping_recovered&&state.phases.at(-1)?.phase==='input_mapping'){
+     if(!channel||state.pending||state.cleanup_complete!==true||!inputCheckpoint?.probe_verified||now()>=Math.min(state.deadline,state.configure_deadline))return false;
+     activeSignal=signal;signal?.throwIfAborted();operation.deadline=Math.min(state.deadline,state.configure_deadline,now()+15000);
+     return sameInputRecovery(await graphForInput(),inputCheckpoint.graph);
+    }
     // Only a durably accepted graph launch can be resumed. A partially edited
     // expression or port needs reconciliation; never replay its mutations.
     if(!channel||!configured||state.pending||state.cleanup_complete!==true
