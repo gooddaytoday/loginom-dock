@@ -9,6 +9,12 @@
 Node24 запускается явно из установленного runtime. Browser visible/maximized,
 viewport:null. Source MCP/Dock HOME изолированы; общий plugin не менялся.
 
+## Разрешённый variant-прототип
+
+[Проверенный ограниченный prototype](collapse-variant-prototype-result-2026-09-13.md)
+получает самостоятельные native tags до decoder; это устраняет неопределённость
+источника для наблюдённых случаев, но не означает интеграции/полной приёмки.
+
 ## Follow-up пустого результата
 
 Диагностика после checkpoint6e36609d установила неактивный upstream перед

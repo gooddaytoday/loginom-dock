@@ -1,3 +1,16 @@
+# Node16: ограниченный variant-прототип проверен — 13 сентября 2026
+
+После прямого разрешения пользователя fixed method321/interface116 прочитал
+native typed bytes в собственной test-1 копии. Проверены integer/real/string1,
+Null/boolean/empty, signed64 границы, ±значения вне2^53, binary64/−0/subnormal и
+локальный datetime .123ms.12tests PASS,23payload replay PASS,16live отказов доRPC,
+реальный stale execution отказ безRPC,8отрицательных подмен независимого аудитора.
+[Результат, provenance и ограничения](collapse-variant-prototype-result-2026-09-13.md).
+Prototype не интегрирован в handler/plugin. Полный variant_io BLOCKED; native
+real32, общий временной контракт и серверная snapshot-consistency не заявлены.
+
+---
+
 # Node16: пустой результат после открытия проверен — 13 сентября 2026
 
 В своей ветке подтверждены сохранные owner/port/link IDs и полная схема пустого
