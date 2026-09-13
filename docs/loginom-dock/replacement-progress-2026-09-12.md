@@ -476,3 +476,16 @@ b99b922033e87b7580f14c2eec8cd0744c23bab29ee45b2548212cdac8c394ca,155 файло�
 проводился. Home подтверждён, harness exit0.
 [Полный отчёт](../plans/loginom-dock/11-fix-results-2026-09-13.md).
 Следующее действие назначает координатор; Hermes без слота не запускать.
+
+## 13 сентября: комплект автономной приёмки подготовлен
+
+Команда node11:acceptance-preparation:1:91dee921e9e17343d53bf20fd7ca5f3b19f8de7a.
+Код runtime не менялся. Подготовлены обычный goal, два CSV, полные эталоны,
+внешний автономный аудитор и запуск на существующей подписке Sol/low.
+28 тестов и preflight PASS;7 групп на сохранённых доказательствах PASS,18 подмен
+отклонены. Это подготовка: нового live/Hermes/reopening ещё нет.
+Source archive389 файлов совпадает с91dee921. Candidate2026.09.13-node11.1-candidate
+только предложен; проверенного URI/SHA нет, stage закрепляет координатор.
+[Отчёт](../plans/loginom-dock/11-acceptance-preparation-2026-09-13.md).
+Следующий шаг — передать stage/readback и слот; ручной checkpoint N11-R1
+по-прежнему не доказывает persistence окончательной ревизии после reopening.
