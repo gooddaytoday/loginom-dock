@@ -1,3 +1,19 @@
+# Node14: замечания review исправлены в source — 13 сентября 2026
+
+В ветке `codex/node-14-missing-values` коммитом
+`a63586fe096f4fd7f17f346c391834d3e34bdaa4` исправлены N14-R1 (строгая
+Missing Values schema) и N14-R2 (подтверждённая terminal failure/cleanup).
+Реальные Done/Execute и failed job прошли schema; inspect failed операции —
+resolved, повтор/resume без жестов. После восстановления CSV новый явный запуск
+успешен в том же runtime. Клиент: 1426 PASS / 1 SKIP, Python: 3 PASS.
+
+Lost-reply input_mapping recovery остаётся подтверждённым блокером; native save
+/test-4, immutable candidate и Hermes требуют отдельного допуска. Узел не принят.
+[Отчёт единственного fix round](missing-values-fix-r1-2026-09-13.md).
+Ниже — исторические статусы соответствующих ревизий.
+
+---
+
 # Три потока разработки запущены — 12 сентября 2026
 
 Сверка source registry, подпланов и сохранённых аудитов подтвердила восемь полных

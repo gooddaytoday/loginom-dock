@@ -1,11 +1,13 @@
 # 14. Заполнение пропусков: среднее и строковая константа
 
-Статус: **разработка и Codex direct QA завершены; автономная приёмка не выполнена**.
-Отдельный поток4, ветка `codex/node-14-missing-values`. Проверены полный выход,
-сохранение/reopen и безопасное отсутствие повторных жестов при потере ответа.
-Ограничения общего execution failure lifecycle и каталога `/test-4` сохранены
-в [итоговом отчёте](../../loginom-dock/missing-values-development-report-2026-09-13.md).
-Следующий этап — review по отдельной команде координатора; Hermes не запускался.
+Статус: **review и единственный fix round завершены в source; автономная приёмка не выполнена**.
+Отдельный поток4, ветка `codex/node-14-missing-values`. N14-R1/R2 исправлены
+и проверены в живом Loginom, code SHA `a63586fe096f4fd7f17f346c391834d3e34bdaa4`.
+[Отчёт исправлений](../../loginom-dock/missing-values-fix-r1-2026-09-13.md)
+фиксирует tests, pins, terminal failure/cleanup и успешный запуск после восстановления CSV.
+Lost-reply recovery фазы input_mapping остаётся блокером; безопасный pending
+не засчитан как восстановление. Native save /test-4, immutable candidate и Hermes
+ожидают отдельного допуска координатора. Повторного полного review не назначено.
 Навигация: [реестр](README.md), [общие требования новой волны](next-wave.md).
 Зависимости: [03 — общий node.apply](03-text-import.md),
 [05 — тип/вид поля](05-field-parameters.md), [09 — обычный Hermes](09-hermes-user-diagnostics.md).
