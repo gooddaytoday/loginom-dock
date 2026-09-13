@@ -8,6 +8,7 @@ from pathlib import Path
 from types import SimpleNamespace
 from collapse_preview_negative import verify_preview_negative
 from collapse_case_restart import bind_restart
+from collapse_transfer_resolution import verified_delivery_child
 from evidence import PREFIX,unwrap
 from grouping_node_acceptance import model_completed
 from node_public_acceptance_evidence import paired_public_calls, proven_validation_refusal
@@ -255,11 +256,11 @@ def obligations(request,e,ps,independent=None):
         from verify_loss import check as loss_check
         need(loss_check(directory)['operation_id'].startswith(run+':'),'Foreign loss operation')
     finally:sys.path.pop(0)
-    # Any genuine ambiguous model operations must remain unresolved and must not
-    # be hidden by the separate injected-fault check.
+    # Upload dispatch initially requires server-copy verification. Accept only
+    # its bound completed delivery; a genuine unresolved operation still fails.
     for ev in e['events']:
         if ev.get('phase')=='completed' and ev.get('outcome',{}).get('status')=='AMBIGUOUS':
-            need(False,'Model ambiguous operation requires diagnosis before acceptance: '+str(ev.get('operation_id')))
+            verified_delivery_child(SimpleNamespace(**globals()),e,ps,ev)
     return True
 
 def audit(request,evidence,prompt,independent):

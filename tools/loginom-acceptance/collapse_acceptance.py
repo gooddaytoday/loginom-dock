@@ -8,8 +8,8 @@ KIT=WORK/'collapse/acceptance-kit'
 GOAL_ID='collapse-node-complete'
 # Coordinator-approved exact Null-marker transfer from node14 (814f3146).
 # The original kit's source metadata remains historical; cases/fixtures unchanged.
-SOURCE='b0709ec0f6f820a8988f4683297388894813935e'
-RUNTIME='e4e9ecbea5242cd403351fb5e4d5feaec38d18edfb7355f520985b752bed78a3'
+SOURCE='8cd5c2811a216b45ae50a16a4ed1930e4e87fa59'
+RUNTIME='17b0ede0035452a2e9481a3ba007b97a8d1b1b47fdd13ffd4e9153b90dc8daed'
 # Native per-session raw bytes/topology producer; bare receipt documents remain unsupported.
 READONLY_PRODUCER='collapse_native_sessions_v1'
 CANDIDATE_URI='viking://resources/loginom-dock/catalogs/executor-preview/releases/2026.09.13-node16-b0709ec0-candidate/manifest.json'
@@ -80,6 +80,7 @@ def prompt(package,directory,run_id):
     for p,a in zip(fixture_paths(),fixtures(run_id,directory)):text=text.replace(p.name,a['name'])
     text+='\nИдентификаторы итоговых операций: '+', '.join(run_id+':'+k for k in json.loads((KIT/'expected.json').read_text()))+'. Отдельные операции: '+', '.join(run_id+':'+k for k in ['done','close','negative-conflict','negative-missing','negative-empty','loss'])+'. Для отрицательного отсутствующего поля используйте __MissingField__. При потере ответа сохраняйте исходную операцию.\n'
     text+='\nДля независимого открытия сохраните каждый из десяти итоговых вариантов отдельным пакетом в этом каталоге: Dock-collapse-'+run_id+'-<имя случая>.lgp. В каждом пакете один сценарий с одной парой текстовый импорт → Свёртка; промежуточные варианты не должны перезаписывать окончательные сохранённые случаи. Идентификаторы финального сохранения: '+', '.join(run_id+':save-'+k for k in json.loads((KIT/'expected.json').read_text()))+'.\n'
+    text+='\nОбычное итоговое сохранение каждого случая выполняйте через dock_action_run с action_key package.save_checkpoint: это сохраняет открытый сценарий. package.save_as с переоткрытием используйте только при отдельном требовании переоткрыть пакет. Для разных исходных CSV создавайте новый пакет с одной новой парой Текстовый импорт → Свёртка; существующую Свёртку изменяйте в предусмотренном заданием случае reconfigured. При добавлении нового поля в настройки существующего импорта задавайте полностью name, label, type, data_kind, used. Сохраняйте заданные типы, одинаковые метки, порядок и формат источника; это не сокращает десять случаев, полное чтение 470 ячеек и отрицательные проверки.\n'
     return text+'\nКаталог: '+directory+'\nОсновной пакет: '+package+'\nRun ID: '+run_id+'\nНачинайте operation_id с '+run_id+'; каждому действию — новый суффикс.\n'
 def admission(args):
     errors=[]

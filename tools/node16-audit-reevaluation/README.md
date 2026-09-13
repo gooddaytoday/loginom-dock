@@ -50,3 +50,16 @@ no-effect reconfigured → reconfigured-final. Любая другая посл�
 ```sh
 python3 -m unittest discover -s tools/node16-audit-reevaluation -p test_future_auditor.py
 ```
+
+
+## Подтверждённая доставка перед существующим импортом — 14 сентября
+
+`test_delivery_resolution.py` проверяет неизменный экспорт четвёртого run
+20260913-234616-4ac1a433 с исходным SHA256. Пять первичных upload AMBIGUOUS
+разрешены последующими связанными byte verification / transfer_completed /
+публичными SUCCEEDED. Настоящий AMBIGUOUS import-mapped отклоняется.
+20 подмен доказательств также отклоняются. Это целевая проверка нового
+`collapse_transfer_resolution.py`, не новый full report и не изменение старого audit.
+При отсутствии сохранённого локального экспорта тест явно SKIP.
+
+Команда: `python3 -m unittest discover -s tools/node16-audit-reevaluation -p 'test_delivery_resolution.py' -v`.

@@ -1,6 +1,6 @@
 {
-  "source_sha": "b0709ec0f6f820a8988f4683297388894813935e",
-  "runtime": "e4e9ecbea5242cd403351fb5e4d5feaec38d18edfb7355f520985b752bed78a3",
+  "source_sha": "8cd5c2811a216b45ae50a16a4ed1930e4e87fa59",
+  "runtime": "17b0ede0035452a2e9481a3ba007b97a8d1b1b47fdd13ffd4e9153b90dc8daed",
   "inputs": {
     "artifact-transport-check.mjs": "bbbb1fb4abbe7ff2b3c463f9bf51a9811455c9856ceefa929e2e7f9e803f296d",
     "artifact_conflict_evidence.py": "b3e1b84f9f7b45cb4ba565c28b6b7b3de4d44c74cc9314093213baa3e789e10b",
@@ -61,10 +61,11 @@
     "collapse/runner-integration/candidate-stage.json": "356e8112e094ae707f09017d50effc9e43e301b828eb75cb874a88be75fccacd",
     "collapse/runner-integration/readonly-source.schema.json": "7e2cb50a1dfb24562b1ed31f23611f6325968c03f6eebbd05a316ace17c3ed7c",
     "collapse-live.mjs": "eafe7236887f6dc3b096a7ece49abd62d206d5b5d01e2adc33da7a9ce960cef4",
-    "collapse_acceptance.py": "b355553fed8395e93e473da8ba6a8f8483cecfdaef378190fc6ada733c7ab674",
+    "collapse_acceptance.py": "0d4a2c97a7576ed7ee370a344884196e1c54994514e75b39559a2b9ed3479910",
     "collapse_case_restart.py": "fec7b36b52108df94024bac712f7d75c9db632489c127af6c5084d55c56f940c",
-    "collapse_node_acceptance.py": "69f9f23fb0c4a8222fd89d1843f7c93715e3488cabfb85cf48adfe87eda00fa4",
+    "collapse_node_acceptance.py": "5298f7a51b55eab50efce92482201d16a73fc92f5d10b04f38a9b66dc73290dc",
     "collapse_preview_negative.py": "d62a849d34994f1829d700ed46a2ad0bb7956cd0d4595ae2447051fd2c285af7",
+    "collapse_transfer_resolution.py": "cbe3d0677717ce1552bc3a0e14ae060a17a25cd629b314d1cfb3d62d06e4a97e",
     "data_pipeline.py": "99aff9b4978e9f0076f2f3dda197fb2b3af2c44da86c258acd8e70ee4e17d73c",
     "destinations.py": "b1fbe7d7d6c4b66346b025b402076a78261b531d314ca6304b317e7f8bcf4835",
     "evidence.py": "c3d9b3131c074102d77f9fa257499618446478f3a666421962dc41a55a4d78aa",
