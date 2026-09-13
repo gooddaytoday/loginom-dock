@@ -161,3 +161,12 @@ Source `83dc0db5`: полный аудитор теперь учитывает �
 [Отчёт, проверки и pins](../../loginom-dock/missing-values-terminal-refusal-verifier-2026-09-13.md).
 Свежий packet test4.2 проверен из source commit; сборка/stage и новый Hermes
 ожидают отдельного назначения координатора.
+
+
+### Candidate2 preflight — 2026-09-13
+
+[Свежий preflight](../../loginom-dock/missing-values-candidate2-preflight-2026-09-13.md)
+прошёл без модели: 4/4 server-built bytes, runtime/source/harness156/395/252,
+READY test-4 и8/8 startup CSV. Исходный полный goal сохранён. Подготовлен
+отдельный pinned launch plan одного Hermes; запуск только после выдачи слота.
+Candidate test4.2 staged координатором, не activated. Старый FAIL неизменён.

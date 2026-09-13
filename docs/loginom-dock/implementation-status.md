@@ -7557,3 +7557,13 @@ Source `83dc0db5` добавил строгий учёт доказанного 
 сохранены. Полная цель 27/9/12 и независимый reopen остаются обязательными.
 [Отчёт и свежий пакет кандидата](missing-values-terminal-refusal-verifier-2026-09-13.md).
 Test4.2 не staged; Hermes, review, push и deployment не запускались.
+
+
+## Узел 14: candidate2 preflight — 2026-09-13
+
+Immutable test4.2 скачан и проверен 4/4; manifest `cadd80df…7b2ad`.
+Source83dc0db5/runtime bdddbd1b, inventory156/395/252 неизменны. Реальный startup
+без модели: test-4, 8/8 CSV admission, READY, развёрнутое окно, cleanup завершён.
+[Отчёт и pins](missing-values-candidate2-preflight-2026-09-13.md).
+Готов к одному полному Hermes; слот не выдан. Goal27/9/12/save/reopen и старый
+FAIL13/13 сохранены. Candidate staged координатором, activate=false.
