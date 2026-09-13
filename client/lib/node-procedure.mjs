@@ -398,7 +398,8 @@ export function createNodeProcedure({ operation, execute, record, wrapMutation,
     },
     // Fixed handlers supply the readiness condition and domain identity. Caller
     // input never contains a resolver or a recipe. Only a durably recorded,
-    // strictly pre-gesture epoch refusal permits a new local attempt.
+    // strictly pre-gesture epoch refusal or explicitly proved body replacement
+    // permits a new local attempt.
     async perform({ condition, ready, resolve, identity, confirmIdentity, timeoutMs = 15000, initialObservation, refreshReplacedBody }) {
       if (typeof resolve !== 'function' || typeof identity !== 'function') {
         throw new Error('A bound action resolver and domain identity are required');
@@ -465,7 +466,7 @@ export function createNodeProcedure({ operation, execute, record, wrapMutation,
             rejected_operation_id: r.operation_id, retry: attempt + 1,
             condition, binding_sha256: binding, intent_sha256: intent,
             effect_possible: false,
-            ...(bodyRefusal?{reason:'prepared_source_body_replaced'}:{}),
+            ...(bodyRefusal?{reason:'prepared_graph_body_replaced'}:{}),
           });
           if (event?.rejected_operation_id !== r.operation_id || event.retry !== attempt + 1
             || event.binding_sha256 !== binding || event.intent_sha256 !== intent) {

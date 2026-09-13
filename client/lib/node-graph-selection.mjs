@@ -12,7 +12,7 @@ export function preparedGraphSelection(state) {
   throw Error('Prepared graph node has no observed selection point');
 }
 
-// A failed source selection may observe a new SVG body for the same native node.
+// A failed graph selection may observe a new SVG body for the same native node.
 // Do not generalize this proof to labels, controls, hidden bodies or other errors.
 export function isPreparedBodyReplacement({receipt,observation,action}) {
   const after=receipt?.output,a=observation?.prepared_node_context,b=after?.prepared_node_context;

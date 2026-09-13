@@ -501,7 +501,7 @@ test('a source body proof permits only one strict stale refusal refresh',async()
   const f=recoveryFixture({refusals,receipt:{error:{code:'UI_REFERENCE_STALE'}},refreshReplacedBody:()=>true});
   if(refusals===1)await f.perform();else await assert.rejects(f.perform());
   assert.equal(f.mutations,2);const events=f.records.filter(e=>e.phase==='node_step_refresh_authorized');
-  assert.equal(events.length,1);assert.equal(events[0].reason,'prepared_source_body_replaced');
+  assert.equal(events.length,1);assert.equal(events[0].reason,'prepared_graph_body_replaced');
  }
 });
 for(const [name,options] of Object.entries({
