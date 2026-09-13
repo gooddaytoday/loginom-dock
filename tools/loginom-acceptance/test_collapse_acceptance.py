@@ -16,6 +16,12 @@ class CollapseAdmissionTest(unittest.TestCase):
  def test_run_blocked_before_auth_even_with_claimed_closed_gates(self):
   with patch.object(a,'frozen',return_value={'gates':{'resource':'PASS'}}),patch.object(run,'connection',side_effect=AssertionError('credentials')),patch.object(run.subprocess,'Popen',side_effect=AssertionError('model')):
    with self.assertRaisesRegex(ValueError,'Collapse admission blocked'):run.execute(SimpleNamespace(goal=a.GOAL_ID,run=True))
+ def test_authorized_collapse_budget_only(self):
+  args=SimpleNamespace(goal=a.GOAL_ID,run=True,timeout=7200,max_turns=140,manifest_uri=a.CANDIDATE_URI,manifest_sha256=a.CANDIDATE_SHA,model_profile='chatgpt-sol',storage_directory='/test-1/node16-20260913-a56c2488',loginom_user='test-1')
+  run.validate_inputs(args)
+  for change in [dict(timeout=7201),dict(max_turns=141),dict(goal='basic-graph')]:
+   invalid=SimpleNamespace(**{**vars(args),**change})
+   with self.assertRaisesRegex(ValueError,'Invalid acceptance budget'):run.validate_inputs(invalid)
  def test_exact_candidate_admitted_and_wrong_profile_blocked(self):
   args=SimpleNamespace(manifest_uri=a.CANDIDATE_URI,manifest_sha256=a.CANDIDATE_SHA,model_profile='chatgpt-sol')
   self.assertTrue(a.admission(args)['ready'])

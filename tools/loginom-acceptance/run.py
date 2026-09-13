@@ -141,7 +141,10 @@ def validate_inputs(args):
     if profile not in ('chatgpt-sol','xiaomi-mimo') or profile=='xiaomi-mimo' and getattr(args,'goal',None)!='data-pipeline':
         raise ValueError('Xiaomi comparison is authorized only for the full data-pipeline goal')
     max_turns_limit=300 if getattr(args,'goal','basic-graph') in ('data-pipeline','calculator-roundtrip') else 100
-    if not 30 <= args.timeout <= 3600 or not 1 <= args.max_turns <= max_turns_limit:
+    timeout_limit=3600
+    if getattr(args,'goal',None)==collapse_acceptance.GOAL_ID:
+        timeout_limit=7200;max_turns_limit=140
+    if not 30 <= args.timeout <= timeout_limit or not 1 <= args.max_turns <= max_turns_limit:
         raise ValueError("Invalid acceptance budget")
     if args.manifest_uri is not None and not re.fullmatch(re.escape(MANIFEST_ROOT) + r"[0-9A-Za-z.+-]+/manifest\.json", args.manifest_uri):
         raise ValueError("Invalid candidate manifest URI")
