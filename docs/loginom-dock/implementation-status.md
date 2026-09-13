@@ -1,3 +1,12 @@
+# Node16: проект exact variant контракта подготовлен — 13 сентября 2026
+
+Предложены cell_type/native bytes, отдельные coverage/binding/consistency и bounded
+exact_table в user-v1; подготовлен pure adapter без public wiring. 27 tests и
+независимый replay38native cells прошли. Native32/server cancel/server atomicity
+не являются дополнительными требованиями исходного16goal. Полная приёмка ждёт
+подключения и полного сравнения после save/newsession/reexecute.
+[Контракт, module owners и acceptance mapping](node16-variant-contract-design-2026-09-13.md).
+
 # Node16: изолированный variant hardening проверен — 13 сентября 2026
 
 Добавлен lifecycle прототипа: deadline/cancel, запрет поздней публикации и повторного
