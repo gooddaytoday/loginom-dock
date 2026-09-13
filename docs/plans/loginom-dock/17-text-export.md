@@ -3,8 +3,8 @@
 Исходный коммит: `110da29abe5d247c76ed71b09f7e6b7f6d0b588b`.
 
 Разработка кандидата `exports.text` завершена 13.09.2026. Исходные тесты и
-независимая native-проверка выполнены; review, correction round и автономная
-приёмка Hermes ещё не проводились. Это состояние ветки, не main, сервера или
+независимая native-проверка выполнены. Единственное review и один correction
+round R1/R2 завершены; автономная приёмка Hermes ещё не проводилась. Это состояние ветки, не main, сервера или
 установленного клиента.
 
 Ветка `codex/node-17-text-export`, постоянный worktree
@@ -12,6 +12,10 @@
 `a3b419bde8a660e1905284ee62a46362d5a49e09`. Назначение
 `node17:development:1`, component `component.exports.Text`, аккаунт `test-2`,
 хранилище `/test-2`. Непрослитые изменения node11 не переносились.
+
+Исправления: `2524921058b29db0e79e9a188ec7bb8fa9ef9d8c`.
+[Отчёт correction round](17-text-export-fix.md),
+[доказательства исправлений](17-text-export-fix-evidence.json).
 
 ## Контракт кандидата
 
