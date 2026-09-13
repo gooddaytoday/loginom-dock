@@ -45,3 +45,30 @@ test('binding accepts reordered JSON keys but refuses changed or extra identity 
   assert.throws(()=>bindObserver({...changed,overallDeadline:1000}));
  }
 });
+
+const refusedReturn=()=>({status:'NOT_APPLIED',phase:'preconditions',error:{code:'UI_EPOCH_CHANGED'},effect_possible:false,cleanup_complete:true,trace:[{event:'ui_observation_started'},{event:'ui_action_failed'}]});
+const withReturnRefusals=(responses,count,change=()=>{})=>{
+ const prefix=responses.slice(0,11),tail=responses.slice(11),extra=[];
+ for(let i=0;i<count;i++){
+  const refusal=refusedReturn();change(refusal,i);extra.push(refusal,structuredClone(responses[9]),structuredClone(responses[10]));
+ }
+ return [...prefix,...extra,...tail];
+};
+test('return refresh after one or two proven refusals downloads and dispatches exactly once',async t=>{
+ for(const count of [1,2]){
+  const r=await run(t,{transformResponses:xs=>withReturnRefusals(xs,count)});
+  assert.equal(r.error,null);assert.equal(r.dispatched,1);assert.equal(r.calls,14+3*count);
+ }
+});
+test('return cannot refresh unsafe receipts or more than twice',async t=>{
+ for(const change of [r=>r.effect_possible=true,r=>r.cleanup_complete=false,r=>r.error.code='UI_CONTEXT_CHANGED',r=>delete r.trace,r=>r.trace.push({event:'ui_gesture_applied'}),r=>r.trace.push({event:'ui_preconditions_verified'})]){
+  const r=await run(t,{transformResponses:xs=>withReturnRefusals(xs,1,change)});assert.ok(r.error);assert.equal(r.dispatched,0);assert.equal(r.calls,12);
+ }
+ const r=await run(t,{transformResponses:xs=>withReturnRefusals(xs,3)});assert.ok(r.error);assert.equal(r.dispatched,0);assert.equal(r.calls,18);
+});
+test('fresh return refuses changed package or tab before a second gesture',async t=>{
+ for(const field of ['package_identity','active_identity']){
+  const r=await run(t,{transformResponses:xs=>{const q=withReturnRefusals(xs,1);q[13].output[field]='foreign';return q;}});
+  assert.ok(r.error);assert.equal(r.dispatched,0);assert.equal(r.calls,14);
+ }
+});

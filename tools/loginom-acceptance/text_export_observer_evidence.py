@@ -69,11 +69,27 @@ def project_graph(g,c):
     assert [e for e in g['links'] if e['target']==c['identity']['node_id']]==[c['source_edge']]
     return dict(complete=True,**c['identity'],workflow_ref=g['workflow_ref'],settings_verified=False,graph=dict(nodes=[{k:v for k,v in n.items() if k!='dom_epoch'} for n in g['nodes']],links=g['links'],foreign_links=g['foreign_links']))
 
+def safe_return_refusal(r):
+    return (r.get('status')=='NOT_APPLIED' and r.get('phase')=='preconditions'
+        and r.get('error',{}).get('code')=='UI_EPOCH_CHANGED' and r.get('effect_possible') is False
+        and r.get('cleanup_complete') is True and isinstance(r.get('trace'),list)
+        and not any(e.get('event') in ['ui_preconditions_verified','ui_gesture_applied'] for e in r['trace']))
+
+def return_binding(step):
+    s,e=step['snapshot'],step['element']
+    return dict(document=s.get('dom_epoch',{}).get('document'),workflow=s.get('workflow_ref'),
+        active_identity=s.get('active_identity'),package=s.get('package_identity'),
+        target={k:e.get(k) for k in ['tid','label','kind','scope']})
+
 def verify_action_ledger(ledger,c,before,after):
     assert 6<=len(ledger)<=512
     kinds=[e['step']['kind'] for e in ledger];assert kinds[0]==kinds[-1]=='graph'
-    assert kinds.count('files')==kinds.count('download')==kinds.count('return')==1
-    d=kinds.index('download');ret=kinds.index('return');assert 0<d<ret<len(kinds)-1
+    assert kinds.count('files')==kinds.count('download')==1
+    returns=[e for e in ledger if e['step']['kind']=='return']
+    assert 1<=len(returns)<=3 and returns[-1]['response'].get('status')=='SUCCEEDED'
+    assert all(safe_return_refusal(e['response']) for e in returns[:-1]),'Unsafe return retry'
+    assert all(return_binding(e['step'])==return_binding(returns[0]['step']) for e in returns),'Return owner changed'
+    d=kinds.index('download');ret=max(i for i,k in enumerate(kinds) if k=='return');assert 0<d<ret<len(kinds)-1
     assert not any(k in ['files','folder','home','download'] for k in kinds[d+1:])
     refs=set();name=Path(c['baseline']['destination']).name;document_epoch=None;files_owner=None
     graph_owner={k:c['workflow_ref'][k] for k in ['tab_tid','prefix']}
@@ -82,7 +98,8 @@ def verify_action_ledger(ledger,c,before,after):
         assert e['seq']==i+1 and e['run_id']==c['run_id'] and e['session_id']==c['session_id'] and e['cleanup_complete'] is True
         assert math.isfinite(e['mono_start']) and math.isfinite(e['mono_end']) and e['mono_end']>=e['mono_start'] and (i==0 or e['mono_start']>=ledger[i-1]['mono_end'])
         assert len(e['code_sha256'])==64 and all(x in '0123456789abcdef' for x in e['code_sha256'])
-        response=e['response'];assert 'status' not in response or response['status']=='SUCCEEDED'
+        response=e['response'];refused=kind=='return' and safe_return_refusal(response)
+        assert refused or 'status' not in response or response['status']=='SUCCEEDED'
         if kind in ['graph','roots']:assert set(step)=={'kind'}
         if kind=='root':assert set(step)=={'kind','ref'} and step['ref'] in refs
         if kind=='row':assert set(step)=={'kind','name'} and step['name'] in ['test-2',name]
@@ -105,7 +122,7 @@ def verify_action_ledger(ledger,c,before,after):
             expected={'files':'MF;cntMain;tlbMainToolbar;btnFilestorage','home':prefix+';cnrNaviMode;b.s_Сервер>Файлы','return':c['workflow_ref']['tab_tid'],'folder':prefix+';FileStorageForm;colName_test-2','download':prefix+';FileStorageForm;colName_'+name}[kind]
             assert el['tid']==expected and ('double_click' if kind in ['folder','download'] else 'click') in el['allowed_actions']
             assert response['cleanup_complete'] is True
-            if kind!='download':assert response['output']['gesture_applied'] is True
+            if kind!='download' and not refused:assert response['output']['gesture_applied'] is True
             if kind=='folder':assert s['file_storage']['directory']=='/' and el['storage_entry']['kind']=='folder' and el['label']=='test-2'
             if kind=='download':
                 assert s['file_storage']['directory']=='/test-2' and el['label']==name and el['storage_entry']['bytes']==c['baseline']['bytes'] and el['interaction']['state']=='point_observed'

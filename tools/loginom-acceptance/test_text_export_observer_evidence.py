@@ -96,6 +96,27 @@ class ObserverEvidenceTests(unittest.TestCase):
         actual.write_text(json.dumps(e)+'\n')
         self.assertFalse(verify_run_observer(self.run,self.run_request,self.request['params']['arguments'])['passed'])
 
+    def test_return_refresh_proof_requires_exact_no_effect_and_bound_owner(self):
+        from text_export_observer_evidence import verify_action_ledger
+        proof=self.events[2]['payload'];original=proof['action_ledger']
+        ret=next(i for i,e in enumerate(original) if e['step']['kind']=='return')
+        def fixture(count):
+            rows=copy.deepcopy(original);extra=[]
+            for _ in range(count):
+                refusal=copy.deepcopy(original[ret]);refusal['response']=dict(status='NOT_APPLIED',phase='preconditions',error=dict(code='UI_EPOCH_CHANGED'),effect_possible=False,cleanup_complete=True,trace=[])
+                extra.extend([refusal,*copy.deepcopy(original[ret-2:ret])])
+            rows[ret:ret]=extra
+            for i,e in enumerate(rows):e.update(seq=i+1,mono_start=2*i,mono_end=2*i+1)
+            return rows
+        def verify(rows):return verify_action_ledger(rows,self.expected,proof['before'],proof['after'])
+        for count in [1,2]:verify(fixture(count))
+        with self.assertRaises(AssertionError):verify(fixture(3))
+        for key,value in [('effect_possible',True),('cleanup_complete',False),('error',dict(code='UI_CONTEXT_CHANGED')),('trace',[dict(event='ui_gesture_applied')]),('trace',[dict(event='ui_preconditions_verified')])]:
+            rows=fixture(1);rows[ret]['response'][key]=value
+            with self.assertRaises(AssertionError):verify(rows)
+        rows=fixture(1);rows[ret+3]['step']['snapshot']['package_identity']='foreign'
+        with self.assertRaises(AssertionError):verify(rows)
+
     def test_nonmonotonic_and_nonfinite_times_are_refused(self):
         for time in [0,float('nan'),float('inf')]:
             self.events[2]['mono_ms']=time;self.persist();self.assertFalse(self.result())

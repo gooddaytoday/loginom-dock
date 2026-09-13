@@ -3,6 +3,12 @@ export const REVISION='node17-reject-read-observer.2-unadmitted';
 export const NATIVE_SMOKE_ADMITTED=false;
 export const need=(v,m)=>{if(!v)throw Error(m);};
 export const same=(a,b)=>JSON.stringify(a)===JSON.stringify(b);
+// Only this proven pre-gesture refusal permits a new return observation.
+export const safeReturnRefusal=r=>r?.status==='NOT_APPLIED'&&r.phase==='preconditions'
+ &&r.error?.code==='UI_EPOCH_CHANGED'&&r.effect_possible===false&&r.cleanup_complete===true
+ &&Array.isArray(r.trace)&&!r.trace.some(e=>['ui_preconditions_verified','ui_gesture_applied'].includes(e.event));
+export const returnBinding=(s,e)=>({document:s.dom_epoch?.document,workflow:s.workflow_ref,
+ active_identity:s.active_identity,package:s.package_identity,target:{tid:e.tid,label:e.label,kind:e.kind,scope:e.scope}});
 export function checkStep(step,c){
  const kinds=['graph','roots','root','row','files','home','folder','download','return'];
  need(step&&kinds.includes(step.kind),'Unregistered observer action');
@@ -31,8 +37,11 @@ export function checkActionLedger(ledger,c){
   checkStep(e.step,c);need(/^[a-f0-9]{64}$/.test(e.code_sha256)&&e.response!==undefined,'Raw browser evidence missing');
  }
  need(ledger[0].step.kind==='graph'&&ledger.at(-1).step.kind==='graph','Graph observations required');
- for(const kind of ['download','files','return'])need(ledger.filter(e=>e.step.kind===kind).length===1,'Exactly one '+kind+' required');
- const d=ledger.findIndex(e=>e.step.kind==='download'),r=ledger.findIndex(e=>e.step.kind==='return');need(d>0&&r>d&&r<ledger.length-1,'Return/download order differs');
+ for(const kind of ['download','files'])need(ledger.filter(e=>e.step.kind===kind).length===1,'Exactly one '+kind+' required');
+ const returns=ledger.filter(e=>e.step.kind==='return');need(returns.length>=1&&returns.length<=3&&returns.at(-1).response.status==='SUCCEEDED','One completed return required');
+ need(returns.slice(0,-1).every(e=>safeReturnRefusal(e.response)),'Unsafe return retry');
+ need(returns.every(e=>same(returnBinding(e.step.snapshot,e.step.element),returnBinding(returns[0].step.snapshot,returns[0].step.element))),'Return target changed');
+ const d=ledger.findIndex(e=>e.step.kind==='download'),r=ledger.findLastIndex(e=>e.step.kind==='return');need(d>0&&r>d&&r<ledger.length-1,'Return/download order differs');
  need(!ledger.slice(d+1).some(e=>['files','folder','home','download'].includes(e.step.kind)),'Navigation after download differs');
  return true;
 }

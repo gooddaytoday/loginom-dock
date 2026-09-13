@@ -3,7 +3,7 @@ import {createHash} from 'node:crypto';
 const sha=s=>createHash('sha256').update(s).digest('hex');
 const bool=v=>typeof v==='boolean'?v:null;
 const count=v=>Number.isSafeInteger(v)&&v>=0&&v<=1000000?v:null;
-const codes=new Set(['DOWNLOAD_BROWSER_CALL_FAILED','DOWNLOAD_CONTEXT_CHANGED','DOWNLOAD_EVENT_MISSING','DOWNLOAD_FAILED','DOWNLOAD_FILENAME_MISMATCH','DOWNLOAD_GESTURE_NOT_CONFIRMED','DOWNLOAD_ORIGIN_MISMATCH','DOWNLOAD_OUTPUT_SIZE_CHANGED','DOWNLOAD_REVEAL_EPOCH_CHANGED','DOWNLOAD_REVEAL_LIMIT','DOWNLOAD_REVEAL_NOT_CONFIRMED','DOWNLOAD_REVEAL_NOT_VERTICAL','DOWNLOAD_REVEAL_OWNER_BLOCKED','DOWNLOAD_REVEAL_OWNER_CHANGED','DOWNLOAD_REVEAL_OWNER_MISSING','DOWNLOAD_REVEAL_TARGET_CHANGED']);
+const codes=new Set(['UI_EPOCH_CHANGED','UI_CONTEXT_CHANGED','UI_ROOT_STALE','UI_TARGET_CHANGED','LOGIN_REQUIRED','DOWNLOAD_BROWSER_CALL_FAILED','DOWNLOAD_CONTEXT_CHANGED','DOWNLOAD_EVENT_MISSING','DOWNLOAD_FAILED','DOWNLOAD_FILENAME_MISMATCH','DOWNLOAD_GESTURE_NOT_CONFIRMED','DOWNLOAD_ORIGIN_MISMATCH','DOWNLOAD_OUTPUT_SIZE_CHANGED','DOWNLOAD_REVEAL_EPOCH_CHANGED','DOWNLOAD_REVEAL_LIMIT','DOWNLOAD_REVEAL_NOT_CONFIRMED','DOWNLOAD_REVEAL_NOT_VERTICAL','DOWNLOAD_REVEAL_OWNER_BLOCKED','DOWNLOAD_REVEAL_OWNER_CHANGED','DOWNLOAD_REVEAL_OWNER_MISSING','DOWNLOAD_REVEAL_TARGET_CHANGED']);
 const statuses=new Set(['SUCCEEDED','FAILED','NOT_APPLIED','AMBIGUOUS']);
 const phases=new Set(['preconditions','revealing','requesting','downloading','downloaded','observed']);
 const checkNames=['observation','authenticated','origin','build','workflow','epoch','tab','package','storage','dialogs','masks'];
@@ -14,7 +14,7 @@ export function safeNativeResult(r){
   effect_possible:bool(r?.effect_possible),cleanup_complete:bool(r?.cleanup_complete),pending_ui_actions:count(r?.pending_ui_actions),
   download_count:count(r?.observer_download_count),listener_registered:bool(r?.observer_listener_registered),download_completed:bool(r?.output?.download_completed),
   context_checks:trace.filter(x=>x?.event==='download_context_refused').slice(0,1).map(x=>Object.fromEntries(checkNames.map(k=>[k,bool(x.checks?.[k])]))),
-  trace_count:trace.length,trace_omitted:true};
+  trace_count:trace.length,preconditions_verified:trace.some(x=>x?.event==='ui_preconditions_verified'),gesture_applied:trace.some(x=>x?.event==='ui_gesture_applied'),trace_omitted:true};
 }
 function envelope(reply){
  const content=Array.isArray(reply?.content)?reply.content:[];

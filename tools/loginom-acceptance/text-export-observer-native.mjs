@@ -8,7 +8,7 @@ import {makeWorkspaceUiCode} from '../../client/lib/workspace-ui.mjs';
 import {makeNativeOutputDownloadCode} from '../../client/lib/executor.mjs';
 import {createNodeTargetBrowserAdapter} from '../../client/lib/node-target-browser.mjs';
 import {observeResponse} from './text-export-observer-response.mjs';
-import {need,same,checkStep,checkActionLedger} from './text-export-observer-policy.mjs';
+import {need,same,checkStep,checkActionLedger,safeReturnRefusal,returnBinding} from './text-export-observer-policy.mjs';
 const hash=v=>createHash('sha256').update(v).digest('hex');
 const one=xs=>{need(xs.length===1,'Unique observed control required');return xs[0];};
 export function parseBrowserResult(reply){
@@ -44,6 +44,7 @@ export function createNativeObserver({invoke,artifactRoot,record=async()=>{},rec
     result=await observeResponse({invoke,parse:parseBrowserResult,guard,clock,signal,deadline,code,record:recordResponse,
      binding:{seq:ledger.length+1,step_kind:step.kind,run_id:c.run_id,session_id:c.session_id,read_id:readId,mono_start:start},
      validate:r=>{
+      if(step.kind==='return'&&safeReturnRefusal(r))return;
       if(r.status!==undefined)need(r.status==='SUCCEEDED','Native step incomplete');
       if(['files','home','folder','return'].includes(step.kind))need(r.cleanup_complete===true&&r.output?.gesture_applied===true,'Navigation cleanup unknown');
      }});
@@ -103,7 +104,13 @@ export function createNativeObserver({invoke,artifactRoot,record=async()=>{},rec
   const counted=`async page=>{let count=0;const listener=()=>{count++};page.on('download',listener);try{const result=await (${downloadCode})(page);return {...result,observer_download_count:count,observer_listener_registered:true};}finally{page.off('download',listener);}}`;
   const downloaded=await run(step,counted);
   need(downloaded.cleanup_complete===true&&downloaded.observer_download_count===1&&downloaded.observer_listener_registered===true&&downloaded.output?.download_completed===true&&downloaded.output.suggested_name===name&&same(downloaded.output.output_binding,task.output_binding),'Native download binding incomplete');
-  s=await control('MF;cntMain;cntWorkspace;Workspace;t.br');await nav('return',s,one(s.ui.elements.filter(e=>e.tid===c.workflow_ref.tab_tid)));
+  let returnOwner;
+  for(let attempt=0;attempt<3;attempt++){
+   s=await control('MF;cntMain;cntWorkspace;Workspace;t.br');const target=one(s.ui.elements.filter(e=>e.tid===c.workflow_ref.tab_tid)),binding=returnBinding(s,target);
+   returnOwner??=binding;need(same(binding,returnOwner),'Return owner changed before refreshed action');
+   const returned=await nav('return',s,target);if(returned.status==='SUCCEEDED')break;
+   need(attempt<2&&safeReturnRefusal(returned),'Return refresh budget exhausted');
+  }
   await wait(roots,s=>{need(same(owner(s),filesOwner)||same(owner(s),graphOwner),'Foreign return owner');return same(owner(s),graphOwner)&&!s.ui.masks?.length;});
   const after=await graph();need(same(before,after),'Observed graph/identity changed');checkActionLedger(ledger,c);guard();
   const bytes=await readFile(downloadPath);guard();
