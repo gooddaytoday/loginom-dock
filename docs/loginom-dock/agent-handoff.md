@@ -1,3 +1,21 @@
+# Узел14: следующий полный Hermes назначен; узел17 получил ответ — 13 сентября 2026
+
+Scoped import verifier7bef361c/reportac7ce151 проверен помощником:
+strict default/gates27/9/12/save/reopen, gzip114/114/1264. Координатор сверил
+33evidence/395source/156runtime/256harness и отсутствие acceptance процессов
+11:26:31UTC. Единственный слот node14-hermes-20260913-run4-7bef361c выделен
+на один полный run4, existing ChatGPT/Sol/low. Ход01a09a86-25bc-7312-a1c5-a07b051efde4
+active; actual model start ещё не проверен. Runtime71f73d81, immutable cadd80df.
+Launch plan SHA1730009e86d2f73f4783f22c9afb7c40451ebb8bbd1dc11d9cef72d9823a1f39.
+Новый префлайт перед моделью обязателен, при FAIL нет второго автозапуска.
+
+17: connect-preflight-mask proposal согласован: existing bounded observe только
+exports.text перед link mutation, exact graph и повторный cancel/deadline guard.
+Не повторять возможный link, не переобозначать старый pending.
+Все входящие обработаны, результат помощника учтён. Main/plugin не менялись.
+
+---
+
 # Узел13: R2 принят ограниченно, готовится полная приёмка — 13 сентября 2026
 
 5a4c46fc: exact11files/18hunks R2 transfer выполнен, terminal live test-3 PASS.

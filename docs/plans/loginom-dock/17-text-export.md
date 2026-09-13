@@ -72,3 +72,10 @@ drag. Отказ/отмена/неизвестный эффект не допу�
 Scroll журналируется как UI effect, даже если узел не создан; cleanup не скрывает
 остаточное состояние. Нужны focused negative tests и live test-2. Реализация
 назначена в текущей фазе; успешное live выполнение ещё не подтверждено.
+
+Согласовано node17:connect-preflight-mask-proposal:1: перед link.create только
+для exports.text использовать existing bounded read-only observe≤3 вместо
+прямого graph read. После ожидания exact graph===effect.before, port/context
+guards, signal/deadline до rebinding и link. Ни одного retry возможного link.
+Старый pending сохраняется; новая live проверка transient mask/foreign graph/
+cancel/deadline обязательна. Инструкция доставлена в текущую фазу.
