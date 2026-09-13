@@ -1,3 +1,8 @@
+> 13 сентября: кандидат12.2 прошёл новый автономный run, но frozen аудит **FAIL112/118**.
+> Причина: три identity import mappings вне закреплённого scope аудитора (шесть gates).
+> Save/close/open и16 node operations прошли. Полная приёмка остаётся незавершённой.
+> Отчёт: `docs/plans/loginom-dock/node12-acceptance-preparation-2/attempt-20260913-072904.md`.
+
 # Поток 12: прямая отладка не завершена — 12 сентября 2026
 
 В `codex/node-12-duplicates` добавлен кандидат research.duplicates / mark.
