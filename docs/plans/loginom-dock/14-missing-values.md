@@ -139,3 +139,13 @@ Configure-only возвращает `execution=not_requested`, `output=not_refre
 «Только строка» оказался в pending/AMBIGUOUS после недоступной точки drop; native
 checkpoint заблокирован. Pre-audit FAIL, независимый12-result reopen не запускался.
 Production/harness pins сохранены; новый прогон и исправления не назначены.
+
+### Target recovery follow-up — 2026-09-13
+
+По отдельному назначению исправлено завершение доказанного отказа создания после
+законченного preflight источника. Source/harness e433c593; live: FAILED с известным
+эффектом источника, gate released, новый ID → SUCCEEDED,20 ячеек и native save
+подтверждены. Общая семантика identity и unknown outcome сохранена. Старый FAIL
+и13 receipts не изменены. [Полный отчёт и следующий candidate packet](../../loginom-dock/missing-values-target-recovery-2026-09-13.md).
+Candidate test4.2 не staged; строгий полный аудитор пока не принимает отказанные
+prepared-запросы без node_checkpoint. Новый Hermes только по отдельному назначению.

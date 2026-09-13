@@ -7536,3 +7536,13 @@ prepare прошёл. Runtime a9db4113… сохранён. Полная авт�
 recovery, блокирующем native-save. Full pre-audit FAIL,12-result reopen не допущен.
 Второй model run/фиксраунд не выполнялся; следующий шаг требует отдельного
 назначения прямой UI-диагностики. Собственные процессы завершены.
+
+## Node14 target recovery — 13 сентября 2026
+
+Узкий follow-up после автономного FAIL завершён: source/harness
+`e433c593cbc729af29c69933a777a70d672a4e21`. Живой доказанный отказ до drop после
+деактивации источника завершился FAILED/cleanup=true и освободил gate; новый ID
+с доступной координатой создал один узел, независимые20 ячеек и native save
+в /test-4 проверены. Focused123 PASS; клиент1444 PASS/1 SKIP; Python12 PASS.
+[Отчёт, pins и ограничения полного аудитора](missing-values-target-recovery-2026-09-13.md).
+Архив test4.2 подготовлен, stage/Hermes не запускались. Полный goal не принят.
