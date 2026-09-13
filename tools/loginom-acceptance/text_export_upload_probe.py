@@ -12,7 +12,7 @@ def validate_catalog(uri,digest,directory):
 def descriptors(run_id,directory):
     storage_segments(directory)
     if directory!='/test-2' or not re.fullmatch(r'\d{8}-\d{6}-[a-f0-9]{8}',run_id):raise ValueError('Invalid Text export run identity')
-    return [dict(name='Dock-export-'+run_id+'-'+name,bytes=size,sha256=digest,upload=dict(directory=directory,overwrite='reject')) for name,(digest,size) in FIXTURES.items()]
+    return [dict(name='Dock-export-'+run_id+'-input-'+name,bytes=size,sha256=digest,upload=dict(directory=directory,overwrite='reject')) for name,(digest,size) in FIXTURES.items()]
 def prompt(template,package_path,directory,run_id):
     artifacts=descriptors(run_id,directory);text=render_goal(template,package_path,directory)
     for token,a in zip(('__MAIN_CSV__','__TYPED_CSV__','__WIDE_CSV__'),artifacts):text=text.replace(token,a['name'])

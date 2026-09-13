@@ -384,7 +384,7 @@
     "test_sorting_output_evidence.py": "57185d3ae99b44093131eb678b3020e8e44aa791dd8f4806fbd6929f3f77ee14",
     "test_subscription.py": "c6a9c5e6d0821dd6de1132bf5bd01158d85549b295334ae5151745b5c5162d82",
     "test_table_datetime_restoration_evidence.py": "cd02970dbb74c4268029c97d90f13e4649dfee401238211db48b87c7c8c0c52a",
-    "test_text_export_acceptance.py": "02e9a9241c366601a88741177014ad65dfdf22e1a446d44ba4d2277c7555b3d7",
+    "test_text_export_acceptance.py": "ac1a4ef4af2417b9b2e967ccb40438e890a5d54b12ff59b00db20d74fe1765a1",
     "test_text_export_observer_evidence.py": "82b0992007cf6e8008d31203eab319150339a094acef7bf7b24e31fdfe39126a",
     "test_text_export_origin.py": "a2ee8c615a1105cd6244d3aa173f6c7436b37ddc790b8e0f2b40d54e82c10c37",
     "test_text_export_readiness.py": "966c3bb79c0b10cc7c70d6dae5385e11ff8bb57bc6404e570957340c51e14902",
@@ -427,7 +427,7 @@
     "text_export_observer_run.py": "5f1802984e818f3bb5a075a95d8e400f40dbaf0db37eb13ca30b36a07b1e9df6",
     "text_export_origin.py": "20ebc438cf5c3c4ec1e3959f68d5c3d9a1aa93244d6f0bd9f524d3751ec84ca3",
     "text_export_readiness.py": "aff8615d32439749a7bf6df7122c502ba7da5aeed23811dd0b3f8cab86b51376",
-    "text_export_upload_probe.py": "76401217b9ab5c5fd967065dfb9e2185e1114058064ee80d30479567ede4cb0b",
+    "text_export_upload_probe.py": "ab2915618608672d40578a873378fe6c6f332b63f9e41c2f5c2739c5415db75f",
     "text_export_user_v1_evidence.py": "0e758a742a65e1b48dd15c7284977ca7b75aae6da4fc52da7dfc4b75bc7701e5",
     "union-live.mjs": "3840d57e05edad771504157d95e842dd25b9b51b6407f04ae5a5113f4a8050ba",
     "union_configuration_evidence.py": "802ff9ae8ba41ced52f658afedea2cab0bf048014955144d0a9f28e114d3601a",
@@ -449,6 +449,7 @@
   "changed_since_diagnostic": [
     "audit-native-text-export-observer.py",
     "run.py",
+    "test_text_export_acceptance.py",
     "test_text_export_readiness.py",
     "text-export-observer-client.mjs",
     "text-export-observer-native.mjs",
@@ -456,6 +457,7 @@
     "text-export-observer-sdk.mjs",
     "text_export_acceptance.py",
     "text_export_readiness.py",
+    "text_export_upload_probe.py",
     "user_result_evidence.py"
   ],
   "goal_sha256": "5db16d49554a80afceedcbad2f9a836378377650bcec1d27c4768638a29b46b6",

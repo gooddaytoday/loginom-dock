@@ -16,6 +16,15 @@ class TextExportAcceptanceTests(unittest.TestCase):
   for directory in ['/test-1','/test-2/nested','/test-2/../test-1']:
    with self.assertRaises(ValueError):validate_catalog(MANIFEST_URI,MANIFEST_SHA,directory)
   with self.assertRaises(ValueError):validate_catalog(MANIFEST_URI,'0'*64,'/test-2')
+ def test_input_paths_never_collide_with_any_export_destination(self):
+  run='20260913-180000-1234abcd';directory='/test-2';artifacts=descriptors(run,directory)
+  inputs={directory+'/'+a['name'] for a in artifacts}
+  suffixes=['csv.csv','typed.csv','wide.tsv','empty.csv','zero.csv','tsv.tsv','done.csv','closed.csv','reopen-changed.csv','reopen-typed.csv','reopen-wide.tsv','reopen-zero.csv']
+  outputs={directory+'/Dock-export-'+run+'-'+s for s in suffixes}
+  self.assertFalse(inputs & outputs);self.assertEqual(len(inputs),3)
+  text=prompt((WORK/'goals/text-export-node-complete.txt').read_text(),directory+'/packages/run.lgp',directory,run)
+  for a in artifacts:self.assertIn(a['name'],text)
+  for output in outputs:self.assertIn(output,text)
  def test_persistence_rejects_reconfiguration_and_rebinding(self):
   def out(doc,execution):return {'output':{'node':{'node_id':'n','document_id':doc},'configuration':{'readback':{'input_mapping':{'fields':['a']},'settings':{'destination':doc,'delimiter':';'}}},'execution':{'status':'completed','execution_id':execution}}}
   a,b=out('old','e1'),out('new','e2');r={'target':{'kind':'existing'},'inputs':[],'mappings':[],'parameters':{'destination':'new'}}
