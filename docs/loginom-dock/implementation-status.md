@@ -1,5 +1,9 @@
 # Text export: разработка кандидата завершена — 13 сентября 2026
 
+Текущий acceptance blocker: [reject-baseline read](../plans/loginom-dock/17-text-export-reject-baseline-gate.md).
+Запуск Hermes и полный PASS закрыты до согласованного независимого чтения
+между reject и replace; runtime обработчика не изменён.
+
 В ветке `codex/node-17-text-export` реализован кандидат `exports.text`: CSV/TSV
 UTF-8, настройка мастера, один вход, Execute/Done/Close и независимое чтение
 нативного файла через отдельный output lease. Тестовый scope — `/test-2`.
