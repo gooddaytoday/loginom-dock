@@ -1,3 +1,17 @@
+# Node17: account probe локализован; кандидат подготовлен к отдельной попытке
+
+Назначение `node17:account-probe-diagnosis:1:95a8105c`: source/SDK проверка не
+обнаружила удержания prepare gate; один diagnostic-only live probe вернул raw
+partial за 3.14 с. Видимый test-2 и actual session/document/profile подтверждены.
+Escape завершился, но меню осталось видимым в 29 последующих чтениях; closure
+не подтверждён. Узко заменено закрытие на один клик свежего Avatar с тем же
+owner, без авто-повторов. 6 focused Node + 20 Python PASS; новый close ещё не
+live-verified. Браузер закрыт, фоновых процессов нет; baseline/upload/node/
+observer/replace/Hermes не запускались. Старый timeout сохранён как FAIL с
+неизвестным подшагом. Full admission закрыт, user-v1 component/fullgoal не приняты.
+Следующий trigger координатору: отдельная минимальная user-v1 попытка кандидата.
+[Диагноз, pins и evidence](../plans/loginom-dock/17-text-export-account-diagnosis.md).
+
 # Node17: fixed account probe — единственная попытка остановлена до baseline
 
 Назначение `node17:user-v1-account-preflight:1:0f37df75`: acceptance-only probe

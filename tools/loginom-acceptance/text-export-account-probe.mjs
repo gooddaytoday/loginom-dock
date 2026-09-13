@@ -40,7 +40,7 @@ export async function nativeAccountProbe(page,binding){
   for(;;){phase='account_wait';current=await inspect(true);if(current.menu_count===1)break;if(current.menu_count!==0)throw Error('ACCOUNT_MENU_OWNER_AMBIGUOUS');await page.waitForTimeout(Math.min(100,remaining()));remaining();}
   account=current.account;
   if(!current.line_visible||typeof account!=='string')throw Error('ACCOUNT_LINE_UNOBSERVED');
-  phase='before_close';await inspect();mark('close_started');remaining();await page.keyboard.press('Escape',{timeout:remaining()});remaining();mark('close_gesture_completed');
+  phase='before_close';const beforeClose=await inspect();if(beforeClose.menu_count!==1)throw Error('ACCOUNT_MENU_CHANGED');mark('close_started');remaining();await page.locator('[data-tid="MF;cntMain;tlbMainToolbar;btnAvatar"]:visible').click({timeout:remaining()});remaining();mark('close_gesture_completed');
   for(;;){phase='close_wait';const after=await inspect();if(after.menu_count===0){closed=true;break;}if(after.menu_count!==1)throw Error('ACCOUNT_MENU_OWNER_AMBIGUOUS');await page.waitForTimeout(Math.min(100,remaining()));remaining();}
   if(account!=='test-2')throw Error('ACCOUNT_MISMATCH');
   return {status:'SUCCEEDED',account,opened,closed,elapsed_ms:Date.now()-start,phase,steps,pending_ui_actions:0,observations};
