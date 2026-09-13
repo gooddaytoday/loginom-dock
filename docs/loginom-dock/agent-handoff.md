@@ -1,3 +1,17 @@
+# Узел16: bounded exact wiring согласован — 13 сентября 2026
+
+Проект7e1bbab9 проверен помощником:6prototype/decoder/3artifact SHA и38cells.
+Выявлен и координатором воспроизведён BOM/U+FEFF decoder defect, исправление
+включено в назначение. [Точное решение](node16-exact-wiring-decision-2026-09-13.md)
+разрешает private Collapse source wiring после live fullR×C/stability gate.
+Host-derived provenance/receipt, failclosed unknown profile и byte budget до
+накопления обязательны; sample defaults сохраняются, actual user-v1 проверяется.
+Ход01a09a73-f656-7b12-9b17-7d3cf7f2c617 active, Astra medium.
+Полный узел не принят; Hermes/sharedplugin/VPS/main не назначены.
+Все входящие обработаны и результат помощника учтён.
+
+---
+
 # Узел14: NULL исправлен, import refusal verifier назначен — 13 сентября 2026
 
 Source814f3146/report841d6443: native picker выбирает точный NULL,
