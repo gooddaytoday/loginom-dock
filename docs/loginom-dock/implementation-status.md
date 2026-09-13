@@ -7496,3 +7496,12 @@ Read-only precheck вне sandbox прошёл; сценарий Hermes не з�
 Полный аудитор вызван, но evidence.json отсутствует: PASS не заявляется.
 Собственные процессы завершены, слот освобождён; повтор требует новой выдачи.
 [Отчёт](../plans/loginom-dock/node12-acceptance-preparation-1/attempt-20260913-060042.md).
+
+### Узел 12 — вторая автономная попытка: FAIL
+
+Run 20260913-060514-47b236af завершён, 16 node operations SUCCEEDED,
+полный audit 103/112 PASS — общий FAIL. Save/reopen AMBIGUOUS
+(packages.close cardinality 0); сохранность после открытия не доказана.
+Также выявлены требования аудитора к sample_rows=10 для 8 строк и opening
+receipt для пустого settings. Исходники не изменялись, слот освобождён.
+[Полный отчёт](../plans/loginom-dock/node12-acceptance-preparation-1/attempt-20260913-060514.md).
