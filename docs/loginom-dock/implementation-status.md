@@ -7488,3 +7488,11 @@ activated=false. Полный локальный launch preflight прошёл, 
 Dock read подтвердил SHA манифеста. Runtime/harness/native skill неизменны.
 Сценарий Hermes не запускался, слот ожидается после узла 11.
 [Сводка](../plans/loginom-dock/node12-acceptance-preparation-1/candidate-preflight-summary.json).
+
+### Узел 12 — первая автономная попытка остановилась до модели
+
+Run `20260913-060042-78fec37f`: FAILED_BEFORE_MODEL, MCP_TOOL_PRECHECK_FAILED.
+Read-only precheck вне sandbox прошёл; сценарий Hermes не запускался.
+Полный аудитор вызван, но evidence.json отсутствует: PASS не заявляется.
+Собственные процессы завершены, слот освобождён; повтор требует новой выдачи.
+[Отчёт](../plans/loginom-dock/node12-acceptance-preparation-1/attempt-20260913-060042.md).
