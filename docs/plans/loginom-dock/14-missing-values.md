@@ -131,3 +131,11 @@ Configure-only возвращает `execution=not_requested`, `output=not_refre
 завершена на неизменном c32a5d5e / a9db4113…: packet11, startup8, native checkpoint,
 новый document и полный независимый component output124×5. Все12 финальных
 случаев остаются в полном goal; автономный запуск ещё не выполнен и требует слота.
+
+## Autonomous acceptance 2 — FAIL, 2026-09-13
+
+[Run20260913-113814-1bc86af9](../../loginom-dock/missing-values-autonomous-acceptance-2-2026-09-13.md)
+прошёл запуск по прямому подтверждению пользователя, но не полный goal: target
+«Только строка» оказался в pending/AMBIGUOUS после недоступной точки drop; native
+checkpoint заблокирован. Pre-audit FAIL, независимый12-result reopen не запускался.
+Production/harness pins сохранены; новый прогон и исправления не назначены.
