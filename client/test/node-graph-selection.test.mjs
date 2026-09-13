@@ -35,3 +35,34 @@ test('uses the selection target resolved after an epoch refresh',async()=>{
   assert.deepEqual(actions.map(a=>a.ref),refreshedLabel?['label','body']:['body']);
  }
 });
+
+function replacement(){
+ const node={verified:true,surface:'graph',locked:false,document_id:'doc',workflow_id:'flow',node_id:'guid',tid:'MF;TF-1;Graph;Source'};
+ const element={ref:'old',tid:node.tid,scope:'graph',graph_node:{part:'body'},identity:{anchor_tid:node.tid,path:[]},signature:{tag:'g'},allowed_actions:['click'],interaction:{state:'point_observed'}};
+ const observation={origin:'http://test',loginom_build:'7.4.2',workflow_ref:{workflow_id:'flow'},graph_identity:{status:'observed',native_prefix:'MF;TF-1;Graph;'},dom_epoch:{document:'dom'},prepared_node_context:node,scan:{complete:true},ui:{elements:[element],dialogs:[],masks:[],truncated:{dialogs:false,masks:false}}};
+ const output=structuredClone(observation);output.ui.elements[0].ref='new';
+ return {observation,receipt:{output},action:{verb:'click',ref:'old'}};
+}
+test('replacement proof retains the exact prepared source, not its display label alone',async()=>{
+ const {isPreparedBodyReplacement}=await import('../lib/node-graph-selection.mjs');
+ assert.equal(isPreparedBodyReplacement(replacement()),true);
+ for(const mutate of [
+  x=>x.receipt.output.prepared_node_context.node_id='other',x=>x.receipt.output.prepared_node_context.workflow_id='other',
+  x=>x.receipt.output.prepared_node_context.document_id='other',x=>x.receipt.output.prepared_node_context.verified=false,
+  x=>x.receipt.output.prepared_node_context.surface='wizard',x=>x.receipt.output.prepared_node_context.locked=true,
+  x=>x.receipt.output.origin='foreign',x=>x.receipt.output.dom_epoch.document='other',x=>x.receipt.output.graph_identity.native_prefix='other',
+  x=>x.receipt.output.ui.elements[0].ref='old',x=>x.receipt.output.ui.elements.push({...x.receipt.output.ui.elements[0]}),
+  x=>x.receipt.output.ui.elements[0].tid='Other',x=>x.receipt.output.ui.elements[0].signature.tag='rect',
+  x=>x.receipt.output.ui.elements[0].identity.path=[1],x=>x.receipt.output.ui.elements[0].graph_node.part='label',
+  x=>x.receipt.output.ui.elements[0].interaction.state='point_not_observed',x=>x.receipt.output.ui.elements[0].allowed_actions=[],
+  x=>x.receipt.output.ui.dialogs.push({}),x=>x.receipt.output.ui.masks.push({}),x=>x.receipt.output.ui.truncated.masks=true,
+  x=>x.receipt.output.scan.complete=false,x=>x.action.verb='double_click',x=>x.action.ref='foreign',
+ ]){const x=replacement();mutate(x);assert.equal(isPreparedBodyReplacement(x),false);}
+});
+test('body replacement recovery is opt-in for source selection',async()=>{
+ const {selectPreparedGraphNode,isPreparedBodyReplacement}=await import('../lib/node-graph-selection.mjs');
+ for(const enabled of [false,true]){
+  const s=state();const channel={perform:async spec=>assert.equal(spec.refreshReplacedBody,enabled?isPreparedBodyReplacement:undefined)};
+  await selectPreparedGraphNode(channel,s,'select',{refreshReplacedBody:enabled});
+ }
+});

@@ -399,11 +399,11 @@ export function createNodeProcedure({ operation, execute, record, wrapMutation,
     // Fixed handlers supply the readiness condition and domain identity. Caller
     // input never contains a resolver or a recipe. Only a durably recorded,
     // strictly pre-gesture epoch refusal permits a new local attempt.
-    async perform({ condition, ready, resolve, identity, confirmIdentity, timeoutMs = 15000, initialObservation }) {
+    async perform({ condition, ready, resolve, identity, confirmIdentity, timeoutMs = 15000, initialObservation, refreshReplacedBody }) {
       if (typeof resolve !== 'function' || typeof identity !== 'function') {
         throw new Error('A bound action resolver and domain identity are required');
       }
-      let binding, intent;
+      let binding, intent, bodyRefreshes = 0;
       const initialPage=initialObservation?.wizard?.import_columns?.page;
       const initialOutputPage=initialObservation?.wizard?.output_columns?.page;
       for (let attempt = 0; attempt < 3; attempt++) {
@@ -447,17 +447,25 @@ export function createNodeProcedure({ operation, execute, record, wrapMutation,
         try { return await channel.act(action); }
         catch (error) {
           const r = error instanceof NodeProcedureStepError ? error.receipt : null;
-          const preGestureRefusal=r?.phase==='preconditions'&&r.error?.code==='UI_EPOCH_CHANGED'
-            ||r?.phase==='observing'&&r.error?.code==='UI_ROOT_STALE';
-          if (attempt === 2 || r?.status !== 'NOT_APPLIED' || !preGestureRefusal
+          if (attempt === 2 || r?.status !== 'NOT_APPLIED'
             || r.effect_possible !== false || r.cleanup_complete !== true
             || r.trace?.some(e => ['ui_preconditions_verified','ui_gesture_applied'].includes(e.event))
             || !Array.isArray(r.trace)) throw error;
+          const epochRefusal=r.phase==='preconditions'&&r.error?.code==='UI_EPOCH_CHANGED'
+            ||r.phase==='observing'&&r.error?.code==='UI_ROOT_STALE';
+          // Only an opting-in source selector can prove a replaced native body.
+          // This remains a new observation and bound attempt, never a raw retry.
+          const bodyRefusal=r.phase==='preconditions'&&r.error?.code==='UI_REFERENCE_STALE'
+            &&bodyRefreshes===0&&typeof refreshReplacedBody==='function'
+            &&refreshReplacedBody({receipt:r,observation:observed,action})===true;
+          if(!epochRefusal&&!bodyRefusal)throw error;
+          if(bodyRefusal)bodyRefreshes++;
           const event = await entry('node_step_refresh_authorized', {
             step:operation.nodeStepSequence,internal_operation_id:r.operation_id,
             rejected_operation_id: r.operation_id, retry: attempt + 1,
             condition, binding_sha256: binding, intent_sha256: intent,
             effect_possible: false,
+            ...(bodyRefusal?{reason:'prepared_source_body_replaced'}:{}),
           });
           if (event?.rejected_operation_id !== r.operation_id || event.retry !== attempt + 1
             || event.binding_sha256 !== binding || event.intent_sha256 !== intent) {

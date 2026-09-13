@@ -20,7 +20,7 @@ export async function preflightMissingValuesSource(options,ctx,config){
  const graph=s=>s.prepared_node_context?.surface==='graph'&&s.wizard?.status==='absent';
  const observeSource=async()=>{
   let s=await channel.observe({condition:'missing values source output activity',readOutputs:true,ready:s=>graph(s)&&s.node_outputs?.verified===true});
-  if(!s.node_outputs.node_selected){await selectPreparedGraphNode(channel,s,'select missing values source');s=await channel.observe({condition:'selected missing values source output',readOutputs:true,ready:s=>graph(s)&&s.node_outputs?.verified&&s.node_outputs.node_selected});}
+  if(!s.node_outputs.node_selected){await selectPreparedGraphNode(channel,s,'select missing values source',{refreshReplacedBody:true});s=await channel.observe({condition:'selected missing values source output',readOutputs:true,ready:s=>graph(s)&&s.node_outputs?.verified&&s.node_outputs.node_selected});}
   const ports=s.node_outputs.ports.filter(p=>p.index===input.output);need(ports.length===1,'Exact source output required');return ports[0];
  };
  const before=await observeSource();
