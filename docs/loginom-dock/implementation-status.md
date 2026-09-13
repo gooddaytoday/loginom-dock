@@ -1,3 +1,17 @@
+# Node17: candidate admission реализован; user-v1 preflight остановлен до узлов
+
+Назначение `node17:final-admission-preflight:1:79e648b2`: unconditional blocker
+заменён проверкой source/runtime/harness/goal и native evidence pins. Реальный
+stdio entry дважды подтвердил effective user-v1 в isolated config, не меняя
+установленную конфигурацию. Baseline/reject/observer/replace не запускались:
+проверка account identity сначала не учла пагинацию, а один исправленный вход
+получил runtime rejection устаревшего snapshot cursor. Оба браузера закрыты,
+процессов нет. Full admission закрыт до real user-v1 component evidence;
+Hermes не запускался, полного PASS нет. 19 Node + 20 Text export Python + 6 user
+projection тестов прошли. Следующий trigger принадлежит координатору: адресный
+способ наблюдения аккаунта для stdio entry и продолжение component preflight.
+[Полный checkpoint, диагноз и frozen launch plan](../plans/loginom-dock/17-text-export-final-admission-preflight.md).
+
 # Node17: native observer исправлен — candidate evidence-ready
 
 Назначение `node17:observer-navigation-origin-fix:1:e74d14d2` выполнено только

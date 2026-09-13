@@ -19,7 +19,7 @@ from evidence import export_history, clean
 from preflight import preflight, runtime_pin
 from destinations import storage_segments, render_goal
 import upload_probe
-from text_export_readiness import require_reject_baseline_reader,REJECT_BASELINE_BLOCKER
+from text_export_readiness import require_reject_baseline_reader,REJECT_BASELINE_BLOCKER,isolated_user_config
 import text_export_upload_probe
 import union_upload_probe
 import union_review_upload_probe
@@ -233,8 +233,10 @@ def execute(args):
             "series": {"planned_attempts": 1, "variant": fault, "pass_criteria": "text_export_acceptance.py full declared scenario plus independent fresh-session gates" if goal_id=="text-export-node-complete" else "union_review_acceptance.py full scenario contract" if goal_id=="union-review-complete" else "union_node_acceptance.py full scenario contract" if goal_id=="union-node-complete" else "join_node_acceptance.py full scenario contract" if goal_id in ("join-node-complete","join-review-complete") else "filter_node_acceptance.py full scenario contract" if goal_id == 'filter-node-complete' else "reform_node_acceptance.py full scenario contract" if goal_id == 'reform-node-complete' else "sales_sorting_acceptance.py full scenario contract" if goal_id == 'sales-sorting-complete' else "grouping_node_acceptance.py full scenario contract" if goal_id == 'grouping-node-complete' else "calculator_node_acceptance.py full scenario contract" if goal_id == 'calculator-node-complete' else "node_apply_acceptance.py full scenario contract" if goal_id == 'node-apply-complete' else "audit.py declared variant contract"},
             "manifest_uri": args.manifest_uri, "manifest_sha256": args.manifest_sha256}
     if goal_id=='text-export-node-complete':
-        info['acceptance_readiness']={'ready':False,'blockers':[REJECT_BASELINE_BLOCKER]}
-        info['acceptance_observer']={'contract':2,'native_smoke_admitted':False,'entry':'text-export-observer-client.mjs','settings_verified':False}
+        try:info['acceptance_readiness']=require_reject_baseline_reader()
+        except ValueError as e:info['acceptance_readiness']={'ready':False,'blockers':[str(e)]}
+        info['result_profile']='user-v1'
+        info['acceptance_observer']={'contract':2,'native_smoke_admitted':info['acceptance_readiness']['ready'],'entry':'text-export-observer-client.mjs','settings_verified':False}
     if profile == 'chatgpt-sol':
         info['auth_policy'] = AUTH_POLICY
         with tempfile.TemporaryDirectory(prefix='dock-auth-guard-') as guard_temp:
@@ -276,7 +278,8 @@ def execute(args):
     # No key is persisted in the child config. Dock reads its own explicit config.
     entry = REPO / "client/bin/loginom-dock.mjs" if fault == "none" else WORK / {"lost_receipt": "lost-receipt-client.mjs", "rename": "rename-client.mjs", "partial_link": "partial-link-client.mjs", "position": "position-client.mjs", "save_reopen": "save-reopen-client.mjs"}[fault]
     if goal_id=='text-export-node-complete':entry=WORK/'text-export-observer-client.mjs'
-    command = [str(entry), "--config", str(args.dock_config.resolve()),
+    launch_config=isolated_user_config(args.dock_config.resolve(),run/'private/user-v1-config.json') if goal_id=='text-export-node-complete' else args.dock_config.resolve()
+    command = [str(entry), "--config", str(launch_config),
                "--state-dir", str(dock_home), "--agent", "hermes", "--adapter-revision", "0.1.0-rc.4-acceptance",
                "--mode", "executor-replay", "--action-manifest-uri", args.manifest_uri,
                "--action-manifest-sha256", args.manifest_sha256, "--replay-bootstrap", "--replay-login-user", args.loginom_user]

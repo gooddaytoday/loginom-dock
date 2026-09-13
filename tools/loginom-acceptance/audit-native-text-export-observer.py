@@ -6,10 +6,10 @@ from text_export_acceptance import export_check,terminal,bytes_audit,CASES,WORK
 from text_export_observer_run import verify_run_observer
 from text_export_origin import observed_origin
 
-def native_audit(r):
+def native_audit(r,replace_request=None):
     run=json.loads((r/'request.json').read_text());sessions=list((r/'private/dock-state/sessions').iterdir());assert len(sessions)==1;s=sessions[0]
     events=[json.loads(x) for x in (s/'execution-events.jsonl').read_text().splitlines()]
-    request=json.loads((r/'replace-body.json').read_text());dest=request['parameters']['destination']
+    request=replace_request or json.loads((r/'replace-body.json').read_text());dest=request['parameters']['destination']
     original=terminal(events,'smoke-original');replaced=terminal(events,'smoke-replace');reject=terminal(events,'smoke-reject')
     result={'scope':'native diagnostic smoke, not user-v1 or Hermes acceptance','original':export_check(original,'csv',events,r,dest),'replace':export_check(replaced,'csv',events,r,dest)}
     assert reject['status']=='FAILED' and reject['cleanup_complete'] is True

@@ -66,6 +66,7 @@ def normalize_user_evidence(evidence):
         for call,reply in sorted(pairs,key=lambda pair:pair[0]['row']):
             tool=call['tool'];args=call.get('arguments',{});value=reply.get('result',{})
             if proven_validation_refusal(call,reply,events,accepted_ids,pairs):continue
+            if tool in {PREFIX+x for x in ('dock_node_apply','dock_node_wait','dock_node_status','dock_artifact_deliver','dock_artifact_delivery_status')} and value.get('result_version')!='user-v1':raise ValueError('user_mixed_result_profile')
             if tool==PREFIX+'dock_prepare':
                 if value.get('prepared') is True:
                     state=value['workspace']
@@ -86,11 +87,17 @@ def normalize_user_evidence(evidence):
                 call['arguments']=expanded
             if value.get('result_version')!='user-v1':continue
             operation=args.get('operation_id')
-            if value.get('error') is not None and tool in {PREFIX+x for x in ('dock_node_apply','dock_node_wait','dock_node_status')}:raise ValueError('user_node_error')
+            if value.get('error') is not None and tool in {PREFIX+x for x in ('dock_node_apply','dock_node_wait','dock_node_status')}:
+                # The Text export goal intentionally proves native overwrite rejection.
+                refused=[e for e in events if e.get('operation_id')==operation and e.get('phase')=='node_phase_refused' and e.get('receipt',{}).get('verification')=='text_export_conflict_rejected' and e['receipt'].get('cleanup_complete') is True]
+                executed=any(e.get('operation_id')==operation and e.get('phase')=='node_execution_prepared' for e in events)
+                if not (value.get('state')=='settled' and value.get('status')=='FAILED' and value.get('cleanup_complete') is True and value['error'].get('code')=='NODE_APPLY_STOPPED' and len(refused)==1 and not executed):raise ValueError('user_node_error')
+
             if tool in {PREFIX+x for x in ('dock_node_apply','dock_node_wait','dock_node_status')}:
                 if value.get('state')=='settled':
                     end=one([e for e in events if e.get('phase')=='completed' and e.get('operation_id')==operation and e.get('action_key')=='node.apply'],'user_node_end')
-                    raw={**pick(value,'operation_id attempt state cancel_requested server_stop_requested'),'outcome':end['outcome'],'error':value.get('error')}
+                    if value.get('error')!=end['outcome'].get('error'):raise ValueError('user_node_error_projection')
+                    raw={**pick(value,'operation_id attempt state cancel_requested server_stop_requested'),'outcome':end['outcome'],'error':None}
                 elif value.get('state')=='running':
                     raw={**pick(value,'operation_id attempt state cancel_requested server_stop_requested progress'),'outcome':None,'error':value.get('error')}
                 else:raise ValueError('user_node_state')

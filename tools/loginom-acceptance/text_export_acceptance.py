@@ -75,7 +75,7 @@ def audit_directory(directory,external_dir=None):
         assert value,name
     try:
         require_reject_baseline_reader()
-        request=json.loads((directory/'request.json').read_text());raw=json.loads((directory/'evidence.json').read_text());evidence,projection=normalize_user_evidence(raw);checks['projection']=projection;assert projection['passed']
+        request=json.loads((directory/'request.json').read_text());raw=json.loads((directory/'evidence.json').read_text());evidence,projection=normalize_user_evidence(raw);checks['projection']=projection;assert projection['passed'] and projection['scope']=='user_v1_exact_projection_and_prepared_workflow' and request['result_profile']=='user-v1'
         check('declared_goal',request['goal_id']=='text-export-node-complete' and (directory/'scenario.txt').read_text()==prompt((WORK/'goals/text-export-node-complete.txt').read_text(),request['package_path'],request['storage_directory'],request['run_id']))
         check('model',model_completed(request,evidence) and evidence['process']['returncode']==0 and not evidence['process']['timed_out'])
         check('frozen',all(evidence[k] is True for k in ['export_complete','runtime_source_unchanged','harness_unchanged','native_skill_unchanged']) and runtime_pin(ROOT)==request['runtime_source_pin'] and request['runtime_source_pin']['client_revision']==CONTRACT['runtime'])
