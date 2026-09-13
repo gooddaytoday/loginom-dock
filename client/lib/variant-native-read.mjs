@@ -40,10 +40,11 @@ export async function readNativeVariant(page,b,decode,options={}) {
    const graphLinks=model.FDiagram.FLinks.FCollection,graphLink=graphLinks[0];
    need(graphLinks.length===1&&typeof graphLink?.FGuid==='string'&&graphLink.FGuid.length>0,'static topology changed');
    const sourcePort=graphLink.FSourcePort,inputPort=graphLink.FTargetPort;
-   need(sourcePort?.parent===sourceNode&&sourceNode.FPorts[1].FCollection.includes(sourcePort)
-    &&inputPort?.parent===node&&node.FPorts[0].FCollection.includes(inputPort)
+   // FPortIndex is absent after native package reopen; use collection position.
+   need(sourcePort?.parent===sourceNode&&sourceNode.FPorts[1].FCollection[0]===sourcePort
+    &&inputPort?.parent===node&&node.FPorts[0].FCollection[0]===inputPort
     &&sourcePort.FType===1&&inputPort.FType===0
-    &&[sourcePort,inputPort].every(p=>p.FSubType===1&&p.FParam===0&&p.FPortIndex===0&&typeof p.FGuid==='string'&&p.FGuid.length>0),'static topology changed');
+    &&[sourcePort,inputPort].every(p=>p.FSubType===1&&p.FParam===0&&typeof p.FGuid==='string'&&p.FGuid.length>0),'static topology changed');
    need(model.FCreateDraggedNodeStarted===false&&model.FDraggingOverGraph===false&&!model.FDraggedNode,'concurrent graph interaction');
    const ownProcesses=records.filter(r=>r.data.ModelNode===node.data);
    need(ownProcesses.some(r=>String(r.data.id).startsWith(parts[1]+'.')&&r.data.Status===3&&r.data.ErrorDetails===''),'execution node owner');

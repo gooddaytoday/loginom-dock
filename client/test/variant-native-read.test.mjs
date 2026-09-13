@@ -89,7 +89,7 @@ test('native link accepts labels whose test IDs normalize spaces and Unicode',as
 for(const [name,change] of [
  ['extra edge',f=>f.links.push({...f.links[0]})],
  ['foreign parent',f=>f.sourcePort.parent={...f.sourceNode}],
- ['wrong input index',f=>f.inputPort.FPortIndex=1],
+ ['wrong input index',f=>f.node.FPorts[0].FCollection.unshift({})],
  ['variable link',f=>f.inputPort.FSubType=4],
  ['detached port',f=>f.sourceNode.FPorts[1].FCollection=[]],
  ['missing edge identity',f=>delete f.links[0].FGuid],
@@ -103,4 +103,9 @@ for(const [name,change] of [
 ])test('native topology rejects '+name+' across an awaited response',async()=>{
  const f=fake('deferred'),pending=readNativeVariant(f.page,f.b,decodeVariantFrame);change(f);f.finish();
  await assert.rejects(pending,/stale owner/);assert.deepEqual(f.counters,{sent:1,released:2});
+});
+
+test('reopened native ports need no transient FPortIndex property',async()=>{
+ const f=fake();delete f.sourcePort.FPortIndex;delete f.inputPort.FPortIndex;
+ const r=await readNativeVariant(f.page,f.b,decodeVariantFrame);assert.equal(r.cells.length,1);assert.equal(f.counters.sent,1);
 });
