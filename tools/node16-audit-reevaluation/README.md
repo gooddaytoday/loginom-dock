@@ -31,3 +31,22 @@ verifier обязан сохранить full_goal=false. Это не основ
 python3 tools/node16-audit-reevaluation/reevaluate.py .dock/node16/hermes-runs/20260913-205733-a38816e5 --output .dock/node16/hermes-runs/20260913-205733-a38816e5/versioned-full-reevaluation.json
 python3 -m unittest discover -s tools/node16-audit-reevaluation -p test_reevaluation.py
 ```
+
+Следующая версия отдельно проверила три исходных negative cases. Только выбор
+того же output-порта → F3 → закрытие принадлежащего ему preview допускаются при
+связанной полной схеме, исходных observation SHA/signature и неизменном графе.
+13 семантических подмен отклонены; тот же verifier прошёл на новом живом
+`node16-hash-1789325763089:new-negative-missing` без создания узла.
+Отчёт `versioned-preview-reevaluation-v2.json` не меняет исходный full FAIL.
+
+Для следующего model run эти ограничения включены в будущий основной auditor,
+а также проверенная user-v1 проекция и строго связанная последовательность
+no-effect reconfigured → reconfigured-final. Любая другая последовательность,
+параметры, target, source execution либо эффект исходной операции отклоняются.
+Исходный execution harness доступен в коммите `9a6bb8c7`; его старый отчёт и
+хеши не переписаны. Исторический тест в новом checkout пропускается явно.
+Текущие проверки (28 отрицательных подмен):
+
+```sh
+python3 -m unittest discover -s tools/node16-audit-reevaluation -p test_future_auditor.py
+```

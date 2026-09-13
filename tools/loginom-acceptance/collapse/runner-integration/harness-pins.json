@@ -1,6 +1,6 @@
 {
-  "source_sha": "621bf7a41657dfdc9da60c7510b9f212b8652d79",
-  "runtime": "e33dd667c8e7eba1edd96a13621aa7251874198e2340e2efede15baa3681b98b",
+  "source_sha": "b0709ec0f6f820a8988f4683297388894813935e",
+  "runtime": "e4e9ecbea5242cd403351fb5e4d5feaec38d18edfb7355f520985b752bed78a3",
   "inputs": {
     "artifact-transport-check.mjs": "bbbb1fb4abbe7ff2b3c463f9bf51a9811455c9856ceefa929e2e7f9e803f296d",
     "artifact_conflict_evidence.py": "b3e1b84f9f7b45cb4ba565c28b6b7b3de4d44c74cc9314093213baa3e789e10b",
@@ -51,16 +51,20 @@
     "collapse/native-gates/test_import_settings.py": "de632a8118c05246c491d68085cbbfa9cc604a66e2d57cbfaebae8e4911bc53e",
     "collapse/native-gates/test_negative_evidence.py": "d48fe4ee9aa5d28294043383e2f6db8a1471b78dd3b52e55ef61cde538f60b16",
     "collapse/native-gates/test_package_snapshot.py": "ddb62b6455826dd52ffeff4ee3ff3cd9449d3a577d5e7fd47fedc59096d7cd36",
+    "collapse/native-gates/test_user_bindings.py": "24b18fdcffdeb2026b5c088e69cf4d53f2c7451e7a132a8d24e463432d249e14",
     "collapse/native-gates/test_verify_downloads.py": "1a28c6288c64a8bc334b10fdbcacce8e57b3793ee061f7280a6d6db3849c3369",
     "collapse/native-gates/verify_bundle.py": "d7258662714e4796e4382855158d82a9a77c9023cf39937cd3efa7b01ce838b6",
     "collapse/native-gates/verify_downloads.py": "fb8ef1621026b3b31903bd4abfa935fd7d20b95bcf1904f501169588d6abb361",
     "collapse/native-gates/verify_loss.py": "dd21a9da8ec63f54f9eed66d301a9f125a14b365501b8988532b3b7dc011c9f4",
     "collapse/native-gates/verify_reopened.py": "1a4191b0ada2ed0527980e4017d88bed981223399d3c1ff70aa7b53c6265e475",
     "collapse/review-fix/provenance.json": "9282d219ba4677ccb3a97cbe61671e05f7ceed6eb4d6a0ea313650e928e26b7e",
+    "collapse/runner-integration/candidate-stage.json": "dc5be3e203ddc10a0fdc9a46486e5e0a9668346ff10cd71997f4a036a5d12440",
     "collapse/runner-integration/readonly-source.schema.json": "7e2cb50a1dfb24562b1ed31f23611f6325968c03f6eebbd05a316ace17c3ed7c",
     "collapse-live.mjs": "eafe7236887f6dc3b096a7ece49abd62d206d5b5d01e2adc33da7a9ce960cef4",
-    "collapse_acceptance.py": "525d7490d64b785bb13620f13975edfec0971233a762550a03482d5ba5ad395e",
-    "collapse_node_acceptance.py": "f3734365eecbc55c03d022e983f2c812c8d444d978c84ec4d7310fb35b34d070",
+    "collapse_acceptance.py": "0ea999f111bfa7222db7b8a7f144668fc6fbcf541174b1603970c3a2aca54516",
+    "collapse_case_restart.py": "fec7b36b52108df94024bac712f7d75c9db632489c127af6c5084d55c56f940c",
+    "collapse_node_acceptance.py": "69f9f23fb0c4a8222fd89d1843f7c93715e3488cabfb85cf48adfe87eda00fa4",
+    "collapse_preview_negative.py": "d62a849d34994f1829d700ed46a2ad0bb7956cd0d4595ae2447051fd2c285af7",
     "data_pipeline.py": "99aff9b4978e9f0076f2f3dda197fb2b3af2c44da86c258acd8e70ee4e17d73c",
     "destinations.py": "b1fbe7d7d6c4b66346b025b402076a78261b531d314ca6304b317e7f8bcf4835",
     "evidence.py": "c3d9b3131c074102d77f9fa257499618446478f3a666421962dc41a55a4d78aa",
@@ -268,12 +272,6 @@
     "verify-sources.py": "8fadbed76333aff6363d6f033e192989319f5bc605fcddd17365b6ae5880c3c9",
     "wizard_open_evidence.py": "7089c03616ea77e951f3d9f8cd36715f93793cbf4bd2992a3ad2ceb19057c1c8",
     "workflow_activation_evidence.py": "dd4b398bfb405ae1b12830f041c7d6fee1a7ca7607d1e7a1641d96556fd215c4",
-    "workflow_recovery_evidence.py": "d7b8e10a3f3d8db00b94873f1b89685adffc153b96c15309e606e47bd2e39b16",
-    "collapse/runner-integration/README.md": "c32a13676528c4240a664fff94b8da1e10640cff5cf2385b8f39b2f80339d919",
-    "collapse/runner-integration/check-tooling.py": "4e097c2490a415d08ca5b4ad80110e0fbacacf7f244563aac3382922b270c7af",
-    "collapse/runner-integration/replay-components.py": "1d136adc3046b53743e16ded1120e59857c252a823260e36203f770a94d02e8d",
-    "collapse/runner-integration/prepare-current-packet.py": "a633df413a08d67729e89b224a68cddf4cf8c2b38e7387c26615d023532ef140",
-    "collapse/runner-integration/candidate-stage.json": "dc5be3e203ddc10a0fdc9a46486e5e0a9668346ff10cd71997f4a036a5d12440",
-    "collapse/native-gates/test_user_bindings.py": "24b18fdcffdeb2026b5c088e69cf4d53f2c7451e7a132a8d24e463432d249e14"
+    "workflow_recovery_evidence.py": "d7b8e10a3f3d8db00b94873f1b89685adffc153b96c15309e606e47bd2e39b16"
   }
 }

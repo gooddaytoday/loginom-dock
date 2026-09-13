@@ -8,8 +8,8 @@ KIT=WORK/'collapse/acceptance-kit'
 GOAL_ID='collapse-node-complete'
 # Coordinator-approved exact Null-marker transfer from node14 (814f3146).
 # The original kit's source metadata remains historical; cases/fixtures unchanged.
-SOURCE='721cf71f341bd978385a1dae41279ead08499ac9'
-RUNTIME='cd997be4f90452d92c36195d62ef709e1db9b47a2f518389d38ea457b9dbe6aa'
+SOURCE='b0709ec0f6f820a8988f4683297388894813935e'
+RUNTIME='e4e9ecbea5242cd403351fb5e4d5feaec38d18edfb7355f520985b752bed78a3'
 # Native per-session raw bytes/topology producer; bare receipt documents remain unsupported.
 READONLY_PRODUCER='collapse_native_sessions_v1'
 CANDIDATE_URI='viking://resources/loginom-dock/catalogs/executor-preview/releases/2026.09.13-node16-721cf71f-candidate/manifest.json'

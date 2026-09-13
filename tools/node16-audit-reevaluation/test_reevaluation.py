@@ -5,6 +5,9 @@ RUN=Path('.dock/node16/hermes-runs')/r.RUN_ID
 class EvidenceCounterexamples(unittest.TestCase):
  @classmethod
  def setUpClass(cls):
+  request=json.loads((RUN/'request.json').read_text())
+  if r.sha(r.WORK/'collapse_node_acceptance.py')!=request['harness_inputs']['collapse_node_acceptance.py']:
+   raise unittest.SkipTest('Historical verifier requires original execution checkout; use test_future_auditor.py for current harness')
   cls.verifier=r.build(RUN);cls.original=json.loads((RUN/'counterexample-input.json').read_text())
  def test_actual_sample_projection_and_restart(self):
   e=copy.deepcopy(self.original);v=self.verifier;v.node(e,v.pairs(e),r.RUN_ID+':import-mixed');self.assertEqual(v.bind_restart(e,v.pairs(e)),r.RUN_ID+':reconfigured-final')

@@ -5,6 +5,9 @@ bundle. Readonly source, topology and fault evidence must come from actual nativ
 """
 import argparse,hashlib,importlib.util,json,re,sys
 from pathlib import Path
+from types import SimpleNamespace
+from collapse_preview_negative import verify_preview_negative
+from collapse_case_restart import bind_restart
 from evidence import PREFIX,unwrap
 from grouping_node_acceptance import model_completed
 from node_public_acceptance_evidence import paired_public_calls, proven_validation_refusal
@@ -88,12 +91,25 @@ def node(e,ps,op):
     if end['status']=='SUCCEEDED':
         need(body['configuration']==n['configuration'] and body['execution']==n['execution'],'Terminal settings/execution differ')
         for a,b in zip(body['output'].get('ports',[]),n['output'].get('ports',[])):
+            expected=dict(b)
+            if body.get('result_version')=='user-v1':
+                expected['schema']=[{k:v for k,v in column.items() if k!='header_tid'} for column in b['schema']]
+                expected['sample']=[]
+                for row in b['sample']:
+                    cells=[]
+                    for cell in row:
+                        value=dict(cell)
+                        if 'display_text' in value and value.get('value')==value['display_text']:del value['display_text']
+                        cells.append(value)
+                    expected['sample'].append(cells)
             for key in ['schema','exact_table','sample','read_coverage','binding']:
-                need(a.get(key)==b.get(key),'Public/internal '+key)
+                need(json.dumps(a.get(key),sort_keys=True,ensure_ascii=False)==json.dumps(expected.get(key),sort_keys=True,ensure_ascii=False),'Public/internal '+key)
         need(len(body['output'].get('ports',[]))==len(n['output'].get('ports',[])),'Public/internal port count')
     return call['arguments'],body
 
 def native_case(e,ps,op,key):
+    if key=='reconfigured' and op.endswith(':reconfigured') and any(c['tool']==PREFIX+'dock_node_apply' and c['arguments'].get('operation_id')==op+'-final' for c,r in ps):
+        op=bind_restart(e,ps,op.removesuffix(':reconfigured'),SimpleNamespace(**globals()))
     request,body=node(e,ps,op);oracle.audit(body,key)
     for role in ['information','transposed']:
         if role in request['parameters']:need([f['name'] for f in request['parameters'][role]]==EXPECTED[key][role],'Declared roles differ')
@@ -214,7 +230,10 @@ def negative(e,ps,op,kind):
         _,r=node(e,ps,op)
         need(r['status']=='NOT_APPLIED' and r['effect_possible'] is False and r['cleanup_complete'] is True,'Negative mutated state')
         need('__MissingField__' in json.dumps(event(e,op,'completed')['outcome'],ensure_ascii=False),'Missing-field cause absent')
-    need(not any(x.get('operation_id')==op and x.get('phase')=='node_step_prepared' for x in e['events']),'Negative dispatched mutation')
+    steps=any(x.get('operation_id')==op and x.get('phase')=='node_step_prepared' for x in e['events'])
+    if steps:
+        need(kind=='missing','Negative dispatched mutation')
+        verify_preview_negative(SimpleNamespace(**globals()),e,op)
     return True
 
 def obligations(request,e,ps,independent=None):

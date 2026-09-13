@@ -1,3 +1,14 @@
+# Node16: исправлен отпечаток схемы до первого выполнения — 13 сентября 2026
+
+Source `b0709ec0`, runtime `e4e9ecbe`. В живом Loginom прошли Done → Close →
+readback → Execute/full 192 cells и отрицательные проверки; клиентские тесты
+1525 PASS / 1 SKIP. Минимальный новый candidate packet готов к staging.
+Полная Hermes-приёмка остаётся **НЕ пройдена**, новый запуск требует нового
+candidate/rehearsal и слота координатора.
+[Доказательства, verifier delta и следующий checkpoint](node16-hash-fix-result-2026-09-13.md).
+
+---
+
 # Node16: native диагностика и исправление existing-input — 13 сентября 2026
 
 Source621bf7a4/runtimee33dd667:1506client PASS/1SKIP. Missing field отказал до
