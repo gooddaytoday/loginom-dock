@@ -1,3 +1,37 @@
+# Node16: третий Hermes остановлен на Close; диагностика продолжается — 13 сентября 2026
+
+Run `20260913-205733-a38816e5`, candidate97809b7a/source721cf71f/runtimecd997be4,
+user-v1, Sol/low: **FAIL**, PID74522 остановлен SIGTERM после неразрешимого
+`:close` AMBIGUOUS/target (`Collapse input snapshot: native schema fingerprint`).
+Exit-15, timeout=false,103 calls/12698 events; original runtime/harness unchanged.
+Исходные export/audit сохранены с SHA в `original-export-hashes.json`; wide output
+и сохранение отсутствуют. Model/MCP/browser processes проверены отсутствующими.
+Координатор освободил слот, назначил его другому узлу. Новый Hermes не разрешён.
+
+Девять завершённых случаев дают278 точных ячеек (60+44+20+75+55+24, пустые случаи0).
+Это НЕполный успех. Координатор явно разрешил отдельную versioned reevaluation
+того же raw export: исходный verifier не менялся; новый независимый verifier
+в `tools/node16-audit-reevaluation` исправляет только documented user-v1 проекцию
+(schema.header_tid и совпадающий sample.value/display_text) и единственную явную
+привязку reconfigured→reconfigured-final. Исходная операция имела NOT_APPLIED,
+effect=false,cleanup=true,0steps; cached replay совпал, resume отказан; между
+ними выполнен тот же источник, новый request отличался только operation_id.
+Новый отчёт `versioned-partial-reevaluation.json` подтвердил9cases и сохранил
+full_goal_passed=false. 15 отрицательных подмен projection/recovery отклонены.
+Original model identity не повышена до успешной: model был остановлен, wide и
+full fresh/currentloss отсутствуют. Исходный audit не переписан.
+
+Прямая UI-диагностика в отдельной копии `Node16-input-hash-20260913-205733.lgp`,
+сессия `.dock/node16/live-1789324568980`: на переоткрытом старом широком узле
+native hash Uint8Array20/25fields/usage192,active=false,105/105references released.
+Это пока не воспроизведение модельного отказа. Проверяется отличие нового узла
+после Done до первого выполнения. После удаления старого узла в собственной
+копии попытка создать новый получила отдельный Graph is blocked/target; этот
+операторский AMBIGUOUS также сохранён. Не считать его модельным повтором или
+успехом. Следующая диагностика использует чистую отдельную сессию.
+
+---
+
 # Node16: новый кандидат допущен к третьему Hermes — 13 сентября 2026
 
 Координатор назначил node16:hermes-full:3:63038231 и эксклюзивный слот
