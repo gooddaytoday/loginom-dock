@@ -7693,3 +7693,18 @@ outer AMBIGUOUS/cleanup=false. Смена ref при неизменном data-t
 
 [Отчёт и scope возможного продолжения](missing-values-stale-full-context-diagnosis-2026-09-13.md),
 [pins](missing-values-stale-full-context-diagnosis-pins-2026-09-13.json).
+
+## Node14 — выбор источника и готовность к Hermes, 13 сентября 2026
+
+В `ad8a1a09` добавлено opt-in обновление заменённого тела источника только
+для Missing Values preflight: строгое no-effect доказательство, новый связанный
+шаг, прежние identity/deadline/cancel и outer accounting. 104+72+2 JS,
+18 Python PASS; два живых порога40/41 и Decimal oracle, 8/8 проверок.
+Body refresh в успешных live-проходах не понадобился; проверен адресно и на
+двух реальных сохранённых отказах. Старые FAIL не переоценены.
+Runtime `4111dfed…`, harness `0da2ccdc…`; kit acceptance6.1, 412 файлов сверены,
+goal/fixtures/auditor сохранены, preflight PASS. Модель не запускалась.
+Готово к полному прогону после выделения общего Hermes-слота координатором.
+
+[Исправление, ограничения и точный план запуска](missing-values-source-selection-fix-2026-09-13.md),
+[pins](missing-values-source-selection-fix-pins-2026-09-13.json).
