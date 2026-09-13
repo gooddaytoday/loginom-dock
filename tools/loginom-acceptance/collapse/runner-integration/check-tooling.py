@@ -6,5 +6,5 @@ from preflight import runtime_pin
 m=json.loads((P/'harness-pins.json').read_text())
 for p,h in m['inputs'].items():assert a.sha(W/p)==h,p
 a.frozen();assert runtime_pin(a.ROOT)['client_revision']==a.RUNTIME
-assert a.READONLY_PRODUCER is None and a.admission(None)['ready'] is False
+assert a.READONLY_PRODUCER == 'collapse_native_sessions_v1' and a.admission(None)['ready'] is False
 print(json.dumps(dict(status='TOOLING_PASS',runtime=a.RUNTIME,ready=False,model_started=False)))

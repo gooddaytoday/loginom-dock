@@ -11,7 +11,7 @@ class CollapseAdmissionTest(unittest.TestCase):
  def test_preflight_before_credentials_or_process(self):
   with tempfile.TemporaryDirectory() as d,patch.object(run,'connection',side_effect=AssertionError('credentials')),patch.object(run.subprocess,'run',side_effect=AssertionError('process')):
    args=SimpleNamespace(goal=a.GOAL_ID,run=False,output=Path(d)/'preflight.json')
-   self.assertEqual(run.execute(args),0);r=json.loads(args.output.read_text());self.assertFalse(r['ready']);self.assertEqual(r['readonly_producer'],None)
+   self.assertEqual(run.execute(args),0);r=json.loads(args.output.read_text());self.assertFalse(r['ready']);self.assertEqual(r['readonly_producer'],'collapse_native_sessions_v1')
    self.assertIn('all-null',r['gates']);self.assertIn('candidate-stage-and-readback',r['gates'])
  def test_run_blocked_before_auth_even_with_claimed_closed_gates(self):
   with patch.object(a,'frozen',return_value={'gates':{'resource':'PASS'}}),patch.object(run,'connection',side_effect=AssertionError('credentials')),patch.object(run.subprocess,'Popen',side_effect=AssertionError('model')):

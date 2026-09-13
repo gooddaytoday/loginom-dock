@@ -6,10 +6,12 @@ from preflight import runtime_pin
 WORK=Path(__file__).resolve().parent;ROOT=WORK.parents[1]
 KIT=WORK/'collapse/acceptance-kit'
 GOAL_ID='collapse-node-complete'
-SOURCE='77385e36a969e61ade03ab072678b8fb6f00a27d'
-RUNTIME='db6d957169c50bcd5cb169db80d744fd846b8ffa4eee683178619c001fb22bab'
-# There is no admitted retained-byte observer. A receipt document cannot opt in.
-READONLY_PRODUCER=None
+# Coordinator-approved exact Null-marker transfer from node14 (814f3146).
+# The original kit's source metadata remains historical; cases/fixtures unchanged.
+SOURCE='621bf7a41657dfdc9da60c7510b9f212b8652d79'
+RUNTIME='e33dd667c8e7eba1edd96a13621aa7251874198e2340e2efede15baa3681b98b'
+# Native per-session raw bytes/topology producer; bare receipt documents remain unsupported.
+READONLY_PRODUCER='collapse_native_sessions_v1'
 
 def sha(p):return hashlib.sha256(p.read_bytes()).hexdigest()
 def frozen():
@@ -23,6 +25,7 @@ def harness_pins():
     paths=[*WORK.glob('*.py'),*WORK.glob('*.mjs'),WORK/'goals/collapse-node-complete.txt']
     paths += [KIT.parent/'exact-wiring/public-audit.py',KIT.parent/'review-fix/provenance.json',KIT.parent/'runner-integration/readonly-source.schema.json']
     paths += [p for p in KIT.rglob('*') if p.is_file() and '__pycache__' not in p.parts]
+    paths += [p for folder in ['native-gates','existing-input-preflight'] for p in (KIT.parent/folder).rglob('*') if p.is_file() and '__pycache__' not in p.parts]
     return {p.relative_to(WORK).as_posix():sha(p) for p in sorted(paths)}
 def fixtures(run_id,directory):
     frozen();storage_segments(directory)
@@ -39,11 +42,13 @@ def admission(args):
     try:g=frozen();gates={k:v for k,v in g['gates'].items() if k!='autonomous-audit'}
     except (OSError,ValueError,KeyError) as e:gates={'freeze':'OPEN'};errors.append(str(e))
     gates['runner-collapse-goal-integration']='IMPLEMENTED_NOT_ADMITTED'
-    gates['new-session-readonly-source-proof']='OPEN_NO_PRODUCER'
+    gates['new-session-readonly-source-proof']='IMPLEMENTED_LIVE_VERIFIED_DIAGNOSTIC'
+    for key in ['header-only','empty-ignore','all-null','all-null-ignore','other-full-scope-live']:
+        gates[key]='DIAGNOSTIC_PASS_RUNTIME51_CURRENT_TARGETED_FIX_PASS'
     gates['candidate-stage-and-readback']='OPEN_NO_ADMITTED_ATTESTATION'
     gates['candidate-source-rehearsal']='OPEN'
-    gates['independent-topology-readback-producers']='OPEN'
-    gates['loss-native-evidence-bridge']='OPEN'
+    gates['independent-topology-readback-producers']='IMPLEMENTED_LIVE_VERIFIED_DIAGNOSTIC'
+    gates['loss-native-evidence-bridge']='IMPLEMENTED_DIAGNOSTIC_PASS_CURRENT_RUN_REQUIRED'
     gates['coordinator-hermes-slot']='OPEN'
     free=shutil.disk_usage(ROOT).free
     # Space alone never grants a slot/resource reservation across active streams.

@@ -13,12 +13,17 @@ import {createPublicNodeWire} from './public-node-wire.mjs';
 process.umask(0o077);
 const option=k=>{const i=process.argv.indexOf(k);if(i<0||!process.argv[i+1])throw Error('Required '+k);return process.argv[i+1];};
 const loginomUrl=option('--loginom-url'),user=option('--loginom-user'),storage=option('--storage'),packagePath=option('--package');
+const readonlyFirst=process.argv.includes('--readonly-first')?JSON.parse(await fs.readFile(option('--readonly-first'),'utf8')):null;
+if(readonlyFirst&&(process.argv.includes('--copy-to')||process.argv.includes('--new-draft')))throw Error('Readonly-first forbids draft/copy writes');
+if(process.argv.includes('--reopen-case')&&(!readonlyFirst||!process.argv.includes('--public-user-v1')))throw Error('Automatic replay requires readonly-first and public user-v1');
 const url=new URL(loginomUrl);
 if(url.username||url.password||!/^\/[A-Za-z0-9_.-]+(?:\/[A-Za-z0-9_.-]+)*$/.test(storage)||!packagePath.startsWith(storage+'/'))throw Error('Explicit safe URL and storage required');
 const dir=process.cwd()+'/.dock/node16/live-'+Date.now();await fs.mkdir(dir+'/runtime',{recursive:true});
 await fs.symlink(process.env.HOME+'/.loginom-dock/runtime/browsers',dir+'/runtime/browsers');
 const session=await createSession({stateDir:dir,agent:'codex',adapterRevision:'node16-diagnostic',mode:'executor-replay'});
 session.metadata.targetIdentity={origin:url.origin,loginom_build:'7.4.2'};
+session.metadata.operatorPublicProfile=process.argv.includes('--public-user-v1')?'user-v1':'raw';
+session.metadata.automaticReadonlyReopen=process.argv.includes('--reopen-case');
 await fs.writeFile(dir+'/session.json',JSON.stringify(session.metadata,null,2));
 const diagnostic={dropReply:null,dropUploadReply:null,dropped:[],nodeDrivers:new Map()};
 const client=new Client({name:'collapse-live',version:'1'}),transport=new StdioClientTransport({command:process.execPath,
@@ -48,7 +53,21 @@ try {
  let prep=await execute(makeWorkspacePrepareCode({loginomUrl,compatibility:{profile_id:'loginom-7.4.2-macos-chromium',loginom_build:'7.4.2',platform:'macos',browser:'chromium'},
   sessionId:session.metadata.sessionId,operationId:'prepare',intent:process.argv.includes('--new-draft')?'new_draft':'open_package',packagePath:process.argv.includes('--new-draft')?null:packagePath,timeoutMs:15000}));
  await fs.writeFile(dir+'/preparation.json',JSON.stringify(prep,null,2));if(prep.status!=='READY')throw Error('Saved package preparation failed');
- if(process.argv.includes('--copy-to')||prep.workflow_ref.navigation_path.some(c=>c.label.endsWith('(только чтение)'))){
+ if(readonlyFirst){
+  const {downloadReadonly,openReadonlyDirectory}=await import('./collapse/native-gates/readonly-download.mjs');
+  if(readonlyFirst.package?.path!==packagePath||!readonlyFirst.source?.path?.startsWith(storage+'/'))throw Error('Readonly-first explicit file pair required');
+  const start=sequence,downloads=[];
+  await openReadonlyDirectory(execute,storage);
+  for(const entry of [readonlyFirst.source,readonlyFirst.package]){
+   if(!/^[a-f0-9]{64}$/.test(entry.sha256))throw Error('Readonly-first frozen byte hash required');
+   const first=sequence+1;
+   const download=await downloadReadonly({execute,documentId:prep.document_id,path:entry.path,directory:dir+'/readonly-downloads',expectedSha256:entry.sha256});
+   delete download.base64;downloads.push({...download,raw_observation_refs:[`browser-${first}.json`]});
+  }
+  await fs.writeFile(dir+'/readonly-first.json',JSON.stringify({kind:'collapse_readonly_first_diagnostic_v1',session_id:session.metadata.sessionId,document_id:prep.document_id,package_path:packagePath,start_sequence:start,end_sequence:sequence,executor_created:false,downloads},null,2));
+  await execute(`async page=>{await page.locator('[data-tid="'+${JSON.stringify(prep.workflow_ref.tab_tid)}+'"]').click();return true}`);
+ }
+ if(process.argv.includes('--copy-to')||(!readonlyFirst&&prep.workflow_ref.navigation_path.some(c=>c.label.endsWith('(только чтение)')))){
   if(!process.argv.includes('--copy-to'))throw Error('Diagnostic package is read-only; use a separate writable copy');
   const copy=option('--copy-to');
   if(!copy.startsWith(storage+'/')||!/^\/[A-Za-z0-9_./-]+\.lgp$/.test(copy)||copy.includes('..')||copy===packagePath)throw Error('Explicit distinct diagnostic copy required');
@@ -72,8 +91,12 @@ try {
  const rawRuntime=createActionRuntime({pinned:{actions:new Map(actions.map(a=>[a.action_key,a])),selectors:new Map(selectors.map(s=>[s.symbol,s])),pins:{}},
   execute,onRecord:record,...config,allowCandidate:true,artifactStore:session.artifactStore,...support,
   nodeApplyDriverFactory:options=>{diagnostic.nodeDrivers.set(options.operation.id,options);return support.nodeApplyDriverFactory(options);}});
- wire=await createPublicNodeWire(rawRuntime,{directory:dir,browserSequence:()=>sequence});
- const ctx={execute,session,dir,fs,record,prep,diagnostic,runtime:wire.runtime,rawRuntime};
+ wire=await createPublicNodeWire(rawRuntime,{directory:dir,browserSequence:()=>sequence,userProfile:process.argv.includes('--public-user-v1')});
+ const ctx={execute,session,dir,fs,record,prep,diagnostic,runtime:wire.runtime,rawRuntime,readonlyFirst,browserSequence:()=>sequence};
+ if(session.metadata.automaticReadonlyReopen){
+  try{const {reopenCase}=await import('./collapse/native-gates/reopen-case.mjs');await fs.writeFile(dir+'/automatic-reopen.json',JSON.stringify(await reopenCase(ctx),null,2));}
+  catch(error){await fs.writeFile(dir+'/automatic-reopen.json',JSON.stringify({status:'FAILED',error:error.message},null,2));}
+ }
  console.log(JSON.stringify({dir,status:'READY',runtime:session.metadata.clientRevision}));
  for await(const line of readline.createInterface({input:process.stdin})) {
   if(!line.trim())continue;const command=JSON.parse(line);if(command.operator==='close')break;

@@ -1,3 +1,14 @@
+# Node16: native диагностика и исправление existing-input — 13 сентября 2026
+
+Source621bf7a4/runtimee33dd667:1506client PASS/1SKIP. Missing field отказал до
+открытия порта; сохранённое EntityId подтверждено75+75ячейками. Исторические10cases/
+470cells и10fresh sessions проверены на runtime51; не обозначены как новый runtime.
+32native/auditor+8runner+2wire PASS. Readonly native producer реализован;
+coordinator candidate/slot и полный Hermes/audit ещё впереди. Node16 НЕ принят.
+[Точный статус и evidence](node16-native-gates-progress-2026-09-13.md).
+
+---
+
 # Node16: зарегистрирована цель полного аудита, запуск закрыт — 13 сентября 2026
 
 Назначение `node16:acceptance-runner-integration:1:1d6cdc31`. В acceptance run.py

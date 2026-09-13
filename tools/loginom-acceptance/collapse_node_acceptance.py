@@ -1,13 +1,13 @@
 """Fail-closed FULL Collapse goal auditor, separate from case-only oracle.
 
 Consumes original model-run calls/tool content/events and an independent session
-bundle. Missing native readonly producer ALWAYS prevents full acceptance.
+bundle. Readonly source, topology and fault evidence must come from actual native sessions.
 """
-import argparse,hashlib,importlib.util,json,re
+import argparse,hashlib,importlib.util,json,re,sys
 from pathlib import Path
 from evidence import PREFIX,unwrap
 from grouping_node_acceptance import model_completed
-from node_public_acceptance_evidence import paired_public_calls
+from node_public_acceptance_evidence import paired_public_calls, proven_validation_refusal
 from preflight import runtime_pin
 import collapse_acceptance as admission
 W=Path(__file__).resolve().parent;R=W.parents[1];K=admission.KIT
@@ -74,11 +74,13 @@ def readonly_receipt(receipt,*,run_id,document_id,path,digest,size):
     need(receipt['path']==path and receipt['sha256']==digest and receipt['bytes']==size,'Readonly bytes/path')
     need(receipt['before_any_write'] is True and receipt['write_operations']==[],'Readonly observation order')
     need(receipt.get('raw_observation_refs') and receipt.get('download_artifact_sha256')==digest,'Readonly native evidence missing')
-    need(admission.READONLY_PRODUCER is not None and receipt['producer_id']==admission.READONLY_PRODUCER,'Readonly producer is not implemented/admitted')
+    need(False,'Bare readonly receipts are unsupported; actual native session evidence required')
 
 def persistence(request,e,bundle,original):
     need(isinstance(bundle,dict),'Independent new-session bundle missing')
     need(bundle['run_id']==request['run_id'] and bundle['origin']=='independent_codex_session','Independent run identity')
+    if bundle.get('kind')=='collapse_native_sessions_v1':
+        return native_session_persistence(request,e,bundle,original)
     other=bundle['evidence'];need(other['run_id']==request['run_id'] and other['events'],'Independent raw evidence missing');ps=pairs(other)
     need(set(bundle['case_operations'])==set(EXPECTED),'All ten independent reopened cases required')
     for key,(oldrequest,before) in original.items():
@@ -101,21 +103,95 @@ def persistence(request,e,bundle,original):
         readonly_receipt(bundle['readonly_sources'][key],run_id=request['run_id'],document_id=after['node']['document_id'],path=source['destination'],digest=source['sha256'],size=source['bytes'])
     return True
 
-def obligations(request,e,ps):
+def native_session_persistence(request,e,bundle,original):
+    """Consume real per-case sessions; never merge ten callers into one identity.
+
+    This component check does not change the separate model/candidate admission.
+    Diagnostic source cases cannot substitute for the original model run.
+    """
+    sys.path.insert(0,str(K.parent/'native-gates'))
+    try:
+        from verify_reopened import check as fresh_check
+        from import_settings import format_equal
+        from export_live import export
+        need(set(original)==set(EXPECTED)==set(bundle['sessions']),'All ten original and fresh cases required')
+        docs=set();sessions=set()
+        for key,(oldrequest,before) in original.items():
+            directory=Path(bundle['sessions'][key]);spec=json.loads((directory/'readonly-specification.json').read_text())
+            need(spec['case']==key and spec['run_id']==request['run_id'],'Native case/run identity')
+            verified=fresh_check(directory)
+            need(verified['document_id'] not in docs and verified['session_id'] not in sessions,'Fresh case session reused')
+            docs.add(verified['document_id']);sessions.add(verified['session_id'])
+            baseline=json.loads(Path(spec['baseline_case']).read_text())
+            for field in ['node','configuration','output']:
+                need(baseline[field]==before[field],'Diagnostic baseline substituted for original model '+field)
+            other=export(directory,request['run_id']);op=spec['run_id']+':'+key+':reopen'
+            _,after=native_case(other,pairs(other),op,key)
+            oldproof=event(e,oldrequest['operation_id'],'collapse_native_full_completed')['proof']
+            _,oldimport=node(e,pairs(e),oldproof['source_profile']['import_operation_id'])
+            imported=json.loads((directory/'reopened-import.json').read_text())['output']
+            for field in ['source','format','columns','output_mapping']:
+                new_value=imported['configuration']['readback'][field];old_value=oldimport['configuration']['readback'][field]
+                need(format_equal(old_value,new_value) if field=='format' else new_value==old_value,'Persisted import '+field)
+            saveid=bundle['save_operations'][key]
+            savecall,savereply=one([(c,r) for c,r in pairs(e) if c['tool']==PREFIX+'dock_action_run' and c['arguments'].get('operation_id')==saveid],'Original model save public call')
+            saved=event(e,saveid,'completed')['outcome']
+            need(saved['status']=='SUCCEEDED' and saved['output']['save_completed'] and saved['output']['workflow_preserved'],'Original saved checkpoint missing')
+            need(savereply['result']['output']==saved['output'],'Save public/journal mismatch')
+            need(saved['output']['package_ref']['path']==spec['package']['path'],'Original saved package differs')
+        return True
+    finally:
+        sys.path.pop(0)
+
+def audit_native_diagnostics(bundle):
+    """Explicit operator scope: raw bridge verification, never Hermes acceptance."""
+    sys.path.insert(0,str(K.parent/'native-gates'))
+    try:
+        from verify_bundle import check
+        return check(bundle)
+    finally:
+        sys.path.pop(0)
+
+def negative(e,ps,op,kind):
+    call,reply=one([(c,r) for c,r in ps if c['tool']==PREFIX+'dock_node_apply' and c['arguments'].get('operation_id')==op],'Negative public call')
+    p=call['arguments']['parameters']
+    need((kind=='conflict' and bool({f['name'] for f in p['information']}&{f['name'] for f in p['transposed']})) or (kind=='empty' and p['transposed']==[]) or (kind=='missing' and '__MissingField__' in [f['name'] for f in p['transposed']]),'Negative input wrong')
+    if kind in ('conflict','empty'):
+        need(proven_validation_refusal(call,reply,e['events'],set(),ps),'Negative is not a proven unallocated MCP validation refusal')
+        error=json.JSONDecoder().raw_decode(reply['result']['error'])[0]
+        message=json.dumps(error.get('error',{}),ensure_ascii=False).lower()
+        need(('complete ordered collapse roles required' in message) if kind=='empty' else ('unknown, duplicate or conflicting collapse role' in message),'Wrong validation cause')
+    else:
+        _,r=node(e,ps,op)
+        need(r['status']=='NOT_APPLIED' and r['effect_possible'] is False and r['cleanup_complete'] is True,'Negative mutated state')
+        need('__MissingField__' in json.dumps(event(e,op,'completed')['outcome'],ensure_ascii=False),'Missing-field cause absent')
+    need(not any(x.get('operation_id')==op and x.get('phase')=='node_step_prepared' for x in e['events']),'Negative dispatched mutation')
+    return True
+
+def obligations(request,e,ps,independent=None):
     run=request['run_id']
     for suffix,kind in [('negative-conflict','conflict'),('negative-missing','missing'),('negative-empty','empty')]:
-        op=run+':'+suffix;call=one([c for c,r in ps if c['tool']==PREFIX+'dock_node_apply' and c['arguments'].get('operation_id')==op],'Negative public call')
-        r=one([r['result'] for c,r in ps if c is call],'Negative reply')
-        need(r['status']=='NOT_APPLIED' and r['effect_possible'] is False and r['cleanup_complete'] is True,'Negative mutated state')
-        p=call['arguments']['parameters']
-        need((kind=='conflict' and bool({f['name'] for f in p['information']}&{f['name'] for f in p['transposed']})) or (kind=='empty' and p['transposed']==[]) or (kind=='missing' and '__MissingField__' in [f['name'] for f in p['transposed']]),'Negative input wrong')
-        need(not any(x.get('operation_id')==op and x.get('phase')=='node_step_prepared' for x in e['events']),'Negative dispatched mutation')
+        negative(e,ps,run+':'+suffix,kind)
     for finish in ['done','close']:
         r,b=node(e,ps,run+':'+finish);need(r['finish']==finish and b['status']=='SUCCEEDED' and b['execution']['status']=='not_requested','Done/Close executed or missing')
-    lossid=run+':loss';r,b=node(e,ps,lossid);need(b['status']=='AMBIGUOUS' and b['cleanup_complete'] is False,'Loss outcome rewritten')
-    loss=event(e,lossid,'collapse_independent_loss_observed')['proof']
-    need(loss['gesture_applied'] is True and loss['node']==b['node'] and loss['raw_native_reply'] and loss['before']==loss['after_replay']==loss['after_resume'],'Loss/replay native identity')
-    need(len([c for c,r in ps if c['tool']==PREFIX+'dock_node_apply' and c['arguments'].get('operation_id')==lossid])==1,'Loss mutation replayed')
+    # The frozen goal says "if an operation becomes ambiguous"; it does not ask
+    # Hermes to manufacture a transport fault. Inject it in the independent live
+    # harness, retain the real gesture/replay/resume replies, and bind the session
+    # to this run. No synthetic journal event or historical loss receipt qualifies.
+    need(isinstance(independent,dict) and independent.get('run_id')==run,'Current independent loss session required')
+    directory=Path(independent['loss_session'])
+    session=json.loads((directory/'session.json').read_text())
+    need(session['sessionId'] not in {c['session_id'] for c in e['calls']},'Independent loss caller required')
+    sys.path.insert(0,str(K.parent/'native-gates'))
+    try:
+        from verify_loss import check as loss_check
+        need(loss_check(directory)['operation_id'].startswith(run+':'),'Foreign loss operation')
+    finally:sys.path.pop(0)
+    # Any genuine ambiguous model operations must remain unresolved and must not
+    # be hidden by the separate injected-fault check.
+    for ev in e['events']:
+        if ev.get('phase')=='completed' and ev.get('outcome',{}).get('status')=='AMBIGUOUS':
+            need(False,'Model ambiguous operation requires diagnosis before acceptance: '+str(ev.get('operation_id')))
     return True
 
 def audit(request,evidence,prompt,independent):
@@ -140,7 +216,7 @@ def audit(request,evidence,prompt,independent):
     for key in EXPECTED:
         def case(key=key):results[key]=native_case(evidence,pairs(evidence),request['run_id']+':'+key,key)
         check('case:'+key,case)
-    check('negatives_done_close_loss',lambda:obligations(request,evidence,pairs(evidence)))
+    check('negatives_done_close_loss',lambda:obligations(request,evidence,pairs(evidence),independent))
     check('full_new_session_persistence_source',lambda:(need(set(results)==set(EXPECTED),'Missing original cases'),persistence(request,evidence,independent,results)))
     # No input JSON can flip an unimplemented native source-proof producer to PASS.
     check('admission',lambda:need(admission.admission(None)['ready'],'Live/candidate/resource/readonly/runner admission remains OPEN'))
