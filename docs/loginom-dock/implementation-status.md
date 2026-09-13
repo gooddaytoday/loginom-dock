@@ -7653,3 +7653,18 @@ Disk gate 12 ГиБ BLOCKED: последнее измерение 2 614 120 448
 нужны место, export check, новый слот и разрешение координатора.
 [Подготовка, ограничения и план запуска](missing-values-acceptance5-preparation-2026-09-13.md),
 [квитанции](missing-values-acceptance5-preparation-pins-2026-09-13.json).
+
+
+## Node14 — пятая автономная приёмка, 13 сентября 2026
+
+Единственный разрешённый run `20260913-172045-ceabf472` Sol/low завершён:
+17 SUCCEEDED (9 imports/8 MV), 1 NOT_APPLIED, 1 AMBIGUOUS на `mv-boundary-40`.
+Полный неизменённый аудитор FAIL; save0, pre-reopen gates не пройдены,
+независимое открытие не запускалось. Launcher/child exit0, timed_out=false,
+56 API calls; полный экспорт сохранён без recovery. Внутренний шаг n14
+получил UI_REFERENCE_STALE при click по Граница; внешние pending target /
+cleanup=false сохранены. Новый live diagnosis не выполнялся. Слот освобождён,
+собственных процессов0; дальнейшие действия только по назначению координатора.
+
+[Отчёт](missing-values-autonomous-acceptance-5-2026-09-13.md),
+[pins и квитанции](missing-values-autonomous-acceptance-5-pins-2026-09-13.json).
