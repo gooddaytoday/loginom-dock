@@ -60,3 +60,15 @@ artifacts/download: точный destination/execution, свежий native file
 полные bytes/SHA и durable cleanup receipt. Input upload guards не ослаблять.
 Нового транспорта/универсального downloader нет. Reject по умолчанию, replace
 только явно для выделенного файла; реализацию и негативные проверки ведёт поток1.
+
+## Решение: раскрытие невидимого компонента палитры
+
+Координатор согласовал node17:palette-reveal-proposal:1: только exports.text,
+один bounded owner-only scroll наблюдённого pnlVendors;tree внутри create-effect.
+Не в read-only preflight. Точный TreeText/icon/root/owner и причина offscreen
+проверяются; overlay/неоднозначность не обходятся. До scroll проверить drop, после
+scroll полный graph должен совпасть с before; заново source/drop hit-test перед
+drag. Отказ/отмена/неизвестный эффект не допускают повторного drag.
+Scroll журналируется как UI effect, даже если узел не создан; cleanup не скрывает
+остаточное состояние. Нужны focused negative tests и live test-2. Реализация
+назначена в текущей фазе; успешное live выполнение ещё не подтверждено.

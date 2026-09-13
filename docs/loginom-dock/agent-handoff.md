@@ -1,3 +1,13 @@
+# Узел17: ограниченная прокрутка палитры согласована — 13 сентября 2026
+
+Exact export TreeText вне viewport; coordinator проверил existing create effect
+и согласовал owner-only scroll внутри journaled mutation с повторным полным
+graph/hit-test перед drag. Решение и guards записаны в17подплане.
+Разработчику доставлено уточнение текущей фазы, нового review/Hermes нет.
+Все входящие обработаны; успешная реализация scroll ещё не подтверждена.
+
+---
+
 # Узел16: bounded exact wiring согласован — 13 сентября 2026
 
 Проект7e1bbab9 проверен помощником:6prototype/decoder/3artifact SHA и38cells.
