@@ -1,3 +1,14 @@
+# Node17: native observer smoke остановлен до download/replace
+
+Один smoke в новой test-2 session проверил native baseline124 bytes/golden и
+terminal reject. Observer завершился incomplete за765ms: папка ещё не успела
+перейти в /test-2. Поздний read-only snapshot подтвердил завершение навигации
+без повторного жеста. Download0, replace dispatch0; readiness остаётся false.
+Также выявлено требование отсутствующего target.origin в старом byte-аудиторе
+для actual bridge journal. 15 Node/14 Python PASS не заменяют native proof.
+Собственный браузер закрыт, процессов нет; UI logout не подтверждён.
+[Checkpoint, pins и два конкретных блокера](../plans/loginom-dock/17-text-export-native-observer-smoke.md).
+
 # Node17: observer contract2 подключён офлайн — native smoke ожидает допуска
 
 По назначению `node17:observer-contract-refinement:1:7e9922f4` интегрированы
