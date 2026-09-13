@@ -546,3 +546,13 @@ Typed выполнился с пустыми parameters/mappings, configure effe
 Исходный FAIL/A1–A3 сохранены, полный аудит не повторялся, Hermes не запускался.
 Новые pins и архив392 файла подготовлены для следующего stage по решению координатора.
 [Отчёт и ограничения](../plans/loginom-dock/11-saveas-integration-results-2026-09-13.md).
+
+# Узел11: candidate v2 preflight пройден — 13 сентября 2026
+
+**candidate_preflight_passed / awaiting_hermes_slot**. Новый candidate v2 закреплён;
+source/runtime/goal и 253 harness inputs проверены. Свежий dock_prepare READY,
+реальная геометрия окна и save pins подтверждены, собственный черновик закрыт.
+[Отчёт и команда следующей приёмки](../plans/loginom-dock/11-candidate-v2-preflight-2026-09-13.md).
+Hermes11 не запускался: ожидается отдельный слот координатора, текущий остаётся node14.
+
+---
