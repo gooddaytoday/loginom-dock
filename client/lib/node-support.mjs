@@ -1,4 +1,5 @@
 import {createUnionNodeSupport} from './union-node.mjs';
+import {createTextExportNodeSupport} from './text-export-node.mjs';
 import {createJoinNodeSupport} from './join-node.mjs';
 import {createFilterNodeSupport} from './filter-node.mjs';
 import {createTextImportNodeSupport} from './text-import-node.mjs';
@@ -11,9 +12,11 @@ import {createCalculatorNodeSupport} from './calculator-node.mjs';
 // the already validated request; never infer a handler from the current UI.
 export function createCandidateNodeSupport(config) {
  const union=createUnionNodeSupport(config),join=createJoinNodeSupport(config),filter=createFilterNodeSupport(config),imports=createTextImportNodeSupport(config),calculator=createCalculatorNodeSupport(config),grouping=createGroupingNodeSupport(config),sorting=createSortingNodeSupport(config),reform=createReformNodeSupport(config);
- const nodeApplyHandlers=new Map([...imports.nodeApplyHandlers,...calculator.nodeApplyHandlers,...grouping.nodeApplyHandlers,...sorting.nodeApplyHandlers,...reform.nodeApplyHandlers,...filter.nodeApplyHandlers,...join.nodeApplyHandlers,...union.nodeApplyHandlers]);
+ const exports=createTextExportNodeSupport(config);
+ const nodeApplyHandlers=new Map([...exports.nodeApplyHandlers,...imports.nodeApplyHandlers,...calculator.nodeApplyHandlers,...grouping.nodeApplyHandlers,...sorting.nodeApplyHandlers,...reform.nodeApplyHandlers,...filter.nodeApplyHandlers,...join.nodeApplyHandlers,...union.nodeApplyHandlers]);
  return {nodeApplyHandlers,nodeApplyDriverFactory:options=>{
   const type=options.operation.parameters?.target?.type;
+  if(type==='exports.text')return exports.nodeApplyDriverFactory(options);
   if(type==='transform.union_data')return union.nodeApplyDriverFactory(options);
   if(type==='transform.join_data')return join.nodeApplyDriverFactory(options);
   if(type==='transform.filter_data')return filter.nodeApplyDriverFactory(options);

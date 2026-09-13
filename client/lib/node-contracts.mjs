@@ -2,6 +2,7 @@ import { createHash } from 'node:crypto';
 
 export const NODE_CONTRACT_REVISION = '1.0.0';
 const definitions = [
+  ['exports.text', 'Текстовый файл', 'exporttextfile', 1, 0, false, ['delimited'], 'integration/export/txt-csv.md'],
   ['imports.text', 'Текстовый файл', 'importtextfile', 0, 1, false, ['delimited'], 'integration/import/txt/README.md'],
   ['transform.calculator', 'Калькулятор', 'calcdata', 1, 1, false, ['expression'], 'processors/transformation/calc/README.md'],
   ['transform.reform_columns', 'Параметры полей', 'reformcolumns', 1, 1, false, ['scalar'], 'processors/transformation/fields-features.md'],
@@ -18,7 +19,7 @@ export const NODE_TYPES = freeze(Object.fromEntries(definitions.map(([type, titl
   semantics: type === 'transform.join_data' ? 'Join two tables by keys; not positional Соединение.'
     : type === 'transform.union_data' ? 'Append rows, preserving duplicates; not UNION DISTINCT.' : title,
   graph_handler: 'node_target_v1', graph_handler_status: 'internal_candidate', configuration_handler: null,
-  configuration_status: 'planned_in_subplans_03_to_10',
+  configuration_status: type==='exports.text'?'candidate_in_subplan_17':'planned_in_subplans_03_to_10',
   sources: { e2e: ['bg/helpers/workflow/node.ts', 'bg/helpers/workflow/ports.ts', 'bg/helpers/workflow/links.ts'],
     help_root: 'viking://resources/loginom-dock/sources/loginom-help', help_path: 'data/' + help },
 }])));

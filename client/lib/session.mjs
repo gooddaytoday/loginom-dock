@@ -85,7 +85,7 @@ export async function createSession(config, { headless = false } = {}) {
   };
   return {
     directory, metadata, browserRoot, browserConfig,
-    artifactStore:await createArtifactStore({directory:join(artifacts,'input')}),
+    artifactStore:await createArtifactStore({directory:join(artifacts,'input'),sessionId:id}),
     browserCli: join(dirname(packagePath('@playwright/mcp')), 'cli.js'),
     async save(catalog) {
       await writeFile(join(directory, 'session.json'), JSON.stringify({

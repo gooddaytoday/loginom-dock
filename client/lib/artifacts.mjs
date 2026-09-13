@@ -74,12 +74,12 @@ async function readVerified(path, expected, maxBytes) {
   } finally {await file.close();}
 }
 
-export async function createArtifactStore({directory,maxBytes=16*1024*1024}) {
+export async function createArtifactStore({directory,maxBytes=16*1024*1024,sessionId=null}) {
   if (!Number.isSafeInteger(maxBytes) || maxBytes<1 || maxBytes>64*1024*1024) throw new Error('Invalid artifact limit');
   await mkdir(directory,{recursive:true,mode:0o700});
   const info=await lstat(directory);
   if (!info.isDirectory() || info.isSymbolicLink()) throw new Error('Artifact directory must be a real directory');
-  const root=await realpath(resolve(directory)),entries=new Map(),transfers=new Set();
+  const root=await realpath(resolve(directory)),entries=new Map(),transfers=new Set(),outputs=new Map();
   const pendingStages=new Set();let closing=false;
   const stageTransfer=async (artifactId,download=false) => {
       const descriptor=entries.get(artifactId);
@@ -142,7 +142,43 @@ export async function createArtifactStore({directory,maxBytes=16*1024*1024}) {
     pending.then(()=>pendingStages.delete(pending),()=>pendingStages.delete(pending));
     return pending;
   };
+  const stageNativeOutput=async binding => {
+      if(!sessionId||!binding||Object.keys(binding).sort().join(',')!=='destination,document_id,execution_id,node_id,session_id,workflow_id'
+        ||binding.session_id!==sessionId||!['document_id','workflow_id','node_id','execution_id'].every(k=>typeof binding[k]==='string'&&/^[A-Za-z0-9_.:-]{1,128}$/.test(binding[k]))
+        ||!/^\/test-2\/(?:[A-Za-z0-9_-]+\/)*[A-Za-z0-9][A-Za-z0-9_.-]*\.(csv|tsv)$/.test(binding.destination)||binding.destination.includes('..'))throw Error('Invalid native output binding');
+      binding=structuredClone(binding);
+      const artifactId=randomUUID(),name=binding.destination.split('/').at(-1),dir=join(root,'output-'+artifactId),path=join(dir,name);
+      await mkdir(dir,{mode:0o700});const owner=await lstat(dir);let released=false,retained=false,descriptor=null;
+      const check=async()=>{const current=await lstat(dir);if(released||!current.isDirectory()||current.isSymbolicLink()||current.ino!==owner.ino||current.dev!==owner.dev)throw Error('Output lease owner changed');};
+      const lease={path,artifact_id:artifactId,name,binding:Object.freeze(binding),
+        async verify(suggestedName,expectedBytes){
+          await check();if(retained)throw Error('Output already retained');if(suggestedName!==name||!Number.isSafeInteger(expectedBytes)||expectedBytes<0||expectedBytes>maxBytes)throw Error('Output name or size differs');
+          const info=await lstat(path);if(!info.isFile()||info.isSymbolicLink()||info.size!==expectedBytes)throw Error('Output is not the bounded downloaded file');
+          const file=await open(path,constants.O_RDONLY|(constants.O_NOFOLLOW??0)|(constants.O_NONBLOCK??0));
+          let buffer;try{const stat=await file.stat();if(!stat.isFile()||stat.ino!==info.ino||stat.dev!==info.dev||stat.size!==expectedBytes)throw Error('Output changed before read');
+            buffer=Buffer.alloc(expectedBytes+1);let offset=0;while(offset<buffer.length){const r=await file.read(buffer,offset,buffer.length-offset,offset);if(!r.bytesRead)break;offset+=r.bytesRead;}
+            if(offset!==expectedBytes)throw Error('Output changed during read');buffer=buffer.subarray(0,offset);
+          }finally{await file.close();}
+          await check();const digest=sha(buffer);await readVerified(path,{bytes:expectedBytes,sha256:digest},maxBytes);
+          descriptor={artifact_id:artifactId,name,bytes:expectedBytes,sha256:digest,...binding};
+          return structuredClone(descriptor);
+        },
+        async retain(){await check();if(!descriptor)throw Error('Unverified output cannot be retained');await readVerified(path,descriptor,maxBytes);outputs.set(artifactId,{descriptor:structuredClone(descriptor),path,check});retained=true;transfers.delete(lease);return structuredClone(descriptor);},
+        async release(){if(released)return;await check();const info=await lstat(path).catch(e=>{if(e.code!=='ENOENT')throw e;return null;});
+          if(info){if(!info.isFile()&&!info.isSymbolicLink())throw Error('Output cleanup target changed');await unlink(path);}await rmdir(dir);outputs.delete(artifactId);released=true;transfers.delete(lease);},
+      };transfers.add(lease);return Object.freeze(lease);
+    };
   return {
+    // Native output is not admitted as an input and carries no upload grant.
+    // Only the owning node driver may allocate a lease after fresh execution.
+    async stageOutput(binding) {
+      if(closing||transfers.size+pendingStages.size>=8)throw Error('Output staging unavailable');
+      const pending=stageNativeOutput(binding);pendingStages.add(pending);
+      pending.then(()=>pendingStages.delete(pending),()=>pendingStages.delete(pending));
+      return pending;
+    },
+    async resolveOutput(artifactId){const item=outputs.get(artifactId);if(!item)throw Error('Unknown session output');await item.check();return {descriptor:structuredClone(item.descriptor),buffer:await readVerified(item.path,item.descriptor,maxBytes)};},
+    get outputSessionId(){return sessionId;},
     async admit({sourcePath,name,bytes,sha256,upload}) {
       if (!validName(name)) throw new Error('Invalid artifact display name');
       const authorization=upload===undefined ? null : validateUploadAuthorization(upload);

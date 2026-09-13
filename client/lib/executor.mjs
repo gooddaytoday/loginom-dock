@@ -180,7 +180,7 @@ async function browserArtifactReveal(page,task,snapshot) {
 
 async function browserArtifactDownload(page,task,observe,act,reveal) {
   let phase='preconditions',gesture=false,download=null,completed=false,event,revealed=false;
-  const trace=[];
+  const trace=[],destination=task.output_binding??task.artifact.upload;
   const result=(status,code,output={})=>({status,action_key:'artifact.download',action_revision:'1',operation_id:task.operation_id,
     phase,effect_possible:gesture,cleanup_complete:!gesture || completed,output,
     error:code?{code,message:code}:null,trace});
@@ -189,7 +189,7 @@ async function browserArtifactDownload(page,task,observe,act,reveal) {
     && current.loginom_build===task.expected_build && same(current.workflow_ref,task.snapshot.workflow_ref)
     && current.dom_epoch?.document===task.snapshot.dom_epoch?.document
     && current.active_tab_ref===task.snapshot.active_tab_ref && same(current.package_identity,task.snapshot.package_identity)
-    && current.file_storage?.status==='observed' && current.file_storage.directory===task.artifact.upload.directory
+    && current.file_storage?.status==='observed' && current.file_storage.directory===destination.directory
     && current.ui.dialogs.length===0 && current.ui.masks.length===0;
   try {
     let before=await observe(page);
@@ -201,7 +201,7 @@ async function browserArtifactDownload(page,task,observe,act,reveal) {
         build:current.loginom_build===task.expected_build,workflow:same(current.workflow_ref,task.snapshot.workflow_ref),
         epoch:same(current.dom_epoch,task.snapshot.dom_epoch),tab:current.active_tab_ref===task.snapshot.active_tab_ref,
         package:same(current.package_identity,task.snapshot.package_identity),
-        storage:current.file_storage?.status==='observed'&&current.file_storage.directory===task.artifact.upload.directory,
+        storage:current.file_storage?.status==='observed'&&current.file_storage.directory===destination.directory,
         dialogs:current.ui?.dialogs?.length===0,masks:current.ui?.masks?.length===0}});
       return result('NOT_APPLIED','DOWNLOAD_CONTEXT_CHANGED');
     }
@@ -252,6 +252,8 @@ async function browserArtifactDownload(page,task,observe,act,reveal) {
         origin:before.output.origin,loginom_build:before.output.loginom_build,workflow_ref:before.output.workflow_ref,
         active_tab_ref:before.output.active_tab_ref,package_identity:before.output.package_identity,directory:before.output.file_storage.directory});
     }
+    if(task.output_binding && target(before.output)?.storage_entry?.bytes!==task.expected_bytes)
+      return result(gesture?'AMBIGUOUS':'NOT_APPLIED','DOWNLOAD_OUTPUT_SIZE_CHANGED');
     // Register BEFORE the checked gesture; native download may fire before
     // the click promise settles. Only this Page's event is eligible.
     event=page.waitForEvent('download',{timeout:15000}).then(value=>value,()=>null);
@@ -286,10 +288,10 @@ async function browserArtifactDownload(page,task,observe,act,reveal) {
     if(await download.failure()!==null)return result('AMBIGUOUS','DOWNLOAD_FAILED');
     completed=true;
     const after=await observe(page);
-    if(after.status!=='SUCCEEDED' || !contextMatches(after.output))return result('AMBIGUOUS','DOWNLOAD_CONTEXT_CHANGED');
+    if(after.status!=='SUCCEEDED' || !contextMatches(after.output)
+      ||task.output_binding&&target(after.output)?.storage_entry?.bytes!==task.expected_bytes)return result('AMBIGUOUS','DOWNLOAD_CONTEXT_CHANGED');
     phase='downloaded';
-    return result('SUCCEEDED',null,{artifact_id:task.artifact.artifact_id,upload_grant_id:task.artifact.upload.grant_id,
-      upload_operation_id:task.upload_operation_id,destination:task.artifact.upload.destination,
+    return result('SUCCEEDED',null,{artifact_id:task.artifact.artifact_id,...(task.output_binding?{output_binding:task.output_binding}:{upload_grant_id:task.artifact.upload.grant_id,upload_operation_id:task.upload_operation_id}),destination:destination.destination,
       suggested_name:name,download_completed:true,bytes_verification_required:true,
       file_ref:task.file_ref,observation_id:task.observation_id});
   } catch {
@@ -299,6 +301,21 @@ async function browserArtifactDownload(page,task,observe,act,reveal) {
     if(download && !completed)try{await download.cancel();completed=true;}catch{}
     return result(gesture || event?'AMBIGUOUS':'NOT_APPLIED','DOWNLOAD_BROWSER_CALL_FAILED');
   }
+}
+
+// Host-owned native export only; shares the exact download gesture and cleanup.
+export function makeNativeOutputDownloadCode(options){
+ const b=options?.output_binding,a=options?.artifact,s=options?.snapshot;
+ const matches=s?.ui?.elements?.filter(e=>e.ref===options.file_ref)??[];
+ if(!b||!b.execution_id||!b.node_id||!b.session_id||b.destination!==b.directory+'/'+a?.name
+   ||!/^\/test-2\//.test(b.destination)||b.destination.includes('..')||!/\.(csv|tsv)$/.test(a.name)
+   ||matches.length!==1||matches[0].label!==a.name||matches[0].tid!==s.workflow_ref?.prefix+';FileStorageForm;colName_'+a.name
+   ||!Number.isSafeInteger(options.expected_bytes)||options.expected_bytes<0||options.expected_bytes>16777216
+   ||matches[0].storage_entry?.bytes!==options.expected_bytes||s.file_storage?.directory!==b.directory)throw Error('Native output download binding differs');
+ const shared={expected_build:options.expected_build,expected_origin:options.expected_origin};
+ const observe=makeWorkspaceUiCode({mode:'observe',root_ref:options.file_ref,...shared});
+ const act=makeWorkspaceUiCode({mode:'act',snapshot:s,action:{verb:'double_click',ref:options.file_ref},...shared},{snapshotArgument:true});
+ return `async page=>(${browserArtifactDownload.toString()})(page,${JSON.stringify(options)},${observe},${act},${browserArtifactReveal.toString()})`;
 }
 
 // Trusted adapter only: every public reference must additionally be checked
@@ -2039,7 +2056,7 @@ export function createActionRuntime({ pinned, execute, artifactStore, allowCandi
             if(response.status!=='SUCCEEDED')throw new Error(response.error?.message??'Node driver transport failed');
             return response.output.value;
           };
-          operation.nodeApplyDrivers=nodeApplyDriverFactory({operation,execute:executeNodeScript,onRecord,now,
+          operation.nodeApplyDrivers=nodeApplyDriverFactory({operation,execute:executeNodeScript,onRecord,now,artifactStore,
             receiptOptions:(id,key,signature)=>receiptOptions(operation,id,key,signature),
             verifiedUploads:()=>[...operations.values()].filter(o=>o.action.capability==='artifact.upload'
               && o.outcome?.status==='SUCCEEDED'&&o.cleanupConfirmed===true)

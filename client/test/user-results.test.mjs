@@ -42,3 +42,9 @@ test('knowledge bundle retains parameter schemas and revision pins', () => {
   assert.equal(result.session_manifest.digest, 'pin');assert.deepEqual(result.node_types[0].parameter_schema, schema);
   assert.equal(result.node_types[0].cache_key, 'cache');assert.equal(result.node_types[0].source, undefined);
 });
+test('export result retains byte evidence but excludes host paths and private binding',()=>{
+ const file={artifact_id:'file',destination:'/test-2/file.csv',bytes:12,sha256:'a'.repeat(64),execution_id:'run',verification_id:'download',freshness_basis:'native_absence_check_and_completed_execution',path:'/private/host/file.csv',session_id:'private-session'};
+ const r=compactNodeResult({operation_id:'export',state:'settled',outcome:{status:'SUCCEEDED',output:{output:{status:'complete',ports:[],file_artifacts:[file]}}}});
+ assert.equal(r.output.file_artifacts[0].sha256,file.sha256);assert.equal(r.output.file_artifacts[0].destination,file.destination);
+ assert.equal(r.output.file_artifacts[0].path,undefined);assert.equal(r.output.file_artifacts[0].session_id,undefined);assert.equal(validate(r).valid,true);
+});

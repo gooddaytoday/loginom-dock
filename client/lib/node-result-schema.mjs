@@ -18,7 +18,9 @@ const port=object({port:integer,port_guid:str,fresh:bool,freshness_basis:str,exe
  sample:{type:'array',items:array(cell),maxItems:10},sample_rows:{type:'integer',minimum:0,maximum:10},sample_complete:bool,
  precision:object({numbers_verified:bool,limitations:array(str),strings:str}),table_schema_id:str,filter_enabled:bool},
  ['port','port_guid','fresh','execution_id','schema','row_count','sample','sample_rows','sample_complete','precision'],true);
-const output=object({status:values('not_refreshed','partial','complete'),evidence_ref:nullable(str),execution_id:str,ports:array(port),
+const fileArtifact=object({artifact_id:str,destination:str,bytes:integer,sha256:{type:'string',pattern:'^[a-f0-9]{64}$'},execution_id:str,verification_id:str,
+ freshness_basis:values('explicit_replace_and_completed_native_execution','native_absence_check_and_completed_execution')});
+const output=object({status:values('not_refreshed','partial','complete'),evidence_ref:nullable(str),execution_id:str,ports:array(port),file_artifacts:{...array(fileArtifact),maxItems:1},
  verified:bool,cleanup_complete:bool,effect_possible:bool,no_output_requested:bool},['status','evidence_ref'],true);
 const readbackColumn=object({index:integer,name:str,label:str,type:str,data_kind:str,used:bool});
 const readbackMappingField=object({index:integer,name:str,label:str,type:str,data_kind:str,source_name:str});
@@ -79,7 +81,9 @@ const unionConfigurationReadback=object({kind:values('union'),scope:values('obse
  input_mappings:{...array(object({port:{type:'integer',minimum:0,maximum:14},autosync:bool,fields:boundedFields(readbackMappingField)})),minItems:2,maxItems:15},
  output_mapping:object({port:{type:'integer',const:0},autosync:bool,fields:boundedFields(object({...readbackMappingField.properties,excluded:bool}))}),
  package_persistence_verified:{type:'boolean',const:false}});
-const configurationReadback={anyOf:[importConfigurationReadback,calculatorConfigurationReadback,groupingConfigurationReadback,sortingConfigurationReadback,reformConfigurationReadback,filterConfigurationReadback,joinConfigurationReadback,unionConfigurationReadback]};
+const exportConfigurationReadback=object({kind:values('text_export'),scope:values('observed_before_verified_finish'),node:ref,
+ receipt_ids:{...array(str),minItems:3,maxItems:3},values_are:values('observed_ui_values'),destination:str,settings:object({destination:str,text_qualifier:values('"'),decimal_separator:values('.',','),date_separator:str,time_separator:str,true_value:str,false_value:str,null_marker:str,date_format:str,time_format:str,delimiter:values(';',',','\t'),encoding:{type:'integer',const:65001},bom:bool,line_ending:{type:'integer',enum:[0,1]},header:{type:'integer',enum:[0,1,2]}}),input_mapping:object({port:{type:'integer',const:0},autosync:bool,fields:boundedFields(readbackMappingField)}),package_persistence_verified:{type:'boolean',const:false}});
+const configurationReadback={anyOf:[exportConfigurationReadback,importConfigurationReadback,calculatorConfigurationReadback,groupingConfigurationReadback,sortingConfigurationReadback,reformConfigurationReadback,filterConfigurationReadback,joinConfigurationReadback,unionConfigurationReadback]};
 export const nodeApplyResultSchema=object({operation_id:str,status:values('SUCCEEDED','FAILED','NOT_APPLIED','AMBIGUOUS'),
  effect_possible:bool,phases:array(receipt),node:nullable(ref),execution,output,
  package_saved:{type:'boolean',const:false},cleanup_complete:bool,warnings:array(str),
