@@ -9,7 +9,8 @@ from grouping_node_acceptance import model_completed,SAVE_REVISIONS
 from node_public_acceptance_evidence import verify_public_nodes_and_saves,verify_public_delivery
 from artifact_delivery_evidence import verify_delivered_import_output
 from node_configuration_evidence import verify_configuration_readback
-from existing_import_evidence import _verify_existing_import_output
+from persisted_import_evidence import verify_persisted_import
+from full_read_evidence import verify_full_read
 from node_apply_reopen_binding import verify_reopen_binding
 from node_apply_save_chain import verify_save_chain
 from workflow_activation_evidence import verify_workflow_activation
@@ -79,6 +80,9 @@ def audit(request,evidence,prompt):
         repeated={result(r)['node']['node_id']:r for r in again}
         check('six_existing_nodes_after_open',len(repeated)==6 and all(r['target']['kind']=='existing' and r['inputs']==[] and r['mappings']==[] and r['finish']=='execute' for r in again))
         pairs=[]
+        ports=[dict(node_label=n,tids=[n+';Input_Connection[0]',n+';Input_Var[0]',n+';Output_Data[0]']) for n in labels]+[dict(node_label=n+'-mark',tids=[n+'-mark;Input_Data[0]',n+'-mark;Output_Data[0]']) for n in labels]
+        graph=dict(nodes=sorted(labels+[n+'-mark' for n in labels]),ports=sorted(ports,key=lambda p:p['node_label']),links=sorted(n+'|Output_Data[0]|'+n+'-mark|Input_Data[0]' for n in labels))
+        row_counts={}
         for key,f in fixtures.items():
             label='Node12-'+key;ir=imports[label];mr=marks[label+'-mark'];inode=result(ir)['node'];mnode=result(mr)['node']
             settings=ir['parameters']['settings'];actual=[{k:v for k,v in c.items() if k!='source_name' or v!=c.get('name')} for c in settings['columns']]
@@ -91,7 +95,8 @@ def audit(request,evidence,prompt):
             if delivery['passed']:checks[key+'_source_bytes']=verify_delivered_import_output(events,ir,f['data'],delivery['delivery'],request['runtime_source_pin']['client_revision'])
             later_i,later_m=repeated[inode['node_id']],repeated[mnode['node_id']]
             seed=restored if key=='main10' else mr;pairs.extend([(ir,later_i,False),(seed,later_m,True)])
-            checks[key+'_persisted_import']=_verify_existing_import_output(events,ir,later_i,f['data'],reopened_package=True)
+            checks[key+'_persisted_import']=verify_persisted_import(evidence,ir,later_i,f['data'],path,SAVE_REVISIONS,expected_rows=len(f['rows']),expected_graphs=[graph,graph],stages=[('package.save_checkpoint',path,False),('package.save_as',path,True)])
+            row_counts[inode['node_id']]=row_counts[mnode['node_id']]=len(f['rows'])
             check(key+'_persistent_node',later_m['target']['ref']['node_id']==mnode['node_id'] and later_m['parameters']==f['parameters'] and result(later_m)['execution']['execution_id']!=result(seed)['execution']['execution_id'])
             # Saved roles must already be present before the handler can rewrite them.
             sequence=verify_internal_sequence(events,later_m['operation_id'],max_steps=4096)
@@ -103,15 +108,13 @@ def audit(request,evidence,prompt):
         checks['key_only_output']=verify_duplicates_output(events,keyonly,f['rows'],[[1,2,3],[4,5,6],[9,10]],[],source_columns=f['columns'])
         checks['restored_output']=verify_duplicates_output(events,restored,f['rows'],f['duplicate_groups'],f['contradiction_groups'],source_columns=f['columns'])
         for r in requests:
-            if r['finish']=='execute':check(r['operation_id']+'_full_read',r['read']['ports']==[0] and r['read']['sample_rows']==10 and r['read']['require_exact_numbers'] is True)
+            if r['finish']=='execute':checks[r['operation_id']+'_full_read']=verify_full_read(events,r,row_counts[result(r)['node']['node_id']])
             if r['target']['type']=='research.duplicates':
                 checks[r['operation_id']+'_graph']=verify_duplicates_graph(events,r)
                 if r['finish']!='close':checks[r['operation_id']+'_configuration']=verify_duplicates_configuration(events,r)
             checks[r['operation_id']+'_workflow']=verify_workflow_activation(events,r)
         saves=[e for e in events if e.get('phase')=='completed' and e.get('action_key') in SAVE_REVISIONS]
         checks['public_calls']=verify_public_nodes_and_saves(evidence,{r['operation_id']:r for r in requests},[e['operation_id'] for e in saves],allow_validation_refusals=True)
-        ports=[dict(node_label=n,tids=[n+';Input_Connection[0]',n+';Input_Var[0]',n+';Output_Data[0]']) for n in labels]+[dict(node_label=n+'-mark',tids=[n+'-mark;Input_Data[0]',n+'-mark;Output_Data[0]']) for n in labels]
-        graph=dict(nodes=sorted(labels+[n+'-mark' for n in labels]),ports=sorted(ports,key=lambda p:p['node_label']),links=sorted(n+'|Output_Data[0]|'+n+'-mark|Input_Data[0]' for n in labels))
         checks['save_chain']=verify_save_chain(events,next(iter(imports.values())),path,SAVE_REVISIONS,expected_graphs=[graph,graph],stages=[('package.save_checkpoint',path,False),('package.save_as',path,True)])
         if checks['save_chain']['passed']:
             save_id=checks['save_chain']['save_operation_ids'][-1]

@@ -466,3 +466,24 @@ test('save/reopen graph proof retains links with semicolons in automatic node la
   const lost=await run(changed,'package.save_as',{path:'/user/data/packages/lost-link.lgp',conflict_policy:'fail'});
   assert.equal(lost.status,'AMBIGUOUS');
 });
+
+
+test('overwrite waits for native Save As menu dismissal before reopening its Close command', async()=>{
+ const page=linkPage(),path='/user/data/packages/overwrite-race.lgp';
+ page.storage.set(path,{nodes:[],edges:[]});
+ const click=page.click.bind(page),wait=page.waitForTimeout.bind(page);let hiddenAt=null;const clicks=[];
+ page.click=async item=>{
+  const wasOpen=page.menu;clicks.push(item.symbol);await click(item);
+  if(item.symbol==='packages.menu')page.menu=!wasOpen;
+  if(item.symbol==='packages.save_as')page.menu=true;
+  if(item.symbol==='message.yes'){page.menu=true;hiddenAt=page.clock+400;}
+ };
+ page.waitForTimeout=async ms=>{await wait(ms);if(hiddenAt!==null&&page.clock>=hiddenAt){page.menu=false;hiddenAt=null;}};
+ const outcome=await run(page,'package.save_as',{path,conflict_policy:'replace'});
+ assert.equal(outcome.status,'SUCCEEDED',JSON.stringify(outcome.error));
+ assert.equal(clicks.filter(s=>s==='message.yes').length,1);
+ assert.equal(clicks.filter(s=>s==='packages.close').length,1);
+ assert.equal(clicks.filter(s=>s==='packages.open').length,1);
+ assert.ok(outcome.trace.findIndex(e=>e.event==='save_flow_completed')>outcome.trace.findIndex(e=>e.event==='overwrite_confirmed'));
+ assert.equal(outcome.output.reopened,true);
+});
