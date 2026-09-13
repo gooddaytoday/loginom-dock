@@ -33,7 +33,7 @@ const save=async(name,value)=>fs.writeFile(join(runDir,name),JSON.stringify(reda
 const stage=async(value,extra={})=>{phase=value;await save('smoke-state.json',{assignment,run_id:runId,phase,smoke_used:smokeUsed,setup_used:setupUsed,...extra});console.log(JSON.stringify({phase,run_dir:runDir,...extra}));};
 const guard=()=>need(performance.now()<overallDeadline&&!stopped,'Smoke overall deadline');
 const config=await loadConfig({configPath:join(process.env.HOME,'.loginom-dock/config.json'),stateDir,agent:'hermes',adapterRevision:'node17-native-observer-smoke',mode:'executor-replay',actionManifestUri:'viking://resources/loginom-dock/catalogs/executor-preview/releases/2026.09.13-node11.2-candidate/manifest.json',actionManifestSha256:'bb2fe2207e01d594108efb591d1c25036adc12f67168ef895dfde755d391ac2a',replayBootstrap:true,replayLoginUser:'test-2',replayLoginomUrl:'http://logi-test-plan.bg.local/app/?testable=true'});
-need(config.resultProfile==='user-v1','Smoke requires actual Hermes user-v1 wire profile');redactor=createRedactor([config.apiKey]);
+need(['user-v1','diagnostic'].includes(config.resultProfile),'Unsupported configured result profile');redactor=createRedactor([config.apiKey]);
 const wire=async(name,args)=>{
  guard();await fs.appendFile(join(runDir,'public-wire.jsonl'),JSON.stringify({phase:'request',at:performance.now(),name,args})+'\n');
  const reply=await publicClient.callTool({name,arguments:args},undefined,{timeout:Math.max(1,Math.min(300000,overallDeadline-performance.now()))});
@@ -43,7 +43,7 @@ const wire=async(name,args)=>{
 const node=async request=>{
  let r=await wire('dock_node_apply',request);
  while(r.state==='running'){guard();r=await wire('dock_node_wait',{operation_id:request.operation_id,timeout_ms:10000});}
- need(r.state==='settled','Node outcome unsettled');await save(request.operation_id+'.json',{request,result:r});return r;
+ need(r.state==='settled','Node outcome unsettled');await save(request.operation_id+'.json',{request,result:r});return r.outcome?{...r,...r.outcome,...r.outcome.output,output:r.outcome.output?.output}:r;
 };
 const raw=async code=>parseBrowserResult(await browser.callTool({name:'browser_run_code_unsafe',arguments:{code}},undefined,{timeout:20000}));
 async function setup(){
@@ -52,7 +52,7 @@ async function setup(){
  while(delivered.state==='running'){guard();delivered=await wire('dock_artifact_delivery_status',{operation_id:'smoke-deliver'});await new Promise(r=>setTimeout(r,250));}
  await save('delivery.json',delivered);need(delivered.status==='SUCCEEDED'||delivered.outcome?.status==='SUCCEEDED','Baseline upload unconfirmed');
  const settings={source:{source_path:a.upload.destination,encoding:'UTF-8 (65001)',rows_to_skip:0,first_line_as_title:true},format:{delimiter:';',decimal_separator:'.',null_marker:'?',text_qualifier:'"'},columns:[['id','integer'],['text','string'],['number','real']].map(([name,type])=>({name,label:name,type,data_kind:type==='string'?'Дискретный':'Непрерывный',used:true}))};
- const base={contract_revision:'1.0.0',document_id:prep.document_id,workflow_ref:{workflow_id:prep.workflow_ref.workflow_id},mode:'delimited',inputs:[],mappings:[],finish:'execute',read:{ports:[],sample_rows:0,require_exact_numbers:false},budgets:{configure_ms:180000,execute_ms:60000,total_ms:240000}};
+ const base={contract_revision:'1.0.0',document_id:prep.document_id,workflow_ref:config.resultProfile==='user-v1'?{workflow_id:prep.workflow_ref.workflow_id}:prep.workflow_ref,mode:'delimited',inputs:[],mappings:[],finish:'execute',read:{ports:[],sample_rows:0,require_exact_numbers:false},budgets:{configure_ms:180000,execute_ms:60000,total_ms:240000}};
  const sourceRequest={...base,operation_id:'smoke-source',target:{kind:'new',type:'imports.text',label:'Main',position:{x:220,y:130}},parameters:{source:{artifact_id:a.artifact_id,upload_operation_id:'smoke-deliver:upload'},settings},read:{ports:[0],sample_rows:10,require_exact_numbers:false}};
  const source=await node(sourceRequest);need(source.status==='SUCCEEDED'&&source.output.ports[0].row_count===5,'Baseline source failed');await stage('baseline_source_ready');
  const parameters={destination:`/test-2/Dock-export-${runId}-csv.csv`,encoding:'UTF-8',delimiter:';',header:'names',bom:false,line_ending:'LF',decimal_separator:'.',null_marker:'?',text_qualifier:'"'};
@@ -91,7 +91,7 @@ async function close(){
 let captureConnect;
 try{
  session=await createSession(config);need(session.metadata.clientRevision===pin.runtime,'Session runtime changed');
- const run={assignment,run_id:runId,goal_id:'text-export-node-complete',probe_scope:'reject_baseline_native_smoke_only',scope:'source_runtime',model_launched:false,loginom_url:config.loginomUrl,storage_directory:'/test-2',runtime_source_pin:{client_revision:pin.runtime,inputs:pin.runtime_inputs},budget:{timeout_seconds:600},free_before_browser:free,acceptance_observer:{contract:2,native_smoke_admitted:false}};
+ const run={assignment,run_id:runId,goal_id:'text-export-node-complete',result_profile:config.resultProfile,probe_scope:'reject_baseline_native_smoke_only',scope:'source_runtime',model_launched:false,loginom_url:config.loginomUrl,storage_directory:'/test-2',runtime_source_pin:{client_revision:pin.runtime,inputs:pin.runtime_inputs},budget:{timeout_seconds:600},free_before_browser:free,acceptance_observer:{contract:2,native_smoke_admitted:false}};
  const harness=Object.fromEntries(await Promise.all(Object.keys(pin.harness_inputs).map(async n=>[n,hash(await fs.readFile(join(work,n)))])));harness['text-export-observer-smoke.mjs']=hash(await fs.readFile(new URL(import.meta.url)));run.harness_inputs=harness;await save('request.json',run);
  const bytes=await fs.readFile(join(work,'fixtures/text-export/input/main.csv'));
  await admitStartupArtifacts(session.artifactStore,[{sourcePath:join(work,'fixtures/text-export/input/main.csv'),name:`Dock-export-${runId}-main.csv`,bytes:bytes.length,sha256:hash(bytes),upload:{directory:'/test-2',overwrite:'reject'}}]);
