@@ -1,3 +1,14 @@
+# Node17: observer contract2 подключён офлайн — native smoke ожидает допуска
+
+По назначению `node17:observer-contract-refinement:1:7e9922f4` интегрированы
+acceptance-only SDK wrapper, native adapter, actual-dispatch ledger и outer auditor.
+14 Node + 14 Python PASS, включая cross-runtime synthetic proof и real SDK
+InMemoryTransport. Runtime155, goal22/3 и save/reopen сохранены.
+Readiness=false: native/browser/Hermes не запускались, native admission закрыт.
+Applied settings явно исключены из claim observer; их отдельные gates сохранены.
+[Текущий checkpoint, pins и ресурсный trigger](../plans/loginom-dock/17-text-export-read-observer-v2.md).
+Предыдущий snapshot blocker ниже исторический, снят уточнением contract2.
+
 # Node17: acceptance observer — локальная часть, native gate не закрыт
 
 Назначение `node17:acceptance-read-observer:1:77de0909`: добавлены отдельные

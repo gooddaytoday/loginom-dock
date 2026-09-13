@@ -1,3 +1,7 @@
+> Исторический contract1. Уточнение координатора и актуальная офлайн-интеграция:
+> [contract2](17-text-export-read-observer-v2.md). Applied-settings snapshot
+> больше не требуется для узкого byte-read gate; native smoke всё ещё pending.
+
 # Node17: локальный observer подготовлен, native snapshot остаётся блокером
 
 Назначение `node17:acceptance-read-observer:1:77de0909`.
