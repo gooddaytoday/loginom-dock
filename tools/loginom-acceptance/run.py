@@ -214,6 +214,8 @@ def execute(args):
     if goal_id=='missing-values-complete':
         for name in [*missing_values_goal.FILES,'acceptance-pins.json']:
             harness_inputs['fixtures/missing-values/'+name]=sha(WORK/'fixtures/missing-values'/name)
+        for name in ('fixtures/missing-values-refusal-live.json.gz','node14/refusal-live.mjs'):
+            harness_inputs[name]=sha(WORK/name)
     info = {"schema_version": 2, "loginom_url": loginom_url, "storage_directory":getattr(args,"storage_directory",None), "scope": "source_runtime", "model_started": False,
             "provider": provider, "model": model, "reasoning_effort": reasoning, "hermes_version": "0.21.0",
             "model_profile": profile, "provider_selection": "explicit CLI; effective usage identity checked after the run",

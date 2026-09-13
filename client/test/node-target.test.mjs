@@ -126,3 +126,9 @@ for(const lost of [false,true])test('pre-dispatch refusal cannot clear '+(lost?'
  const r=await f.run();assert.equal(r.status,'AMBIGUOUS');assert.equal(r.cleanup_complete,false);assert.ok(r.pending);
  assert.equal(f.operation.targetPhase.refusals?.length??0,0);
 });
+
+test('post-refusal graph evidence must be durably acknowledged before clearing pending',async()=>{
+ const f=fixture();f.adapter.mutate=async()=>({status:'NOT_APPLIED',effect_possible:false,cleanup_complete:true});
+ const result=await prepareNodeTarget({request:request(),operation:f.operation,adapter:f.adapter,record:async e=>e.phase==='node_target_refusal_observed'?{...e,refusal:{}}:e});
+ assert.equal(result.status,'AMBIGUOUS');assert.equal(result.cleanup_complete,false);assert.ok(result.pending);
+});

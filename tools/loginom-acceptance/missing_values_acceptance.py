@@ -15,6 +15,7 @@ from calculator_output_evidence import verify_calculator_output
 from missing_values_contract import audit_missing_values
 from missing_values_goal import CASES,FILES,WORK,PIN,MANIFEST_URI,expected,fixtures,prompt,descriptors
 from preflight import runtime_pin
+from missing_values_refusals import classify
 
 def unique(xs):
  if len(xs)!=1:raise ValueError('unique evidence required')
@@ -95,11 +96,20 @@ def raw_table_binding(table,raw):
   return True
  except (KeyError,TypeError,ValueError,AssertionError,ArithmeticError):return False
 
+def full_goal_passed(checks):
+ # Explicit mandatory gates cannot disappear through a partial/empty report.
+ required={'exact_operations','final_results_count','saved_exact_links','final_native_checkpoint','public_calls','public_projection','terminal_refusal_accounting','frozen','model','independent_reopen_present','reopened_package'}
+ return required.issubset(checks) and all(c['passed'] for c in checks.values()) and all(sum(k.startswith(prefix) for k in checks)==12 for prefix in ('full_persisted:','raw_full_rows:','saved_configuration:','saved_connection:','unchanged_request:'))
+
 def audit(run,candidate,reopen=None):
  checks={};put=lambda k,v:checks.update({k:dict(passed=bool(v))})
  def add(k,v):checks[k]=v
  try:
-  req=json.loads((run/'request.json').read_text());ev,projection=normalize_user_evidence(json.loads((run/'evidence.json').read_text()));add('public_projection',projection)
+  req=json.loads((run/'request.json').read_text());original=json.loads((run/'evidence.json').read_text())
+  partition=classify(original,runtime_revision=PIN,manifest_sha256=req['manifest_sha256']);add('terminal_refusal_accounting',partition)
+  if not partition['passed']:raise ValueError('Unproved prepared operation or refusal')
+  terminal={k:v['outcome'] for k,v in partition['refusals'].items()}
+  ev,projection=normalize_user_evidence(original,terminal_outcomes=terminal);add('public_projection',projection)
   fixtures();manifest=json.loads((candidate/'manifest.json').read_text());actions=json.loads((candidate/'actions.json').read_text());uri=MANIFEST_URI;digest=hashlib.sha256((candidate/'manifest.json').read_bytes()).hexdigest()
   put('candidate_identity',req['manifest_uri']==uri and req['manifest_sha256']==digest and manifest['catalog_version']==uri.split('/')[-2] and manifest['status']=='candidate' and manifest['e2e_commit']=='2cad5602158fd2e4836d821d644a2b8d92f571a2' and manifest['compatibility']==dict(profile_id='loginom-7.4.2-macos-chromium-ru',loginom_build='7.4.2',platform='macos',browser='chromium'))
   stage=json.loads((candidate/'stage-report.json').read_text());put('staged_readback',stage['staged'] is True and stage['activated'] is False and stage['manifest_sha256']==digest and stage['catalog_uri']+'/manifest.json'==uri)
@@ -109,7 +119,8 @@ def audit(run,candidate,reopen=None):
   put('model',model_completed(req,ev) and req['provider']=='openai-codex' and req['model']=='gpt-5.6-sol' and req['reasoning_effort']=='low' and req['fault_injection'] is False)
   put('frozen',ev['export_complete'] and ev['runtime_source_unchanged'] and ev['harness_unchanged'] and ev['native_skill_unchanged'] and req['runtime_source_pin']['client_revision']==PIN and runtime_pin(WORK.parents[1])==req['runtime_source_pin'] and all(hashlib.sha256((WORK/n).read_bytes()).hexdigest()==h for n,h in req['harness_inputs'].items()))
   put('artifacts',req['input_artifacts']==descriptors(req['run_id'],'/test-4'))
-  events=ev['events'];requests=[e['request'] for e in events if e.get('phase')=='node_apply_prepared'];results={r['operation_id']:result(events,r) for r in requests}
+  events=ev['events'];all_requests=[e['request'] for e in events if e.get('phase')=='node_apply_prepared']
+  requests=[r for r in all_requests if r['operation_id'] in partition['successful']];results={r['operation_id']:result(events,r) for r in requests}
   caller=ev['calls'][0]['session_id'];first=min(c['row'] for c in ev['calls'] if c['tool'] in (PREFIX+'dock_artifact_deliver',PREFIX+'dock_node_apply'))
   prepared=verified_prepare_v1(ev,PREFIX,caller,first);put('prepare',prepared is not None)
   if prepared is None:raise ValueError('No bound preparation')
@@ -136,7 +147,7 @@ def audit(run,candidate,reopen=None):
    elif r['target']['type']=='preprocessing.data_recovery':missing.append((r,res,label,copy.deepcopy(imports),copy.deepcopy(source_versions)))
    else:raise ValueError('Unexpected node type')
   expected_order=[(c,'execute') for c in CASES];core=CASES[1];expected_order[2:2]=[(core,'done'),(dict(core,value='DISCARD_ME'),'close'),(core,'preserve')]
-  put('exact_operations',len(requests)==27 and len(missing)==len(expected_order) and len(imports)==9)
+  put('exact_operations',len(requests)==27 and len(all_requests)==27+partition['refusal_count'] and len(missing)==len(expected_order) and len(imports)==9)
   if len(missing)!=len(expected_order):raise ValueError('Incomplete case matrix')
   final={};seen_executions=set()
   for (r,res,label,imps,versions),(case,mode) in zip(missing,expected_order):
@@ -153,11 +164,12 @@ def audit(run,candidate,reopen=None):
    execution=res['execution']['execution_id'];put('fresh:'+tag,execution not in seen_executions);seen_executions.add(execution)
    add('observed_output:'+tag,verify_calculator_output(events,r,wanted['schema'],wanted['rows']))
    if case['final']:final[label]=dict(case=case,request=r,result=res,source_request=imps[case['source']],source_result=source)
+  put('final_results_count',len(final)==12)
   labels=set(by_node.values());save_graph=unique([e['checkpoint']['graph'] for e in events if e.get('phase')=='prepared' and e.get('action_key')=='package.save_checkpoint'])
   native=lambda n:re.sub(r'\s','_',n).replace(',','')
   put('saved_exact_links',sorted(save_graph['links'])==sorted(native(c['source'])+'|Output_Data[0]|'+native(c['label'])+'|Input_Data[0]' for c in CASES if c['final']))
   save=checkpoint_save(events,req['package_path'],saves['package.save_checkpoint']['revision'],requests[-1]['operation_id'],labels);put('final_native_checkpoint',save is not None)
-  add('public_calls',verify_public_nodes_and_saves(ev,{r['operation_id']:r for r in requests},[save] if save else [],allow_validation_refusals=True))
+  add('public_calls',verify_public_nodes_and_saves(ev,{r['operation_id']:r for r in all_requests},[save] if save else [],terminal_outcomes=terminal))
   # This plan is input to the separate operator reader, not an acceptance verdict.
   plan=dict(package_path=req['package_path'],old_document_id=prepared['workspace']['document_id'],working_session=prepared['sessionId'],runtime_revision=PIN,manifest_uri=uri,manifest_sha256=digest,final=final)
   put('independent_reopen_present',reopen is not None)
@@ -173,7 +185,7 @@ def audit(run,candidate,reopen=None):
     put('unchanged_request:'+label,r['parameters']=={} and r['inputs']==[] and r['mappings']==[] and r['finish']=='execute' and r['target']['ref']==node and node['node_id']==before['result']['node']['node_id'] and node['document_id']==post['prepare']['document_id'])
     graph=item['graph'];put('saved_connection:'+label,graph['verified'] and graph['read_only'] and graph['package_path']==req['package_path'] and len(graph['links'])==1 and graph['links'][0]['source']['node_id']==source_node['node_id'] and graph['links'][0]['target']['node_id']==node['node_id'])
     postevents=[json.loads(l) for l in (reopen/'execution-events.jsonl').read_text().splitlines()];put('saved_configuration:'+label,configuration(postevents,r,res,wanted))
-  return dict(passed=all(c['passed'] for c in checks.values()),checks=checks,reopen_plan=plan,scope='full_missing_values_goal',source_bytes_reverified_after_reopen=False)
+  return dict(passed=full_goal_passed(checks),checks=checks,reopen_plan=plan,scope='full_missing_values_goal',source_bytes_reverified_after_reopen=False)
  except (KeyError,TypeError,ValueError,IndexError,AssertionError,FileNotFoundError) as error:
   checks['incomplete_evidence']=dict(passed=False,error=str(error));return dict(passed=False,checks=checks,scope='full_missing_values_goal')
 if __name__=='__main__':

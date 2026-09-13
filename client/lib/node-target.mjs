@@ -50,7 +50,7 @@ export async function prepareNodeTarget({ request, operation, adapter, record, s
   const save = async (phase, detail) => {
     const event = { operation_id: operation.id, phase, internal_provenance: 'node_target_v1', ...structuredClone(detail) };
     const ack = await record(event);
-    if (!ack || !same(ack[phase === 'node_target_effect_prepared' ? 'effect' : 'target_state'], event[phase === 'node_target_effect_prepared' ? 'effect' : 'target_state'])) throw new Error('Node target journal acknowledgement differs');
+    if (!ack || !same(ack[phase === 'node_target_effect_prepared' ? 'effect' : phase === 'node_target_refusal_observed' ? 'refusal' : 'target_state'], event[phase === 'node_target_effect_prepared' ? 'effect' : phase === 'node_target_refusal_observed' ? 'refusal' : 'target_state'])) throw new Error('Node target journal acknowledgement differs');
   };
   const observe = async () => {
     budget();
@@ -82,7 +82,9 @@ export async function prepareNodeTarget({ request, operation, adapter, record, s
       if (receipt?.status === 'NOT_APPLIED' && receipt.effect_possible === false && receipt.cleanup_complete === true) {
         // Confirm the same live graph before accepting a pre-dispatch refusal.
         // An unrelated change or lost observation keeps this effect pending.
-        if(!same(before,await observe()))throw new Error('Graph changed after refused gesture');
+        const after=await observe();
+        if(!same(before,after))throw new Error('Graph changed after refused gesture');
+        await save('node_target_refusal_observed',{refusal:{effect,receipt:structuredClone(receipt),after_graph:after}});
         (state.refusals??=[]).push({id:effect.id,kind,receipt:structuredClone(receipt)});
         state.pending = null; state.effect_possible=priorEffect;
         await commit();

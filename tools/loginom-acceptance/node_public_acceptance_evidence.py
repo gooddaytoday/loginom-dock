@@ -63,7 +63,9 @@ def proven_validation_refusal(call, reply, events, accepted_ids, pairs=()):
         return False
 
 
-def verify_public_nodes_and_saves(evidence, requests, save_ids, *, allow_validation_refusals=False):
+def verify_public_nodes_and_saves(evidence, requests, save_ids, *, allow_validation_refusals=False, terminal_outcomes=None):
+    # Only a separate scoped proof may supply terminal failures; defaults stay strict.
+    terminal_outcomes=terminal_outcomes or {}
     pairs, failures = paired_public_calls(evidence)
     events = evidence['events']
     allowed_node = {PREFIX+n for n in ('dock_node_apply', 'dock_node_wait', 'dock_node_status')}
@@ -71,7 +73,7 @@ def verify_public_nodes_and_saves(evidence, requests, save_ids, *, allow_validat
     refused = [(c,r) for c,r in relevant if allow_validation_refusals and proven_validation_refusal(c,r,events,set(requests),pairs)]
     relevant = [(c,r) for c,r in relevant if not any(c is discarded for discarded,_ in refused)]
     actual_ids = {c.get('arguments', {}).get('operation_id') for c, _ in relevant}
-    if actual_ids != set(requests):
+    if actual_ids != set(requests) or not set(terminal_outcomes).issubset(requests):
         failures.append('public_exact_node_operations')
     for operation_id, request in requests.items():
         node_pairs = sorted(((c, r) for c, r in relevant if c.get('arguments', {}).get('operation_id') == operation_id),
@@ -84,7 +86,9 @@ def verify_public_nodes_and_saves(evidence, requests, save_ids, *, allow_validat
             failures.append('public_node_journal:'+operation_id)
             continue
         outcome = ends[0].get('outcome', {})
-        if outcome.get('status') != 'SUCCEEDED' or outcome.get('cleanup_complete') is not True:
+        if (outcome.get('status') != ('FAILED' if operation_id in terminal_outcomes else 'SUCCEEDED')
+                or outcome.get('cleanup_complete') is not True
+                or operation_id in terminal_outcomes and outcome!=terminal_outcomes[operation_id]):
             failures.append('public_node_terminal_success:'+operation_id)
         settled, last_row = False, -1
         for index, (call, reply) in enumerate(node_pairs):

@@ -89,7 +89,7 @@ async function readGraph(page, task) {
 // Fixed UI gestures used only through the enclosing graph phase. The complete
 // pre-effect snapshot must still match immediately before the gesture.
 async function mutateGraph(page, task, read) {
-  let effectPossible=false, held=false, transient=false, outcome;
+  let effectPossible=false, held=false, transient=false, outcome, placementRefusal;
   const remaining=()=>{if(page[Symbol.for('loginom-dock.node-target-cancel')]?.has(task.effect.id))throw new Error('Node target cancelled');const value=task.deadline-Date.now();if(value<=0)throw new Error('Graph deadline');return value;};
   const ensureContext=()=>page.evaluate(({request,epoch})=>{
     const p=globalThis.__loginomDockPreparationV1;
@@ -124,9 +124,10 @@ async function mutateGraph(page, task, read) {
       const target={x:origin.x+p.position.x,y:origin.y+p.position.y};
       const reachable=await find(task.request.workflow_ref.prefix+';ModelForm;cmpDiagram').evaluate((e,p)=>{
         const b=e.getBoundingClientRect(),hit=document.elementFromPoint(p.x,p.y);
-        return p.x>=0&&p.y>=0&&p.x<innerWidth&&p.y<innerHeight&&p.x>=b.x&&p.x<b.right&&p.y>=b.y&&p.y<b.bottom&&!!hit&&(hit===e||e.contains(hit));
+        return {reachable:p.x>=0&&p.y>=0&&p.x<innerWidth&&p.y<innerHeight&&p.x>=b.x&&p.x<b.right&&p.y>=b.y&&p.y<b.bottom&&!!hit&&(hit===e||e.contains(hit)),
+          graph_rect:{x:b.x,y:b.y,width:b.width,height:b.height},viewport:{width:innerWidth,height:innerHeight},screen_point:p,hit_inside:!!hit&&(hit===e||e.contains(hit))};
       },target);
-      if(!reachable)throw new Error('Requested drop surface is not reachable');
+      if(!reachable.reachable){placementRefusal={kind:'unreachable_drop_surface',requested_position:p.position,...reachable};throw new Error('Requested drop surface is not reachable');}
       await drag(find(palette),target);
     }else if(kind==='rename'){
       const tid=await targetTid(p.ref);await point(find(tid+';Label;Label'));effectPossible=true;
@@ -195,7 +196,7 @@ async function mutateGraph(page, task, read) {
     await page.mouse.move(10,10);
     const after=await wait('graph_effect_visible_and_drag_idle',async()=>{try{const g=await read(page,task);return g.interaction_ready&&JSON.stringify(g)!==JSON.stringify(before)?g:null;}catch{return null;}});
     outcome={status:'SUCCEEDED',effect_possible:true,after};
-  }catch(error){outcome={status:effectPossible?'AMBIGUOUS':'NOT_APPLIED',effect_possible:effectPossible,error:String(error.message)};}
+  }catch(error){outcome={status:effectPossible?'AMBIGUOUS':'NOT_APPLIED',effect_possible:effectPossible,error:String(error.message),...(placementRefusal?{placement_refusal:placementRefusal}:{})};}
   finally{try{if(held){await page.mouse.up();held=false;}if(transient==='delete'){const cancel=find('msgbox;tlb;no');if(await cancel.isVisible())await cancel.click({timeout:3000});}else if(transient)await page.keyboard.press('Escape');transient=false;outcome.cleanup_complete=true;}catch(error){outcome={...outcome,status:'AMBIGUOUS',cleanup_complete:false,cleanup_error:String(error.message)};}}
   return outcome;
 }

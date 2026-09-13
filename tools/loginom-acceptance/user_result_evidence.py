@@ -49,7 +49,9 @@ def project_action(outcome):
     result['result_version']='user-v1';return result
 
 
-def normalize_user_evidence(evidence):
+def normalize_user_evidence(evidence, *, terminal_outcomes=None):
+    # Explicit scoped verifier input only; all existing callers remain strict.
+    terminal_outcomes=terminal_outcomes or {}
     if not any(t.get('result',{}).get('result_version')=='user-v1' for t in evidence.get('tools',[]) if isinstance(t.get('result'),dict)):
         return deepcopy(evidence),{'passed':True,'scope':'legacy_diagnostic_results'}
     from node_public_acceptance_evidence import paired_public_calls,proven_validation_refusal
@@ -84,13 +86,14 @@ def normalize_user_evidence(evidence):
                 call['arguments']=expanded
             if value.get('result_version')!='user-v1':continue
             operation=args.get('operation_id')
-            if value.get('error') is not None and tool in {PREFIX+x for x in ('dock_node_apply','dock_node_wait','dock_node_status')}:raise ValueError('user_node_error')
+            if value.get('error') is not None and tool in {PREFIX+x for x in ('dock_node_apply','dock_node_wait','dock_node_status')} and operation not in terminal_outcomes:raise ValueError('user_node_error')
             if tool in {PREFIX+x for x in ('dock_node_apply','dock_node_wait','dock_node_status')}:
                 if value.get('state')=='settled':
                     end=one([e for e in events if e.get('phase')=='completed' and e.get('operation_id')==operation and e.get('action_key')=='node.apply'],'user_node_end')
-                    raw={**pick(value,'operation_id attempt state cancel_requested server_stop_requested'),'outcome':end['outcome'],'error':value.get('error')}
+                    if operation in terminal_outcomes and (end['outcome']!=terminal_outcomes[operation] or end['outcome']['status']!='FAILED'):raise ValueError('unbound_terminal_outcome')
+                    raw={**pick(value,'operation_id attempt state cancel_requested server_stop_requested'),'outcome':end['outcome'],'error':None if operation in terminal_outcomes else value.get('error')}
                 elif value.get('state')=='running':
-                    raw={**pick(value,'operation_id attempt state cancel_requested server_stop_requested progress'),'outcome':None,'error':value.get('error')}
+                    raw={**pick(value,'operation_id attempt state cancel_requested server_stop_requested progress'),'outcome':None,'error':None if operation in terminal_outcomes else value.get('error')}
                 else:raise ValueError('user_node_state')
                 if project_node(raw)!=value:raise ValueError('user_node_projection:'+str(operation))
                 reply['result']=raw
