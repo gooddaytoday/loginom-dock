@@ -7723,3 +7723,14 @@ Hermes до готовности и выделения слота.
 
 [Отчёт](missing-values-autonomous-acceptance-6-2026-09-13.md),
 [pins](missing-values-autonomous-acceptance-6-pins-2026-09-13.json).
+# Node14: целевой узел после выходного мастера — 13 сентября 2026
+
+Исправление `1b407882` готово к следующему выделенному Hermes-слоту:
+существующая доказанная замена graph-body разрешена также в finishGraph
+Missing Values. Run6 остаётся FAIL, его слот координатор освободил.
+Проверки: 129+72 JS, 18 Python и 2 startup — PASS; новая реальная source-сессия,
+импорт и два Missing Values SUCCEEDED, 9/9 адресных проверок, процессы закрыты.
+Kit acceptance7.1: 412 файлов, goal/auditor неизменны, модель не запускалась.
+Полная автономная приёмка, save и независимый reopen пока не пройдены.
+
+[Исправление, pins и ограничения](missing-values-target-selection-fix-2026-09-13.md).
