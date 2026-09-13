@@ -1,13 +1,14 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, existsSync, realpathSync, statSync, chmodSync, rmSync } from 'node:fs';
+import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, existsSync, realpathSync, statSync, chmodSync, rmSync, symlinkSync, readdirSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { Writable } from 'node:stream';
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { validateProjectRouting, resolveProjectRoute, routingReceiptPath } from '../project-routing.mjs';
-import { runHook, parseHookInput, buildChildEnvironment, activationPath } from '../hook-router.mjs';
+import { runHook, parseHookInput, buildChildEnvironment, activationPath, HOOK_SCRIPTS } from '../hook-router.mjs';
+import { deriveWorkspacePeerId } from '../vendor/workspace-peer.mjs';
 
 const CONFIG = `export function loadConfig() {
  const env = process.env.OPENVIKING_CREDENTIAL_SOURCE === 'env';
@@ -56,10 +57,93 @@ function fixture(t) {
     const result = await runHook(event,{...options,...extra,
       stdout:new Writable({write(chunk,_,done){out+=chunk;done();}}),
       stderr:new Writable({write(chunk,_,done){err+=chunk;done();}})});
-    return {result,out,err,data:JSON.parse(out)};
+    return {result,out,err,data:out ? JSON.parse(out) : null};
   }
   return {root,route,context,raw,options,run,activation,stateDir,legacyStateDir,pluginRoot,cwd};
 }
+
+function legacyState(f, overrides = {}) {
+  return {codexSessionId:f.context.threadId,workspacePeerId:deriveWorkspacePeerId(f.cwd),
+    ovSessionId:'cx-'+f.context.threadId,capturedTurnCount:37,...overrides};
+}
+
+test('root and unmapped workspaces skip all five hooks without starting a child or writing routing state',async t=>{
+  const f=fixture(t), unrelated=join(f.root,'unrelated');mkdirSync(unrelated);
+  const before=readdirSync(f.stateDir,{recursive:true});
+  for(const cwd of [f.route.projectRoot,unrelated]) for(const event of Object.keys(HOOK_SCRIPTS)) {
+    const answer=await f.run(event,{cwd,raw:Buffer.from(JSON.stringify({cwd,session_id:f.context.threadId})),
+      spawnImpl(){assert.fail('unmapped hook started a child');}});
+    assert.equal(answer.result.skipped,'unmapped-workspace');
+    assert.equal(answer.result.routeEstablished,false);assert.equal(answer.result.captureVerified,false);
+    assert.equal(answer.out,'');assert.equal(answer.err,'');
+  }
+  assert.deepEqual(readdirSync(f.stateDir,{recursive:true}),before);
+});
+
+test('unactivated mapped task with exact protected legacy state stays in standby for all five hooks',async t=>{
+  const f=fixture(t);rmSync(activationPath(f.context,f.route));
+  const path=join(f.legacyStateDir,f.context.threadId+'.json'),bytes=JSON.stringify(legacyState(f));
+  writeFileSync(path,bytes,{mode:0o600});
+  chmodSync(f.legacyStateDir,0o755);
+  const before=readdirSync(f.stateDir,{recursive:true});
+  for(const mode of [0o600,0o644]) {
+    chmodSync(path,mode);
+    for(const event of Object.keys(HOOK_SCRIPTS)) {
+      const answer=await f.run(event,{spawnImpl(){assert.fail('standby hook started a child');}});
+      assert.equal(answer.result.skipped,'legacy-standby');assert.equal(answer.result.routeEstablished,false);
+      assert.equal(answer.result.captureVerified,false);assert.equal(answer.out,'');assert.equal(answer.err,'');
+      assert.equal(readFileSync(path,'utf8'),bytes);assert.equal(statSync(path).mode & 0o777,mode);
+    }
+  }
+  assert.equal(statSync(f.legacyStateDir).mode & 0o777,0o755);
+  assert.deepEqual(readdirSync(f.stateDir,{recursive:true}),before);
+});
+
+test('standby rejects foreign or malformed legacy identities and cursors',async t=>{
+  const f=fixture(t);rmSync(activationPath(f.context,f.route));
+  const path=join(f.legacyStateDir,f.context.threadId+'.json');
+  for(const state of [legacyState(f,{codexSessionId:'foreign'}),legacyState(f,{workspacePeerId:f.route.canonicalPeerId}),
+    legacyState(f,{workspacePeerId:''}),legacyState(f,{ovSessionId:'cx-foreign'}),
+    legacyState(f,{capturedTurnCount:-1}),legacyState(f,{capturedTurnCount:0.5}),null]) {
+    writeFileSync(path,JSON.stringify(state),{mode:0o600});
+    await assert.rejects(f.run('Stop'),/Original hook state does not match/);
+  }
+  writeFileSync(path,'{broken');await assert.rejects(f.run('Stop'),/not valid JSON/);
+});
+
+test('standby refuses insecure legacy files and symlinked legacy paths',async t=>{
+  const f=fixture(t);rmSync(activationPath(f.context,f.route));
+  const path=join(f.legacyStateDir,f.context.threadId+'.json');
+  writeFileSync(path,JSON.stringify(legacyState(f)),{mode:0o600});
+  for(const mode of [0o664,0o666]) {
+    chmodSync(path,mode);await assert.rejects(f.run('Stop'),/owner-controlled/);
+  }
+  chmodSync(path,0o600);
+  chmodSync(f.legacyStateDir,0o777);await assert.rejects(f.run('Stop'),/owner-controlled/);chmodSync(f.legacyStateDir,0o700);
+  const linkedDir=join(f.root,'legacy-link');symlinkSync(f.legacyStateDir,linkedDir);
+  await assert.rejects(f.run('Stop',{legacyStateDir:linkedDir}),/owner-controlled/);
+  rmSync(path);symlinkSync(join(f.root,'missing'),path);
+  await assert.rejects(f.run('Stop'),/owner-controlled/);
+});
+
+test('present invalid activation never falls back to otherwise valid legacy standby',async t=>{
+  const f=fixture(t),path=activationPath(f.context,f.route);
+  writeFileSync(join(f.legacyStateDir,f.context.threadId+'.json'),JSON.stringify(legacyState(f)),{mode:0o600});
+  writeFileSync(path,JSON.stringify({...f.activation,generation:'old'}));
+  await assert.rejects(f.run('Stop'),/activation/);
+  rmSync(path);symlinkSync(join(f.root,'missing'),path);
+  await assert.rejects(f.run('Stop'),/activation/);
+});
+
+test('removing activation after shared state or receipt exists cannot downgrade to standby',async t=>{
+  const f=fixture(t);rmSync(activationPath(f.context,f.route));
+  writeFileSync(join(f.legacyStateDir,f.context.threadId+'.json'),JSON.stringify(legacyState(f)),{mode:0o600});
+  mkdirSync(join(f.stateDir,'routing-receipts'),{mode:0o700});
+  for(const path of [join(f.stateDir,f.context.threadId+'.json'),routingReceiptPath(f.route,f.context.threadId)]) {
+    writeFileSync(path,'{}',{mode:0o600});
+    await assert.rejects(f.run('SessionStart'),/Shared hook state exists without a valid activation/);rmSync(path);
+  }
+});
 
 test('five hooks preserve exact input/cwd/session and pin child-only project routing from CLI credentials',async t=>{
   const f=fixture(t);

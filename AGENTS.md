@@ -76,6 +76,12 @@
   by need. Verify important writes by exact read-back and scoped retrieval.
   Managed peer memory is populated by official capture/extraction, not raw writes
   to restricted peers paths; remember retains global User semantics.
+- When the coordinator disables the original plugin locally during migration, its
+  installed official skills remain the operational references. Read them directly:
+  `/Users/kartamyshev/.codex/plugins/cache/openviking/openviking-memory/0.8.1/skills/openviking-memory/SKILL.md`,
+  `/Users/kartamyshev/.codex/plugins/cache/openviking/openviking-memory/0.8.1/skills/ov-experience-memory/SKILL.md`,
+  `/Users/kartamyshev/.codex/plugins/cache/openviking/openviking-memory/0.8.1/skills/ov-memory-doctor/SKILL.md`.
+  Project routing stays coordinator-owned; do not re-enable duplicate capture hooks.
 - Repository/live evidence and current user instructions outrank memories.
   Detailed current policy and transition status:
   `/Users/kartamyshev/Git/loginom-dock/docs/loginom-dock/shared-project-memory.md`.

@@ -2573,7 +2573,7 @@
       "policy": "docs/loginom-dock/shared-project-memory.md",
       "target_peer": "-Users-kartamyshev-Git-loginom-dock",
       "preserve_separate_sessions": true,
-      "routing_status": "prepared and locally tested; normal hook trust and controlled activation pending"
+      "routing_status": "canonical hooks trusted; legacy capture preserved; awaiting completed phases and app restart before runtime cutover"
     }
   },
   "accepted_components": [

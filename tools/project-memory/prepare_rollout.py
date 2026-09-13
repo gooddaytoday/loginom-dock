@@ -23,7 +23,7 @@ WORKSPACES = (
 )
 
 
-def prepare(root: Path, output: Path, runtime: Path, node: Path, plugin: Path, state: Path):
+def prepare(root: Path, output: Path, runtime: Path, node: Path, plugin: Path, state: Path, generation: str):
     root = root.resolve(strict=True)
     output.mkdir(parents=True, exist_ok=True, mode=0o700)
     registry = json.loads((root / ".dock/node-streams-20260912/state.json").read_text())
@@ -31,11 +31,19 @@ def prepare(root: Path, output: Path, runtime: Path, node: Path, plugin: Path, s
     route = {"version": 1, "projects": [{
         "projectRoot": str(root),
         "workspaces": [str(root / ".worktrees" / name) for name in WORKSPACES],
-        "stateDir": str(state), "pluginRoot": str(plugin), "generation": "20260913.1",
+        "stateDir": str(state), "pluginRoot": str(plugin), "generation": generation,
     }]}
     manifest = {"status": "INACTIVE_PREPARATION", "routing": route, "tasks": [],
         "runtime": str(runtime), "node": str(node), "no_trust_granted": True,
-        "active_configs_changed": False, "capture_cursors_changed": False}
+        "active_configs_changed": False, "capture_cursors_changed": False,
+        "generation": generation, "disablement_method": "project-plugin-disabled",
+        "canonical_hooks_path": str(root / '.codex/hooks.json')}
+    hooks = {"description": "Shared Loginom Dock memory; exact workspace routing, official scripts", "hooks": {}}
+    for event, (_, matcher, timeout) in HOOK_EVENTS.items():
+        command = " ".join(shlex.quote(str(x)) for x in (node, runtime / "hook-router.mjs", event))
+        hooks["hooks"][event] = [{"matcher": matcher, "hooks": [{
+            "type": "command", "command": command, "timeout": timeout,
+        }]}]
     for name in WORKSPACES:
         worktree = root / ".worktrees" / name
         if worktree.is_symlink() or worktree.resolve(strict=True) != worktree:
@@ -44,38 +52,36 @@ def prepare(root: Path, output: Path, runtime: Path, node: Path, plugin: Path, s
         source = worktree / ".codex/config.toml"
         original = source.read_text()
         parsed = tomllib.loads(original)
-        if "hooks" in parsed or "openviking" in parsed.get("mcp_servers", {}) or (source.parent / "hooks.json").exists():
+        if "hooks" in parsed or "openviking" in parsed.get("mcp_servers", {}) or \
+                "openviking-memory@openviking" in parsed.get("plugins", {}) or (source.parent / "hooks.json").exists():
             raise ValueError(f"Existing project memory/hook configuration requires reconciliation: {worktree}")
         addition = "\n# Prepared shared project memory route; activation requires reviewed hooks.\n"
         addition += "[mcp_servers.openviking]\n"
         addition += "command = " + json.dumps(str(node)) + "\n"
         addition += "args = " + json.dumps([str(runtime / "server.mjs")]) + "\n"
         addition += "enabled = true\nstartup_timeout_sec = 30\ntool_timeout_sec = 120\n"
-        hooks = {"description": "Shared Loginom Dock memory; official scripts, project routing", "hooks": {}}
-        for event, (identifier, matcher, timeout) in HOOK_EVENTS.items():
-            key = f"openviking-memory@openviking:hooks/hooks.json:{identifier}:0:0"
-            addition += "\n[hooks.state." + json.dumps(key) + "]\nenabled = false\n"
-            command = " ".join(shlex.quote(str(x)) for x in (node, runtime / "hook-router.mjs", event))
-            hooks["hooks"][event] = [{"matcher": matcher, "hooks": [{
-                "type": "command", "command": command, "timeout": timeout,
-            }]}]
+        # Linked worktrees use the root checkout's hook declarations and state.
+        # Plugin enablement remains local, so retire original hooks only here.
+        addition += '\n[plugins."openviking-memory@openviking"]\nenabled = false\n'
         updated = original.rstrip() + "\n" + addition
         after = tomllib.loads(updated)
         for key, value in parsed.items():
-            if key != "mcp_servers":
+            if key not in ("mcp_servers", "plugins"):
                 assert after[key] == value
         for key, value in parsed.get("mcp_servers", {}).items():
             assert after["mcp_servers"][key] == value
+        for key, value in parsed.get("plugins", {}).items():
+            assert after["plugins"][key] == value
         target = output / name
         target.mkdir(exist_ok=True, mode=0o700)
         (target / "config.toml.pending").write_text(updated)
-        (target / "hooks.json.pending").write_text(json.dumps(hooks, ensure_ascii=False, indent=2) + "\n")
         (target / "config.diff").write_text("".join(difflib.unified_diff(
             original.splitlines(True), updated.splitlines(True), fromfile=str(source), tofile=str(source) + " (planned)")))
         manifest["tasks"].append({"node": lane["node"], "thread_id": lane["thread_id"],
             "cwd": str(worktree), "source_config_sha256": hashlib.sha256(original.encode()).hexdigest(),
             "target_config_sha256": hashlib.sha256(updated.encode()).hexdigest(),
             "pending_directory": str(target), "phase_at_preparation": lane["phase"]})
+    (output / "hooks.json.pending").write_text(json.dumps(hooks, ensure_ascii=False, indent=2) + "\n")
     (output / "project-memory-routing.json.pending").write_text(json.dumps(route, indent=2) + "\n")
     (output / "manifest.json").write_text(json.dumps(manifest, ensure_ascii=False, indent=2) + "\n")
     print(json.dumps({"status": manifest["status"], "tasks": len(manifest["tasks"]),
@@ -86,10 +92,11 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__)
     root = Path(__file__).resolve().parents[2]
     parser.add_argument("--root", type=Path, default=root)
-    parser.add_argument("--output", type=Path, default=root / ".dock/shared-project-memory/rollout")
-    parser.add_argument("--runtime", type=Path, default=root / ".dock/shared-project-memory/runtime/20260913.1")
+    parser.add_argument("--output", type=Path, default=root / ".dock/shared-project-memory/rollout-20260913.3")
+    parser.add_argument("--runtime", type=Path, default=root / ".dock/shared-project-memory/runtime/20260913.3")
+    parser.add_argument("--generation", default="20260913.3")
     parser.add_argument("--node", type=Path, default=Path.home() / ".local/bin/node")
     parser.add_argument("--plugin", type=Path, default=Path.home() / ".codex/plugins/cache/openviking/openviking-memory/0.8.1")
     parser.add_argument("--state", type=Path, default=Path.home() / ".openviking/project-states/loginom-dock")
     args = parser.parse_args()
-    prepare(args.root, args.output, args.runtime, args.node, args.plugin, args.state)
+    prepare(args.root, args.output, args.runtime, args.node, args.plugin, args.state, args.generation)

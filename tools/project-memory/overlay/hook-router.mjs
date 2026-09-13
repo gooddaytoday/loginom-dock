@@ -1,13 +1,14 @@
 import { spawn } from 'node:child_process';
 import { createHash, randomUUID } from 'node:crypto';
 import { readFileSync, lstatSync, realpathSync, existsSync, mkdirSync, writeFileSync, renameSync, unlinkSync } from 'node:fs';
-import { join, resolve } from 'node:path';
+import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import {
   loadProjectRouting, resolveProjectRoute, makeRoutingReceipt,
   routingReceiptPath, readMappedState, readRouteReceipt, validateActivation, activationPath, assertNoLegacyState,
-  computeOfficialPluginPin,
+  computeOfficialPluginPin, DEFAULT_LEGACY_STATE_DIR,
 } from './project-routing.mjs';
+import { deriveWorkspacePeerId } from './vendor/workspace-peer.mjs';
 
 export const HOOK_SCRIPTS = Object.freeze({
   SessionStart: 'session-start-commit.mjs',
@@ -79,6 +80,38 @@ export function buildChildEnvironment(parentEnv, cfg, route) {
 
 export { validateActivation, activationPath, assertNoLegacyState };
 
+function pathPresent(path) {
+  try { lstatSync(path); return true; }
+  catch (error) {
+    if (error.code === 'ENOENT') return false;
+    fail('Cannot verify the hook routing state.');
+  }
+}
+
+function validateLegacyStandby(context, route, legacyStateDir) {
+  // Missing activation must never downgrade an already migrated task.
+  if (pathPresent(join(route.stateDir, `${context.threadId}.json`)) ||
+      pathPresent(routingReceiptPath(route, context.threadId)))
+    fail('Shared hook state exists without a valid activation.');
+  const path = join(legacyStateDir, `${context.threadId}.json`);
+  if (!pathPresent(path)) fail('Thread activation or exact original hook state is required.');
+  const own = stat => typeof process.getuid !== 'function' || stat.uid === process.getuid();
+  const stat = lstatSync(path), parent = lstatSync(dirname(path));
+  // Official legacy hooks create metadata with the inherited umask (commonly
+  // 0644). Read access does not grant routing authority; foreign writes do.
+  if (!stat.isFile() || stat.isSymbolicLink() || !own(stat) || (stat.mode & 0o022) ||
+      !parent.isDirectory() || !own(parent) || (parent.mode & 0o022) || realpathSync(path) !== path)
+    fail('Original hook state must be an owner-controlled regular file without symlinks.');
+  let state;
+  try { state = JSON.parse(readFileSync(path, 'utf8')); }
+  catch { fail('Original hook state is not valid JSON.'); }
+  if (!state || state.codexSessionId !== context.threadId ||
+      state.workspacePeerId !== deriveWorkspacePeerId(context.cwd) ||
+      (state.ovSessionId != null && state.ovSessionId !== `cx-${context.threadId}`) ||
+      !Number.isInteger(state.capturedTurnCount) || state.capturedTurnCount < 0)
+    fail('Original hook state does not match the host workspace and task.');
+}
+
 function writeReceipt(context, route) {
   const target = routingReceiptPath(route, context.threadId);
   const directory = join(route.stateDir, 'routing-receipts');
@@ -95,12 +128,18 @@ function writeReceipt(context, route) {
 export async function runHook(event, {
   raw, cwd = process.cwd(), routing = loadProjectRouting(),
   parentEnv = process.env, stdout = process.stdout, stderr = process.stderr,
-  legacyStateDir, spawnImpl = spawn,
+  legacyStateDir = DEFAULT_LEGACY_STATE_DIR, spawnImpl = spawn,
 } = {}) {
   if (!Object.hasOwn(HOOK_SCRIPTS, event)) fail('Unsupported hook event.');
   const context = parseHookInput(raw, cwd);
   const route = resolveProjectRoute(context.cwd, routing);
-  if (!route) fail('No exact shared-project route exists for this workspace.');
+  // Root-checkout hooks are also discovered in linked worktrees. Leave all
+  // unmapped tasks, including the coordinator, to their existing plugin.
+  if (!route) return { event, skipped: 'unmapped-workspace', routeEstablished: false, captureVerified: false };
+  if (!pathPresent(activationPath(context, route))) {
+    validateLegacyStandby(context, route, legacyStateDir);
+    return { event, skipped: 'legacy-standby', routeEstablished: false, captureVerified: false };
+  }
   officialScript(route, event);
   validateActivation(context, route, legacyStateDir);
   if (event !== 'SessionStart') {
