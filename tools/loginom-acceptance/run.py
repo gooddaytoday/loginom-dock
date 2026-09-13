@@ -19,6 +19,7 @@ from evidence import export_history, clean
 from preflight import preflight, runtime_pin
 from destinations import storage_segments, render_goal
 import upload_probe
+from text_export_readiness import require_reject_baseline_reader,REJECT_BASELINE_BLOCKER
 import text_export_upload_probe
 import union_upload_probe
 import union_review_upload_probe
@@ -131,6 +132,8 @@ def validate_loginom_url(value):
 
 
 def validate_inputs(args):
+    if getattr(args, "goal", None)=="text-export-node-complete" and getattr(args, "run", False):
+        require_reject_baseline_reader()
     if getattr(args, 'goal', None) in ('union-node-complete','union-review-complete') and not getattr(args, 'loginom_url', None):
         raise ValueError('Union acceptance requires an explicit Loginom target')
     if getattr(args, 'loginom_url', None) is not None:
@@ -229,6 +232,8 @@ def execute(args):
             "budget": {"timeout_seconds": args.timeout, "max_turns": args.max_turns},
             "series": {"planned_attempts": 1, "variant": fault, "pass_criteria": "text_export_acceptance.py full declared scenario plus independent fresh-session gates" if goal_id=="text-export-node-complete" else "union_review_acceptance.py full scenario contract" if goal_id=="union-review-complete" else "union_node_acceptance.py full scenario contract" if goal_id=="union-node-complete" else "join_node_acceptance.py full scenario contract" if goal_id in ("join-node-complete","join-review-complete") else "filter_node_acceptance.py full scenario contract" if goal_id == 'filter-node-complete' else "reform_node_acceptance.py full scenario contract" if goal_id == 'reform-node-complete' else "sales_sorting_acceptance.py full scenario contract" if goal_id == 'sales-sorting-complete' else "grouping_node_acceptance.py full scenario contract" if goal_id == 'grouping-node-complete' else "calculator_node_acceptance.py full scenario contract" if goal_id == 'calculator-node-complete' else "node_apply_acceptance.py full scenario contract" if goal_id == 'node-apply-complete' else "audit.py declared variant contract"},
             "manifest_uri": args.manifest_uri, "manifest_sha256": args.manifest_sha256}
+    if goal_id=='text-export-node-complete':
+        info['acceptance_readiness']={'ready':False,'blockers':[REJECT_BASELINE_BLOCKER]}
     if profile == 'chatgpt-sol':
         info['auth_policy'] = AUTH_POLICY
         with tempfile.TemporaryDirectory(prefix='dock-auth-guard-') as guard_temp:

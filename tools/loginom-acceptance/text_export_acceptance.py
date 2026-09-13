@@ -5,6 +5,7 @@ supplied. Preparatory live evidence is never substituted for a later model run.
 """
 import argparse,hashlib,importlib.util,json,stat
 from pathlib import Path
+from text_export_readiness import require_reject_baseline_reader
 from evidence import PREFIX,KNOWLEDGE_TOOLS
 from audit import knowledge_scope
 from grouping_node_acceptance import model_completed
@@ -72,6 +73,7 @@ def audit_directory(directory,external_dir=None):
         checks[name]={'passed':bool(value)}
         assert value,name
     try:
+        require_reject_baseline_reader()
         request=json.loads((directory/'request.json').read_text());raw=json.loads((directory/'evidence.json').read_text());evidence,projection=normalize_user_evidence(raw);checks['projection']=projection;assert projection['passed']
         check('declared_goal',request['goal_id']=='text-export-node-complete' and (directory/'scenario.txt').read_text()==prompt((WORK/'goals/text-export-node-complete.txt').read_text(),request['package_path'],request['storage_directory'],request['run_id']))
         check('model',model_completed(request,evidence) and evidence['process']['returncode']==0 and not evidence['process']['timed_out'])

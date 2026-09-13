@@ -1,5 +1,9 @@
 # Native-проверка Text export
 
+Текущий blocker: повторное независимое чтение baseline между reject и replace
+не поддержано публичным byte API. `--run` и полный автономный PASS закрыты
+fail-closed guard. [Вариант решения и границы](../../docs/plans/loginom-dock/17-text-export-reject-baseline-gate.md).
+
 Это операторский стенд разработки, не инструкция Hermes и не автономная
 приёмка. `text-export-live.mjs` создаёт отдельную source session, видимый
 максимизированный Chromium и настоящий MCP wire. Он требует явно выбранные
