@@ -7636,3 +7636,20 @@ kit требует новых pins и отдельного слота коорд
 
 [Диагностика, границы и возобновление](missing-values-remove-link-diagnosis-2026-09-13.md),
 [проверки и контрольные суммы](missing-values-remove-link-diagnosis-pins-2026-09-13.json).
+
+
+## Node14 — комплект пятой приёмки, 13 сентября 2026
+
+Подготовлен kit `2026.09.13-node14-acceptance5.1`: runtime `68e8e7a7…`,
+harness `d1892694…`, привязки `34c64710`. Frozen goal/fixtures/full auditor
+сохранены. В новом test-4 контексте повторены 18 успешных операций до threshold41;
+15 объектов/5 связей совпали с run4 по нормализованной идентичности. Однократное
+удаление целевой автосвязи прошло, прямой verifier 12/12. Исходный триггер не
+воспроизведён. Монолитный диагностический export получил RangeError/exit1;
+отдельные receipts и весь JSONL проверены напрямую без повторения UI.
+
+44 JS + 18/7 Python PASS. Модель не запускалась, launch_authorized=false.
+Disk gate 12 ГиБ BLOCKED: последнее измерение 2 614 120 448 свободных байт;
+нужны место, export check, новый слот и разрешение координатора.
+[Подготовка, ограничения и план запуска](missing-values-acceptance5-preparation-2026-09-13.md),
+[квитанции](missing-values-acceptance5-preparation-pins-2026-09-13.json).
