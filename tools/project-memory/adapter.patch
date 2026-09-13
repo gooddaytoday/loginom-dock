@@ -1,0 +1,61 @@
+--- a/adapter.mjs
++++ b/adapter.mjs
+@@ -6,6 +6,7 @@
+ import { Writable } from 'node:stream';
+ import { createOpenVikingMcpProxy } from './vendor/mcp-proxy-core.mjs';
+ import { deriveWorkspacePeerId } from './vendor/workspace-peer.mjs';
++import { loadProjectRouting, resolveProjectRoute, readRouteReceipt, readMappedState, validateActivation } from './project-routing.mjs';
+ 
+ export const CAPABILITY = 'codex/sandbox-state-meta';
+ export const SCOPED_TOOLS = new Set(['find', 'search', 'read', 'list', 'tree', 'grep', 'glob']);
+@@ -46,7 +47,7 @@
+   };
+ }
+ 
+-export function resolveContext(meta, stateDir = join(homedir(), '.openviking', 'codex-plugin-state')) {
++export function resolveContext(meta, stateDir = join(homedir(), '.openviking', 'codex-plugin-state'), routing) {
+   const threadId = meta?.threadId;
+   const cwdUri = meta?.[CAPABILITY]?.sandboxCwd;
+   if (typeof threadId !== 'string' || !/^[A-Za-z0-9][A-Za-z0-9_-]{0,127}$/.test(threadId))
+@@ -57,7 +58,19 @@
+     if (uri.protocol !== 'file:' || uri.search || uri.hash) throw new Error();
+     cwd = fileURLToPath(uri);
+   } catch { throw new AdapterError('Codex did not provide a valid host sandboxCwd file URI. Check codex/sandbox-state-meta support.'); }
+-  const peerId = deriveWorkspacePeerId(cwd);
++  const workspacePeerId = deriveWorkspacePeerId(cwd);
++  try {
++    const route = resolveProjectRoute(cwd, routing ?? loadProjectRouting());
++    if (route) {
++      const context = { threadId, cwd };
++      validateActivation(context, route, stateDir);
++      readRouteReceipt(context, route);
++      const state = readMappedState(context, route);
++      return { threadId, cwd, workspacePeerId, peerId: route.canonicalPeerId,
++        sessionId: state.ovSessionId || `cx-${threadId}`, routeHash: route.routeHash };
++    }
++  } catch (error) { throw new AdapterError(error.message, -32001); }
++  const peerId = workspacePeerId;
+   let state;
+   try { state = JSON.parse(readFileSync(join(stateDir, `${threadId}.json`), 'utf8')); }
+   catch (err) {
+@@ -162,9 +175,10 @@
+ }
+ 
+ export class Adapter {
+-  constructor({ credentials = loadCredentials, stateDir, fetchImpl = globalThis.fetch, observe = () => {} } = {}) {
++  constructor({ credentials = loadCredentials, stateDir, routing = loadProjectRouting, fetchImpl = globalThis.fetch, observe = () => {} } = {}) {
+     this.load = credentials;
+     this.stateDir = stateDir;
++    this.routing = routing;
+     this.fetch = fetchImpl;
+     this.observe = observe;
+     this.pools = new Map();
+@@ -242,7 +256,7 @@
+         this.observe({ stage: 'host-context', threadId: message.params?._meta?.threadId,
+           sandboxCwd: message.params?._meta?.[CAPABILITY]?.sandboxCwd,
+           metaKeys: Object.keys(message.params?._meta || {}) });
+-        const ctx = resolveContext(message.params?._meta, this.stateDir);
++        const ctx = resolveContext(message.params?._meta, this.stateDir, this.routing());
+         const cfg = await this.credentials();
+         const catalog = await this.catalog(cfg);
+         if (!catalog.some(t => t.name === message.params?.name)) throw new AdapterError('Unknown OpenViking tool.');

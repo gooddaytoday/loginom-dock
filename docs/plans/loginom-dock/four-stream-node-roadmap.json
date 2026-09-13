@@ -2564,13 +2564,16 @@
     "event_source": "Developer completion messages to coordinator; actionable blockers only during work",
     "heartbeat_status": "DELETED_BY_USER",
     "shared_project_memory": {
-      "permission": "read-only targeted access",
+      "permission": "read/write confirmed project knowledge through shared official capture",
       "target_uri": "viking://user/kartamyshev/peers/-Users-kartamyshev-Git-loginom-dock/memories",
-      "cross_peer_call_scope": "all only with exact target_uri or exact descendant read URI",
-      "keep_own_peer": true,
+      "cross_peer_call_scope": "legacy exact-root read only until shared actor routing verified",
+      "keep_own_peer": false,
       "sibling_worktrees_allowed": false,
       "periodic_recall": false,
-      "policy": "docs/loginom-dock/shared-project-memory.md"
+      "policy": "docs/loginom-dock/shared-project-memory.md",
+      "target_peer": "-Users-kartamyshev-Git-loginom-dock",
+      "preserve_separate_sessions": true,
+      "routing_status": "prepared and locally tested; normal hook trust and controlled activation pending"
     }
   },
   "accepted_components": [
