@@ -6,7 +6,7 @@ function fixture(fault,initialDirectory='/') {
  const artifact={artifact_id:'artifact',name:'input.csv',bytes:3,sha256:'a'.repeat(64),upload:{grant_id:'grant',directory:'/user/dock-p3',destination:'/user/dock-p3/input.csv',overwrite:'replace'}};
  const calls=[],events=[];let directory=initialDirectory,verified=false;
  const prefix='MF;TF-2',nav=prefix+';NavigationBar;NavigationPanel';
- const entry=(tid,kind)=>({tid,ref:'ui-'+tid,allowed_actions:['click','double_click'],...(kind?{storage_entry:{kind}}:{})});
+ const entry=(tid,kind)=>({tid,ref:'ui-'+tid,label:tid.split(';colName_')[1]??'',allowed_actions:['click','double_click'],...(kind?{storage_entry:{kind}}:{})});
  const state=()=>({observation_id:'obs',dom_epoch:{document:'doc',revision:1},active_tab_ref:'tab',workflow_ref:{prefix},file_storage:{status:'observed',directory},ui:{elements:[entry(nav),entry(prefix+';FileStorageForm;pnlFileStorage;tbl'),entry(prefix+';cnrNaviMode;b.s_Сервер>Файлы'),entry(prefix+';FileStorageForm;colName_'+(directory==='/'?'user':directory==='/user'?'dock-p3':'input.csv'),directory==='/user/dock-p3'?undefined:'folder')]}});
  const runtime={observe:async()=>({status:'SUCCEEDED',output:state()}),uiAct:async a=>{calls.push(a.verb);if(a.verb==='click'&&a.ref.endsWith(';cnrNaviMode;b.s_Сервер>Файлы'))directory='/';if(a.verb==='double_click')directory+='/'+a.ref.split('colName_')[1];directory=directory.replace('//','/');return {status:'SUCCEEDED',cleanup_complete:true}},
   uploadDeliveredArtifact:async()=>{calls.push('upload');if(fault==='upload')throw Error('Lost browser response');return {status:'AMBIGUOUS',cleanup_complete:true,output:{upload_submitted:true}};},

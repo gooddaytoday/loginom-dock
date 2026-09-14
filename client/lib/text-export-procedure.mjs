@@ -107,7 +107,7 @@ export async function configureTextExport(channel,p,ctx,options){
   }
   configured[stage]=current;
   if(ctx.finish!=='close'){
-   try{(stage==='text_export_params'?validateNativeExportParams:validateNativeExportFormat)(current.values);}
+   try{(stage==='text_export_params'?validateNativeExportParams:validateNativeExportFormat)(current.values,options.storageDirectories);}
    catch(error){
     guard();const closed=await options.close(channel);guard();
     need(closed?.cleanup_complete===true&&closed.draft_discarded===true&&closed.settings_applied===false,'Unsupported export draft was not discarded');
@@ -115,7 +115,7 @@ export async function configureTextExport(channel,p,ctx,options){
    }
   }
   if(stage==='text_export_params'){
-   const destination=validateExportDestination(current.values.destination.value);
+   const destination=validateExportDestination(current.values.destination.value,options.storageDirectories);
    const id=operation.id+':export-next',task={binding,before:current,destination,overwrite:p.overwrite??'reject',origin:options.targetOrigin,operation_id:id,deadline:Math.min(ctx.deadline,Date.now()+15000)};
    const result=await runExportNext(task,ctx,options);
    need(result.status==='SUCCEEDED'&&result.cleanup_complete,'Export Next or overwrite decision uncertain');

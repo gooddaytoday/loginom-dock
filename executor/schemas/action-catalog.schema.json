@@ -184,6 +184,9 @@
                 "type": "string",
                 "minLength": 2
               }
+            },
+            "destination_policy": {
+              "const": "session_storage"
             }
           }
         },

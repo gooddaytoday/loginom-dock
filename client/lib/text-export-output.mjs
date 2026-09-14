@@ -2,11 +2,12 @@ import {makeWorkspaceUiCode} from './workspace-ui.mjs';
 import {makeNativeOutputDownloadCode,withBrowserReceipt} from './executor.mjs';
 import {readPreparedNodeContext} from './node-context.mjs';
 import {createHash} from 'node:crypto';
+import {storageTidSuffix,requireExportDestination} from './storage-policy.mjs';
 const need=(v,m)=>{if(!v)throw Error(m);},one=xs=>{need(xs.length===1,'Unique export file control required');return xs[0];};
 // A virtual file row may not exist in the DOM until its page is rendered.
 // Search only the observed folder, through bounded native scroll gestures.
 export async function findNativeStorageRow({name,read,roots,ready,act,guard}) {
- const suffix=';FileStorageForm;colName_'+name.replace(/\s/g,'_').replace(/,/g,'');
+ const suffix=';FileStorageForm;colName_'+storageTidSuffix(name);
  let binding=null,owner=null,lastTop=null,direction=null;
  const bind=s=>{
   need(s.file_storage?.status==='observed','Export search folder unavailable');
@@ -49,6 +50,7 @@ export async function readNativeExportFile(options,ctx,configuration,execution){
  need(typeof destination==='string'&&check?.verified&&check.destination===destination&&!check.rejected
   &&(!check.existed||check.overwrite==='replace'&&check.decision==='replace')
   &&execution?.verified&&execution.owner_verified&&execution.status==='completed'&&execution.execution_id===ctx.execution.execution_id,'Native export provenance incomplete');
+ requireExportDestination(destination,options.storageDirectories);
  const binding={document_id:ctx.document_id,workflow_ref:ctx.workflow_ref,node:ctx.node};
  const owner=await execute(`async page=>(${readPreparedNodeContext.toString()})(page,${JSON.stringify(binding)})`);
  need(owner.verified&&owner.surface==='graph','Export graph changed before file read');
@@ -93,16 +95,16 @@ export async function readNativeExportFile(options,ctx,configuration,execution){
   }
   if(s.file_storage.directory!==directory){let current='';for(const part of directory.split('/').filter(Boolean)){
    s=await row(part);need(s.file_storage?.directory===(current||'/'),'Export storage parent differs');
-   const e=one(s.ui.elements.filter(e=>e.tid===s.workflow_ref.prefix+';FileStorageForm;colName_'+part&&e.storage_entry?.kind==='folder'));
+   const e=one(s.ui.elements.filter(e=>e.tid===s.workflow_ref.prefix+';FileStorageForm;colName_'+storageTidSuffix(part)&&e.label===part&&e.storage_entry?.kind==='folder'));
    await act(s,e,'double_click');current+='/'+part;s=await inDirectory(current);
   }}
   r=await roots();const refreshRoot=one(r.ui.elements.filter(e=>e.tid===r.workflow_ref.prefix+';FileStorageForm;btnRefresh'));
   const details=await read({root_ref:refreshRoot.ref}),refresh=one(details.ui.elements.filter(e=>e.tid===details.workflow_ref.prefix+';FileStorageForm;btnRefresh'));
   await act(details,refresh);await inDirectory(directory);
   s=await row(name);need(s.file_storage?.directory===directory,'Export file directory differs');
-  const e=one(s.ui.elements.filter(e=>e.tid===s.workflow_ref.prefix+';FileStorageForm;colName_'+name&&e.label===name)),bytes=e.storage_entry?.bytes;
+  const e=one(s.ui.elements.filter(e=>e.tid===s.workflow_ref.prefix+';FileStorageForm;colName_'+storageTidSuffix(name)&&e.label===name)),bytes=e.storage_entry?.bytes;
   need(Number.isSafeInteger(bytes)&&bytes>=0&&bytes<=16*1024*1024,'Export output size is unavailable or exceeds limit');
-  const id=operation.id+':export-download',task={...base,operation_id:id,artifact:{artifact_id:lease.artifact_id,name},output_binding:{...fileBinding,directory},expected_bytes:bytes,
+  const id=operation.id+':export-download',task={...base,storage_directories:options.storageDirectories,operation_id:id,artifact:{artifact_id:lease.artifact_id,name},output_binding:{...fileBinding,directory},expected_bytes:bytes,
    snapshot:s,file_ref:e.ref,observation_id:s.observation_id,download_path:lease.path};
   const signature=createHash('sha256').update(JSON.stringify({...task,download_path:undefined})).digest('hex');
   await record('export_file_download_prepared',{binding:fileBinding,artifact_id:lease.artifact_id,bytes,id,signature});

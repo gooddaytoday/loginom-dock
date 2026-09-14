@@ -8,7 +8,26 @@ import { fileURLToPath } from 'node:url';
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 import { ACCEPTANCE_CHECKS, EXECUTOR_REVISION } from '../lib/action-catalog.mjs';
-import { minimumExecutorRevision, configurePackageRoots } from '../../deploy/loginom-dock/build-action-catalog.mjs';
+import { minimumExecutorRevision, configurePackageRoots, configureSessionStorage } from '../../deploy/loginom-dock/build-action-catalog.mjs';
+import { requireCapability } from '../lib/capability-registry.mjs';
+import { makeCapabilityCode } from '../lib/executor.mjs';
+
+test('session storage catalogs require prepared host directories and retain immutable source actions', async () => {
+  const source=JSON.parse(await readFile(new URL('../../executor/catalog/actions.json',import.meta.url),'utf8'));
+  const before=JSON.stringify(source),catalog=configureSessionStorage(source);
+  assert.equal(JSON.stringify(source),before);
+  for(const action of catalog.actions.filter(a=>a.action_key.startsWith('package.'))){
+    assert.equal(action.effect.destination_policy,'session_storage');assert.equal(action.effect.allowed_roots,undefined);
+    assert.equal(action.min_executor_revision,'1.3.0');requireCapability(action);
+    assert.throws(()=>makeCapabilityCode(action,new Map(),{path:'/operator/Мои пакеты/a.lgp'}),/not prepared/);
+    const binding={document_id:'doc',loginom_account:'other-name',directories:{packages:'/operator/Мои пакеты',inputs:'/operator/Вход',exports:'/operator/Выход'}};
+    assert.throws(()=>makeCapabilityCode(action,new Map(),{path:'/operator/Мои пакеты-extra/a.lgp'},{storage_binding:binding}),/outside/);
+    const code=makeCapabilityCode({...action,selector_symbols:[]},new Map(),{path:'/operator/Мои пакеты/a.lgp'},{storage_binding:binding});
+    assert.match(code,/session_storage/);
+    assert.equal(new RegExp(action.input_schema.properties.path.pattern).test('/operator/Мои пакеты/a.lgp'),true);
+  }
+  assert.deepEqual(configureSessionStorage(catalog),catalog);
+});
 
 const exec = promisify(execFile);
 const builder = fileURLToPath(new URL('../../deploy/loginom-dock/build-action-catalog.mjs', import.meta.url));

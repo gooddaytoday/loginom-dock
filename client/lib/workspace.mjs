@@ -103,7 +103,8 @@ async function prepareWorkspace(page, options) {
       if (!current) return {error:'RECEIPT_MISSING'};
       current.tab=tab;current.packageNode=packageNode;current.crumbs=crumbs;current.phase='verified';
       current.workflowId ??= knownWorkflow?.workflowId ?? state.id+'-'+(state.sequence=(state.sequence??0)+1);
-      return {document_id:state.id,workflow_ref:{tab_tid:tabTid,prefix,navigation_path:crumbs,workflow_id:current.workflowId},
+      return {document_id:state.id,loginom_account:app?.Application?.FInstance?.FMainForm?.FMapTree?.FServerConnection?.UserName ?? null,
+        workflow_ref:{tab_tid:tabTid,prefix,navigation_path:crumbs,workflow_id:current.workflowId},
         package_ref:{path,name:packageNode.PackageName??null,persisted:path!==null},preserved_workflows:preserved,
         ownership_verified:options.intent==='new_draft',target_verified:true,
         interaction_readiness:'driver_verification_required',

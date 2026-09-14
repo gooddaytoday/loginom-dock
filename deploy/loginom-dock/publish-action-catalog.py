@@ -93,7 +93,7 @@ def validate_build(texts, activate=False, acceptance=None):
     profile = manifest.get("compatibility")
     require(isinstance(profile, dict) and set(profile) == {"profile_id", "loginom_build", "platform", "browser"}, "Compatibility profile fields are invalid")
     require(isinstance(profile["profile_id"], str) and profile["profile_id"].strip()
-            and profile["platform"] == "macos" and profile["browser"] == "chromium", "Compatibility profile is invalid")
+            and profile["platform"] in ("macos", "linux", "windows") and profile["browser"] == "chromium", "Compatibility profile is invalid")
     require(profile["loginom_build"] is None or (isinstance(profile["loginom_build"], str) and profile["loginom_build"].strip()), "Loginom build is invalid")
     actions = documents["actions.json"]["actions"]
     require(bool(actions) and len({item["action_key"] for item in actions}) == len(actions), "Action keys are empty or duplicated")

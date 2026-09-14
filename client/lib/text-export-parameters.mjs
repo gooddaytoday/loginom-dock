@@ -1,4 +1,5 @@
 // Loginom 7.4.2 Linux, observed in node17 native discovery (2026-09-13).
+import { requireExportDestination } from './storage-policy.mjs';
 export const EXPORT_FIELDS=Object.freeze({
  destination:['ExportTextFileParamsWizard','edtFileName'],
  text_qualifier:['ExportTextFileParamsWizard','edtTextQualifier'],
@@ -17,18 +18,16 @@ export const EXPORT_FIELDS=Object.freeze({
  header:['ExportTextFilePreviewWizard','edtCaptionType'],
 });
 const need=(v,m)=>{if(!v)throw Error(m);};
-export function validateExportDestination(value){
- need(typeof value==='string'&&/^\/test-2\/(?:[A-Za-z0-9_-]+\/)*[A-Za-z0-9][A-Za-z0-9_.-]*\.(csv|tsv)$/.test(value)
-  &&value.length<=512&&!value.includes('..'),'Export requires an explicitly assigned CSV/TSV in /test-2');
- return value;
+export function validateExportDestination(value,directories=null){
+ return requireExportDestination(value,directories);
 }
-export function validateTextExportParameters(p,mode,r){
+export function validateTextExportParameters(p,mode,r,directories=null){
  need(p&&typeof p==='object'&&!Array.isArray(p)&&Object.keys(p).every(k=>k==='overwrite'||k in EXPORT_FIELDS),'Unknown text export parameter');
  need(mode==='delimited'&&r.read.ports.length===0&&r.mappings.length===0&&r.inputs.length<=1,'Text export supports one table and file output, without requested port mappings');
  need((r.read.sample_rows??0)===0&&(r.read.require_exact_numbers??false)===false,'Text export returns verified file bytes, not tabular samples');
  need(r.target.kind==='existing'||r.inputs.length===1,'A new export requires its input table');
  if(r.target.kind==='new')need(['destination','encoding','delimiter','header','bom','line_ending','decimal_separator','null_marker','text_qualifier'].every(k=>k in p),'New export requires explicit format and destination');
- if('destination'in p)validateExportDestination(p.destination);
+ if('destination'in p)validateExportDestination(p.destination,directories);
  for(const [k,values]of Object.entries({encoding:['UTF-8'],delimiter:[';',',','\t'],header:['none','names','labels'],line_ending:['LF','CRLF'],
   decimal_separator:['.',','],text_qualifier:['"'],null_marker:['','?','null','NULL'],date_separator:['.','/','\\','-'],time_separator:[':', '.'],
   date_format:['dd/mm/yyyy','mm/dd/yyyy','yyyy/mm/dd','dd/mm/yy','mm/dd/yy','yy/mm/dd'],time_format:['h:mm','hh:mm','h:mm:ss','hh:mm:ss'],
@@ -48,8 +47,8 @@ export function validateNativeExportFormat(values){
   need(allowed.includes(values[key]?.value),'Unsupported retained export '+key);
 }
 
-export function validateNativeExportParams(values){
- validateExportDestination(values.destination?.value);
+export function validateNativeExportParams(values,directories=null){
+ validateExportDestination(values.destination?.value,directories);
  // Empty date/time settings are the supported, preserved native defaults;
  // unlike decimal/qualifier they are not reported as a resolved separator.
  const allowed={text_qualifier:['"'],decimal_separator:['.',','],null_marker:['','?','null','NULL'],

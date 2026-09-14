@@ -4,6 +4,7 @@ import os
 from pathlib import Path
 import tempfile
 import types
+import sys
 import unittest
 from unittest.mock import patch
 
@@ -28,6 +29,42 @@ class Context:
 
 
 class NativeDiagnosticsTest(unittest.TestCase):
+    def test_current_text_prefix_excludes_attached_content_and_resolves_only_whole_files(self):
+        text = '@file:"data 1.csv"'
+        ref = types.SimpleNamespace(kind='file', target='data 1.csv', start=0, end=len(text), line_start=None, line_end=None)
+        seen=[]
+        parser=types.SimpleNamespace(parse_context_references=lambda message: seen.append(message) or [ref])
+        with patch.dict(sys.modules, {'agent.context_references':parser}):
+            message=[{'type':'text','text':text+'\n\n--- Attached Context ---\n\n@file:/secret.csv'}, {'type':'image_url','image_url':{'url':'ignored'}}]
+            self.assertEqual(native.native_input_paths(message,'/workspace'),['/workspace/data 1.csv'])
+            self.assertEqual(seen,[text])
+            self.assertEqual(native.native_input_paths(text,None),[])
+            ref.line_start=1
+            self.assertEqual(native.native_input_paths(text,'/workspace'),[])
+
+    def test_native_tokens_are_current_turn_only_and_model_tokens_are_blocked(self):
+        ctx=Context()
+        with patch.object(native,'install_usage_presence'), patch.object(native,'input_host_environment',return_value=(None,None,True)), patch.object(native.subprocess,'run',return_value=types.SimpleNamespace(returncode=0,stdout=json.dumps({'token':'a'*64}))):
+            native.register(ctx)
+            capture=ctx.hooks['pre_llm_call'][0]; prepare=ctx.hooks['pre_tool_call'][0]
+            capture(session_id='one',turn_id='t1',user_message='Read /explicit/data.csv')
+            self.assertEqual(prepare(session_id='one',turn_id='t1',tool_name='loginom_dock_prepare',args={})['args']['host_context_token'],'a'*64)
+            for missing_turn in (None, ''):
+                self.assertEqual(prepare(session_id='one',turn_id=missing_turn,tool_name='loginom_dock_prepare',args={'host_context_token':'a'*64})['action'],'block')
+            self.assertEqual(prepare(session_id='one',turn_id='t2',tool_name='loginom_dock_prepare',args={'host_context_token':'a'*64})['action'],'block')
+            self.assertEqual(prepare(session_id='two',turn_id='t1',tool_name='loginom_dock_prepare',args={'host_context_token':'a'*64})['action'],'block')
+            capture(session_id='one',turn_id='t2',user_message='New task without a file')
+            self.assertIsNone(prepare(session_id='one',turn_id='t2',tool_name='loginom_dock_prepare',args={}))
+
+    def test_remote_workspace_does_not_authorize_a_matching_local_path(self):
+        ctx=Context()
+        with patch.object(native,'install_usage_presence'), patch.object(native,'input_host_environment',return_value=('/remote',Path('/profile/attachments'),False)), patch.object(native.subprocess,'run',return_value=types.SimpleNamespace(returncode=0,stdout=json.dumps({'token':'a'*64}))) as run:
+            native.register(ctx)
+            ctx.hooks['pre_llm_call'][0](session_id='one',turn_id='t1',user_message='Read /remote/data.csv and /profile/attachments/file.csv')
+            ctx.hooks['pre_tool_call'][0](session_id='one',turn_id='t1',tool_name='loginom_dock_prepare',args={})
+            payload=next(json.loads(call.kwargs['input']) for call in run.call_args_list if call.args[0][1]=='input')
+            self.assertEqual(payload['paths'],['/profile/attachments/file.csv'])
+
     def test_presence_distinguishes_zero_and_missing_without_copying_secrets(self):
         self.assertEqual(native.usage_presence({"prompt_tokens_details": {"cached_tokens": 0}, "authorization": "hidden"}),
                          {"cache_read_tokens": True, "cache_write_tokens": False})
@@ -43,7 +80,7 @@ class NativeDiagnosticsTest(unittest.TestCase):
             csv = root / "my sales.csv"
             csv.write_text("product,quantity\nA,2\n")
             ctx = Context()
-            with patch.object(native, "install_usage_presence"), patch.object(native.subprocess, "run", return_value=types.SimpleNamespace(returncode=0)) as run:
+            with patch.object(native, "install_usage_presence"), patch.object(native, "input_host_environment", return_value=(None,None,True)), patch.object(native.subprocess, "run", return_value=types.SimpleNamespace(returncode=0, stdout=json.dumps({"token":"a"*64}))) as run:
                 native.register(ctx)
                 ctx.hooks["pre_api_request"][0](session_id="session", turn_id="turn", api_request_id="r1", user_message=f'Analyse "{csv}"',
                                                 system_prompt="DO NOT LOG", request_messages=["HIDDEN"], started_at=1)
@@ -51,12 +88,12 @@ class NativeDiagnosticsTest(unittest.TestCase):
                 self.assertEqual(technical['events'][0]['event'], 'model.start')
                 self.assertNotIn(str(csv), json.dumps(technical))
                 self.assertNotIn('user_message', json.dumps(technical))
-                args = ctx.hooks["pre_tool_call"][0](session_id="session", tool_name="mcp_loginom_dock_dock_prepare", args={})
+                args = ctx.hooks["pre_tool_call"][0](session_id="session", turn_id="turn", tool_name="mcp_loginom_dock_dock_prepare", args={})
                 self.assertEqual(args["action"], "modify")
                 token = args["args"]["host_context_token"]
-                ticket = json.loads((root / "host-inputs" / (token + ".json")).read_text())
-                self.assertEqual(ticket["files"][0]["sourcePath"], str(csv))
-                self.assertEqual(ticket["files"][0]["upload"]["overwrite"], "reject")
+                self.assertEqual(token, "a"*64)
+                ticket = next(json.loads(call.kwargs['input']) for call in run.call_args_list if call.args[0][1] == 'input')
+                self.assertEqual(ticket, {"session_id":"session", "turn_id":"turn", "paths":[str(csv)]})
                 self.assertNotIn("DO NOT LOG", json.dumps(ticket))
                 ctx.hooks["post_tool_call"][0](session_id="session", tool_name="mcp_loginom_dock_dock_prepare", tool_call_id="tool1",
                                               result={"prepared": True, "sessionId": "dock-session"})
@@ -74,7 +111,7 @@ class NativeDiagnosticsTest(unittest.TestCase):
                 self.assertEqual(end['usage']['cache_read_tokens'], 0)
                 self.assertIsNone(end['usage']['cache_write_tokens'])
                 self.assertNotIn('user_message', json.dumps(batches[0]))
-                prepared = next(e for batch in batches for e in batch['events'] if e['event'] == 'task.prepared')
+                prepared = next(e for batch in batches for e in batch.get('events', []) if e['event'] == 'task.prepared')
                 self.assertEqual(prepared["user_message"], f'Analyse "{csv}"')
 
     def test_model_supplied_path_does_not_create_a_host_ticket(self):

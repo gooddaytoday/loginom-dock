@@ -8,6 +8,7 @@ import { openArchive } from '../lib/archive.mjs';
 import { acquireClipboard } from '../lib/clipboard.mjs';
 import { setTimeout as delay } from 'node:timers/promises';
 import { pinnedHook } from '../lib/hook-runtime.mjs';
+import { codexDatasetContext } from '../lib/host-inputs.mjs';
 
 process.umask(0o077);
 try {
@@ -57,7 +58,11 @@ try {
       });
       process.exit(code);
     }
-    const result = await handleHook(config, input, { knownSecrets });
+    // Local input admission precedes archive activation. Never send bytes to
+    // the archive or network while producing an opaque dataset ticket.
+    const datasetContext = config.agent === 'codex' ? await codexDatasetContext(config, input) : null;
+    if (datasetContext) process.stdout.write(JSON.stringify(datasetContext) + '\n');
+    await handleHook(config, input, { knownSecrets });
     const pending = await openArchive(config, { knownSecrets });
     const work = pending.workRemaining(); pending.close();
     if (work) {

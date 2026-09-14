@@ -8,6 +8,26 @@ import { loadConfig } from '../lib/config.mjs';
 const actor = { agent: 'codex', adapterRevision: 'test-1' };
 const valid = { endpoint: 'https://dock.example/mcp', api_key: 'test-only', account: 'loginom-dock', user: 'loginom-dock' };
 
+test('ordinary workflow profile enables both agents with explicit directories and manual login', async t => {
+  const directory = await mkdtemp(join(tmpdir(), 'dock-workflow-profile-'));
+  t.after(() => rm(directory, { recursive: true, force: true }));
+  const path = join(directory, 'config.json');
+  const profile = { version: 1, mode: 'executor-replay', result_profile: 'user-v1',
+    action_manifest_uri: 'viking://resources/loginom-dock/catalogs/executor-preview/releases/rc6/manifest.json',
+    action_manifest_sha256: 'a'.repeat(64),
+    storage_directories: { packages: '/Автор/Пакеты', inputs: '/Автор/Данные 1', exports: '/Автор/Результаты' } };
+  await writeFile(path, JSON.stringify({ ...valid, workflow_profile: profile }), { mode: 0o600 });
+  for (const agent of ['codex', 'hermes']) {
+    const config = await loadConfig({ configPath: path, stateDir: directory, agent, adapterRevision: 'test' });
+    assert.equal(config.mode, 'executor-replay'); assert.equal(config.resultProfile, 'user-v1');
+    assert.equal(config.replayBootstrap, false); assert.equal(config.replayLoginUser, null);
+    assert.deepEqual(config.storageDirectories, profile.storage_directories);
+    assert.ok(Object.isFrozen(config.storageDirectories));
+  }
+  await writeFile(path, JSON.stringify({ ...valid, workflow_profile: { ...profile, storage_directories: { packages: '/' } } }));
+  await assert.rejects(loadConfig({ configPath: path, ...actor }), /storage directories/);
+});
+
 test('installed Hermes profile supplies pins without changing the Codex profile', async t => {
   const directory = await mkdtemp(join(tmpdir(), 'dock-hermes-profile-'));
   t.after(() => rm(directory, { recursive: true, force: true }));

@@ -85,7 +85,7 @@
           "minLength": 1
         },
         "platform": {
-          "const": "macos"
+          "enum": ["macos", "linux", "windows"]
         },
         "browser": {
           "const": "chromium"

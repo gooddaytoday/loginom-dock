@@ -4,6 +4,7 @@ import { join } from 'node:path';
 import { normalizeConfigPath } from '../../examples/memory-plugin-shared/lib/mcp-proxy-config.mjs';
 import { privatePath } from './platform.mjs';
 import { ACTION_CATALOG_ROOT } from './action-catalog.mjs';
+import { storageDirectories, storagePath } from './storage-policy.mjs';
 
 const SHA256 = /^[a-f0-9]{64}$/;
 
@@ -20,10 +21,12 @@ export async function loadConfig({ configPath, stateDir, agent, adapterRevision,
     throw new Error('Dock credentials must be a private regular file');
   }
   const data = JSON.parse(await readFile(path, 'utf8'));
-  const profile = agent === 'hermes' ? data.hermes_profile : null;
+  const sharedProfile = data.workflow_profile;
+  const profile = sharedProfile ?? (agent === 'hermes' ? data.hermes_profile : null);
   if (profile && (profile.version !== 1 || profile.result_profile !== 'user-v1' || profile.mode !== 'executor-replay')) {
-    throw new Error('Unsupported installed Hermes profile');
+    throw new Error('Unsupported installed workflow profile');
   }
+  const directories = sharedProfile ? storageDirectories(sharedProfile.storage_directories) : null;
   mode ??= profile?.mode ?? 'classic';
   if (mode === 'executor-replay' && profile) {
     actionManifestUri ??= profile.action_manifest_uri;
@@ -79,6 +82,9 @@ export async function loadConfig({ configPath, stateDir, agent, adapterRevision,
     account: data.account, user: data.user, agent, adapterRevision, mode,
     actionManifestUri, actionManifestSha256, replayBootstrap, replayLoginUser, acceptanceCleanupPackage,
     resultProfile: profile?.result_profile ?? 'diagnostic',
+    storageDirectories: directories,
+    inputUploadDirectory: directories?.inputs ?? (profile?.input_upload_directory ? storagePath(profile.input_upload_directory) : null),
+    nativeSessionId: agent === 'codex' ? process.env.CODEX_THREAD_ID ?? process.env.CODEX_SESSION_ID ?? null : null,
     stateDir: normalizeConfigPath(stateDir || join(homedir(), '.loginom-dock')),
   });
 }

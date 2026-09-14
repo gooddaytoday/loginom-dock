@@ -1,3 +1,4 @@
+import {requireStorageDestination,requireExportDestination,storageTidSuffix} from './storage-policy.mjs';
 import {resolveArtifactUploadConflict} from './artifact-upload-conflict.mjs';
 import {makeArtifactDiscoveryDownloadCode,verifiedDiscoveryReference} from './artifact-discovery.mjs';
 import {createArtifactDelivery} from './artifact-delivery.mjs';
@@ -309,10 +310,10 @@ export function makeNativeOutputDownloadCode(options){
  const b=options?.output_binding,a=options?.artifact,s=options?.snapshot;
  const matches=s?.ui?.elements?.filter(e=>e.ref===options.file_ref)??[];
  if(!b||!b.execution_id||!b.node_id||!b.session_id||b.destination!==b.directory+'/'+a?.name
-   ||!/^\/test-2\//.test(b.destination)||b.destination.includes('..')||!/\.(csv|tsv)$/.test(a.name)
-   ||matches.length!==1||matches[0].label!==a.name||matches[0].tid!==s.workflow_ref?.prefix+';FileStorageForm;colName_'+a.name
+   ||matches.length!==1||matches[0].label!==a.name||matches[0].tid!==s.workflow_ref?.prefix+';FileStorageForm;colName_'+storageTidSuffix(a.name)
    ||!Number.isSafeInteger(options.expected_bytes)||options.expected_bytes<0||options.expected_bytes>16777216
    ||matches[0].storage_entry?.bytes!==options.expected_bytes||s.file_storage?.directory!==b.directory)throw Error('Native output download binding differs');
+ requireExportDestination(b.destination,options.storage_directories);
  const shared={expected_build:options.expected_build,expected_origin:options.expected_origin};
  const observe=makeWorkspaceUiCode({mode:'observe',root_ref:options.file_ref,...shared});
  const act=makeWorkspaceUiCode({mode:'act',snapshot:s,action:{verb:'double_click',ref:options.file_ref},...shared},{snapshotArgument:true});
@@ -843,6 +844,10 @@ function browserCapability(page, task) {
     return reconcileLink(before, { stage: 'after_recovery', attempt: 1 });
   };
   const normalizedPackagePath = () => {
+    if(task.action.effect.destination_policy==='session_storage'){
+      if(!task.storage_binding || task.parameters.path!==task.storage_destination)throw Error('Session package destination is not bound');
+      return task.storage_destination;
+    }
     let value = task.parameters.path.trim().replaceAll('\\', '/').replace(/\/+/g, '/');
     if (!value.startsWith('/')) value = '/' + value;
     if (!value.toLowerCase().endsWith('.lgp')) value += '.lgp';
@@ -1178,6 +1183,11 @@ function browserCapability(page, task) {
 }
 
 export function makeCapabilityCode(action, selectors, parameters, options = {}) {
+  if(action.effect?.destination_policy==='session_storage'){
+    const binding=options.storage_binding;
+    if(!binding || !binding.document_id || !binding.loginom_account)throw Error('Session storage is not prepared');
+    options={...options,storage_destination:requireStorageDestination(parameters.path,binding.directories,'packages')};
+  }
   const handler = requireCapability(action).handler;
   const allowedSelectors = Object.fromEntries(action.selector_symbols.map(symbol => [symbol, selectors.get(symbol)]));
   const task = { action: structuredClone(action), selectors: structuredClone(allowedSelectors), parameters: structuredClone(parameters), ...structuredClone(options), handler };
@@ -1234,7 +1244,7 @@ export function parseCapabilityResult(response) {
 }
 
 export function createActionRuntime({ pinned, execute, artifactStore, allowCandidate = false, onRecord = async () => {}, now = Date.now, targetBuild = pinned?.compatibility?.loginom_build, targetOrigin, getNodeContractPins = () => pinned.pins, nodeTargetAdapterFactory = createNodeTargetBrowserAdapter,
-  nodeApplyHandlers = new Map(), nodeApplyDriverFactory }) {
+  nodeApplyHandlers = new Map(), nodeApplyDriverFactory, getStorageBinding = () => null }) {
   if (!pinned?.actions || !pinned?.selectors) throw new Error('A verified pinned action catalog is required');
   let pending = null;
   let running = false;
@@ -1328,6 +1338,7 @@ export function createActionRuntime({ pinned, execute, artifactStore, allowCandi
     if (mutation) operation.lastReceipt.operation_id = operation.id;
     const outcome = await execute(makeCapabilityCode(operation.action, pinned.selectors, operation.parameters, {
       operation_id: operation.id, mode, checkpoint: operation.checkpoint, expected_build: targetBuild,
+      ...(operation.action.effect?.destination_policy==='session_storage'?{storage_binding:getStorageBinding()}:{}),
       ...receipt, ...(mutation ? { deadline_at: mode === 'apply' ? operation.deadline : now() + operation.action.timeout_ms } : {}),
     }), { timeout: operation.action.timeout_ms + 5000, ...options });
     assertActionOutcome(outcome);
@@ -1668,6 +1679,7 @@ export function createActionRuntime({ pinned, execute, artifactStore, allowCandi
           session_manifest: structuredClone(pinned.pins) };
       }
       if (actionKey === undefined) return { available_actions: [...pinned.actions.keys()],
+        available_node_types: allowCandidate && nodeApplyDriverFactory ? [...nodeApplyHandlers.keys()] : [],
         candidate_operation_tools:runtime.tools.filter(t=>nodeApiTools.includes(t)||deliveryApiTools.includes(t)).map(t=>t.name),
         ...(allowCandidate && artifactStore ? {artifact_upload_tool:'dock_artifact_upload',artifact_verify_tool:'dock_artifact_verify',input_artifacts:artifactStore.list()} : {}),
         ui_action_tool: 'dock_ui_action', observation_tool: 'dock_workspace_observe', session_manifest: structuredClone(pinned.pins) };

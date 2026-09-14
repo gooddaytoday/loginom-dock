@@ -1,0 +1,33 @@
+# Обычная установка перед RC6
+
+Пользователь14сентября выбрал: сначала довести обычную установку до работы с новыми узлами и пользовательскими каталогами, затем выпустить RC и обновить сайт. Это расширение подготовки поставки, не запуск новых узлов. Принятая реализация98fd9c5a и website014d0dac сохранены. Main/серверный runtime/общий установленный плагин пока не менялись.
+
+## План реализации
+
+1. Общий workflow_profile для Codex/Hermes с user-v1/executor-replay, immutable release pins и явно выбранным корнем хранения Loginom. Сохранить legacy hermes_profile и персональное подключение profiles/hermes-user.json при обновлении; миграцию второго файла включить в транзакцию/откат установщика. Вход по умолчанию ручной через существующий LOGIN_REQUIRED→READY, тестовый passwordless остаётся отдельным явным режимом.
+2. Подписанные каталоги без привязки к test-2: декларация session destination policy, точный разрешённый корень берётся из host config и связывается с подготовленным документом/фактическим Loginom account. Не выводить каталог из username. Сохранение, upload, export и native download применяют одну политику; native breadcrumbs/имя/тип объекта подтверждают фактическое назначение. Не переписывать pinned catalog после загрузки. Legacy тестовые ограничения сохраняются для старых каталогов без новой policy.
+3. Пользователь дополнительно потребовал прикреплять датасет файлом к сообщению Codex и Hermes. Codex получает opaque host-input ticket из существующего доверенного UserPromptSubmit hook (native section Files mentioned by the user). Hermes Desktop/TUI передают вложения как @file; исходный префикс перед первым Context Warnings/Attached Context отделяется от раскрытого содержимого. Относительные пути разрешаются только через сохранённый host task cwd, не общий cwd процесса. Пути из файла, истории и model tool args не дают полномочий. TTL/hash/size/claim и привязка к agent/native session обязательны. Hermes producer читает тот же выбранный профиль. Проверка реальных вложений обоих приложений входит в приёмку; messaging gateways отдельно не объявляются поддержанными без их проверки.
+4. Подготовка/инструкции user-v1 возвращают все14 реально зарегистрированных типов. Оба native skills согласовать с готовыми handler API, ручным входом, входными файлами и рабочей папкой. Не добавлять универсальный интерпретатор сценариев.
+5. Точные compatibility profiles macOS/Linux/Windows для Loginom7.4.2. Реальное определение платформы и strict matching сохраняются. Проверять платформы реально; сборки сами по себе не являются live приёмкой. XLSX остаётся вне RC.
+6. Адресные unit/contract проверки, живые операции в другом явно выбранном каталоге, ошибки/path traversal/account change/пробелы/кириллица, fresh setup/upgrade/rollback с сохранением посторонних настроек. Перед реализацией UI-политики посмотреть живой Loginom и существующие E2E helpers. Один Hermes Sol/low слот, обычная задача из нового комплекта и независимый аудит результата; не повторять модель как основной debug loop.
+7. Согласованные version/manifests/hooks, чистый source snapshot, сборки на VPS, проверки готовых архивов и native lifecycle. После принятия точных assets — prerelease rc.6, download/hash readback, затем новый landing manifest и Caddy build/deploy/rollback проверка по releasing.md/operations.md.
+
+## Точки кода
+
+config.mjs, setup.mjs, dispatch.mjs, bridge.mjs, user-results.mjs; host-artifacts.mjs и hook.mjs/hooks.mjs; Hermes __init__.py. Storage: artifacts.mjs, artifact-delivery.mjs, executor.mjs, text-export-parameters/procedure/output.mjs, workspace.mjs; schemas/catalog builder/publisher. В native TID whitespace→underscore и удаление запятой должны сочетаться с exact original label и folder kind, чтобы не принимать коллизии.
+
+## Статус
+
+Исследование исходников и read-only карт выполнено. OpenViking healthy, GitHub active account доступен, VPS healthy/9.1GiB свободно. Реализованы shared workflow profile, выбранные каталоги и identity guard, привязанные export/upload/download/save destinations, Codex/Hermes attachment producers, выбранный config и обратимый profile update в setup. Для завершения установщика ещё требуется выпущенный release-workflow.json с реальными pins. Сборка/публикация не выполнены. Три предыдущих combined сценария остаются PASS для исходного приёмочного профиля; новый профиль этими отчётами не принимается автоматически.
+
+## Уточнение пользователя: Linux и Windows
+
+14 сентября пользователь разрешил выпустить Linux и Windows, опираясь на предыдущие версии плагина, а новую отладку этих платформ перенести после RC. Это явное исключение из полной V5-проверки для данного RC; не переименовывать старые classic/Chromium результаты в новую user-v1 приёмку. Серверная сборка, проверки архивов и доступные автоматические тесты сохраняются. Новая живая приёмка обычной установки, выбранных каталогов и прикреплённых файлов выполняется на этом Mac. В release notes и на сайте обозначить, что новый полный native прогон Linux/Windows не выполнен. Windows SSH14сентября отвечал TCP22, но закрывал соединение до обмена ключами; никаких изменений на Windows не было.
+
+### Текущая проверка реализации
+
+Живой Loginom7.4.2: orcestrator, создан и подтверждён /orcestrator/RC public 20260914, native TID с преобразованием пробелов, точные breadcrumbs/label/type. После исследования PackageNodes.Count=0, native Logout подтверждён; operator40598 закрыт. Локальные143 focused checks, дополнительные10contract checks,7catalog checks и8Hermes-native checks прошли. Полный client suite:1810PASS/1SKIP/9FAIL из-за sandbox EPERM на локальных сокетах и связанных ожиданиях; только эти suites повторяются с разрешёнными локальными сокетами. Новая живая приёмка изменённого runtime ещё не выполнена.
+
+Source refs для вложений: Codex26.908.40834/codex0.154.0-alpha.6.2 native composer Files mentioned by the user; официальные hooks https://developers.openai.com/codex/hooks . Hermes693641aa8b4359c602283bdbbc14041e03bc47bc: file.attach→@file, context_references исходный префикс, host pre_llm_call/pre_api_request+pre_tool_call и scoped cwd/backend. Native producer не меняет Hermes core и не сканирует историю. Исключены paths из Attached Context, чужие sessions/turns, remote workspace read на host; разрешены локально staged remote attachments текущего profile.
+
+Повтор четырёх suites, использующих реальные локальные сокеты/процессы:14/14PASS. Итого полного набора после подтверждённого sandbox-only повтора —1819PASS/1SKIP; исходный FAIL report сохранён. Синтетические attachment и profile проверки не заменяют предстоящую Mac native приёмку.

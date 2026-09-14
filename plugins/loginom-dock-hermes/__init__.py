@@ -5,13 +5,71 @@ import os
 import subprocess
 import time
 import re
-import hashlib
-import secrets
-import stat
 import functools
 from pathlib import Path
 
-ADAPTER_REVISION = "0.1.0-dev.20260910.3"
+ADAPTER_REVISION = "0.1.0-rc.6"
+
+
+def user_input_prefix(message):
+    if isinstance(message, list):
+        message = "\n\n".join(part["text"] for part in message if isinstance(part, dict)
+                            and part.get("type") == "text" and isinstance(part.get("text"), str))
+    if not isinstance(message, str):
+        return ""
+    for separator in ("\n\n--- Context Warnings ---\n", "\n\n--- Attached Context ---\n\n"):
+        message = message.split(separator, 1)[0]
+    return message
+
+
+def input_host_environment(task_id):
+    """Read the scoped host environment, never the process cwd or another task."""
+    cwd, staged, local = None, None, False
+    try:
+        from hermes_constants import get_hermes_home
+        staged = get_hermes_home() / "attachments"
+        from tools.terminal_scope import terminal_env, TerminalPolicyUnavailable
+        try:
+            local = terminal_env("TERMINAL_ENV", "local").strip().lower() == "local"
+        except TerminalPolicyUnavailable:
+            pass
+        if local and isinstance(task_id, str) and task_id:
+            from tools.terminal_tool import get_session_cwd
+            cwd = get_session_cwd(task_id)
+    except (ImportError, KeyError, TypeError):
+        pass
+    return cwd, staged, local
+
+
+def native_input_paths(message, cwd=None):
+    """Only the current user's prefix, before Hermes expands external context."""
+    message = user_input_prefix(message)
+    paths = []
+    if "@file:" in message:
+        try:
+            from agent.context_references import parse_context_references
+            refs = parse_context_references(message)
+        except (ImportError, ValueError, TypeError):
+            # Do not reinterpret an unparsed @file reference as a literal path.
+            return []
+        for ref in refs:
+            if ref.kind != "file" or ref.line_start is not None or ref.line_end is not None:
+                continue
+            path = Path(ref.target).expanduser()
+            if not path.is_absolute():
+                if not isinstance(cwd, str) or not Path(cwd).is_absolute():
+                    continue
+                path = Path(cwd) / path
+            paths.append(str(path))
+        # Remove every reference, including ranges, before scanning explicit
+        # paths so a partial-file reference never grants the whole dataset.
+        for ref in sorted(refs, key=lambda r: r.start, reverse=True):
+            message = message[:ref.start] + " " + message[ref.end:]
+    quoted = r'''["`']((?:/|[A-Za-z]:[\\/])[^"`'\n]+)["`']'''
+    paths.extend(re.findall(quoted, message))
+    unquoted = re.sub(quoted, ' ', message)
+    paths.extend(p.rstrip('.,;') for p in re.findall(r'''(?<![\w/:])((?:/|[A-Za-z]:[\\/])[^\s<>"`'\)\]]+)''', unquoted))
+    return list(dict.fromkeys(paths))
 
 
 def usage_presence(raw):
@@ -85,70 +143,64 @@ def register(ctx):
     prompts = {}
     input_tickets = {}
 
+    native_inputs = {}
+
+    def capture_inputs(**kwargs):
+        session, turn = kwargs.get("session_id"), kwargs.get("turn_id")
+        if not isinstance(session, str) or not session or not isinstance(turn, str) or not turn:
+            return
+        previous = native_inputs.get(session)
+        if previous and previous["turn_id"] == turn:
+            return
+        input_tickets.pop(session, None)
+        message = kwargs.get("user_message")
+        # Messaging gateways can prepend document contents before the user's
+        # text. Their attachment envelope is not this Desktop/TUI contract.
+        platform = kwargs.get("platform") or ""
+        if not isinstance(message, (str, list)) or platform not in ("", "cli", "tui", "desktop", "local"):
+            native_inputs[session] = {"turn_id": turn, "paths": []}
+            return
+        cwd, staged, local = input_host_environment(kwargs.get("task_id"))
+        # Resolve relative references now; a later tool may change this task's
+        # cwd. Never use the shared process cwd or a default session key.
+        paths = native_input_paths(message, cwd if local else None)
+        if not local:
+            # A remote workspace path must not accidentally resolve to another
+            # file on this host. Only this profile's local staging is eligible.
+            root = staged.resolve() if isinstance(staged, Path) and staged.is_absolute() else None
+            paths = [p for p in paths if root and Path(p).is_absolute() and Path(p).resolve().is_relative_to(root)]
+        native_inputs[session] = {"turn_id": turn, "paths": paths}
+
     def admit_user_paths(session, message):
-        # Only absolute file paths literally supplied in the user message.
-        # Quoted paths may contain spaces. Never inspect conversation history,
-        # model arguments, directories, or system prompts for candidate files.
-        quoted = r'["`\'](/[^"`\'\n]+)["`\']'
-        paths = re.findall(quoted, message)
-        unquoted = re.sub(quoted, ' ', message)
-        paths += [p.rstrip('.,;') for p in re.findall(r'(?<![\w/:])(/[^\s<>"`\'\)\]]+)', unquoted)]
-        paths = list(dict.fromkeys(paths))
-        if not paths or len(paths) > 8:
+        item = native_inputs.get(session)
+        if not item or not item["paths"]:
             return
         dock_root = Path(os.environ.get("LOGINOM_DOCK_HOME", str(Path.home() / ".loginom-dock")))
-        profile_path = dock_root / "profiles/hermes-user.json"
+        launcher = dock_root / ("bin/loginom-dock.cmd" if os.name == "nt" else "bin/loginom-dock")
         try:
-            config = json.loads(profile_path.read_text())
-            upload = config["hermes_profile"]["input_upload_directory"]
-            files, total = [], 0
-            for source in paths:
-                path = Path(source)
-                try:
-                    info = path.lstat()
-                except FileNotFoundError:
-                    continue
-                if not stat.S_ISREG(info.st_mode) or info.st_size > 16 * 1024 * 1024:
-                    continue
-                fd = os.open(path, os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0) | getattr(os, "O_NONBLOCK", 0))
-                with os.fdopen(fd, "rb") as stream:
-                    actual = os.fstat(stream.fileno())
-                    if not stat.S_ISREG(actual.st_mode) or (actual.st_dev, actual.st_ino) != (info.st_dev, info.st_ino):
-                        return
-                    data = stream.read(16 * 1024 * 1024 + 1)
-                total += len(data)
-                if len(data) != info.st_size or total > 64 * 1024 * 1024:
-                    return
-                # Each user task owns a fresh destination; never overwrite a CSV
-                # left by a previous task merely because its basename matches.
-                uploaded_name = f"{path.stem[:170]}-{secrets.token_hex(6)}{path.suffix}"
-                files.append({"sourcePath": str(path), "name": uploaded_name, "bytes": len(data),
-                              "sha256": hashlib.sha256(data).hexdigest(), "upload": {"directory": upload, "overwrite": "reject"}})
-            if not files:
+            result = subprocess.run([str(launcher), "input", "hermes", ADAPTER_REVISION],
+                input=json.dumps({"session_id": session, **item}), text=True, timeout=15,
+                check=False, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL)
+            if result.returncode != 0:
                 return
-            directory = dock_root / "host-inputs"
-            directory.mkdir(mode=0o700, exist_ok=True)
-            info = directory.lstat()
-            if not stat.S_ISDIR(info.st_mode) or info.st_mode & 0o077:
-                return
-            token = secrets.token_hex(32)
-            fd = os.open(directory / (token + ".json"), os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
-            with os.fdopen(fd, "w") as stream:
-                json.dump({"version": 1, "session_id": session, "created_at": time.time() * 1000, "files": files}, stream)
-                stream.flush()
-                os.fsync(stream.fileno())
-            input_tickets[session] = token
-        except (OSError, ValueError, KeyError, TypeError):
-            # Admission failure is reported as unavailable input by Dock; no
-            # exception body containing a user path or credential is printed.
+            admitted = json.loads(result.stdout)
+            if isinstance(admitted, dict) and re.fullmatch(r"[a-f0-9]{64}", admitted.get("token", "")) and native_inputs.get(session) is item:
+                input_tickets[session] = {"turn_id": item["turn_id"], "token": admitted["token"]}
+        except (OSError, ValueError, TypeError, subprocess.TimeoutExpired):
             return
 
     def host_context(**kwargs):
         name = kwargs.get("tool_name", "")
         session = kwargs.get("session_id")
-        if isinstance(name, str) and "loginom" in name and name.endswith("dock_prepare") and session not in input_tickets:
+        preparing = isinstance(name, str) and "loginom" in name and name.endswith("dock_prepare")
+        current = native_inputs.get(session)
+        turn_matches = current and bool(kwargs.get("turn_id")) and kwargs["turn_id"] == current["turn_id"]
+        if preparing and turn_matches and session not in input_tickets:
             admit_user_paths(session, prompts.get(session, ""))
-        ticket = input_tickets.get(session)
+        item = input_tickets.get(session)
+        ticket = item["token"] if item and turn_matches and item["turn_id"] == current["turn_id"] else None
+        if preparing and not ticket and isinstance(kwargs.get("args"), dict) and "host_context_token" in kwargs["args"]:
+            return {"action":"block", "message":"Loginom Dock: этот токен не подтверждён вложением текущей задачи. Повтори dock_prepare без подставленного токена или приложи файл."}
         if isinstance(session, str) and isinstance(name, str) and (session in active or ("loginom" in name and name.endswith("dock_prepare"))):
             event = {"event": "tool.start", "tool_name": name, "tool_call_id": kwargs.get("tool_call_id"),
                      "host_pid": os.getpid(), "observed_at": time.time()}
@@ -188,10 +240,8 @@ def register(ctx):
             if isinstance(error, dict) and isinstance(error.get("type"), str):
                 item["error_type"] = error["type"]
         if event == "model.start":
-            if isinstance(kwargs.get("user_message"), str):
-                message = kwargs["user_message"]
-                if prompts.get(session) != message:
-                    input_tickets.pop(session, None)
+            if isinstance(kwargs.get("user_message"), (str, list)):
+                message = user_input_prefix(kwargs["user_message"])
                 prompts[session] = message
         elif event == "model.end":
             usage = kwargs.get("usage")
@@ -310,7 +360,11 @@ def register(ctx):
             # Never include raw hook payloads or exception bodies in host logs.
             return
 
-    ctx.register_hook("pre_api_request", lambda **kwargs: diagnostic("model.start", **kwargs))
+    ctx.register_hook("pre_llm_call", capture_inputs)
+    def before_request(**kwargs):
+        capture_inputs(**kwargs)
+        diagnostic("model.start", **kwargs)
+    ctx.register_hook("pre_api_request", before_request)
     ctx.register_hook("pre_tool_call", host_context)
     ctx.register_hook("post_api_request", lambda **kwargs: diagnostic("model.end", **kwargs))
     ctx.register_hook("api_request_error", lambda **kwargs: diagnostic("model.error", **kwargs))
@@ -318,5 +372,11 @@ def register(ctx):
     ctx.register_hook("on_session_start", lambda **kwargs: diagnostic("task.start", **kwargs))
     ctx.register_hook("on_session_end", lambda **kwargs: diagnostic("task.end", **kwargs))
     ctx.register_hook("on_session_finalize", lambda **kwargs: diagnostic("task.finalize", **kwargs))
+    def forget_inputs(**kwargs):
+        session = kwargs.get("session_id")
+        native_inputs.pop(session, None)
+        input_tickets.pop(session, None)
+        prompts.pop(session, None)
+    ctx.register_hook("on_session_finalize", forget_inputs)
     for event in ("post_tool_call", "on_session_end", "on_session_finalize"):
         ctx.register_hook(event, lambda _event=event, **kwargs: forward(_event, **kwargs))

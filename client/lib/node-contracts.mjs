@@ -78,8 +78,8 @@ export function validateNodeTargetRequest(request) {
 
 // Cards are data only. They never install handlers or imply platform/license availability.
 export function describeNodeTypes(types, pins = {}, actions = new Map(), candidateHandlers = new Map()) {
-  if (!Array.isArray(types) || !types.length || types.length > 8 || new Set(types).size !== types.length
-    || types.some(type => !Object.hasOwn(NODE_TYPES, type))) throw new Error('Select one to eight distinct supported node types');
+  if (!Array.isArray(types) || !types.length || types.length > 32 || new Set(types).size !== types.length
+    || types.some(type => !Object.hasOwn(NODE_TYPES, type))) throw new Error('Select one to thirty-two distinct supported node types');
   return types.map(type => {
     const card = structuredClone(NODE_TYPES[type]);
     const admitted = actions.get('node.add')?.input_schema?.properties?.component_key?.enum?.includes(type) === true;

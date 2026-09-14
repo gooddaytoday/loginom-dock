@@ -3,6 +3,7 @@ import {mkdir, open, lstat, realpath, unlink, chmod, rmdir} from 'node:fs/promis
 import {constants} from 'node:fs';
 import {join, resolve, isAbsolute} from 'node:path';
 import {createHash, randomUUID} from 'node:crypto';
+import {requireExportDestination,requireStorageDestination} from './storage-policy.mjs';
 
 const sha = bytes => createHash('sha256').update(bytes).digest('hex');
 const validName = name => typeof name==='string' && name.length>0 && name.length<=200
@@ -74,7 +75,7 @@ async function readVerified(path, expected, maxBytes) {
   } finally {await file.close();}
 }
 
-export async function createArtifactStore({directory,maxBytes=16*1024*1024,sessionId=null}) {
+export async function createArtifactStore({directory,maxBytes=16*1024*1024,sessionId=null,storageDirectories=null}) {
   if (!Number.isSafeInteger(maxBytes) || maxBytes<1 || maxBytes>64*1024*1024) throw new Error('Invalid artifact limit');
   await mkdir(directory,{recursive:true,mode:0o700});
   const info=await lstat(directory);
@@ -145,7 +146,8 @@ export async function createArtifactStore({directory,maxBytes=16*1024*1024,sessi
   const stageNativeOutput=async binding => {
       if(!sessionId||!binding||Object.keys(binding).sort().join(',')!=='destination,document_id,execution_id,node_id,session_id,workflow_id'
         ||binding.session_id!==sessionId||!['document_id','workflow_id','node_id','execution_id'].every(k=>typeof binding[k]==='string'&&/^[A-Za-z0-9_.:-]{1,128}$/.test(binding[k]))
-        ||!/^\/test-2\/(?:[A-Za-z0-9_-]+\/)*[A-Za-z0-9][A-Za-z0-9_.-]*\.(csv|tsv)$/.test(binding.destination)||binding.destination.includes('..'))throw Error('Invalid native output binding');
+        )throw Error('Invalid native output binding');
+      requireExportDestination(binding.destination,storageDirectories);
       binding=structuredClone(binding);
       const artifactId=randomUUID(),name=binding.destination.split('/').at(-1),dir=join(root,'output-'+artifactId),path=join(dir,name);
       await mkdir(dir,{mode:0o700});const owner=await lstat(dir);let released=false,retained=false,descriptor=null;
@@ -182,6 +184,7 @@ export async function createArtifactStore({directory,maxBytes=16*1024*1024,sessi
     async admit({sourcePath,name,bytes,sha256,upload}) {
       if (!validName(name)) throw new Error('Invalid artifact display name');
       const authorization=upload===undefined ? null : validateUploadAuthorization(upload);
+      if(authorization && storageDirectories)requireStorageDestination(authorization.directory,storageDirectories,'inputs',{directory:true});
       const payload=await readVerified(sourcePath,{bytes,sha256},maxBytes);
       const artifactId=randomUUID(),path=join(root,artifactId);
       const file=await open(path,'wx',0o600);

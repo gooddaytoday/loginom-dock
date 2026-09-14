@@ -9,6 +9,7 @@ import { createHash, randomUUID } from 'node:crypto';
 import { installBundle, rollbackBundle, verifyBundle, restoreRuntime } from '../lib/install.mjs';
 import { nativeSnapshot, validateNativeInstall, registerNative, restoreNative, unregisterNative, createNativeCommand } from '../lib/native.mjs';
 import { loadConfig } from '../lib/config.mjs';
+import { configureWorkflow, restoreWorkflow, workflowRegistration } from '../lib/install-profile.mjs';
 import { agentVersionGuidance, diagnoseConnection } from '../lib/diagnostics.mjs';
 import { createAgentLauncher } from '../lib/agent-command.mjs';
 import { privateDirectory, privatePath, readRuntimePointer } from '../lib/platform.mjs';
@@ -49,6 +50,7 @@ try {
   const { values } = parseArgs({ options: {
     bundle: { type: 'string' }, home: { type: 'string' }, agent: { type: 'string' },
     'config-from': { type: 'string' }, 'loginom-url': { type: 'string' }, 'hermes-home': { type: 'string' },
+    'storage-root': { type: 'string' },
     'runtime-only': { type: 'boolean' }, rollback: { type: 'boolean' }, uninstall: { type: 'boolean' },
   } });
   const root = resolve(values.home || process.env.LOGINOM_DOCK_HOME || join(homedir(), '.loginom-dock'));
@@ -56,6 +58,10 @@ try {
   const profile = values.agent === 'hermes'
     ? resolve(values['hermes-home'] || process.env.HERMES_HOME || join(homedir(), '.hermes'))
     : resolve(process.env.CODEX_HOME || join(homedir(), '.codex'));
+  const hermesConfigFile = join(root, 'profiles', 'hermes-user.json');
+  const hasHermesConfig = values.agent === 'hermes' && await lstat(hermesConfigFile).then(()=>true).catch(e=>{if(e.code!=='ENOENT')throw e;return false;});
+  const selectedConfigName = hasHermesConfig ? 'profiles/hermes-user.json' : 'config.json';
+  const configFile = join(root, selectedConfigName);
   const nativeEnv = { ...process.env, HERMES_HOME: profile, LOGINOM_DOCK_HOME: root };
   const agentLauncher = createAgentLauncher(values.agent || '', { env: nativeEnv });
   const runNative = createNativeCommand(agentLauncher);
@@ -73,10 +79,13 @@ try {
       console.log('Плагин и подключение Dock удалены из выбранного агента. Локальные профили, артефакты, очередь и общая история сохранены.');
     } else {
       const record = JSON.parse(await readFile(recordFile, 'utf8'));
+      const restoreConfigName = record.configName ?? 'config.json';
+      if(!['config.json','profiles/hermes-user.json'].includes(restoreConfigName))throw Error('Invalid saved config destination');
+      const restoreConfigFile = join(root,restoreConfigName);
       if (record.state === 'pending') {
         await restoreRuntime(root, record.previousRelease);
-        if (record.hadConfig) await writeFile(join(root, 'config.json'), await readFile(recordFile + '.config-before'), { mode: 0o600 });
-        else await rm(join(root, 'config.json'), { force: true });
+        if (record.hadConfig) await writeFile(restoreConfigFile, await readFile(recordFile + '.config-before'), { mode: 0o600 });
+        else await rm(restoreConfigFile, { force: true });
         await restoreNative({ agent: values.agent, env: nativeEnv, run: runNative, before: record.before });
         if (record.previousRecord) await saveRecord(recordFile, record.previousRecord);
         else await rm(recordFile, { force: true });
@@ -87,12 +96,17 @@ try {
       await verifyBundle(join(root, record.previousRelease), { checkNode: false });
       const currentNative = await nativeSnapshot(values.agent, nativeEnv, runNative);
       const currentRelease = await readRuntimePointer(root);
+      const currentConfig = record.workflowChange ? await readFile(restoreConfigFile) : null;
+      const restoredConfig = currentConfig ? restoreWorkflow(JSON.parse(currentConfig),record.workflowChange.installed,record.workflowChange.previous) : null;
       try {
         await restoreRuntime(root, record.previousRelease);
         await restoreNative({ agent: values.agent, env: nativeEnv, run: runNative, before: record.before });
-        await saveRecord(recordFile, { ...record, before: currentNative, previousRelease: currentRelease, release: record.previousRelease });
+        if(restoredConfig)await writeFile(restoreConfigFile,JSON.stringify(restoredConfig,null,2)+'\n',{mode:0o600});
+        await saveRecord(recordFile, { ...record, before: currentNative, previousRelease: currentRelease, release: record.previousRelease,
+          ...(record.workflowChange?{workflowChange:{installed:record.workflowChange.previous,previous:record.workflowChange.installed}}:{}) });
       } catch (error) {
         await restoreRuntime(root, currentRelease);
+        if(currentConfig)await writeFile(restoreConfigFile,currentConfig,{mode:0o600});
         await restoreNative({ agent: values.agent, env: nativeEnv, run: runNative, before: currentNative });
         throw error;
       }
@@ -117,10 +131,15 @@ try {
   }
   console.log('Задачи Loginom после успешной подготовки сохраняются в общей базе Dock с очисткой секретов.');
   let data;
+  const existingInfo = await lstat(configFile).catch(e=>{if(e.code!=='ENOENT')throw e;return null;});
+  if(existingInfo && (!existingInfo.isFile() || !privatePath(existingInfo)))throw Error('Existing Dock config must be private');
+  const existingData = existingInfo ? JSON.parse(await readFile(configFile,'utf8')) : null;
   if (values['config-from']) {
     const info = await lstat(resolve(values['config-from']));
     if (!info.isFile() || !privatePath(info)) throw new Error('Credential source must be a private regular file');
     data = JSON.parse(await readFile(resolve(values['config-from']), 'utf8'));
+  } else if(existingData) {
+    data = existingData;
   } else {
     const prompts = createInterface({ input: process.stdin, output: process.stdout });
     const endpoint = await prompts.question('Адрес Dock [https://loginom.duckdns.org/mcp]: ');
@@ -129,6 +148,14 @@ try {
     const api_key = await secretPrompt();
     data = { endpoint: endpoint.trim() || 'https://loginom.duckdns.org/mcp', loginom_url: loginom.trim(), api_key, account: 'loginom-dock', user: 'loginom-dock' };
   }
+  let storageRoot=values['storage-root'] ?? null;
+  if(storageRoot===null && !data.workflow_profile?.storage_directories){
+    if(!process.stdin.isTTY){guidance='Укажите --storage-root с существующей рабочей папкой Loginom либо workflow_profile.storage_directories в config-from.';throw Error('Explicit Loginom directory required');}
+    const prompts=createInterface({input:process.stdin,output:process.stdout});
+    storageRoot=(await prompts.question('Рабочая папка в Loginom (например /analyst/Мои сценарии): ')).trim();prompts.close();
+  }
+  const releaseWorkflow=JSON.parse(await readFile(join(bundle,'client/lib/release-workflow.json'),'utf8'));
+  data=configureWorkflow(data,releaseWorkflow,{storageRoot});
   if (values['loginom-url']) data.loginom_url = values['loginom-url'];
   const loginom = new URL(data.loginom_url);
   if (!['http:', 'https:'].includes(loginom.protocol) || loginom.username || loginom.password || loginom.searchParams.get('testable') !== 'true') throw new Error('Loginom must have a credential-free HTTP(S) address with testable=true');
@@ -151,16 +178,15 @@ try {
   run(process.execPath, [join(bundle, 'client/bin/install-browser.mjs'), '--state-dir', root]);
   // Prepare the browser and authenticate before changing the active release.
   const previousRelease = await readRuntimePointer(root);
-  const previousConfig = await readFile(join(root, 'config.json')).catch(error => { if (error.code !== 'ENOENT') throw error; return null; });
+  const previousConfig = await readFile(configFile).catch(error => { if (error.code !== 'ENOENT') throw error; return null; });
   const oldRecord = await readFile(recordFile).catch(error => { if (error.code !== 'ENOENT') throw error; return null; });
-  recovery = { root, before, nativeEnv, runNative, agent: values.agent, previousRelease, previousConfig, recordFile, oldRecord, nativeStarted: false };
+  recovery = { root, configFile, before, nativeEnv, runNative, agent: values.agent, previousRelease, previousConfig, recordFile, oldRecord, nativeStarted: false };
   if (before) {
     if (previousConfig) await writeFile(recordFile + '.config-before', previousConfig, { mode: 0o600 });
-    await saveRecord(recordFile, { state: 'pending', agent: values.agent, profile, before, previousRelease,
+    await saveRecord(recordFile, { state: 'pending', agent: values.agent, profile, before, previousRelease, configName:selectedConfigName,
       hadConfig: !!previousConfig, previousRecord: oldRecord ? JSON.parse(oldRecord) : null });
   }
   const installed = await installBundle(bundle, root);
-  const configFile = join(root, 'config.json');
   try {
     const previous = await readFile(configFile);
     if (!previous.equals(await readFile(temporary))) await writeFile(join(root, 'config.before.json'), previous, { mode: 0o600 });
@@ -173,8 +199,8 @@ try {
     await registerNative({ agent: values.agent, destination: installed.destination, root, manifest, env: nativeEnv, run: runNative, before });
     const prior = oldRecord ? JSON.parse(oldRecord) : null;
     // Reinstalling an identical version must not erase the useful rollback target.
-    const same = prior?.state === 'installed' && prior.release === 'releases/' + installed.manifest.id;
-    await saveRecord(recordFile, same ? prior : { state: 'installed', agent: values.agent, profile, before, previousRelease, release: 'releases/' + installed.manifest.id });
+    await saveRecord(recordFile, workflowRegistration(prior, { state: 'installed', agent: values.agent, profile, before, previousRelease, release: 'releases/' + installed.manifest.id, configName:selectedConfigName,
+      workflowChange:{previous:existingData?.workflow_profile??null,installed:data.workflow_profile} }));
     if (values.agent === 'codex') console.log('Перед первой задачей проверьте обработчики Loginom Dock в /hooks. Решения о доверии установщик не изменяет.');
     else console.log('Плагин Hermes включён. Если gateway запущен, перезапустите его для загрузки новой версии.');
   }
@@ -191,8 +217,8 @@ try {
   if (recovery) {
     try {
       await restoreRuntime(recovery.root, recovery.previousRelease);
-      if (recovery.previousConfig) await writeFile(join(recovery.root, 'config.json'), recovery.previousConfig, { mode: 0o600 });
-      else await rm(join(recovery.root, 'config.json'), { force: true });
+      if (recovery.previousConfig) await writeFile(recovery.configFile, recovery.previousConfig, { mode: 0o600 });
+      else await rm(recovery.configFile, { force: true });
       if (recovery.nativeStarted) await restoreNative({ agent: recovery.agent, env: recovery.nativeEnv, run: recovery.runNative, before: recovery.before });
       if (recovery.oldRecord) await writeFile(recovery.recordFile, recovery.oldRecord, { mode: 0o600 });
       else await rm(recovery.recordFile, { force: true });

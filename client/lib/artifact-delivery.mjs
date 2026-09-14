@@ -1,3 +1,4 @@
+import {storageTidSuffix} from './storage-policy.mjs';
 import {createHash} from 'node:crypto';
 const requireValue=(value,message)=>{if(!value)throw Error(message);};
 const hash=value=>createHash('sha256').update(JSON.stringify(value)).digest('hex');
@@ -71,9 +72,9 @@ export function createArtifactDelivery({runtime,artifactStore,record,admit,admit
   },s=>s.file_storage?.status==='observed'&&(expected===undefined||s.file_storage.directory===expected));
   const readRow=name=>ready('authorized storage entry '+name,async()=>{
    const r=await observe({scope:'roots',storageName:name});
-   const rows=r.ui.elements.filter(e=>e.tid===r.workflow_ref.prefix+';FileStorageForm;colName_'+name);
+   const rows=r.ui.elements.filter(e=>e.tid===r.workflow_ref.prefix+';FileStorageForm;colName_'+storageTidSuffix(name));
    requireValue(rows.length<=1,'Storage row is ambiguous');return rows.length?detail(r,rows[0]):null;
-  },s=>s.ui.elements.some(e=>e.tid===s.workflow_ref.prefix+';FileStorageForm;colName_'+name));
+  },s=>s.ui.elements.some(e=>e.tid===s.workflow_ref.prefix+';FileStorageForm;colName_'+storageTidSuffix(name)));
   try {
    let upload,inspected;
    if(resumeId) {
@@ -112,7 +113,7 @@ export function createArtifactDelivery({runtime,artifactStore,record,admit,admit
     let current=s.file_storage.directory==='/'?'':s.file_storage.directory;
     requireValue(artifact.upload.directory.startsWith(current+'/'),'Files root did not open');
     for(const part of artifact.upload.directory.slice(current.length).split('/').filter(Boolean)) {
-     check();const rowRead=await readRow(part),folder=one(rowRead.ui.elements.filter(e=>e.tid===rowRead.workflow_ref.prefix+';FileStorageForm;colName_'+part
+     check();const rowRead=await readRow(part),folder=one(rowRead.ui.elements.filter(e=>e.tid===rowRead.workflow_ref.prefix+';FileStorageForm;colName_'+storageTidSuffix(part)&&e.label===part
        &&e.storage_entry?.kind==='folder'&&e.allowed_actions.includes('double_click')),'Destination segment is not a verified folder');
      requireValue(rowRead.file_storage?.directory===(current||'/'),'Storage parent changed');
      await click(rowRead,folder,'double_click');current+='/'+part;s=await directory(current);

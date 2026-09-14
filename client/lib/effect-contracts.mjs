@@ -15,9 +15,12 @@ export function validateEffect(effect) {
   if (!effect || typeof effect !== 'object' || Array.isArray(effect)
       || !Object.hasOwn(EFFECT_CONTRACTS, effect.kind)
       || typeof effect.resource !== 'string' || !/^[a-z]+(?:\.[a-z_]+)*$/.test(effect.resource)
-      || Object.keys(effect).some(key => !['kind', 'resource', 'allowed_roots'].includes(key))) {
+      || Object.keys(effect).some(key => !['kind', 'resource', 'allowed_roots', 'destination_policy'].includes(key))) {
     throw new Error('Invalid local effect contract');
   }
+  if (effect.destination_policy !== undefined && (effect.destination_policy !== 'session_storage'
+      || !['save', 'persist'].includes(effect.kind) || effect.resource !== 'package'
+      || effect.allowed_roots !== undefined)) throw new Error('Invalid session storage effect policy');
   if (effect.allowed_roots !== undefined) {
     if (!['save', 'persist', 'transfer'].includes(effect.kind) || !Array.isArray(effect.allowed_roots) || !effect.allowed_roots.length
         || effect.allowed_roots.some(root => typeof root !== 'string' || !root.startsWith('/')

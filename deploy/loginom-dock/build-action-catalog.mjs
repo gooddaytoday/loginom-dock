@@ -25,6 +25,24 @@ export function configurePackageRoots(catalog, roots) {
   return result;
 }
 
+export function configureSessionStorage(catalog) {
+  const result = structuredClone(catalog);
+  for (const key of ['package.save_as', 'package.save_checkpoint']) {
+    const actions = result.actions.filter(a => a.action_key === key);
+    if (actions.length !== 1) throw Error('Both package persistence contracts are required');
+    const action = actions[0];
+    if (action.effect.destination_policy === 'session_storage') continue;
+    const { allowed_roots, ...effect } = action.effect;
+    effect.destination_policy = 'session_storage'; validateEffect(effect);
+    if (!/^[1-9]\d*$/.test(action.revision) || !Number.isSafeInteger(Number(action.revision)+1)) throw Error('Invalid persistence revision');
+    action.effect = effect; action.revision = String(Number(action.revision)+1);
+    action.min_executor_revision = '1.3.0';
+    action.input_schema.properties.path = { type:'string', minLength:2, maxLength:1024,
+      pattern:'^/[^\\\\\\x00-\\x1f\\x7f]+$' };
+  }
+  return result;
+}
+
 const sha256 = value => createHash('sha256').update(value).digest('hex');
 const canonical = value => JSON.stringify(value, null, 2) + '\n';
 const parse = async path => JSON.parse(await readFile(path, 'utf8'));
@@ -88,6 +106,7 @@ async function main() {
     input: { type: 'string' }, out: { type: 'string' }, 'e2e-manifest': { type: 'string' },
     candidate: { type: 'boolean', default: false },
     'package-root': {type:'string',multiple:true},
+    'session-storage': {type:'boolean',default:false},
     version: { type: 'string' }, 'loginom-build': { type: 'string' }, compatibility: { type: 'string' },
   } });
   if (!values.out) throw new Error('--out is required');
@@ -97,6 +116,11 @@ async function main() {
   await mkdir(out, { recursive: true, mode: 0o700 });
   if ((await readdir(out)).length) throw new Error('Output directory must be empty');
   let actions = await parse(join(input, 'actions.json'));
+  if(values['session-storage']) {
+    if(values['package-root'] || !values.version || values.version.replace(/-candidate$/,'')===actions.catalog_version.replace(/-candidate$/,''))
+      throw Error('--session-storage requires a new catalog version and excludes --package-root');
+    actions=configureSessionStorage(actions);
+  }
   if(values['package-root']) {
     if(!values.version || values.version.replace(/-candidate$/,'')===actions.catalog_version.replace(/-candidate$/,''))throw new Error('--package-root requires an explicit new --version');
     actions=configurePackageRoots(actions,values['package-root']);

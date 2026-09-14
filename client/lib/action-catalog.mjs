@@ -4,7 +4,7 @@ import { ACTION_KEYS, CAPABILITIES, requireCapability } from './capability-regis
 
 export const ACTION_CATALOG_ROOT = 'viking://resources/loginom-dock/catalogs/executor-preview';
 export const CAPABILITY_ABI = 1;
-export const EXECUTOR_REVISION = '1.2.0';
+export const EXECUTOR_REVISION = '1.3.0';
 
 const SHA256 = /^[a-f0-9]{64}$/;
 const OUTCOMES = new Set(['SUCCEEDED', 'NOT_APPLIED', 'FAILED', 'AMBIGUOUS']);
@@ -254,7 +254,7 @@ export function validateCompatibility(value, { requireBuild = false } = {}) {
   if (!isObject(value)) fail('compatibility profile is required');
   exactKeys(value, new Set(['profile_id', 'loginom_build', 'platform', 'browser']), 'compatibility');
   nonEmpty(value.profile_id, 'compatibility.profile_id');
-  if (value.platform !== 'macos' || value.browser !== 'chromium') fail('unsupported MVP compatibility platform/browser');
+  if (!['macos', 'linux', 'windows'].includes(value.platform) || value.browser !== 'chromium') fail('unsupported compatibility platform/browser');
   if (value.loginom_build !== null || requireBuild) nonEmpty(value.loginom_build, 'compatibility.loginom_build');
   return value;
 }

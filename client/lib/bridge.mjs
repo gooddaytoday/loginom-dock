@@ -25,6 +25,7 @@ import { compactActionResult, userResultSchema, compactKnowledgeBundle, userWork
 import { recordLocalDiagnostics } from './local-diagnostics.mjs';
 import { createUserWorkflowBindings, userNodeTool } from './user-workflow.mjs';
 import { makePackageCleanupCode, parsePackageCleanupResult } from './package-cleanup.mjs';
+import { createStorageBinding, requireStorageDestination, withStorageIdentity } from './storage-policy.mjs';
 
 // Keep the runtime receipt byte-for-byte meaningful to reconciliation/journal
 // consumers; recovery advice is a separate MCP content block, never an effect.
@@ -126,11 +127,14 @@ export async function createBridge(config, session) {
       recoveryContext = createRecoveryContext({ remote, pinned, knownSecrets: [config.apiKey] });
       Object.assign(session.metadata, pinned.pins);
       actionRuntime = createActionRuntime({ pinned,
-        ...(replay?createCandidateNodeSupport({targetOrigin:config.loginomUrl?new URL(config.loginomUrl).origin:undefined,targetBuild:pinned.compatibility?.loginom_build}):{}),
+        ...(replay?createCandidateNodeSupport({targetOrigin:config.loginomUrl?new URL(config.loginomUrl).origin:undefined,targetBuild:pinned.compatibility?.loginom_build,storageDirectories:config.storageDirectories}):{}),
+        getStorageBinding: () => session.metadata.storageBinding ?? null,
         getNodeContractPins: () => ({...pinned.pins, skillRevision:session.metadata.skillRevision, loginomProfile:session.metadata.targetIdentity ?? pinned.compatibility}),
         artifactStore:session.artifactStore, allowCandidate: replay, onRecord: recordExecution,
         targetOrigin: config.loginomUrl ? new URL(config.loginomUrl).origin : undefined, execute: async (code, options) => {
-        const response = await browser.callTool({ name: 'browser_run_code_unsafe', arguments: { code } }, undefined, options);
+        const response = await browser.callTool({ name: 'browser_run_code_unsafe', arguments: {
+          code: config.storageDirectories ? withStorageIdentity(code, session.metadata.storageBinding) : code,
+        } }, undefined, options);
         return parseCapabilityResult(response);
       } });
     }
@@ -188,6 +192,8 @@ export async function createBridge(config, session) {
           await admitHostArtifacts(args.host_context_token);
           const preparationRequest = { operation_id: args.operation_id ?? 'prepare', intent: args.intent ?? 'new_draft',
             package_path: args.package_path ?? null, workflow_ref: args.workflow_ref ?? null };
+          if (config.storageDirectories && preparationRequest.package_path)
+            requireStorageDestination(preparationRequest.package_path, config.storageDirectories, 'packages');
           const workspaceOptions = actionRuntime ? { loginomUrl: config.loginomUrl,
             compatibility: pinnedActions.compatibility, sessionId: session.metadata.sessionId,
             operationId: preparationRequest.operation_id, intent: preparationRequest.intent,
@@ -209,6 +215,11 @@ export async function createBridge(config, session) {
                 const response = await browser.callTool({ name: 'browser_run_code_unsafe', arguments: { code } }, undefined, { timeout: 125000 });
                 const state = parseWorkspacePreparation(response);
                 if (state.status === 'READY') {
+                  if (config.storageDirectories) session.metadata.storageBinding = createStorageBinding({
+                    sessionId: session.metadata.sessionId, origin: new URL(config.loginomUrl).origin,
+                    build: state.target.loginom_build, documentId: state.document_id,
+                    account: state.loginom_account, directories: config.storageDirectories,
+                  });
                   const geometry = await browser.callTool({ name: 'browser_run_code_unsafe', arguments: {
                     code: makeBrowserGeometryCode({ session_id: session.metadata.sessionId,
                       operation_id: state.operation_id, document_id: state.document_id,
@@ -233,10 +244,11 @@ export async function createBridge(config, session) {
             const ready = session.metadata.workspaceReady === true;
             const bundle = first ? compactKnowledgeBundle(actionRuntime.describe({
               action_keys: ['package.save_checkpoint', 'package.save_as'],
-              node_types: ['imports.text', 'transform.calculator', 'transform.group_data', 'transform.sorting', 'transform.reform_columns'],
+              node_types: actionRuntime.describe().available_node_types,
             })) : null;
             const result = { prepared: ready, sessionId: session.metadata.sessionId, skillRevision: prepared.detail.revision,
               loginomUrl: config.loginomUrl, workspace, result_version: 'user-v1', input_artifacts: session.artifactStore.list(),
+              ...(config.storageDirectories ? { storage_directories: config.storageDirectories } : {}),
               knowledge: bundle ?? { reused: true, skillRevision: prepared.detail.revision },
               ...(first ? { instructions: userWorkflowInstructions } : {}) };
             await logResult('dock_prepare', result);
