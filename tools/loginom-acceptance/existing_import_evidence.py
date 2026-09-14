@@ -143,8 +143,11 @@ def _verify_existing_import_output(events, seed_request, request, source_bytes, 
     # Keep checking the label against the independently verified seed rather
     # than requiring the caller to repeat that optional display property.
     expected_label = request['target'].get('label', seed_request['target'].get('label'))
+    # An explicit mapping has its own ordered field/identity proof below.
+    # The old output order applies only when the caller preserves mappings.
     output = _verify_text_import_output(events, request, source_bytes, settings_override=final,
-                                      output_columns_override=output_columns, target_label_override=expected_label)
+                                      output_columns_override=None if request.get('mappings') else output_columns,
+                                      target_label_override=expected_label)
     failures.extend(output['failures'])
     if not output.get('execution_id') or output['execution_id'] == seed.get('execution_id'):
         failures.append('new_execution_after_patch_required')

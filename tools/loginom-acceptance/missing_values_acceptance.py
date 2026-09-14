@@ -8,7 +8,7 @@ from user_result_evidence import normalize_user_evidence
 from prepare_binding import verified_prepare_v1
 from grouping_node_acceptance import model_completed
 from node_public_acceptance_evidence import verify_public_nodes_and_saves,verify_public_delivery
-from artifact_delivery_evidence import verify_delivered_import_output
+from artifact_delivery_evidence import verify_delivered_import_output,verify_delivered_existing_import_output
 from node_configuration_evidence import verify_configuration_readback
 from node_procedure_evidence import verify_internal_sequence
 from calculator_output_evidence import verify_calculator_output
@@ -142,7 +142,13 @@ def audit(run,candidate,reopen=None):
     add('source_readback:'+r['operation_id'],verify_configuration_readback(events,r))
     delivery_id=r['parameters']['source']['upload_operation_id'].removesuffix(':upload');calls=[c for c in ev['calls'] if c['tool'] not in (PREFIX+'dock_artifact_deliver',PREFIX+'dock_artifact_delivery_status') or c['arguments'].get('operation_id')==delivery_id];ids={(c['session_id'],c['tool_call_id']) for c in calls}
     delivery=verify_public_delivery(dict(ev,calls=calls,tools=[t for t in ev['tools'] if (t['session_id'],t['tool_call_id']) in ids]),r,prepared);add('delivery:'+r['operation_id'],delivery)
-    if delivery['passed']:add('source_bytes:'+r['operation_id'],verify_delivered_import_output(events,r,(WORK/'fixtures/missing-values'/file).read_bytes(),delivery['delivery'],PIN))
+    if delivery['passed']:
+     body=(WORK/'fixtures/missing-values'/file).read_bytes()
+     if r['target']['kind']=='existing':
+      proof=verify_delivered_existing_import_output(events,imports[label],r,body,delivery['delivery'],PIN,
+       seed_source_bytes=(WORK/'fixtures/missing-values'/source_versions[key]).read_bytes())
+     else:proof=verify_delivered_import_output(events,r,body,delivery['delivery'],PIN)
+     add('source_bytes:'+r['operation_id'],proof)
     imports[label]=r;source_versions[key]=file
    elif r['target']['type']=='preprocessing.data_recovery':missing.append((r,res,label,copy.deepcopy(imports),copy.deepcopy(source_versions)))
    else:raise ValueError('Unexpected node type')
