@@ -7734,3 +7734,11 @@ Kit acceptance7.1: 412 файлов, goal/auditor неизменны, модел
 Полная автономная приёмка, save и независимый reopen пока не пройдены.
 
 [Исправление, pins и ограничения](missing-values-target-selection-fix-2026-09-13.md).
+# Node14: run7 FAIL на импорте120 — 14 сентября 2026
+
+Полный Hermes run7 завершён: 4 SUCCEEDED imports, 1 NOT_APPLIED placement,
+1 AMBIGUOUS configure (отсутствует horizontal scroller при видимых5полях).
+Missing Values/save/reopen не достигнуты, полный аудит FAIL. Model/launcher0,
+без timeout, собственные процессы закрыты, локальная квитанция слота сохранена.
+Продолжается адресная live-диагностика импорта; новая модель не запущена.
+[Отчёт и доказательства](missing-values-autonomous-acceptance-7-2026-09-14.md).
