@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "catalog_version": "2026.09.04-mvp.1",
+  "catalog_version": "2026.09.13-node14.1-candidate",
   "e2e_commit": "2cad5602158fd2e4836d821d644a2b8d92f571a2",
   "source_files": {
     "bg/helpers/filedialog.ts": "a6f7aa54eb48a3d1e330820c5322e03d7d139a172f82f344253b534e48897696",
@@ -22,6 +22,7 @@
         "workflow.workarea",
         "workflow.node",
         "workflow.node_label",
+        "component.preprocessing.data_recovery",
         "component.imports.text",
         "component.imports.lgd",
         "component.transform.group_data",

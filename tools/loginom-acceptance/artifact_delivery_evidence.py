@@ -17,8 +17,19 @@ def verify_delivered_import_output(events, request, source_bytes, delivery, runt
     return _verify_delivered_import(events, request, source_bytes, delivery, runtime_revision)
 
 
-def _verify_delivered_import(events, request, source_bytes, delivery, runtime_revision, *, replay=None, require_replay=False):
-    result = verify_text_import_output(events, request, source_bytes)
+def verify_delivered_existing_import_output(events, seed_request, request, source_bytes, delivery, runtime_revision, *, seed_source_bytes):
+    """Bind replacement delivery/output to an independently verified earlier seed."""
+    return _verify_delivered_import(events, request, source_bytes, delivery, runtime_revision,
+                                   seed_request=seed_request, seed_source_bytes=seed_source_bytes)
+
+
+def _verify_delivered_import(events, request, source_bytes, delivery, runtime_revision, *, replay=None, require_replay=False,
+                             seed_request=None, seed_source_bytes=None):
+    if seed_request is None:
+        result = verify_text_import_output(events, request, source_bytes)
+    else:
+        from existing_import_evidence import verify_existing_import_output
+        result = verify_existing_import_output(events, seed_request, request, source_bytes, seed_source_bytes=seed_source_bytes)
     failures = list(result['failures'])
     source = source_with_delivery_metadata(events, request['parameters']['source'])
     path = request['parameters']['settings']['source']['source_path']

@@ -124,7 +124,17 @@ export async function openPreparedOutputPort(page,task,readNode=readPreparedNode
    const graph=r.graph.FDiagram.FmxGraph,dom=exact(r.portTid)[0],box=dom.getBoundingClientRect(),gb=graph.container.getBoundingClientRect();
    if(!graph.container.contains(dom)||box.width<=0||box.height<=0)fail('Port drawing unavailable');
    if(graph.getCellAt(box.x-gb.x+graph.container.scrollLeft+box.width/2,box.y-gb.y+graph.container.scrollTop+box.height/2)!==r.port.FCell)fail('Port native hit changed');
-   r.portDom=dom;r.phase='menu_issued';return {phase:r.phase};
+   // Hover may draw a transient SVG copy over a port. Use an observed point
+   // directly; the following menu check must still bind the exact native port.
+   const width=globalThis.innerWidth,height=globalThis.innerHeight;
+   if(!Number.isFinite(width)||!Number.isFinite(height))fail('Port viewport unavailable');
+   let point=null;
+   for(const dy of [.5,.25,.75])for(const dx of [.5,.25,.75]){
+    const x=box.x+box.width*dx,y=box.y+box.height*dy,hit=document.elementFromPoint(x,y);
+    if(x>=0&&y>=0&&x<width&&y<height&&hit&&(hit===dom||dom.contains(hit)))point??={x,y};
+   }
+   if(!point)fail('Port has no observed interaction point');
+   r.portDom=dom;r.phase='menu_issued';return {phase:r.phase,point};
   }
   if(mode==='menu'||mode==='open_issued') {
    const visible=e=>e.checkVisibility({checkVisibilityCSS:true});
@@ -160,10 +170,9 @@ export async function openPreparedOutputPort(page,task,readNode=readPreparedNode
   const before=await readNode(page,task.binding);
   if(before?.verified!==true||before.surface!=='graph'||before.locked!==false)throw Error('Prepared unlocked graph required for port opening');
   const target=await inspect('begin');trace.push({event:direction+'_port_reserved',...target});
-  await at(target.port_tid).click({button:'right',trial:true,timeout:remaining()});
   if(JSON.stringify(await readNode(page,task.binding))!==JSON.stringify(before))throw Error('Prepared node changed before port opening');
-  await inspect('menu_issued');effect=true;
-  await at(target.port_tid).click({button:'right',timeout:remaining()});
+  const issued=await inspect('menu_issued');effect=true;
+  await page.mouse.click(issued.point.x,issued.point.y,{button:'right'});
   await page.locator('[data-tid="mn;mniConfigurePort"]:visible').waitFor({state:'visible',timeout:remaining()});
   trace.push({event:direction+'_port_menu_verified',...await inspect('menu')});
   await page.locator('[data-tid="mn;mniConfigurePort"]:visible').click({trial:true,timeout:remaining()});await inspect('open_issued');

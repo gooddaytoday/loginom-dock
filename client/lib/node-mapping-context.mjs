@@ -19,10 +19,10 @@ export function readMappingBrowser(prefix) {
   const fail=reason=>({verified:false,reason,source_identity_verified:false});
   const types={1:'boolean',2:'datetime',3:'real',4:'integer',5:'string',6:'variant'};
   const exact=tid=>[...document.querySelectorAll('[data-tid]')].filter(e=>e.getAttribute('data-tid')===tid);
-  const forms=['ColumnsMappingEngineOutputPortWizard','DerivedDataSourceOutputSocketWizard','TuneDataSourceMappingWizard','DerivedDataSourceMappingEngineOutputPortWizard'];
+  const forms=['ColumnsMappingEngineOutputPortWizard','DerivedDataSourceOutputSocketWizard','DataSetOutputSocketWizard','TuneDataSourceMappingWizard','DerivedDataSourceMappingEngineOutputPortWizard'];
   const candidates=forms.flatMap(form=>exact(prefix+';WizrdMCF;'+form).filter(e=>e.checkVisibility({checkVisibilityCSS:true})).map(root=>({form,root})));
   if(candidates.length!==1)return fail('mapping_root');
-  const {form,root}=candidates[0],input=form==='TuneDataSourceMappingWizard',grouped=['DerivedDataSourceOutputSocketWizard','DerivedDataSourceMappingEngineOutputPortWizard'].includes(form);
+  const {form,root}=candidates[0],input=form==='TuneDataSourceMappingWizard',grouped=['DerivedDataSourceOutputSocketWizard','DataSetOutputSocketWizard','DerivedDataSourceMappingEngineOutputPortWizard'].includes(form);
   const base=prefix+';WizrdMCF;'+form+';';
   if([...document.querySelectorAll('.x-mask,.x-mask-msg,.bg-mask-message')].some(e=>e.checkVisibility({checkVisibilityCSS:true})))return fail('mapping_mask');
   const grids=['grdSourceColumns;tbl','grdTargetColumns;tbl'].map(s=>exact(base+s));

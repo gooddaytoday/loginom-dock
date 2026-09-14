@@ -150,12 +150,12 @@ test('target incarnation confirmation waits for the same identity twice', async 
   assert.equal(f.records.at(-1).readiness.required_samples, 2);
 });
 
-function recoveryFixture({ initialSequence = 0, refusals = 1, receipt = {}, changedIdentity = false, changedIntent = false, recordFailure = false, confirmIdentity } = {}) {
+function recoveryFixture({ initialSequence = 0, refusals = 1, receipt = {}, changedIdentity = false, changedIntent = false, recordFailure = false, confirmIdentity, refreshReplacedBody, onRefresh, now=()=>1, signal } = {}) {
   let reads = 0, mutations = 0; const records = [];
   const operation = {nodeStepSequence:initialSequence,id:'recovery',action:{action_key:'node.apply',revision:'1'},deadline:10000,
     checkpoint:{document_id:'doc',workflow_ref:{prefix:'MF;TF-1',tab_tid:'tab'}}};
-  const channel = createNodeProcedure({operation,now:()=>1,wait:async()=>{},maxSteps:20,targetOrigin:'http://example.test',targetBuild:'7.4.2',
-    record:async e=>{records.push(e);if(recordFailure && e.phase==='node_step_refresh_authorized')throw Error('disk failure');return structuredClone(e)},
+  const channel = createNodeProcedure({operation,now,signal,wait:async()=>{},maxSteps:20,targetOrigin:'http://example.test',targetBuild:'7.4.2',
+    record:async e=>{records.push(e);if(e.phase==='node_step_refresh_authorized'){if(recordFailure)throw Error('disk failure');onRefresh?.();}return structuredClone(e)},
     wrapMutation:(code,reference)=>({reference}),execute:async code=>{
       if(typeof code==='string') {reads++;return {status:'SUCCEEDED',output:{origin:'http://example.test',loginom_build:'7.4.2',
         workflow_ref:{tab_tid:'tab',prefix:'MF;TF-1'},dom_epoch:{document:'doc',revision:reads},scan:{complete:true},wizard:{status:'absent'},
@@ -166,7 +166,7 @@ function recoveryFixture({ initialSequence = 0, refusals = 1, receipt = {}, chan
         status:mutations>refusals?'SUCCEEDED':'NOT_APPLIED',phase:mutations>refusals?'completed':'preconditions',
         error:{code:'UI_EPOCH_CHANGED'},trace:[],...receipt};
     }});
-  const perform=()=>channel.perform({condition:'same field editor',ready:()=>true,identity:s=>s.binding,confirmIdentity,
+  const perform=()=>channel.perform({condition:'same field editor',ready:()=>true,identity:s=>s.binding,confirmIdentity,refreshReplacedBody,
     resolve:s=>({verb:'fill',ref:s.ui.elements[0].ref,text:s.desired})});
   return {perform,records,get mutations(){return mutations}};
 }
@@ -495,4 +495,44 @@ test('duplicate global role editor and its dropdown use bounded roots with stric
   const read=()=>channel.observe({condition:'bound duplicate editor',ready:()=>true,timeoutMs:2000});
   if(['bound','dropdown'].includes(mode)){await read();assert.deepEqual(roots,[mode==='dropdown'?'choices':'editor']);}else await assert.rejects(read());
  }
+});
+test('missing values prompt is read through its portal and requires a bound constant field',async()=>{
+ for(const fault of ['none','title','field','method','control','signature']){
+  const node={document_id:'doc',workflow_id:'wf',node_id:'node'},ref={workflow_id:'wf',prefix:'MF;TF-1',tab_tid:'MF;cntMain;cntWorkspace;Workspace;t.br;tb-1',navigation_path:[{tid:'path',label:'workflow'}]},base='MF;TF-1;WizrdMCF';
+  const native={verified:true,node_context:{verified:true,...node,surface:'wizard',tid:base},method_context:{field_name:'Note',record_id:'r'},fields:[{name:fault==='field'?'other':'Note',record_id:'r',used:true,type:'string',method:fault==='method'?'mean':'constant'}]};
+  const state={origin:'http://example.test',loginom_build:'7.4.2',workflow_ref:ref,dom_epoch:{document:'doc'},prepared_node_context:native.node_context,scan:{complete:true},wizard:{status:'observed',stage:'missing_values',root_ref:'wizard',root_tid:base},ui:{masks:[],dialogs:[{ref:'portal',title:fault==='title'?'Other':'Редактирование значения замены для пропусков'}],truncated:{dialogs:false,masks:false},elements:['msgbox;cnt;cnt;txt','msgbox;tlb;ok','msgbox;tlb;cancel'].map(tid=>({tid,ref:tid,identity:{anchor_tid:tid},signature:{dialog_ref:fault==='signature'?'other':'portal'}}))}};
+  if(fault==='control')state.ui.elements.pop();let clock=1;const roots=[];
+  const channel=createNodeProcedure({operation:{id:'mv-prompt',action:{action_key:'node.apply',revision:'1'},deadline:10000},preparedNodeContext:{document_id:'doc',workflow_ref:{...ref,workflow_id:'wf'},node},targetOrigin:state.origin,targetBuild:state.loginom_build,now:()=>clock++,wait:async()=>{clock+=1000},record:async e=>structuredClone(e),execute:async code=>{
+   if(code.includes('function readMissingValuesBrowser'))return structuredClone(native);
+   if(!code.includes('"discover_roots":true'))roots.push(/"root_ref":"([^"]+)"/.exec(code)?.[1]);
+   return {status:'SUCCEEDED',output:structuredClone(state)};
+  }});
+  const read=()=>channel.observe({condition:'owned prompt',readMissingValues:true,ready:()=>true,timeoutMs:2000});
+  if(fault==='none'){await read();assert.ok(roots.includes('portal'));}else await assert.rejects(read());
+ }
+});
+
+test('a source body proof permits only one strict stale refusal refresh',async()=>{
+ for(const refusals of [1,2]){
+  const f=recoveryFixture({refusals,receipt:{error:{code:'UI_REFERENCE_STALE'}},refreshReplacedBody:()=>true});
+  if(refusals===1)await f.perform();else await assert.rejects(f.perform());
+  assert.equal(f.mutations,2);const events=f.records.filter(e=>e.phase==='node_step_refresh_authorized');
+  assert.equal(events.length,1);assert.equal(events[0].reason,'prepared_graph_body_replaced');
+ }
+});
+for(const [name,options] of Object.entries({
+ noOptIn:{refreshReplacedBody:undefined},unproved:{refreshReplacedBody:()=>false},
+ effect:{receipt:{effect_possible:true}},ambiguous:{receipt:{status:'AMBIGUOUS'}},cleanup:{receipt:{cleanup_complete:false}},
+ gesture:{receipt:{trace:[{event:'ui_gesture_applied'}]}},preconditions:{receipt:{trace:[{event:'ui_preconditions_verified'}]}},
+ missingTrace:{receipt:{trace:undefined}},wrongPhase:{receipt:{phase:'applying'}},wrongError:{receipt:{error:{code:'UI_CONTEXT_CHANGED'}}},
+ journal:{recordFailure:true},identity:{changedIdentity:true},intent:{changedIntent:true},
+}))test('source body refresh refuses '+name,async()=>{
+ const f=recoveryFixture({refreshReplacedBody:()=>true,...options,receipt:{error:{code:'UI_REFERENCE_STALE'},...options.receipt}});
+ await assert.rejects(f.perform());assert.equal(f.mutations,1);
+});
+for(const kind of ['cancel','deadline'])test('source body refresh respects fresh '+kind,async()=>{
+ const controller=new AbortController();let clock=1;
+ const f=recoveryFixture({receipt:{error:{code:'UI_REFERENCE_STALE'}},refreshReplacedBody:()=>true,now:()=>clock,signal:controller.signal,
+ onRefresh:()=>{if(kind==='cancel')controller.abort();else clock=10000;}});
+ await assert.rejects(f.perform());assert.equal(f.mutations,1);
 });

@@ -1,5 +1,5 @@
 /** Shared 02/03 contract. Runtime publication of node.apply belongs to 03. */
-export type NodeType = 'imports.text' | 'transform.calculator' | 'transform.reform_columns'
+export type NodeType = 'preprocessing.data_recovery' | 'transform.date_time' | 'imports.text' | 'transform.calculator' | 'transform.reform_columns'
   | 'research.duplicates' | 'transform.replace_columns' | 'transform.filter_data' | 'transform.group_data' | 'transform.sorting'
   | 'transform.join_data' | 'transform.union_data';
 export interface WorkflowRef { workflow_id: string; tab_tid: string; prefix: string; navigation_path: {tid: string; label: string}[] }
@@ -35,7 +35,7 @@ export interface NodeHandler<T extends NodeType, P> {
   configure(context: NodeProcedureContext, parameters: P): Promise<VerifiedNodePhase>;
   /** Pure projection of accepted receipts; never executes or rereads the UI. */
   configurationReadback?(context: {node: NodeRef; operation_id: string;
-    phases: Array<PhaseReceipt & {value: VerifiedNodePhase}>}): TextImportConfigurationReadback | CalculatorConfigurationReadback | GroupingConfigurationReadback | SortingConfigurationReadback | ReplacementConfigurationReadback | DuplicatesConfigurationReadback | JoinConfigurationReadback;
+    phases: Array<PhaseReceipt & {value: VerifiedNodePhase}>}): TextImportConfigurationReadback | CalculatorConfigurationReadback | GroupingConfigurationReadback | SortingConfigurationReadback | MissingValuesConfigurationReadback | ReplacementConfigurationReadback | DuplicatesConfigurationReadback | JoinConfigurationReadback;
 }
 export interface VerifiedNodePhase { verified: true; cleanup_complete: true; effect_possible: boolean }
 export interface NodeProcedureContext {
@@ -52,7 +52,7 @@ export interface NodeApplyResult {
   execution: NodeExecution; output: NodeOutput;
   /** A local node checkpoint never proves that the package was saved. */
   package_saved: false; cleanup_complete: boolean; warnings: string[];
-  configuration?: {status: 'applied' | 'discarded'; readback?: TextImportConfigurationReadback | CalculatorConfigurationReadback | GroupingConfigurationReadback | SortingConfigurationReadback | ReplacementConfigurationReadback | DuplicatesConfigurationReadback | JoinConfigurationReadback};
+  configuration?: {status: 'applied' | 'discarded'; readback?: TextImportConfigurationReadback | CalculatorConfigurationReadback | GroupingConfigurationReadback | SortingConfigurationReadback | MissingValuesConfigurationReadback | ReplacementConfigurationReadback | DuplicatesConfigurationReadback | JoinConfigurationReadback};
   checkpoint_kind?: 'local_node_checkpoint' | 'local_node_cancellation' | 'local_node_stopped' | 'local_node_failed';
   persisted_package_verified?: false; pending_phase?: PhaseName | null; error?: NodeError;
 }
@@ -172,7 +172,7 @@ export interface NodeJobSnapshot {
   outcome: NodeApplyOutcome | null; error: NodeError | null;
 }
 export const NODE_CONTRACT_REVISION: string;
-export const NODE_TYPES: Readonly<Record<NodeType, {type: NodeType; title: string; tabular_inputs: number; tabular_outputs: number; additional_tabular_inputs: boolean; modes: readonly string[]}>>;
+export const NODE_TYPES: Readonly<Record<NodeType, {type: NodeType; title: string; palette_group: 'Импорт' | 'Трансформация' | 'Предобработка'; tabular_inputs: number; tabular_outputs: number; additional_tabular_inputs: boolean; modes: readonly string[]}>>;
 export function validateNodeReference(ref: unknown): void;
 export function validateNodeTargetRequest(request: unknown): NodeTargetRequest;
 export function describeNodeTypes(types: NodeType[], pins?: object, actions?: Map<string, object>, candidateHandlers?: Map<NodeType, {revision: string}>): object[];
@@ -197,4 +197,18 @@ export interface DuplicatesConfigurationReadback {
     usage_type: 0 | 3 | 4; input_field: {field_id: string; name: string; label: string; type: string; index: number; source_name: string; source_field_id: string}}>;
   input_mapping: {port: 0; fields: Array<{name: string; source_name: string}>};
   output_mapping: {port: 0; fields: Array<{name: string; label: string; type: string; source_name: string}>};
+}
+
+export interface MissingValuesParameters {
+  fields: Array<{field:{kind:'input_field';name:string};method:'mean'} | {field:{kind:'input_field';name:string};method:'constant';value:string}>;
+  max_nulls_percent:number; ordered:false;
+}
+export interface MissingValuesConfigurationReadback {
+  kind:'missing_values';scope:'observed_before_verified_finish';node:NodeRef;
+  receipt_ids:string[];values_are:'observed_ui_values';package_persistence_verified:false;
+  mode:'impute';ordered:false;max_nulls_percent:number;
+  fields:Array<{name:string;label:string;type:string;data_kind:string;used:boolean;method?:'mean'|'constant';value?:string}>;
+  options:Record<string,{value:boolean|number|string;switch_pressed:boolean}>;
+  input_mapping:SortingConfigurationReadback['input_mapping'];
+  output_mapping:SortingConfigurationReadback['output_mapping'];
 }

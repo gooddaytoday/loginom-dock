@@ -90,7 +90,7 @@ async function readGraph(page, task) {
 // Fixed UI gestures used only through the enclosing graph phase. The complete
 // pre-effect snapshot must still match immediately before the gesture.
 async function mutateGraph(page, task, read) {
-  let effectPossible=false, held=false, transient=false, outcome;
+  let effectPossible=false, held=false, transient=false, outcome, placementRefusal;
   const remaining=()=>{if(page[Symbol.for('loginom-dock.node-target-cancel')]?.has(task.effect.id))throw new Error('Node target cancelled');const value=task.deadline-Date.now();if(value<=0)throw new Error('Graph deadline');return value;};
   const ensureContext=()=>page.evaluate(({request,epoch})=>{
     const p=globalThis.__loginomDockPreparationV1;
@@ -100,7 +100,7 @@ async function mutateGraph(page, task, read) {
     if(p?.document!==document||p.id!==request.document_id||!r||tab.length!==1||tab[0]!==r.tab||!tab[0].classList.contains('x-tab-active')||root.length!==1||p.nodeTargetDomEpochs?.objects.get(root[0])!==epoch)throw new Error('Node target document/workflow/DOM epoch changed');
   },{request:task.request,epoch:task.effect.before.dom_epoch});
   const find=value=>page.locator('[data-tid='+JSON.stringify(value)+']');
-  const wait=async(name,probe)=>{const end=Math.min(task.deadline,Date.now()+15000);while(remaining() && Date.now()<end){await ensureContext();const v=await probe();if(v)return v;await page.waitForTimeout(Math.min(80,remaining()));}throw new Error('Readiness timeout: '+name);};
+  const wait=async(name,probe,reserve=0)=>{const end=Math.min(task.deadline-reserve,Date.now()+15000);while(remaining() && Date.now()<end){await ensureContext();const v=await probe();if(v)return v;await page.waitForTimeout(Math.max(0,Math.min(80,end-Date.now())));}throw new Error('Readiness timeout: '+name);};
   const targetTid=async ref=>page.evaluate(id=>{
     const d=bg.app.Application.FInstance.FMainForm.Items.Workspace.getActiveTab().Controller.FController.FDiagram;
     const matches=d.FNodes.FCollection.filter(n=>n.FGuid===id);if(matches.length!==1)throw new Error('Node disappeared');
@@ -120,18 +120,15 @@ async function mutateGraph(page, task, read) {
     const p=task.effect.parameters,kind=task.effect.kind;
     if(kind==='create'){
       const title=task.types[p.type].title.replace(/\s/g,'_');
-      const palette=task.request.workflow_ref.prefix+';ModelForm;colVendors_Компоненты>'+(p.type==='imports.text'?'Импорт':p.type==='research.duplicates'?'Исследование':'Трансформация')+'>'+title+';TreeText';
+      const palette=task.request.workflow_ref.prefix+';ModelForm;colVendors_Компоненты>'+task.types[p.type].palette_group+'>'+title+';TreeText';
       const origin=await find(task.request.workflow_ref.prefix+';ModelForm;cmpDiagram').boundingBox();
       const target={x:origin.x+p.position.x,y:origin.y+p.position.y};
       const reachable=await find(task.request.workflow_ref.prefix+';ModelForm;cmpDiagram').evaluate((e,p)=>{
         const b=e.getBoundingClientRect(),hit=document.elementFromPoint(p.x,p.y);
-        return p.x>=0&&p.y>=0&&p.x<innerWidth&&p.y<innerHeight&&p.x>=b.x&&p.x<b.right&&p.y>=b.y&&p.y<b.bottom&&!!hit&&(hit===e||e.contains(hit));
+        return {reachable:p.x>=0&&p.y>=0&&p.x<innerWidth&&p.y<innerHeight&&p.x>=b.x&&p.x<b.right&&p.y>=b.y&&p.y<b.bottom&&!!hit&&(hit===e||e.contains(hit)),
+          graph_rect:{x:b.x,y:b.y,width:b.width,height:b.height},viewport:{width:innerWidth,height:innerHeight},screen_point:p,hit_inside:!!hit&&(hit===e||e.contains(hit))};
       },target);
-      if(!reachable)throw new Error('Requested drop surface is not reachable');
-      // Research components can be below the palette viewport even in a
-      // maximized window. Reveal only the exact pinned component; drag still
-      // checks the hit target and unchanged graph before mouse-down.
-      await find(palette).scrollIntoViewIfNeeded({timeout:remaining()});
+      if(!reachable.reachable){placementRefusal={kind:'unreachable_drop_surface',requested_position:p.position,...reachable};throw new Error('Requested drop surface is not reachable');}
       await drag(find(palette),target);
     }else if(kind==='rename'){
       const tid=await targetTid(p.ref);await point(find(tid+';Label;Label'));effectPossible=true;
@@ -179,8 +176,12 @@ async function mutateGraph(page, task, read) {
           if(top&&(top===e||e.contains(top)))return {x:q.x,y:q.y};}}
         throw new Error('Owned link has no reachable curve point');
       });
-      effectPossible=true;await page.mouse.click(hit.x,hit.y);
-      await find(linkTid+';TargetBend').waitFor({state:'visible',timeout:remaining()});
+      // Selection can fail to appear. Leave time to return its ambiguous receipt
+      // before the enclosing transport deadline, without repeating the gesture.
+      if(remaining()<=1000)throw new Error('Insufficient deadline for owned link selection');
+      await ensureContext();effectPossible=true;await page.mouse.click(hit.x,hit.y);
+      const bend=find(linkTid+';TargetBend');
+      await wait('owned_link_selection_visible',async()=>await bend.count()===1&&await bend.isVisible(),1000);
       const selected=await page.evaluate(()=>{const d=bg.app.Application.FInstance.FMainForm.Items.Workspace.getActiveTab().Controller.FController.FDiagram;
         return d.FmxGraph.getSelectionCells().map(c=>({edge:c.edge===true,tid:d.FmxGraph.view.getState(c)?.shape?.node?.getAttribute('data-tid')}));});
       if(selected.length!==1 || selected[0].edge!==true || selected[0].tid!==linkTid)throw new Error('Deletion selection includes another object');
@@ -200,7 +201,7 @@ async function mutateGraph(page, task, read) {
     await page.mouse.move(10,10);
     const after=await wait('graph_effect_visible_and_drag_idle',async()=>{try{const g=await read(page,task);return g.interaction_ready&&JSON.stringify(g)!==JSON.stringify(before)?g:null;}catch{return null;}});
     outcome={status:'SUCCEEDED',effect_possible:true,after};
-  }catch(error){outcome={status:effectPossible?'AMBIGUOUS':'NOT_APPLIED',effect_possible:effectPossible,error:String(error.message)};}
+  }catch(error){outcome={status:effectPossible?'AMBIGUOUS':'NOT_APPLIED',effect_possible:effectPossible,error:String(error.message),...(placementRefusal?{placement_refusal:placementRefusal}:{})};}
   finally{try{if(held){await page.mouse.up();held=false;}if(transient==='delete'){const cancel=find('msgbox;tlb;no');if(await cancel.isVisible())await cancel.click({timeout:3000});}else if(transient)await page.keyboard.press('Escape');transient=false;outcome.cleanup_complete=true;}catch(error){outcome={...outcome,status:'AMBIGUOUS',cleanup_complete:false,cleanup_error:String(error.message)};}}
   return outcome;
 }
@@ -251,9 +252,12 @@ export function createNodeTargetBrowserAdapter({execute,origin,build,pinned}) {
       if(!graph.interaction_ready)throw new Error('Drag surface is not ready');
       if(value.target.kind==='new'){
         const title=NODE_TYPES[value.target.type].title.replace(/\s/g,'_');
-        const tid=value.workflow_ref.prefix+';ModelForm;colVendors_Компоненты>'+(value.target.type==='imports.text'?'Импорт':value.target.type==='research.duplicates'?'Исследование':'Трансформация')+'>'+title+';TreeText';
+        const tid=value.workflow_ref.prefix+';ModelForm;colVendors_Компоненты>'+NODE_TYPES[value.target.type].palette_group+'>'+title+';TreeText';
         const available=await call(`async page => page.locator('[data-tid='+${JSON.stringify(JSON.stringify(tid))}+']').evaluateAll(es=>es.length===1 && !!es[0].getBoundingClientRect().width && !es[0].closest('.x-item-disabled,.x-grid-row-disabled'))`,deadline);
         if(!available)throw new Error('Component unavailable in the observed platform/license or palette');
+        // Palette rows below the viewport still have nonzero DOM bounds. Bring
+        // this exact admitted component into view before capturing the drag.
+        await call(`async page => {const row=page.locator('[data-tid='+${JSON.stringify(JSON.stringify(tid))}+']');await row.scrollIntoViewIfNeeded({timeout:${Math.max(1,Math.min(15000,deadline-Date.now()))}});return row.evaluate(e=>{const b=e.getBoundingClientRect(),x=b.x+b.width/2,y=b.y+b.height/2,hit=document.elementFromPoint(x,y);if(x<0||y<0||x>=innerWidth||y>=innerHeight||!(hit===e||e.contains(hit)))throw Error('Palette row is covered after scrolling');return true;});}`,deadline);
       }
       if(value.target.kind==='existing' && graph.nodes.find(n=>n.ref.node_id===value.target.ref.node_id)?.locked)throw new Error('Node is locked');
       // Cycles are rejected against the full tabular graph before any creation.

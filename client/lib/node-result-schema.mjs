@@ -88,6 +88,22 @@ const unionConfigurationReadback=object({kind:values('union'),scope:values('obse
  input_mappings:{...array(object({port:{type:'integer',minimum:0,maximum:14},autosync:bool,fields:boundedFields(readbackMappingField)})),minItems:2,maxItems:15},
  output_mapping:object({port:{type:'integer',const:0},autosync:bool,fields:boundedFields(object({...readbackMappingField.properties,excluded:bool}))}),
  package_persistence_verified:{type:'boolean',const:false}});
+const missingValuesThreshold={type:'integer',minimum:0,maximum:100};
+const disabled={type:'boolean',const:false};
+const missingValuesField={name:str,label:str,type:str,data_kind:str};
+const missingValuesConfigurationReadback=object({kind:values('missing_values'),scope:values('observed_before_verified_finish'),node:ref,
+ receipt_ids:{...array(str),minItems:5,maxItems:5},values_are:values('observed_ui_values'),mode:values('impute'),
+ fields:{...boundedFields({anyOf:[
+  object({...missingValuesField,used:disabled}),
+  object({...missingValuesField,type:values('integer','real'),data_kind:values('Непрерывный'),used:{type:'boolean',const:true},method:values('mean')}),
+  object({...missingValuesField,type:values('string'),data_kind:values('Дискретный'),used:{type:'boolean',const:true},method:values('constant'),value:str}),
+ ]}),minItems:1},ordered:disabled,max_nulls_percent:missingValuesThreshold,
+ options:object({pedUseQuality:object({value:disabled,switch_pressed:disabled}),pedOrderedSample:object({value:disabled,switch_pressed:disabled}),
+  pedMaxNullsPercent:object({value:missingValuesThreshold,switch_pressed:disabled}),
+  'RandSeedEdit;edtRandSeed':object({value:{type:'string',maxLength:32},switch_pressed:disabled})}),
+ input_mapping:object({port:{type:'integer',const:0},autosync:bool,fields:boundedFields(readbackMappingField)}),
+ output_mapping:object({port:{type:'integer',const:0},autosync:bool,fields:boundedFields(object({...readbackMappingField.properties,excluded:bool}))}),
+ package_persistence_verified:disabled});
 const dateTimeConfigurationReadback=object({kind:values('date_time'),scope:values('observed_before_verified_finish'),node:ref,
  receipt_ids:{...array(str),minItems:5,maxItems:5},values_are:values('observed_ui_values'),mode:values('calendar'),
  fields:{...boundedFields(object({name:str,matrix:{...array(object({index:integer,record_id:str,func:{type:'integer',minimum:0,maximum:18},iso:bool,
@@ -103,7 +119,7 @@ const duplicatesConfigurationReadback=object({kind:values('duplicates'),scope:va
  input_mapping:object({port:{type:'integer',const:0},fields:boundedFields(object({name:str,source_name:str}))}),
  output_mapping:object({port:{type:'integer',const:0},fields:boundedFields(object({name:str,label:str,type:str,source_name:str}))}),
  package_persistence_verified:{type:'boolean',const:false}});
-const configurationReadback={anyOf:[dateTimeConfigurationReadback,replacementConfigurationReadback,importConfigurationReadback,calculatorConfigurationReadback,groupingConfigurationReadback,sortingConfigurationReadback,reformConfigurationReadback,filterConfigurationReadback,joinConfigurationReadback,unionConfigurationReadback,duplicatesConfigurationReadback]};
+const configurationReadback={anyOf:[missingValuesConfigurationReadback,dateTimeConfigurationReadback,replacementConfigurationReadback,importConfigurationReadback,calculatorConfigurationReadback,groupingConfigurationReadback,sortingConfigurationReadback,reformConfigurationReadback,filterConfigurationReadback,joinConfigurationReadback,unionConfigurationReadback,duplicatesConfigurationReadback]};
 export const nodeApplyResultSchema=object({operation_id:str,status:values('SUCCEEDED','FAILED','NOT_APPLIED','AMBIGUOUS'),
  effect_possible:bool,phases:array(receipt),node:nullable(ref),execution,output,
  package_saved:{type:'boolean',const:false},cleanup_complete:bool,warnings:array(str),

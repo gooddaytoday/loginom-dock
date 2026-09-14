@@ -1,7 +1,21 @@
 # 14. Заполнение пропусков: среднее и строковая константа
 
-Статус: **planned**. Новый подплан следующей аналитической волны.
-Реализация и live-приёмка в рамках подготовки этого документа не выполнялись.
+Статус: **review и единственный fix round завершены в source; автономная приёмка не выполнена**.
+Отдельный поток4, ветка `codex/node-14-missing-values`. N14-R1/R2 исправлены
+и проверены в живом Loginom, code SHA `a63586fe096f4fd7f17f346c391834d3e34bdaa4`.
+[Отчёт исправлений](../../loginom-dock/missing-values-fix-r1-2026-09-13.md)
+фиксирует tests, pins, terminal failure/cleanup и успешный запуск после восстановления CSV.
+Отдельная development recovery завершена: code SHA
+`c32a5d5e163fe174afba59abce973ac405742cdc`. Потерянный ответ завершённого input
+Done восстановлен в том же ID/runtime/session с полной проверкой mapping;
+изменённый mapping/locked graph безопасно отказаны без Execute.
+[Отчёт восстановления](../../loginom-dock/missing-values-recovery-2026-09-13.md)
+фиксирует границы: это только input_mapping Node14, не configure recovery13.
+Native save /test-4, immutable candidate и Hermes ожидают отдельного допуска
+координатора. Повторного полного review не назначено.
+Подготовка автономной приёмки сохранена в harness commit `2bb2bcd6`:
+[packet, goal, auditor, live gap и gates](../../loginom-dock/missing-values-preparation-2026-09-13.md).
+Production runtime не менялся; VPS stage/native save/Hermes/full reopen ещё впереди.
 Навигация: [реестр](README.md), [общие требования новой волны](next-wave.md).
 Зависимости: [03 — общий node.apply](03-text-import.md),
 [05 — тип/вид поля](05-field-parameters.md), [09 — обычный Hermes](09-hermes-user-diagnostics.md).
@@ -21,8 +35,10 @@
 ## Что есть сейчас и источники
 
 В `executor/inventory/palette-2026-09-05.json` есть `Заполнение_пропусков`;
-в `client/lib/node-contracts.mjs` соответствующий тип ещё не зарегистрирован.
-Нужны карточка, чтение методов/применимости, handler и независимый auditor.
+Стабильный coverage ID `component.preprocessing.DataRecovery` соответствует
+локальному runtime type `preprocessing.data_recovery` и режиму `impute`.
+Тип `preprocessing.data_recovery / impute` зарегистрирован в исходном коде;
+карточка, handler и независимый auditor находятся в live-проверке.
 Общий executor переиспользуется; наличие компонента не означает готовый native handler.
 
 [Help «Заполнение пропусков»](https://help.loginom.ru/userguide/processors/preprocessing/imputation.html)
@@ -108,3 +124,68 @@ Configure-only возвращает `execution=not_requested`, `output=not_refre
 Независимый auditor проверяет полный выход и сохранённые настройки отдельно;
 отклоняет подмены метода, порога, активного поля, среднего и старого запуска.
 Наличие оставшихся Null отражается в результате; не обещать полную очистку по summary.
+
+## Native candidate preflight — 2026-09-13
+
+[Проверка подготовки](../../loginom-dock/missing-values-native-candidate-preflight-2026-09-13.md)
+завершена на неизменном c32a5d5e / a9db4113…: packet11, startup8, native checkpoint,
+новый document и полный независимый component output124×5. Все12 финальных
+случаев остаются в полном goal; автономный запуск ещё не выполнен и требует слота.
+
+## Autonomous acceptance 2 — FAIL, 2026-09-13
+
+[Run20260913-113814-1bc86af9](../../loginom-dock/missing-values-autonomous-acceptance-2-2026-09-13.md)
+прошёл запуск по прямому подтверждению пользователя, но не полный goal: target
+«Только строка» оказался в pending/AMBIGUOUS после недоступной точки drop; native
+checkpoint заблокирован. Pre-audit FAIL, независимый12-result reopen не запускался.
+Production/harness pins сохранены; новый прогон и исправления не назначены.
+
+### Target recovery follow-up — 2026-09-13
+
+По отдельному назначению исправлено завершение доказанного отказа создания после
+законченного preflight источника. Source/harness e433c593; live: FAILED с известным
+эффектом источника, gate released, новый ID → SUCCEEDED,20 ячеек и native save
+подтверждены. Общая семантика identity и unknown outcome сохранена. Старый FAIL
+и13 receipts не изменены. [Полный отчёт и следующий candidate packet](../../loginom-dock/missing-values-target-recovery-2026-09-13.md).
+Candidate test4.2 не staged; строгий полный аудитор пока не принимает отказанные
+prepared-запросы без node_checkpoint. Новый Hermes только по отдельному назначению.
+
+
+### Terminal refusal verifier — 2026-09-13
+
+Source `83dc0db5`: полный аудитор теперь учитывает дополнительно к ровно 27 успехам
+только доказанные терминальные отказы размещения с успешным семантически тем же
+запросом под новым ID. События и публичные вызовы не удаляются; 9 импортов,
+12 результатов, native save и независимый reopen обязательны. Компонентный live
+аудит PASS; это не полная автономная приёмка. Старый FAIL сохранён.
+[Отчёт, проверки и pins](../../loginom-dock/missing-values-terminal-refusal-verifier-2026-09-13.md).
+Свежий packet test4.2 проверен из source commit; сборка/stage и новый Hermes
+ожидают отдельного назначения координатора.
+
+
+### Candidate2 preflight — 2026-09-13
+
+[Свежий preflight](../../loginom-dock/missing-values-candidate2-preflight-2026-09-13.md)
+прошёл без модели: 4/4 server-built bytes, runtime/source/harness156/395/252,
+READY test-4 и8/8 startup CSV. Исходный полный goal сохранён. Подготовлен
+отдельный pinned launch plan одного Hermes; запуск только после выдачи слота.
+Candidate test4.2 staged координатором, не activated. Старый FAIL неизменён.
+
+
+### Автономный candidate2 — FAIL, 2026-09-13
+
+[Run20260913-132939-0384fe0b](../../loginom-dock/missing-values-autonomous-acceptance-3-2026-09-13.md)
+использовал выделенный слот: Sol/low25 API calls,5 успешных импортов.
+import-allnull остановился AMBIGUOUS/configure на подтверждении preview после
+NULL; inspect оставил pending без recovery. Полный аудит FAIL,12 результатов
+и save/reopen отсутствуют. Source/goal/harness и предыдущие FAIL сохранены.
+Дальнейшая диагностика/повтор требуют отдельного назначения; процессов нет.
+
+
+### Import NULL follow-up — 2026-09-13
+
+[Source814f3146](../../loginom-dock/node14-import-configure-followup-2026-09-13.md)
+исправил выбор точного NULL вместо печати+Tab; native расхождение регистра
+воспроизведено, fresh allnull3×5 PASS,336regression PASS. Import-specific
+refusal proof предложен координатору отдельно, не реализован. Старые FAIL
+сохранены; новый Hermes/acceptance pins в этой фазе не назначались.

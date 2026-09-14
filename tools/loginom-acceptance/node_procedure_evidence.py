@@ -17,16 +17,18 @@ def bound_wizard_close_confirmation(state):
     wizard = state.get('wizard', {})
     node = state.get('prepared_node_context', {})
     ui = state.get('ui', {})
-    port = binding.get('owner', {}).get('input_port')
+    port_key = 'input_port' if 'input_port' in binding.get('owner', {}) else 'output_port'
+    port = binding.get('owner', {}).get(port_key)
+    direction = 'input' if port_key == 'input_port' else 'output'
     owner = wizard.get('owner_context')
     if port:
-        if (port.get('direction') != 'input' or type(port.get('port')) is not int or not 0 <= port['port'] < 100
+        if (port.get('direction') != direction or type(port.get('port')) is not int or not 0 <= port['port'] < 100
                 or type(port.get('native_index')) is not int or port['native_index'] < 0
                 or not isinstance(port.get('port_guid'), str) or not port['port_guid']
-                or not isinstance(port.get('opening_operation_id'), str) or not port['opening_operation_id'] or wizard.get('stage') != 'input_mapping'
+                or not isinstance(port.get('opening_operation_id'), str) or not port['opening_operation_id'] or wizard.get('stage') != direction + '_mapping'
                 or node.get('surface') != 'wizard'):
             return False
-        owner = dict(input_port=node.get('input_port'))
+        owner = {port_key: node.get(port_key)}
     output = binding.get('owner', {}).get('output_port')
     if output:
         context = wizard.get('port_context', {})
@@ -85,6 +87,20 @@ def bound_wizard_deactivation_confirmation(state):
 
 def bound_wizard_confirmation(state):
     return bound_wizard_close_confirmation(state) or bound_wizard_deactivation_confirmation(state)
+
+
+def bound_missing_values_dialog(state):
+    ui=state.get('ui',{});dialogs=ui.get('dialogs',[]);wizard=state.get('wizard',{});mv=state.get('node_missing_values',{});node=state.get('prepared_node_context',{})
+    if (len(dialogs)!=1 or ui.get('masks')!=[] or wizard.get('status')!='observed' or wizard.get('stage')!='missing_values'
+        or mv.get('verified') is not True or mv.get('inventory_complete') is not True
+        or node.get('verified') is not True or node.get('surface')!='wizard' or mv.get('node_context')!=node):return False
+    dialog=dialogs[0];title='Редактирование значения замены для пропусков'
+    if dialog.get('title')!=title or dialog.get('text')!=title+' Значение для замены пропусков: OK Отмена':return False
+    context=mv.get('method_context',{});fields=[f for f in mv.get('fields',[]) if f.get('record_id')==context.get('record_id') and f.get('name')==context.get('field_name')]
+    if len(fields)!=1 or fields[0].get('used') is not True or fields[0].get('method')!='constant' or fields[0].get('type')!='string' or fields[0].get('data_kind')!='Дискретный':return False
+    elements=[e for e in ui.get('elements',[]) if e.get('scope')=='dialog' and e.get('signature',{}).get('dialog_ref')==dialog.get('ref')]
+    return (len(elements)==3 and len([e for e in elements if e.get('signature',{}).get('role')=='textbox' and e.get('signature',{}).get('value_truncated') is False and 'fill' in e.get('allowed_actions',[])])==1
+        and all(len([e for e in elements if e.get('tid')==tid and e.get('label')==label and 'click' in e.get('allowed_actions',[])])==1 for tid,label in [('msgbox;tlb;ok','OK'),('msgbox;tlb;cancel','Отмена')]))
 
 
 def bound_table_dialogs(state):
@@ -307,7 +323,7 @@ def verify_internal_sequence(events, operation_id, *, max_steps=96):
             if outcome.get('status') != 'SUCCEEDED' or not samples or samples[-1].get('outcome') != outcome:
                 failures.append('observation_not_backed_by_sample')
             recent = [s.get('outcome', {}).get('output', {}) for s in samples[-required_samples:]]
-            if len(recent) != required_samples or any((not semantic and s.get('dom_epoch') != state.get('dom_epoch')) or s.get('ui', {}).get('masks') and not (bound_wizard_confirmation(s) or bound_expression_dialog(s) or bound_reform_dialog(s) or bound_filter_dialog(s) or bound_grouping_factor(s) or bound_schema_preview(s)) for s in recent):
+            if len(recent) != required_samples or any((not semantic and s.get('dom_epoch') != state.get('dom_epoch')) or s.get('ui', {}).get('masks') and not (bound_wizard_confirmation(s) or bound_missing_values_dialog(s) or bound_expression_dialog(s) or bound_reform_dialog(s) or bound_filter_dialog(s) or bound_grouping_factor(s) or bound_schema_preview(s)) for s in recent):
                 failures.append('observation_not_settled')
             doc = state.get('dom_epoch', {}).get('document')
             if document is None:
@@ -315,7 +331,7 @@ def verify_internal_sequence(events, operation_id, *, max_steps=96):
             if not doc or (doc, state.get('workflow_ref'), state.get('origin'), state.get('loginom_build')) != (document, workflow, origin, build):
                 failures.append('document_context_mismatch')
             ui = state.get('ui', {})
-            if state.get('scan', {}).get('complete') is not True or (ui.get('masks') != [] or not (bound_table_dialogs(state) or bound_output_column_dialog(state) or bound_reform_dialog(state))) and not (bound_wizard_confirmation(state) or bound_expression_dialog(state) or bound_filter_dialog(state) or bound_grouping_factor(state) or bound_schema_preview(state)):
+            if state.get('scan', {}).get('complete') is not True or (ui.get('masks') != [] or not (bound_table_dialogs(state) or bound_output_column_dialog(state) or bound_reform_dialog(state))) and not (bound_wizard_confirmation(state) or bound_missing_values_dialog(state) or bound_expression_dialog(state) or bound_filter_dialog(state) or bound_grouping_factor(state) or bound_schema_preview(state)):
                 failures.append('observation_blocked')
             current = state
             observations.append((step, state))

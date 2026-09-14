@@ -1,8 +1,29 @@
 {
   "schema_version": 1,
-  "catalog_version": "2026.09.04-mvp.1",
+  "catalog_version": "2026.09.13-node14.1-candidate",
   "e2e_commit": "2cad5602158fd2e4836d821d644a2b8d92f571a2",
   "selectors": [
+    {
+      "symbol": "component.preprocessing.data_recovery",
+      "strategy": "data_tid",
+      "match": "suffix",
+      "value": "ModelForm;colVendors_Компоненты>Предобработка>Заполнение_пропусков",
+      "scope": "activeWorkflow",
+      "cardinality": "one",
+      "visibility": "visible",
+      "state": [
+        "enabled"
+      ],
+      "parameters": {},
+      "provenance": {
+        "path": "bg/selectors.ts",
+        "line_start": 470,
+        "line_end": 474,
+        "commit": "2cad5602158fd2e4836d821d644a2b8d92f571a2",
+        "sha256": "59f5ed385076a5ca4cb97827647bbbca49da9380717fb44f204aa415e4b4e9e3",
+        "role": "selector"
+      }
+    },
     {
       "symbol": "loginom.ready_avatar", "strategy": "data_tid", "match": "exact", "value": "MF;cntMain;tlbMainToolbar;btnAvatar",
       "scope": "global", "cardinality": "one", "visibility": "visible", "state": ["enabled"], "parameters": {},

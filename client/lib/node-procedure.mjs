@@ -1,5 +1,6 @@
 import {makeReplacementContextCode} from './replacement-context.mjs';
 import {makeDateTimeContextCode} from './date-time-context.mjs';
+import {makeMissingValuesContextCode} from './missing-values-context.mjs';
 import { createHash } from 'node:crypto';
 import { makeWorkspaceUiCode, validateUiAction } from './workspace-ui.mjs';
 import {validatePreparedNodeContext} from './node-context.mjs';
@@ -91,6 +92,11 @@ export function createNodeProcedure({ operation, execute, record, wrapMutation,
     &&dialog.ref===state.wizard.reform_parameters.root_ref&&dialog.identity?.anchor_tid===state.wizard.reform_parameters.root_tid;
   const allowedFilterEditor=(dialog,state)=>state.wizard?.stage==='row_filter'&&state.node_filter?.verified===true
     &&state.node_filter.dialogs?.length===1&&state.node_filter.dialogs[0].root_tid===dialog.identity?.anchor_tid;
+  const allowedMissingValuesEditor=(dialog,state)=>state.wizard?.stage==='missing_values'
+    &&state.node_missing_values?.verified===true&&state.node_missing_values.method_context
+    &&dialog.title==='Редактирование значения замены для пропусков'
+    &&state.node_missing_values.fields.some(f=>f.record_id===state.node_missing_values.method_context.record_id&&f.name===state.node_missing_values.method_context.field_name&&f.used&&f.method==='constant'&&f.type==='string')
+    &&['msgbox;cnt;cnt;txt','msgbox;tlb;ok','msgbox;tlb;cancel'].every(tid=>state.ui.elements.some(e=>(e.tid===tid||e.identity?.anchor_tid===tid)&&e.signature?.dialog_ref===dialog.ref));
   // An owned filter modal may paint its loading mask before its native editor
   // record is available. This permits waiting only; it cannot satisfy readiness.
   const pendingFilterDialog=(dialog,state)=>{
@@ -101,7 +107,7 @@ export function createNodeProcedure({ operation, execute, record, wrapMutation,
       &&filter.selection?.length===1&&filter.rows?.some(r=>r.record_id===filter.selection[0]&&codes.includes(r.operator_code))
       &&state.ui.masks?.some(m=>m.kind==='busy'&&m.ref===dialog.ref&&m.dialog_ref===dialog.ref&&m.target_tid===tid);
   };
-  const allowedNodeEditor=(dialog,state)=>allowedFilterEditor(dialog,state)||allowedExpressionEditor(dialog,state)||allowedFactorEditor(dialog,state)||allowedPreview(dialog,state)||allowedReformEditor(dialog,state);
+  const allowedNodeEditor=(dialog,state)=>allowedMissingValuesEditor(dialog,state)||allowedFilterEditor(dialog,state)||allowedExpressionEditor(dialog,state)||allowedFactorEditor(dialog,state)||allowedPreview(dialog,state)||allowedReformEditor(dialog,state);
   const assertContext = (state, allowTransient = false, tableDialog = null, rootsOnly = false, wizardConfirmation = null) => {
     if(preparedNodeContext) {
       const b=state.prepared_node_context;
@@ -165,7 +171,7 @@ export function createNodeProcedure({ operation, execute, record, wrapMutation,
         throw new NodeProcedureStepError(result);
       return structuredClone(result);
     },
-    async observe({ condition, ready, confirmIdentity, timeoutMs = 15000, importColumnPage, outputColumnPage, readProcesses = false, readOutputs = false, readMappings = false, readCalculator = false, readGrouping = false, readDateTime = false, readSorting = false, readReplacement = false, readDuplicates = false, readReform = false, readFilter = false, readJoin = false, readUnion = false, readPreview = false, readNavigation = false, tablePage, tableDialog, tableFormatPage, wizardConfirmation } = {}) {
+    async observe({ condition, ready, confirmIdentity, timeoutMs = 15000, importColumnPage, outputColumnPage, readProcesses = false, readOutputs = false, readMappings = false, readCalculator = false, readGrouping = false, readDateTime = false, readMissingValues = false, readSorting = false, readReplacement = false, readDuplicates = false, readReform = false, readFilter = false, readJoin = false, readUnion = false, readPreview = false, readNavigation = false, tablePage, tableDialog, tableFormatPage, wizardConfirmation } = {}) {
       checkBudget();
       if (typeof condition !== 'string' || !condition.trim() || typeof ready !== 'function'
         || !Number.isFinite(timeoutMs) || timeoutMs <= 0 || timeoutMs > 15000) {
@@ -176,7 +182,7 @@ export function createNodeProcedure({ operation, execute, record, wrapMutation,
       if(tableDialog && (!['format','filter'].includes(tableDialog.kind)||!tableDialog.table))throw new Error('A typed Table dialog binding is required');
       if(tablePage)makeNodeTableContextCode(preparedNodeContext,tablePage.table,tablePage.page);
       if(tableDialog)makeNodeTableContextCode(preparedNodeContext,tableDialog.table,{row_offset:0,row_limit:0,column_offset:0,column_limit:1});
-      if ((readProcesses || readOutputs || readMappings || readCalculator || readGrouping || readDateTime || readSorting || readReplacement || readDuplicates || readReform || readFilter || readJoin || readUnion || readPreview) && !preparedNodeContext) throw new Error('Native process/output reads require a prepared node');
+      if ((readProcesses || readOutputs || readMappings || readCalculator || readGrouping || readDateTime || readMissingValues || readSorting || readReplacement || readDuplicates || readReform || readFilter || readJoin || readUnion || readPreview) && !preparedNodeContext) throw new Error('Native process/output reads require a prepared node');
       // A failed wait must invalidate even a previously usable observation.
       snapshot = null;
       evidenceSnapshot = null;
@@ -229,10 +235,12 @@ export function createNodeProcedure({ operation, execute, record, wrapMutation,
         if(filterDialogs.length>1)throw Error('Filter dialog is ambiguous');
         const joinMenus=readJoin&&wizard?.stage==='join'?(roots.output.ui?.elements??[]).filter(e=>e.tid==='mn'):[];
         if(joinMenus.length>1)throw Error('Join link menu is ambiguous');
+        const missingValuesDialogs=readMissingValues&&wizard?.stage==='missing_values'?(roots.output.ui?.elements??[]).filter(e=>e.tid==='msgbox'):[];
+        if(missingValuesDialogs.length>1)throw Error('Missing values dialog is ambiguous');
         const rolePortal=wizard?.stage==='input_mapping'&&portals[0]?.tid==='EditTuneColumnDefForm;cbxUsageType;boundlist'?portals[0].ref:undefined;
         const produceMenus=readMappings&&wizard?.stage==='output_mapping'?(roots.output.ui?.elements??[]).filter(e=>e.tid===wizard.root_tid+';DerivedDataSourceMappingEngineOutputPortWizard;btnProduceType;mn'||e.tid===wizard.root_tid+';DerivedDataSourceOutputSocketWizard;btnProduceType;mn'):[];
         if(produceMenus.length>1)throw Error('Derived output policy menu is ambiguous');
-        const root = rolePortal ?? produceMenus[0]?.ref ?? joinMenus[0]?.ref ?? filterDialogs[0]?.ref ?? previewRoot ?? dialogRoot[0]?.ref ?? outputEditors[0]?.ref ?? navigationRoot ?? processRoot ?? outputRoot ?? (portals.length===1 ? portals[0].ref : expressionEditors[0]?.ref ?? (wizard?.status === 'observed' ? wizard.root_ref : graphRoot));
+        const root = missingValuesDialogs[0]?.ref ?? rolePortal ?? produceMenus[0]?.ref ?? joinMenus[0]?.ref ?? filterDialogs[0]?.ref ?? previewRoot ?? dialogRoot[0]?.ref ?? outputEditors[0]?.ref ?? navigationRoot ?? processRoot ?? outputRoot ?? (portals.length===1 ? portals[0].ref : expressionEditors[0]?.ref ?? (wizard?.status === 'observed' ? wizard.root_ref : graphRoot));
         if (observationNow() >= deadline) break;
         result = await execute(makeWorkspaceUiCode({ mode: 'observe', operation_id: id,
           ...boundOptions,
@@ -241,6 +249,13 @@ export function createNodeProcedure({ operation, execute, record, wrapMutation,
           ...(outputColumnPage===undefined?{}:{output_column_page:outputColumnPage}),
           ...(tableFormatPage===undefined?{}:{table_format_page:tableFormatPage}) }),
         { timeout: Math.min(35000, Math.max(1, deadline - observationNow())) });
+        if(result.status==='SUCCEEDED'&&readMissingValues&&result.output.wizard?.stage==='missing_values'&&result.output.ui.dialogs.length===1){
+          // Ext's message box has no root data-tid. Re-read its observed portal;
+          // native field ownership and exact prompt controls are checked below.
+          result=await execute(makeWorkspaceUiCode({mode:'observe',operation_id:id,...boundOptions,
+            root_ref:result.output.ui.dialogs[0].ref,expected_origin:targetOrigin,expected_build:targetBuild}),
+          {timeout:Math.min(35000,Math.max(1,deadline-observationNow()))});
+        }
         if(result.status==='SUCCEEDED' && wizardConfirmationOwner(result.output,wizardConfirmation)) {
           // The native message box is a portal outside the wizard subtree.
           const dialog=result.output.ui.dialogs[0];
@@ -269,6 +284,10 @@ export function createNodeProcedure({ operation, execute, record, wrapMutation,
         if(readFilter){
           result.output.node_filter=await execute(makeFilterContextCode(preparedNodeContext),{timeout:Math.min(35000,Math.max(1,deadline-observationNow()))});
           if(result.output.node_filter.node_context&&JSON.stringify(canonical(result.output.node_filter.node_context))!==JSON.stringify(canonical(result.output.prepared_node_context)))throw Error('Native filter context changed during observation');
+        }
+        if(readMissingValues){
+          result.output.node_missing_values=await execute(makeMissingValuesContextCode(preparedNodeContext),{timeout:Math.min(35000,Math.max(1,deadline-observationNow()))});
+          if(result.output.node_missing_values.node_context&&JSON.stringify(canonical(result.output.node_missing_values.node_context))!==JSON.stringify(canonical(result.output.prepared_node_context)))throw Error('Native missing values context changed during observation');
         }
         assertContext(result.output, true, tableDialog, false, wizardConfirmation);
         if(readNavigation)result.output.node_navigation_read=true;
@@ -387,12 +406,13 @@ export function createNodeProcedure({ operation, execute, record, wrapMutation,
     },
     // Fixed handlers supply the readiness condition and domain identity. Caller
     // input never contains a resolver or a recipe. Only a durably recorded,
-    // strictly pre-gesture epoch refusal permits a new local attempt.
-    async perform({ condition, ready, resolve, identity, confirmIdentity, timeoutMs = 15000, initialObservation }) {
+    // strictly pre-gesture epoch refusal or explicitly proved body replacement
+    // permits a new local attempt.
+    async perform({ condition, ready, resolve, identity, confirmIdentity, timeoutMs = 15000, initialObservation, refreshReplacedBody }) {
       if (typeof resolve !== 'function' || typeof identity !== 'function') {
         throw new Error('A bound action resolver and domain identity are required');
       }
-      let binding, intent;
+      let binding, intent, bodyRefreshes = 0;
       const initialPage=initialObservation?.wizard?.import_columns?.page;
       const initialOutputPage=initialObservation?.wizard?.output_columns?.page;
       for (let attempt = 0; attempt < 3; attempt++) {
@@ -415,6 +435,7 @@ export function createNodeProcedure({ operation, execute, record, wrapMutation,
           readDateTime:initialObservation?.node_date_time!==undefined,
           readSorting:initialObservation?.node_sorting!==undefined,
           readReplacement:initialObservation?.node_replacement!==undefined,
+          readMissingValues:initialObservation?.node_missing_values!==undefined,
           readReform:initialObservation?.node_reform!==undefined,
           readDuplicates:initialObservation?.node_duplicates!==undefined,
           readFilter:initialObservation?.node_filter!==undefined,
@@ -438,17 +459,25 @@ export function createNodeProcedure({ operation, execute, record, wrapMutation,
         try { return await channel.act(action); }
         catch (error) {
           const r = error instanceof NodeProcedureStepError ? error.receipt : null;
-          const preGestureRefusal=r?.phase==='preconditions'&&r.error?.code==='UI_EPOCH_CHANGED'
-            ||r?.phase==='observing'&&r.error?.code==='UI_ROOT_STALE';
-          if (attempt === 2 || r?.status !== 'NOT_APPLIED' || !preGestureRefusal
+          if (attempt === 2 || r?.status !== 'NOT_APPLIED'
             || r.effect_possible !== false || r.cleanup_complete !== true
             || r.trace?.some(e => ['ui_preconditions_verified','ui_gesture_applied'].includes(e.event))
             || !Array.isArray(r.trace)) throw error;
+          const epochRefusal=r.phase==='preconditions'&&r.error?.code==='UI_EPOCH_CHANGED'
+            ||r.phase==='observing'&&r.error?.code==='UI_ROOT_STALE';
+          // Only an opting-in source selector can prove a replaced native body.
+          // This remains a new observation and bound attempt, never a raw retry.
+          const bodyRefusal=r.phase==='preconditions'&&r.error?.code==='UI_REFERENCE_STALE'
+            &&bodyRefreshes===0&&typeof refreshReplacedBody==='function'
+            &&refreshReplacedBody({receipt:r,observation:observed,action})===true;
+          if(!epochRefusal&&!bodyRefusal)throw error;
+          if(bodyRefusal)bodyRefreshes++;
           const event = await entry('node_step_refresh_authorized', {
             step:operation.nodeStepSequence,internal_operation_id:r.operation_id,
             rejected_operation_id: r.operation_id, retry: attempt + 1,
             condition, binding_sha256: binding, intent_sha256: intent,
             effect_possible: false,
+            ...(bodyRefusal?{reason:'prepared_graph_body_replaced'}:{}),
           });
           if (event?.rejected_operation_id !== r.operation_id || event.retry !== attempt + 1
             || event.binding_sha256 !== binding || event.intent_sha256 !== intent) {

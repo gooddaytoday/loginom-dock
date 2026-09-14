@@ -1358,6 +1358,58 @@ source/model evidence. Hermes, merge, публикация и установка
 
 # План трёх управляемых потоков подготовлен — 12 сентября 2026
 
+# Node14: подготовка автономной приёмки передана — 13 сентября 2026
+
+Подготовлены архив десяти tracked source файлов точного c32a5d5e для VPS,
+естественный goal,9 pinned fixtures/14 expected стадий, независимый auditor и
+reader всех12 финальных результатов. Harness commit `2bb2bcd6`; production
+runtime a9db4113… не менялся. Source preflight395 inputs и реальный подписочный
+preflight Sol/low прошли без модели; Python514/514 PASS. Прямая смена файла у
+того же импорта проверена на текущем runtime, полный4×5 совпал.
+
+[Отчёт и оставшиеся gates](missing-values-preparation-2026-09-13.md).
+Ожидаются coordinator VPS stage/readback новой версии test4, отдельный native-save
+preflight, слот Hermes и полный независимый reopen. Приёмка не завершена;
+общий save/reopen дефект при подтверждении остаётся у владельца12.
+
+---
+
+# Node14: development input_mapping recovery проверено — 13 сентября 2026
+
+В ветке `codex/node-14-missing-values`, code SHA
+`c32a5d5e163fe174afba59abce973ac405742cdc`, восстановлен исходный node.apply
+после потери ответа завершённого входного Done: тот же runtime/session/ID,
+без повторного Done, затем один Execute и полный выход 3×5. Изменённый mapping,
+включая сохранившийся origin_type после возврата метки, корректно отказан;
+исходный pending не сбрасывался. Inspect и повтор результата без жестов.
+
+Клиент 1432 PASS / 1 SKIP, Python 3 PASS, независимая проверка 15 ячеек и
+шесть отрицательных подмен evidence. N14-R1/R2 сохранены; нового review не было.
+[Отчёт разработки recovery](missing-values-recovery-2026-09-13.md) содержит
+точные pins, доказательства и границы. Native save /test-4, immutable candidate
+и Hermes ждут отдельного допуска; узел не принят. Configure recovery13 не реализован.
+Ниже — исторические статусы соответствующих ревизий.
+
+---
+
+# Node14: замечания review исправлены в source — 13 сентября 2026
+
+В ветке `codex/node-14-missing-values` коммитом
+`a63586fe096f4fd7f17f346c391834d3e34bdaa4` исправлены N14-R1 (строгая
+Missing Values schema) и N14-R2 (подтверждённая terminal failure/cleanup).
+Реальные Done/Execute и failed job прошли schema; inspect failed операции —
+resolved, повтор/resume без жестов. После восстановления CSV новый явный запуск
+успешен в том же runtime. Клиент: 1426 PASS / 1 SKIP, Python: 3 PASS.
+
+Lost-reply input_mapping recovery остаётся подтверждённым блокером; native save
+/test-4, immutable candidate и Hermes требуют отдельного допуска. Узел не принят.
+[Отчёт единственного fix round](missing-values-fix-r1-2026-09-13.md).
+Ниже — исторические статусы соответствующих ревизий.
+
+---
+
+# Три потока разработки запущены — 12 сентября 2026
+
 Сверка source registry, подпланов и сохранённых аудитов подтвердила восемь полных
 обработчиков 03–10 в принятых режимах. Для подпланов 11–14 запущены рабочие чаты,
 15/16 остаются planned;
@@ -8870,3 +8922,293 @@ Full read принимает полные 8 строк; persisted schema сра�
 Native34/34, параметры6/6, подмены13/13; клиент1404 PASS/1 SKIP, Python524 PASS.
 Старый failed run неизменён и остаётся FAIL. Новый Hermes не запускался.
 [Отчёт, pins и комплект node12.2](../plans/loginom-dock/node12-acceptance-preparation-2/README.md).
+
+## 2026-09-13 — поток4, узел14: разработка/direct QA, без автономной приёмки
+
+В ветке `codex/node-14-missing-values` реализован `preprocessing.data_recovery / impute`
+и независимые аудиторы полного выхода/сохранения. Клиент1420 PASS/1 SKIP/0 FAIL,
+Python3 PASS, полные live проверки precision, порогов5/12 и1/120, all-null, empty,
+omitted fields, done/close, нового узла с переставленной схемой и одинаковыми
+метками. Новый браузер/reopen с parameters:{} подтвердил настройки, source
+reactivation, граф и полный3×5. Потерянный ответ сохранил AMBIGUOUS/pending,
+повтор ID не повторил жест. Реальная ошибка файла не выдала успешный выход;
+общая квитанция остаётся AMBIGUOUS, terminal failed проверен отдельно вручную.
+
+Итог и ограничения: [отчёт разработки](missing-values-development-report-2026-09-13.md).
+Запрос отдельного каталога для `/test-4` передан координатору ранее, публикация
+не выполнялась. Native save_checkpoint и Hermes не приняты. Review запускает
+координатор отдельной командой; merge/deploy/общий клиент не менялись.
+
+### Node14 — native candidate preflight, 2026-09-13
+
+[Отчёт native-save/startup](missing-values-native-candidate-preflight-2026-09-13.md):
+исправлены packet11 и startup8 без production-изменений. Native checkpoint и
+отдельный reopen4×5+120×5 прошли независимый component audit; полный8-file user-v1
+prepare прошёл. Runtime a9db4113… сохранён. Полная автономная приёмка12 результатов
+не запускалась; до отдельной команды координатора Hermes не запускать.
+
+### Node14 — autonomous acceptance 1: approval blocked
+
+[Статус попытки](missing-values-autonomous-acceptance-1-blocked-2026-09-13.md):
+свежий preflight прошёл, но auto-review отклонил запуск до процесса. Модель и
+полный12-result reopen не запускались; pins неизменны. Нужна прямая авторизация
+пользователя; повторная попытка без неё не выполняется.
+
+### Node14 — autonomous acceptance 2: FAIL
+
+[Отчёт единственного Sol/low run](missing-values-autonomous-acceptance-2-2026-09-13.md):
+`20260913-113814-1bc86af9`, pins неизменны.9 импортов и цепочка одного Missing Values
+выполнены; «Только строка» остановилась на недоступной точке размещения и pending
+recovery, блокирующем native-save. Full pre-audit FAIL,12-result reopen не допущен.
+Второй model run/фиксраунд не выполнялся; следующий шаг требует отдельного
+назначения прямой UI-диагностики. Собственные процессы завершены.
+
+## Node14 target recovery — 13 сентября 2026
+
+Узкий follow-up после автономного FAIL завершён: source/harness
+`e433c593cbc729af29c69933a777a70d672a4e21`. Живой доказанный отказ до drop после
+деактивации источника завершился FAILED/cleanup=true и освободил gate; новый ID
+с доступной координатой создал один узел, независимые20 ячеек и native save
+в /test-4 проверены. Focused123 PASS; клиент1444 PASS/1 SKIP; Python12 PASS.
+[Отчёт, pins и ограничения полного аудитора](missing-values-target-recovery-2026-09-13.md).
+Архив test4.2 подготовлен, stage/Hermes не запускались. Полный goal не принят.
+
+
+## Узел 14: terminal refusal verifier — 2026-09-13
+
+Source `83dc0db5` добавил строгий учёт доказанного терминального отказа размещения
+с сохранением всех событий и user-v1 вызовов. Реальная операторская цепочка:
+2 успеха + 1 доказанный отказ, native save; компонентный аудит PASS. Python 523 PASS,
+клиент 1445 PASS / 1 SKIP, final focused 6/6. Старый автономный FAIL и 13 receipts
+сохранены. Полная цель 27/9/12 и независимый reopen остаются обязательными.
+[Отчёт и свежий пакет кандидата](missing-values-terminal-refusal-verifier-2026-09-13.md).
+Test4.2 не staged; Hermes, review, push и deployment не запускались.
+
+
+## Узел 14: candidate2 preflight — 2026-09-13
+
+Immutable test4.2 скачан и проверен 4/4; manifest `cadd80df…7b2ad`.
+Source83dc0db5/runtime bdddbd1b, inventory156/395/252 неизменны. Реальный startup
+без модели: test-4, 8/8 CSV admission, READY, развёрнутое окно, cleanup завершён.
+[Отчёт и pins](missing-values-candidate2-preflight-2026-09-13.md).
+Готов к одному полному Hermes; слот не выдан. Goal27/9/12/save/reopen и старый
+FAIL13/13 сохранены. Candidate staged координатором, activate=false.
+
+
+## Узел 14: автономный candidate2 — FAIL, 2026-09-13
+
+Один разрешённый run20260913-132939-0384fe0b завершился с process exit0,
+но независимый полный аудит FAIL: 5/27 успехов,5/9 импортов,0 Missing Values,
+без save/reopen. import-allnull остался AMBIGUOUS/configure после ввода NULL
+(WIZARD_FIELD_NOT_CONFIRMED), inspect pending без recovery. Actual Sol/low,
+25 API calls; полный export31/31/3396 сохранён, собственные процессы завершены.
+[Отчёт и pins](missing-values-autonomous-acceptance-3-2026-09-13.md).
+Старый FAIL13/13 и source/harness/goal сохранены. Второй прогон не запускался.
+
+
+## Узел14: import NULL follow-up — 2026-09-13
+
+Подтверждена подмена typed NULL→null при Tab в native combo. Source814f3146
+выбирает точный наблюдаемый пункт;16focused/336regression PASS, fresh live
+allnull3×5 и12Null/schema/NULL PASS. Runtime71f73d81…56ab4ff,156/395 inputs.
+[Отчёт и предложение по import refusal](node14-import-configure-followup-2026-09-13.md).
+Allowance не расширен; full goal/старые FAIL13+14 receipts сохранены. Hermes
+не запускался; все4диагностические сессии закрыты. Нужен новый pinned комплект.
+
+## Узел 14: import placement refusal verifier — 2026-09-13
+
+По фазе `node14:import-refusal-verifier:1:841d6443` реализован строгий scoped proof
+для imports.text/delimited/new. Источник связан с artifact/grant и исходной
+upload/download byte verification; отказанный node.apply остаётся NOT_APPLIED,
+без эффекта внутри операции, с cleanup и без pending. Ранний upload имел эффект
+в хранилище и проверяется отдельно. Преемник допускается только после durable/public
+settlement с изменением ID/position. Full-goal gates и строгие defaults сохранены.
+
+Свежая source live-сессия: отказ→новыйID→успех, native save,114pairs/1264events,
+scoped audit и данные обоих импортов PASS.43 итоговых теста PASS; процессы завершены.
+Код7bef361c, runtime71f73d81, harness256/abda1811. Candidate2/cadd80df повторно
+прочитан:4/4 bytes match. Подготовлен комплект следующего run без Hermes;
+27successful/9imports/12final/native save/independent reopen остаются обязательными.
+Старые FAIL сохранены; следующий запуск требует слота координатора.
+[Отчёт и pins](node14-import-refusal-verifier-2026-09-13.md).
+
+## Узел 14: автономная приёмка4 — 2026-09-13, FAIL
+
+По отдельному слоту выполнен единственный run20260913-142944-6167eba2:
+existing subscription/openai-codex/Sol/low,71API calls.18SUCCEEDED
+(9imports+9Missing Values),1NOT_APPLIED,1AMBIGUOUS; native save отсутствует.
+All-null import прошёл. Узел «Порог41» создан и переименован, но remove_link
+автосвязи «Только строка»→«Порог41» получил timeout: effect=true/cleanup=false/
+pending target. Полный аудитор отказал; независимый reopen не запускался.
+
+На фоне ENOSPC первоначальный экспорт получил OperationalError/launcherexit2.
+После координированной очистки npm cache выполнен только экспорт старого run:
+SQLite quick_check=ok, DB/WAL/journals unchanged,71pairs/10717events. Код выхода
+дочерней модели не был сохранён и остался неизвестным. Полный FAIL сохранён.
+Своих процессов0, второйrun/ручное достраивание/изменения кода не выполнялись.
+Source7bef361c/runtime71f73d81/harness256/candidatecadd80df unchanged.
+[Отчёт, ограничения и38 evidence receipts](missing-values-autonomous-acceptance-4-2026-09-13.md).
+
+
+## Node14 — диагностика REMOVE_LINK, 13 сентября 2026
+
+В назначении `node14:remove-link-diagnosis:1:67865596` исправлено исчерпание
+deadline при ожидании выделения удаляемой связи (`611a9f0c`). 42/42 focused
+tests и 11/11 проверок живых доказательств прошли. Runtime `68e8e7a7…`,
+свежая source-сессия завершена. Причина исходного сбоя выделения run4 не
+воспроизведена; run4 остаётся FAIL с исходным partial REMOVE_LINK pending и
+cleanup=false. Hermes не запускался, full-goal приёмка не завершена. Следующий
+kit требует новых pins и отдельного слота координатора.
+
+[Диагностика, границы и возобновление](missing-values-remove-link-diagnosis-2026-09-13.md),
+[проверки и контрольные суммы](missing-values-remove-link-diagnosis-pins-2026-09-13.json).
+
+
+## Node14 — комплект пятой приёмки, 13 сентября 2026
+
+Подготовлен kit `2026.09.13-node14-acceptance5.1`: runtime `68e8e7a7…`,
+harness `d1892694…`, привязки `34c64710`. Frozen goal/fixtures/full auditor
+сохранены. В новом test-4 контексте повторены 18 успешных операций до threshold41;
+15 объектов/5 связей совпали с run4 по нормализованной идентичности. Однократное
+удаление целевой автосвязи прошло, прямой verifier 12/12. Исходный триггер не
+воспроизведён. Монолитный диагностический export получил RangeError/exit1;
+отдельные receipts и весь JSONL проверены напрямую без повторения UI.
+
+44 JS + 18/7 Python PASS. Модель не запускалась, launch_authorized=false.
+Disk gate 12 ГиБ BLOCKED: последнее измерение 2 614 120 448 свободных байт;
+нужны место, export check, новый слот и разрешение координатора.
+[Подготовка, ограничения и план запуска](missing-values-acceptance5-preparation-2026-09-13.md),
+[квитанции](missing-values-acceptance5-preparation-pins-2026-09-13.json).
+
+
+## Node14 — пятая автономная приёмка, 13 сентября 2026
+
+Единственный разрешённый run `20260913-172045-ceabf472` Sol/low завершён:
+17 SUCCEEDED (9 imports/8 MV), 1 NOT_APPLIED, 1 AMBIGUOUS на `mv-boundary-40`.
+Полный неизменённый аудитор FAIL; save0, pre-reopen gates не пройдены,
+независимое открытие не запускалось. Launcher/child exit0, timed_out=false,
+56 API calls; полный экспорт сохранён без recovery. Внутренний шаг n14
+получил UI_REFERENCE_STALE при click по Граница; внешние pending target /
+cleanup=false сохранены. Новый live diagnosis не выполнялся. Слот освобождён,
+собственных процессов0; дальнейшие действия только по назначению координатора.
+
+[Отчёт](missing-values-autonomous-acceptance-5-2026-09-13.md),
+[pins и квитанции](missing-values-autonomous-acceptance-5-pins-2026-09-13.json).
+
+## Node14 — диагностика UI_REFERENCE_STALE, 13 сентября 2026
+
+Установлен отказ повторного выбора тела источника Граница после закрытия
+редактора порта, до создания target. Два новых живых прохода успешны;
+DOM-замена подтверждена, исходная гонка не воспроизведена. Код не менялся,
+retry не добавлялся, inner NOT_APPLIED и outer AMBIGUOUS сохранены раздельно.
+Сессия закрыта, собственных процессов0; 318 старых квитанций совпали.
+Hermes не запускался, run5 остаётся FAIL. Дальнейшая работа по назначению.
+
+[Диагностика и ограничения](missing-values-stale-target-diagnosis-2026-09-13.md),
+[pins](missing-values-stale-target-diagnosis-pins-2026-09-13.json).
+
+## Node14 — расширенный контекст stale, 13 сентября 2026
+
+Единственная новая копия прошла 14 операций, затем остановилась на повторном
+выборе Базы в mv-note-only: inner UI_REFERENCE_STALE/NOT_APPLIED/no-effect,
+outer AMBIGUOUS/cleanup=false. Смена ref при неизменном data-tid подтверждена
+снимками; раздельная причина checkedHandle неизвестна — наблюдатель был
+ограничен Границей. Целевой boundary и полный контекст не достигнуты.
+12/12 проверок доказательств, 7918 строк JSONL, 347 старых квитанций проверены.
+Код не менялся, модель не запускалась, сессия закрыта. Run5 остаётся FAIL.
+
+[Отчёт и scope возможного продолжения](missing-values-stale-full-context-diagnosis-2026-09-13.md),
+[pins](missing-values-stale-full-context-diagnosis-pins-2026-09-13.json).
+
+## Node14 — выбор источника и готовность к Hermes, 13 сентября 2026
+
+В `ad8a1a09` добавлено opt-in обновление заменённого тела источника только
+для Missing Values preflight: строгое no-effect доказательство, новый связанный
+шаг, прежние identity/deadline/cancel и outer accounting. 104+72+2 JS,
+18 Python PASS; два живых порога40/41 и Decimal oracle, 8/8 проверок.
+Body refresh в успешных live-проходах не понадобился; проверен адресно и на
+двух реальных сохранённых отказах. Старые FAIL не переоценены.
+Runtime `4111dfed…`, harness `0da2ccdc…`; kit acceptance6.1, 412 файлов сверены,
+goal/fixtures/auditor сохранены, preflight PASS. Модель не запускалась.
+Готово к полному прогону после выделения общего Hermes-слота координатором.
+
+[Исправление, ограничения и точный план запуска](missing-values-source-selection-fix-2026-09-13.md),
+[pins](missing-values-source-selection-fix-pins-2026-09-13.json).
+
+## Node14 — шестая автономная приёмка, 13 сентября 2026
+
+Run `20260913-221602-99120ff2` Sol/low: 24 SUCCEEDED, 1 NOT_APPLIED,
+1 FAILED placement, 1 AMBIGUOUS; save0, полный аудит FAIL. Пороги40/41/42
+пройдены. Новый stale — тело целевого узла Смена источника после output
+mapping, этап finish, n144; opt-in source preflight здесь ещё не действует.
+Внутренний no-effect и внешний AMBIGUOUS сохранены раздельно. Model/launcher
+exit0, timed_out=false; полный штатный экспорт, 90/90 calls/replies.
+Собственные процессы0; локальная квитанция освобождения слота сохранена.
+Продолжается автономная узкая диагностика целевого finishGraph, без нового
+Hermes до готовности и выделения слота.
+
+[Отчёт](missing-values-autonomous-acceptance-6-2026-09-13.md),
+[pins](missing-values-autonomous-acceptance-6-pins-2026-09-13.json).
+# Node14: целевой узел после выходного мастера — 13 сентября 2026
+
+Исправление `1b407882` готово к следующему выделенному Hermes-слоту:
+существующая доказанная замена graph-body разрешена также в finishGraph
+Missing Values. Run6 остаётся FAIL, его слот координатор освободил.
+Проверки: 129+72 JS, 18 Python и 2 startup — PASS; новая реальная source-сессия,
+импорт и два Missing Values SUCCEEDED, 9/9 адресных проверок, процессы закрыты.
+Kit acceptance7.1: 412 файлов, goal/auditor неизменны, модель не запускалась.
+Полная автономная приёмка, save и независимый reopen пока не пройдены.
+
+[Исправление, pins и ограничения](missing-values-target-selection-fix-2026-09-13.md).
+# Node14: run7 FAIL на импорте120 — 14 сентября 2026
+
+Полный Hermes run7 завершён: 4 SUCCEEDED imports, 1 NOT_APPLIED placement,
+1 AMBIGUOUS configure (отсутствует horizontal scroller при видимых5полях).
+Missing Values/save/reopen не достигнуты, полный аудит FAIL. Model/launcher0,
+без timeout, собственные процессы закрыты, локальная квитанция слота сохранена.
+Продолжается адресная live-диагностика импорта; новая модель не запущена.
+[Отчёт и доказательства](missing-values-autonomous-acceptance-7-2026-09-14.md).
+# Node14: импорт120 исправлен, готовность8 — 14 сентября 2026
+
+Source40873812 исправил ложное partial coverage при вертикальной полосе
+заголовка импорта. Сбой воспроизведён на старом коде, новый source прошёл
+импорт120 и два Missing Values:11/11 live checks,344+72JS,18Python,2startup.
+Комплект acceptance8.1:412файлов, прежний goal и аудитор. Собственные браузеры
+закрыты, новая модель не запускалась. Run7 остаётся FAIL; требуется новый
+Hermes-слот и полная приёмка с независимым save/reopen.
+[Исправление, доказательства и команда запуска](missing-values-import-layout-fix-2026-09-14.md).
+# Node14: run8 выполнил сценарий, frozen audit FAIL — 14 сентября 2026
+
+27 операций и native save успешны,1 доказанный NOT_APPLIED placement.
+Model/launcher0, без timeout, слот локально освобождён. Из145проверок143PASS:
+блокер — existing import проверялся как новый; independent reopen не запускался.
+Run8 сохранён как FAIL, начата адресная правка аудитора без ослабления цели.
+[Результат и ограничения](missing-values-autonomous-acceptance-8-2026-09-14.md).
+# Node14: проверка existing import исправлена, готовность9 — 14 сентября 2026
+
+Commit21b05b3e исправил выбор verifier для обновления импорта и проверку
+явного mapping. Runtime e909a974… и весь goal неизменны. 530Python PASS,
+фактический source-update proof run8 PASS,8/8 подмен отклонены.
+Kit9:413файлов, fresh preflight без модели. Run8 остаётся frozen FAIL;
+reopen guard не обходился, требуется следующий выделенный полный прогон.
+[Исправление, границы и комплект запуска](missing-values-existing-import-audit-fix-2026-09-14.md).
+
+## Node14 — RC подтверждён версией повторной оценки V2, 14 сентября 2026
+
+Назначение `node14:full8-versioned-audit-and-fresh:21b05b3e` заменило прежний
+план обязательного Hermes9: новый модельный прогон не запускался. Неизменный
+run8 получил отдельную оценку V2: **206/206 PASS**, после нового независимого
+открытия точного сохранённого оригинала и полного чтения **12/12 результатов**.
+Исходные 45 квитанций, historical frozen FAIL и guard сохранены; восстановлены
+256 исходных harness-входов, проверены 156 runtime-входов и ровно три разрешённых
+изменения verifier из21b05b3e. Продукт и прежний reader не менялись.
+
+Свежий reader завершился exit0, настройки из задания не применялись, пакет
+повторно не сохранялся; собственные процессы закрыты. Байты источников повторно
+не скачивались: доказаны прежняя загрузка, сохранённые параметры, новые выполнения
+и полные результаты. Проверены 3 новых теста полноты/provenance; прежние530 и
+8 отрицательных журналов остаются историческими проверками. RC относится только
+к ветке/candidate: merge, push, deploy и общий плагин не затрагивались.
+
+[Итог, версии и ограничения](missing-values-run8-reevaluation-v2-2026-09-14.md),
+[машинные квитанции](missing-values-run8-reevaluation-v2-pins-2026-09-14.json).

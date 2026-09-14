@@ -26,6 +26,28 @@ export async function returnFromOutputTable(channel,table) {
     workflow_path:path,execution_started:false,reopen_performed:false};
 }
 
+async function revealViewerCard(channel,state,select,verb){
+  let s=state;
+  for(let attempt=0;attempt<100;attempt++){
+    const target=one(s.ui.elements.filter(select),'Exact output viewer card required');
+    if(target.allowed_actions.includes(verb)&&target.interaction?.state==='point_observed')return s;
+    const scroll=target.scroll;
+    const anchors=s.ui.elements.filter(e=>e.viewer_card?.port_guid===target.viewer_card.port_guid
+      &&e.viewer_card.port_panel_ref===target.viewer_card.port_panel_ref&&e.scroll?.ref===scroll?.ref
+      &&e.allowed_actions.includes('scroll')&&e.interaction?.state==='point_observed');
+    requireValue(scroll&&anchors.length,'Owned viewer scroll anchor unavailable');
+    const anchor=anchors[Math.floor(anchors.length/2)],direction=target.bounding_box.y<anchor.bounding_box.y?-1:1;
+    await channel.perform({condition:'reveal owned output viewer card',initialObservation:s,
+      ready:s=>s.node_outputs?.verified===true&&s.node_outputs.surface==='views',
+      identity:()=>({card:target.viewer_card,scroll:scroll.ref}),resolve:()=>({verb:'scroll',ref:anchor.ref,delta_y:direction*400})});
+    s=await channel.observe({condition:'output viewer scroll applied',readOutputs:true,
+      ready:s=>{const targets=s.ui.elements.filter(select);return s.node_outputs?.verified===true&&s.node_outputs.surface==='views'&&targets.length===1&&targets[0].scroll?.ref===scroll.ref&&direction*(targets[0].scroll.top-scroll.top)>0;}});
+    const after=one(s.ui.elements.filter(select),'Output viewer changed while scrolling');
+    requireValue(after.scroll?.ref===scroll.ref&&direction*(after.scroll.top-scroll.top)>0,'Output viewer scroll did not advance');
+  }
+  throw Error('Output viewer scroll bound exhausted');
+}
+
 // Fixed UI procedures only: callers provide a port number, never a selector,
 // browser callback or sequence. The enclosing node.apply owns the channel gate.
 export async function openNewOutputTable(channel,port) {
@@ -45,13 +67,15 @@ export async function openNewOutputTable(channel,port) {
   await perform(s,'select Table vendor',e=>e.viewer_vendor?.kind==='table');
   s=await observe('Table selected for native output port',s=>s.ui.elements.some(e=>e.viewer_vendor?.selected===true)
     &&s.ui.elements.some(e=>e.viewer_card?.kind==='add'&&e.viewer_card.port_guid===output.port_guid));
+  s=await revealViewerCard(channel,s,e=>e.viewer_card?.kind==='add'&&e.viewer_card.port_guid===output.port_guid,'click');
   await perform(s,'add Table to native output',e=>e.viewer_card?.kind==='add'&&e.viewer_card.port_guid===output.port_guid);
   s=await observe('new Table card bound to output',s=>{
     const added=s.node_outputs?.verified?s.node_outputs.tables.filter(t=>!before.includes(t.view_guid)&&t.port_guid===output.port_guid):[];
     return added.length===1&&s.ui.elements.filter(e=>e.viewer_card?.kind==='enter'&&e.viewer_card.view_guid===added[0].view_guid
-      &&e.viewer_card.port_guid===output.port_guid&&e.allowed_actions.includes('enter_table')).length===1;
+      &&e.viewer_card.port_guid===output.port_guid).length===1;
   },s=>({epoch:s.dom_epoch,tables:s.node_outputs.tables}));
   const added=s.node_outputs.tables.find(t=>!before.includes(t.view_guid)&&t.port_guid===output.port_guid);
+  s=await revealViewerCard(channel,s,e=>e.viewer_card?.kind==='enter'&&e.viewer_card.view_guid===added.view_guid&&e.viewer_card.port_guid===output.port_guid,'enter_table');
   await perform(s,'enter new Table',e=>e.viewer_card?.kind==='enter'&&e.viewer_card.view_guid===added.view_guid,'enter_table');
   s=await observe('new Table active',s=>s.node_outputs?.verified&&s.node_outputs.tables.some(t=>t.active&&t.view_guid===added.view_guid&&t.table_tid));
   return {table:tableRef(s.node_outputs.tables.find(t=>t.view_guid===added.view_guid)),port,port_guid:output.port_guid,created:true};

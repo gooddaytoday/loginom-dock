@@ -479,3 +479,57 @@ test('recovered target never extends the original configuration deadline',async(
  const count=f.calls.length,result=await f.runtime.runNodeApply(request(),{resume:true});
  assert.equal(result.status,'AMBIGUOUS');assert.equal(f.calls.length,count);assert.ok(!f.calls.includes('open'));
 });
+
+test('source deactivation proof cannot become a no-effect refusal when later palette preflight fails',async()=>{
+ const f=fixture({wrapDrivers:(_context,drivers)=>({...drivers,beforeTarget:async()=>({verified:true,cleanup_complete:true,effect_possible:true})})});
+ f.adapter.verifyWorkflow=async()=>({status:'SUCCEEDED',verified:true,document_id:'doc',workflow_ref:workflow,effect_possible:false,cleanup_complete:true});
+ f.adapter.activateWorkflow=f.adapter.verifyWorkflow;
+ f.adapter.preflight=async()=>{throw Error('Component unavailable');};
+ const result=await f.runtime.runNodeApply(request());
+ assert.equal(result.status,'AMBIGUOUS');assert.equal(result.effect_possible,true);
+ assert.equal(result.output.pending_phase,'target');assert.equal(f.graph.nodes.length,0);
+});
+
+const inspectedSourceProof=()=>({verified:true,cleanup_complete:true,effect_possible:true,settings_changed:false,
+ target_refusal:{phase:'target',status:'FAILED',effect_possible:true,cleanup_complete:true,settings_unchanged:true,verification:'missing_values_preflight_completed'}});
+function refusedAfterSource(proof=inspectedSourceProof()){
+ const f=fixture({wrapDrivers:(_context,drivers)=>({...drivers,beforeTarget:async()=>proof})});
+ f.adapter.verifyWorkflow=async()=>({status:'SUCCEEDED',verified:true,document_id:'doc',workflow_ref:workflow,effect_possible:false,cleanup_complete:true});
+ f.adapter.activateWorkflow=f.adapter.verifyWorkflow;
+ const mutate=f.adapter.mutate;
+ f.adapter.mutate=async e=>e.parameters.position?.x===320?{status:'NOT_APPLIED',effect_possible:false,cleanup_complete:true,error:'Requested drop surface is not reachable'}:mutate(e);
+ return f;
+}
+test('verified source activity effect and refused graph settle FAILED, preserving ID and allowing a corrected new request',async()=>{
+ const f=refusedAfterSource(),r=request();
+ await f.runtime.startNodeApply(r);const job=await f.runtime.waitNodeApply(r.operation_id,{timeoutMs:1000});assertJob(job);
+ assert.equal(job.outcome.status,'FAILED');assert.equal(job.outcome.effect_possible,true);assert.equal(job.outcome.cleanup_complete,true);
+ assert.equal(job.outcome.output.pending_phase,null);assert.equal(job.outcome.output.node,null);assert.equal(f.graph.nodes.length,0);
+ f.runtime.assertPreparationAllowed();assert.equal((await f.runtime.inspect({operationId:r.operation_id})).output.state,'resolved');
+ const count=f.calls.length;assert.equal((await f.runtime.runNodeApply(r)).status,'FAILED');assert.equal(f.calls.length,count);
+ assert.throws(()=>f.runtime.startNodeApply({...r,target:{...r.target,position:{x:500,y:280}}},{resume:true}),/different parameters/);
+ await assert.rejects(f.runtime.runNodeApply(r,{resume:true}),/original inspected/);
+ const corrected={...r,operation_id:'corrected',target:{...r.target,position:{x:500,y:280}}};
+ assert.equal((await f.runtime.runNodeApply(corrected)).status,'SUCCEEDED');assert.equal(f.graph.nodes.length,1);
+});
+for(const [label,change] of [
+ ['missing proof',p=>delete p.target_refusal],['unverified source',p=>p.verified=false],
+ ['unfinished source cleanup',p=>p.cleanup_complete=false],['settings changed',p=>p.settings_changed=true],
+ ['foreign verification',p=>p.target_refusal.verification='other'],
+ ['unfinished refusal cleanup',p=>p.target_refusal.cleanup_complete=false],
+ ['unknown settings',p=>p.target_refusal.settings_unchanged=false],
+])test('target refusal retains uncertainty for '+label,async()=>{
+ const proof=inspectedSourceProof();change(proof);const f=refusedAfterSource(proof);
+ const r=await f.runtime.runNodeApply(request());assert.equal(r.status,'AMBIGUOUS');
+ assert.equal(r.output.pending_phase,'target');assert.throws(()=>f.runtime.assertPreparationAllowed(),/pending|uncertain/);
+});
+test('known source inspection cannot clear a lost target gesture reply',async()=>{
+ const f=refusedAfterSource();f.adapter.mutate=async()=>{throw Error('reply lost');};
+ const r=await f.runtime.runNodeApply(request());assert.equal(r.status,'AMBIGUOUS');assert.equal(r.cleanup_complete,false);
+ assert.throws(()=>f.runtime.assertPreparationAllowed(),/pending|uncertain/);
+});
+test('refusal journal failure keeps the operation pending',async()=>{
+ const f=refusedAfterSource();f.failRecord('node_phase_refused');
+ const r=await f.runtime.runNodeApply(request());assert.equal(r.status,'AMBIGUOUS');assert.equal(r.cleanup_complete,false);
+ assert.throws(()=>f.runtime.assertPreparationAllowed(),/pending|uncertain/);
+});

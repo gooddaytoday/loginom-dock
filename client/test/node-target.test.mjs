@@ -118,3 +118,31 @@ test('Union lost Input_Add or connection reply cannot create a duplicate on retr
   assert.equal(f.calls.filter(x=>x==='add_input').length,1);assert.equal(f.graph.links.length,3);
  }
 });
+
+for(const lost of [false,true])test('pre-dispatch refusal cannot clear '+(lost?'lost post-refusal observation':'changed graph'),async()=>{
+ const f=fixture();let refused=false;const observe=f.adapter.observe;
+ f.adapter.observe=async()=>{if(refused&&lost)throw Error('observation lost');return observe();};
+ f.adapter.mutate=async()=>{refused=true;if(!lost)f.graph.nodes[0].label='changed';return {status:'NOT_APPLIED',effect_possible:false,cleanup_complete:true};};
+ const r=await f.run();assert.equal(r.status,'AMBIGUOUS');assert.equal(r.cleanup_complete,false);assert.ok(r.pending);
+ assert.equal(f.operation.targetPhase.refusals?.length??0,0);
+});
+
+test('post-refusal graph evidence must be durably acknowledged before clearing pending',async()=>{
+ const f=fixture();f.adapter.mutate=async()=>({status:'NOT_APPLIED',effect_possible:false,cleanup_complete:true});
+ const result=await prepareNodeTarget({request:request(),operation:f.operation,adapter:f.adapter,record:async e=>e.phase==='node_target_refusal_observed'?{...e,refusal:{}}:e});
+ assert.equal(result.status,'AMBIGUOUS');assert.equal(result.cleanup_complete,false);assert.ok(result.pending);
+});
+
+test('selection timeout after create and rename retains partial remove pending even with completed cleanup',async()=>{
+ const f=fixture(),mutate=f.adapter.mutate;f.graph.nodes[0].outputs=[0,1];
+ f.adapter.mutate=async e=>{
+  if(e.kind==='remove_link'){f.calls.push(e.kind);return {status:'AMBIGUOUS',effect_possible:true,cleanup_complete:true,error:'selection timeout'};}
+  const result=await mutate(e);if(e.kind==='create')f.graph.links.push({source:'source',output:1,target:'target',input:0});return result;
+ };
+ const first=await f.run();assert.equal(first.status,'AMBIGUOUS');assert.equal(first.partial_effect,true);
+ assert.equal(f.operation.targetPhase.pending.kind,'remove_link');assert.deepEqual(f.calls,['create','rename','remove_link']);
+ f.adapter.reconcile=async()=>({verified:true,cleanup_complete:true});
+ const resumed=await f.run();assert.equal(resumed.status,'AMBIGUOUS');assert.equal(resumed.partial_effect,true);
+ assert.equal(f.operation.targetPhase.pending.kind,'remove_link');assert.deepEqual(f.calls,['create','rename','remove_link']);
+ assert.equal(f.graph.links.length,1);assert.equal(f.graph.nodes[1].label,'Target');
+});
