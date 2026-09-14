@@ -7758,3 +7758,11 @@ Model/launcher0, без timeout, слот локально освобождён.
 блокер — existing import проверялся как новый; independent reopen не запускался.
 Run8 сохранён как FAIL, начата адресная правка аудитора без ослабления цели.
 [Результат и ограничения](missing-values-autonomous-acceptance-8-2026-09-14.md).
+# Node14: проверка existing import исправлена, готовность9 — 14 сентября 2026
+
+Commit21b05b3e исправил выбор verifier для обновления импорта и проверку
+явного mapping. Runtime e909a974… и весь goal неизменны. 530Python PASS,
+фактический source-update proof run8 PASS,8/8 подмен отклонены.
+Kit9:413файлов, fresh preflight без модели. Run8 остаётся frozen FAIL;
+reopen guard не обходился, требуется следующий выделенный полный прогон.
+[Исправление, границы и комплект запуска](missing-values-existing-import-audit-fix-2026-09-14.md).
