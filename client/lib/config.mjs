@@ -84,7 +84,6 @@ export async function loadConfig({ configPath, stateDir, agent, adapterRevision,
     resultProfile: profile?.result_profile ?? 'diagnostic',
     storageDirectories: directories,
     inputUploadDirectory: directories?.inputs ?? (profile?.input_upload_directory ? storagePath(profile.input_upload_directory) : null),
-    nativeSessionId: agent === 'codex' ? process.env.CODEX_THREAD_ID ?? process.env.CODEX_SESSION_ID ?? null : null,
     stateDir: normalizeConfigPath(stateDir || join(homedir(), '.loginom-dock')),
   });
 }

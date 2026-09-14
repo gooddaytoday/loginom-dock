@@ -20,7 +20,7 @@ import { makeBrowserGeometryCode, parseBrowserGeometry } from './browser-geometr
 import { createExecutionJournal } from './execution-journal.mjs';
 import { createRecoveryContext } from './recovery-context.mjs';
 import { outcomeVerification } from './outcome-verification.mjs';
-import { createHostArtifactAdmission } from './host-artifacts.mjs';
+import { createHostArtifactAdmission, codexInputIdentity } from './host-artifacts.mjs';
 import { compactActionResult, userResultSchema, compactKnowledgeBundle, userWorkflowInstructions } from './user-results.mjs';
 import { recordLocalDiagnostics } from './local-diagnostics.mjs';
 import { createUserWorkflowBindings, userNodeTool } from './user-workflow.mjs';
@@ -189,7 +189,7 @@ export async function createBridge(config, session) {
           let args = request.params.arguments ?? {};
           validateActionParameters(prepareTool.inputSchema, args);
           if (userProfile) args = userWorkflows.normalizePreparation(args);
-          await admitHostArtifacts(args.host_context_token);
+          await admitHostArtifacts(args.host_context_token, codexInputIdentity(request.params));
           const preparationRequest = { operation_id: args.operation_id ?? 'prepare', intent: args.intent ?? 'new_draft',
             package_path: args.package_path ?? null, workflow_ref: args.workflow_ref ?? null };
           if (config.storageDirectories && preparationRequest.package_path)
