@@ -2017,8 +2017,8 @@ test('wizard cancellation confirms the original graph after one exact affirmativ
 });
 
 for(const completion of ['done','execute'])test('wizard '+completion+' waits for the expected graph node without claiming execution completion',async()=>{
-  for(const mode of ['success','bound_surface','bound_foreign','bound_graph_unlock','bound_graph_lock_churn','wrapped_label','wrapped_filename','wrapped_grouping','different_key','comma_collision','duplicate_label','duplicate_body','actual_space','wrong_label','dialog','still_open','lost_reply','empty_label','stale_region','late_body','late_epoch','epoch_churn','late_mask','late_tab','late_duplicate']) {
-    const expected=mode==='wrapped_filename'?'sales 2026.csv':mode==='wrapped_grouping'?'Quantity, Revenue, Id по Region':mode==='comma_collision'?'A, B':mode==='empty_label'?'':'Сумма';
+  for(const mode of ['success','bound_surface','bound_multiline','bound_multiline_wrong_text','bound_foreign','bound_graph_unlock','bound_graph_lock_churn','wrapped_label','wrapped_filename','wrapped_grouping','different_key','comma_collision','duplicate_label','duplicate_body','actual_space','wrong_label','dialog','still_open','lost_reply','empty_label','stale_region','late_body','late_epoch','epoch_churn','late_mask','late_tab','late_duplicate']) {
+    const expected=mode.startsWith('bound_multiline')?'Дубликаты: out: Value, Amount; in: Key (+1)':mode==='wrapped_filename'?'sales 2026.csv':mode==='wrapped_grouping'?'Quantity, Revenue, Id по Region':mode==='comma_collision'?'A, B':mode==='empty_label'?'':'Сумма';
     const page=new Page(),base='MF;TF-1;',panel=page.add('div',base+'NavigationBar;NavigationPanel');
     let path='';const breadcrumbs=[];
     for(const label of ['Сервер','Пакеты','Package1','Модуль1','Сценарий','Old','Настройка']) {
@@ -2038,7 +2038,7 @@ for(const completion of ['done','execute'])test('wizard '+completion+' waits for
       let postClickReads=0;
       const readNode=async()=>{const graph=page.events.includes('click')&&++postClickReads>1;
         return {verified:true,document_id:'doc',workflow_id:'workflow',node_id:graph&&mode==='bound_foreign'?'foreign':'node',
-          surface:graph?'graph':'wizard',tid:base+(graph?'Graph;Сумма':'WizrdMCF'),
+          surface:graph?'graph':'wizard',tid:base+(graph?'Graph;'+(mode.startsWith('bound_multiline')?'Дубликаты:__out:_Value_Amount;_in:_Key_(+1)':'Сумма'):'WizrdMCF'),
           ...(graph&&['bound_graph_unlock','bound_graph_lock_churn'].includes(mode)?{locked:mode==='bound_graph_unlock'?postClickReads<4:postClickReads%2===1}:{})};};
       page.execute=async options=>clone(await vm.runInContext('('+workspaceUiCapability.toString()+')',page.context)(page,
         {expected_build:build,expected_origin:origin,kind:'workspace-ui',prepared_node_context:{node:{node_id:'node'},workflow_ref:{prefix:'MF;TF-1',navigation_path:[]}},...options},readNode));
@@ -2050,10 +2050,10 @@ for(const completion of ['done','execute'])test('wizard '+completion+' waits for
     const transition=()=>{
       if(mode==='still_open')return;
       wizard.remove();breadcrumbs.at(-1).remove();breadcrumbs.at(-2).remove();
-      const graph=page.add('div',base+'ModelForm;cmpDiagram'),name=mode==='wrong_label' || mode==='different_key'?'Other':mode==='actual_space'?'Сум_ма':expected.replace(/\s/g,'_').replace(/,/g,'');
+      const graph=page.add('div',base+'ModelForm;cmpDiagram'),name=mode.startsWith('bound_multiline')?'Дубликаты:__out:_Value_Amount;_in:_Key_(+1)':mode==='wrong_label' || mode==='different_key'?'Other':mode==='actual_space'?'Сум_ма':expected.replace(/\s/g,'_').replace(/,/g,'');
       const node=page.add('g',base+'Graph;'+name,'',undefined,graph);
       const wrapped=['wrapped_label','actual_space','wrapped_filename','wrapped_grouping'].includes(mode);
-      const label=page.add('span',base+'Graph;'+name+';Label;Label',wrapped?'':mode==='wrong_label'?'Other':mode==='comma_collision'?'A B':expected,undefined,node);
+      const label=page.add('span',base+'Graph;'+name+';Label;Label',wrapped?'':mode==='bound_multiline_wrong_text'?'Дубликаты: Other':mode==='wrong_label'?'Other':mode==='comma_collision'?'A B':expected,undefined,node);
       finishedNode=node;finishedLabel=label;finishedGraph=graph;
       if(['wrapped_label','actual_space'].includes(mode)){page.add('span',null,mode==='actual_space'?'Сум ':'Сум',undefined,label);page.add('br',null,'',undefined,label);page.add('span',null,'ма',undefined,label);}
       if(mode==='wrapped_filename' || mode==='wrapped_grouping') {
@@ -2089,7 +2089,7 @@ for(const completion of ['done','execute'])test('wizard '+completion+' waits for
       if(mode==='late_duplicate' && waits===2)page.add('span',base+'Graph;Сумма;Label;Label','Сумма',undefined,finishedNode);
     };
     const result=await page.act({verb:completion==='done'?'finish_wizard':'execute_wizard',ref:button.ref},snapshot);
-    const success=['success','bound_surface','bound_graph_unlock','wrapped_label','wrapped_filename','wrapped_grouping','stale_region','late_body','late_epoch'].includes(mode);
+    const success=['success','bound_surface','bound_multiline','bound_graph_unlock','wrapped_label','wrapped_filename','wrapped_grouping','stale_region','late_body','late_epoch'].includes(mode);
     assert.equal(result.status,success?'SUCCEEDED':'AMBIGUOUS',mode+JSON.stringify(result.error));
     assert.equal(page.events.filter(e=>e==='click').length,1);
     if(completion==='execute' && success) {
@@ -3487,7 +3487,7 @@ async function inputPortFinishFixture(mode='valid') {
   const {inputPortBreadcrumbs}=await import('./input-port-breadcrumbs.fixture.mjs');
   const panel=page.add('div','MF;TF-5;NavigationBar;NavigationPanel','',{x:48,y:35,width:1392,height:36});
   const crumbs=inputPortBreadcrumbs.map((n,i)=>{
-    const crumb=page.add('a',n.tid,n.label,n.rect,panel),icon={4:'maptree-icon-workflow',5:'bg-vendor-icon-calcdata',8:'maptree-icon-wizard'}[i];
+    const multiline=mode==='multiline'; const crumb=page.add('a',multiline?n.tid.replace('Revenue','Duplicates:__in:_Key_Sub'):n.tid,multiline&&i===5?'Duplicates: in: Key, Sub':n.label,n.rect,panel),icon={4:'maptree-icon-workflow',5:'bg-vendor-icon-calcdata',8:'maptree-icon-wizard'}[i];
     if(icon)page.add('span',null,'',{x:n.rect.x+1,y:n.rect.y+1,width:16,height:16},crumb).attrs.class=icon;return crumb;
   });
   const done=page.add('button','MF;TF-5;WizrdMCF;btnDone','Готово',{x:1300,y:950,width:100,height:25},owner);
@@ -3500,8 +3500,8 @@ async function inputPortFinishFixture(mode='valid') {
     owner.remove();for(const c of crumbs.slice(5))c.remove();
     if(mode==='wrong_workflow')crumbs[4].ownText='Другой сценарий';
     graph=page.add('div','MF;TF-5;ModelForm;cmpDiagram','',{x:48,y:71,width:1392,height:929});
-    const key=mode==='wrong_node'?'Other':'Revenue';node=page.add('g','MF;TF-5;Graph;'+key,'',{x:100,y:200,width:150,height:80},graph);
-    label=page.add('span','MF;TF-5;Graph;'+key+';Label;Label',key,{x:110,y:220,width:120,height:30},node);
+    const key=mode==='wrong_node'?'Other':mode==='multiline'?'Duplicates:__in:_Key_Sub':'Revenue';node=page.add('g','MF;TF-5;Graph;'+key,'',{x:100,y:200,width:150,height:80},graph);
+    label=page.add('span','MF;TF-5;Graph;'+key+';Label;Label',mode==='multiline'?'Duplicates:in: Key, Sub':key,{x:110,y:220,width:120,height:30},node);
     if(mode==='duplicate_node')page.add('g','MF;TF-5;Graph;'+key,'',node.box,graph);
     if(['toast','foreign_toast','permanent_toast'].includes(mode)){toast=page.add('div',mode==='foreign_toast'?'foreign':'toast','Сохранено',{x:1000,y:800,width:300,height:75});toast.attrs.role='dialog';}
     if(mode==='mask')page.add('div','mask','Загрузка').attrs.class='x-mask-msg';
@@ -3527,10 +3527,10 @@ test('typed input-port finish is offered only with full mapping and exact owner 
 });
 
 test('typed input-port finish uses one gesture and quiet exact graph return without applied claims',async()=>{
-  for(const mode of ['valid','late_body','wrong_node','wrong_workflow','still_open','mask','duplicate_node','churn','late_tab']){
+  for(const mode of ['valid','multiline','late_body','wrong_node','wrong_workflow','still_open','mask','duplicate_node','churn','late_tab']){
     const {page,waits}=await inputPortFinishFixture(mode),snapshot=await page.observe();
     const done=snapshot.ui.elements.find(e=>e.wizard_finish?.mode==='input_port');assert.ok(done,mode);
-    const result=await page.act({verb:'finish_wizard',ref:done.ref},snapshot),success=['valid','late_body'].includes(mode);
+    const result=await page.act({verb:'finish_wizard',ref:done.ref},snapshot),success=['valid','multiline','late_body'].includes(mode);
     assert.equal(result.status,success?'SUCCEEDED':'AMBIGUOUS',mode+JSON.stringify(result.error));
     assert.equal(page.events.filter(e=>e==='click').length,1,mode);
     const event=result.trace.find(e=>e.event==='input_port_finish_verified');assert.equal(!!event,success,mode);
@@ -3590,6 +3590,19 @@ test('node overview rejects incomplete foreign clipped and unowned icon breadcru
   for(const mode of ['hidden','extra','duplicate','duplicate_panel','foreign','broken_chain','clipped','missing_icon','hidden_icon','outside_icon','foreign_tab','wizard','bounded']) {
     const {page}=await nodeOverviewContextFixture(mode);assert.notEqual((await page.observe()).node_context.status,'observed',mode);
   }
+});
+test('prepared node overview binds a multiline automatic key without trusting collapsed label text',async()=>{
+ for(const mode of ['bound','unbound','foreign_key']) {
+  const {page,panel}=await nodeOverviewContextFixture(),crumb=panel.children.at(-1);
+  const key='Дубликаты:__out:_Value_Amount;_in:_Key_(+1)';
+  crumb.attrs['data-tid']=crumb.attrs['data-tid'].replace(/Изменение$/,key);
+  crumb.ownText='Дубликаты: out: Value, Amount; in: Key (+1)';
+  const binding={node:{node_id:'node'},workflow_ref:{prefix:'MF;TF-5',navigation_path:[]}};
+  const reader=async()=>({verified:true,document_id:'doc',workflow_id:'wf',node_id:'node',surface:'graph',tid:'MF;TF-5;Graph;'+(mode==='foreign_key'?'Other':key)});
+  const result=await vm.runInContext('('+workspaceUiCapability.toString()+')',page.context)(page,
+   {mode:'observe',expected_build:build,expected_origin:origin,...(mode==='unbound'?{}:{prepared_node_context:binding})},reader);
+  assert.equal(result.output.node_context.status==='observed',mode==='bound',mode);
+ }
 });
 
 function smallTableCoverageFixture() {
@@ -4593,4 +4606,51 @@ test('compact filter observation retains visible final rows ahead of clipped sav
  const target=observed.ui.elements.find(e=>e.tid===base+';colDelete_Id-99');
  assert.ok(target);assert.ok(target.allowed_actions.includes('click'));assert.equal(target.filter_cell.record_id,'r99');
  assert.ok(observed.ui.elements.length<=240);
+});
+
+test('duplicate role page is recognized by its native grid without an add-mapping button',async()=>{
+  const page=new Page(),root='MF;TF-1;WizrdMCF',form=page.add('div',root);
+  page.add('div',root+';TuneDataSourceInputPortWizard;grdTargetColumns','',undefined,form);
+  page.add('button',root+';btnNext','Далее',undefined,form);
+  const observed=await page.observe();assert.equal(observed.wizard.stage,'input_mapping');
+  assert.equal(observed.wizard.controls.btnNext.enabled,true);
+});
+
+test('global duplicate role selection retains its dialog and rejects unrelated field changes',async()=>{
+ for(const fault of [false,true]) {
+  const page=new Page(),base='MF;TF-1;WizrdMCF;',wizard=page.add('div',base.slice(0,-1)),stem=base+'TuneDataSourceInputPortWizard;';
+  page.add('div',stem+'grdTargetColumns','',undefined,wizard);
+  const grid=page.add('div',stem+'grdTargetColumns;tbl','',undefined,wizard);grid.id='roles-view';grid.attrs.id=grid.id;
+  const row=page.add('table',null,'',undefined,grid);row.attrs={class:'x-grid-item-selected','data-recordindex':'0','data-recordid':'r1','data-boundview':grid.id};
+  page.add('td',stem+'colName_A','A',undefined,row);const label=page.add('td',stem+'colDisplayName_A','A',undefined,row);
+  page.add('span',null,'',undefined,label).attrs.class='bg-TBGDataType-dtInteger';
+  page.add('td',stem+'colDataKind_A','Дискретный',undefined,row);page.add('td',stem+'colUsageType_A','Не задано',undefined,row);
+  const form=page.add('div','EditTuneColumnDefForm');form.id='role-editor';form.attrs.class='x-window';const inputs={};
+  page.add('div','EditTuneColumnDefForm;header','Редактировать столбец',undefined,form);
+  for(const [key,value] of [['edtName','A'],['edtDisplayName','A'],['cbxDataType','Целый'],['cbxDataKind','Дискретный'],['cbxUsageType','Не задано']]) {
+   const owner=page.add('div','EditTuneColumnDefForm;'+key,'',undefined,form),input=page.add('input',null,'',undefined,owner);input.value=value;inputs[key]=input;
+   if(key!=='cbxUsageType'){input.disabled=true;input.attrs.disabled='';}
+  }
+  const record={isModel:true,internalId:'r1'},store={$className:'Ext.data.Store',isLoading:()=>false,getAt:i=>i===0?record:null};
+  const native={FView:{el:{dom:form}},FAddMode:false,Records:[record]};
+  page.context.Ext={getCmp:id=>id===form.id?{Controller:native}:id===grid.id?{el:{dom:grid},getStore:()=>store}:null};
+  page.app.Application={FInstance:{FMainForm:{Items:{Workspace:{getActiveTab:()=>({Controller:{FController:{FView:{el:{dom:wizard}}}}})}}}}};
+  const list=page.add('div','EditTuneColumnDefForm;cbxUsageType;boundlist','',{x:600,y:300,width:140,height:40});
+  page.add('div','EditTuneColumnDefForm;cbxUsageType;boundlist;Выходное','Выходное',{x:605,y:305,width:130,height:25},list);
+  const first=await page.observe();assert.equal(first.wizard.stage,'input_mapping');assert.equal(first.wizard.column_parameters.portal_bound,true);
+  const read=await page.execute({mode:'observe',root_ref:first.ui.elements.find(e=>e.wizard_combo?.kind==='option').wizard_combo.list_ref});
+  const option=read.output.ui.elements.find(e=>e.wizard_combo?.kind==='option');assert.ok(option,JSON.stringify({wizard:read.output.wizard,combos:read.output.ui.elements.filter(e=>e.wizard_combo)}));
+  assert.equal(read.output.ui.elements.some(e=>e.wizard_field?.scope==='output_column'),false);
+  const click=page.mouse.click;page.mouse.click=async(...args)=>{await click(...args);list.remove();inputs.cbxUsageType.value='Выходное';if(fault)inputs.edtName.value='Other';};
+  const result=await page.act({verb:'select_wizard_option',ref:option.ref},read.output);
+  assert.equal(result.status,fault?'AMBIGUOUS':'SUCCEEDED',JSON.stringify(result.error));assert.equal(page.events.filter(e=>e==='click').length,1);
+ }
+});
+
+test('graph observation retains automatic-label links and excludes their child decorations',async()=>{
+ const page=new Page();
+ const link='MF;TF-1;Graph;Source;_one|Output_Data-0|Дубликаты;_in:_Key|Input_Data-0';
+ page.add('g',link,'',{x:300,y:140,width:100,height:1});
+ page.add('g',link+';Decoration','',{x:300,y:140,width:100,height:1});
+ const s=await page.observe();assert.deepEqual(s.links.map(e=>e.tid??e),[link]);
 });

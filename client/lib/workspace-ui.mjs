@@ -94,7 +94,7 @@ export function workspaceUiCapability(page, task, readNodeContext, captureProces
   // The state is document-bound; navigation invalidates every previous reference.
   const readUi = async (rediscover = false) => {
     const nodeContext=await boundNode();
-    const observed = await page.evaluate(({rootRef,discoverRoots,storageName,columnPage,mappingPage,tableFormatPage,cacheReadPredicates,definitionPrefix,preparedWorkflowPath,preparedNodeId,preparedOutputPort,preparedInputPort}) => {
+    const observed = await page.evaluate(({rootRef,discoverRoots,storageName,columnPage,mappingPage,tableFormatPage,cacheReadPredicates,definitionPrefix,preparedWorkflowPath,preparedNodeId,preparedGraphTid,preparedOutputPort,preparedInputPort}) => {
     try {
     const scanStarted = Date.now(), maxElements = 6000, maxWork = 250000;
     let maxMs = 500;
@@ -235,7 +235,7 @@ export function workspaceUiCapability(page, task, readNodeContext, captureProces
     // fixed markers expose the current page without scanning its whole tree.
     const wizardMarkers={text_import_file:';ImportTextFilePreviewWizard;edtFileName',
       text_import_format:';ImportTextFileParamsWizard;edtValueNull',
-      input_mapping:[';TuneDataSourceInputPortWizard;btnAddMappingColumn',';TuneDataSourceMappingWizard;btnAddMappingColumn'],
+      input_mapping:[';TuneDataSourceInputPortWizard;grdTargetColumns',';TuneDataSourceInputPortWizard;btnAddMappingColumn',';TuneDataSourceMappingWizard;btnAddMappingColumn'],
       output_mapping:[';ColumnsMappingEngineOutputPortWizard;btnAddMappingColumn',';DerivedDataSourceOutputSocketWizard;btnAddMappingColumn',';DerivedDataSourceMappingEngineOutputPortWizard;btnAddMappingColumn'],
       replacement:';ReplaceColumnsWizard;grdDataList;tbl',calculator:';CalcDataWizard;btnAddExpr',grouping:';GroupDataWizard;grdUsedFields;tbl',sorting:';SortingWizard;SortingColumnCollection;grdSorting;tbl',
       union:';UnionDataWizard;grdUnionData;grd-1;tbl',join:';JoinDataWizard;grdSourceColumns;tbl',row_filter:';FilterDataWizard;FilterDataPanel;tbl',field_parameters:';ReformColumnsWizard;grdTargetColumns;tbl',done:';DoneWizard;edtDisplayName'};
@@ -250,12 +250,12 @@ export function workspaceUiCapability(page, task, readNodeContext, captureProces
         const owner='[data-tid$=";WizrdMCF;ImportTextFilePreviewWizard;'+name+'"]';return [owner,owner+' input',owner+' textarea'];}),
       '[data-tid$=";WizrdMCF;ImportTextFilePreviewWizard;edtFirstLineAsTitle;ValueControl"]',
       '[data-tid$=";WizrdMCF;ImportTextFilePreviewWizard;edtFirstLineAsTitle;ValueControl;DisplayEl"]',
-      ...['ColumnsMappingEngineOutputPortWizard','DerivedDataSourceOutputSocketWizard','TuneDataSourceMappingWizard'].flatMap(form=>
+      ...['ColumnsMappingEngineOutputPortWizard','DerivedDataSourceOutputSocketWizard','TuneDataSourceMappingWizard','TuneDataSourceInputPortWizard'].flatMap(form=>
         ['grdTargetColumns;tbl','TargetFilter','rbTable','rbLinks','btnAutoSyncThroughColumns'].flatMap(name=>{
           const owner='[data-tid$=";WizrdMCF;'+form+';'+name+'"]';return [owner,owner+' input'];})),
       '[data-tid*=";WizrdMCF;ColumnsMappingEngineOutputPortWizard;grdTargetColumns;tbl;celleditor"]',
       ...['edtDisplayName','cbxNodeTitleMode'].flatMap(name=>{const owner='[data-tid$=";WizrdMCF;DoneWizard;'+name+'"]';return [owner,owner+' input'];}),
-      ...['ColumnsMappingEngineOutputPortWizard','DerivedDataSourceOutputSocketWizard','DerivedDataSourceMappingEngineOutputPortWizard','TuneDataSourceMappingWizard','ReformColumnsWizard'].flatMap(form=>
+      ...['ColumnsMappingEngineOutputPortWizard','DerivedDataSourceOutputSocketWizard','DerivedDataSourceMappingEngineOutputPortWizard','TuneDataSourceMappingWizard','TuneDataSourceInputPortWizard','ReformColumnsWizard'].flatMap(form=>
         ['colName_','colDisplayName_','colDataKind_','colDefaultUsageType_','colUsageType_','colSourceDisplayName_','colCachingMethod_','colExcluded_'].map(key=>'[data-tid*=";WizrdMCF;'+form+';'+key+'"]')),
       '[data-tid$=";WizrdMCF;EditReformColumnDefForm"]','[data-tid="EditReformColumnDefForm"]',
       ...['edtName','edtDisplayName','cbxDataType','cbxDataKind','cbxUsageType','cntMain;cbxCachingMethod','cntMain;chbExcluded','cntMain;chbExcluded;DisplayEl'].flatMap(name=>{const owner='[data-tid="EditReformColumnDefForm;'+name+'"]';return [owner,owner+' input'];}),
@@ -545,8 +545,10 @@ export function workspaceUiCapability(page, task, readNodeContext, captureProces
           const chain=items.every((i,n)=>i.tid.slice(prefix.length).split('>').length===n+1&&(!n||i.tid.startsWith(items[n-1].tid+'>')));
           const format=s=>s.replace(/\s/g,'_').replace(/,/g,'');
           const node=items[5];
+          const graphPrefix=workflow.prefix+';Graph;';
+          const nativeKey=preparedNodeId&&preparedGraphTid?.startsWith(graphPrefix)?preparedGraphTid.slice(graphPrefix.length):null;
           const exact=items[0].tid===prefix+'Сервер'&&items[1].label==='Пакеты'&&items.slice(2).every(i=>i.label)
-            &&node.tid===items[4].tid+'>'+format(node.label);
+            &&node.tid===items[4].tid+'>'+(nativeKey??format(node.label));
           const icon=(e,selector)=>{const found=e.querySelectorAll(selector);charge();return found.length===1&&inside(found[0],e);};
           const icons=icon(crumbs[4],'.maptree-icon-workflow')&&icon(crumbs[5],'[class*="bg-vendor-icon-"]');
           if(!bounded)nodeContext.status='bounded';
@@ -798,8 +800,8 @@ export function workspaceUiCapability(page, task, readNodeContext, captureProces
     scanStage='output_definitions';
     if(wizard.status==='observed' && ['output_mapping','input_mapping','field_parameters'].includes(wizard.stage)) {
       const reform=wizard.stage==='field_parameters',columnsKey=reform?'reform_columns':'output_columns';
-      const mappingForms=['ColumnsMappingEngineOutputPortWizard','DerivedDataSourceOutputSocketWizard','DerivedDataSourceMappingEngineOutputPortWizard','TuneDataSourceMappingWizard'].filter(name=>
-        (tids.get(wizard.root_tid+';'+name+';btnAddMappingColumn')??[]).filter(visible).length===1);
+      const mappingForms=['ColumnsMappingEngineOutputPortWizard','DerivedDataSourceOutputSocketWizard','DerivedDataSourceMappingEngineOutputPortWizard','TuneDataSourceMappingWizard','TuneDataSourceInputPortWizard'].filter(name=>
+        (tids.get(wizard.root_tid+';'+name+';'+(name==='TuneDataSourceInputPortWizard'?'grdTargetColumns':'btnAddMappingColumn'))??[]).filter(visible).length===1);
       const base=wizard.root_tid+';'+(reform?'ReformColumnsWizard':mappingForms.length===1?mappingForms[0]:'__unobserved__')+';';
       const cells=all.filter(e=>{charge();return (getTid(e)??'').startsWith(base+'colName_') && wizardForms[0].contains(e)
         && visible(e) && !sensitive(e) && !e.closest('.x-grid-row-summary');});
@@ -844,12 +846,13 @@ export function workspaceUiCapability(page, task, readNodeContext, captureProces
     }
     if(wizard.output_columns) {
       let coverage={status:'partial',source_identity_verified:false};
-      const forms=['ColumnsMappingEngineOutputPortWizard','DerivedDataSourceOutputSocketWizard','DerivedDataSourceMappingEngineOutputPortWizard','TuneDataSourceMappingWizard'].filter(name=>
-        (tids.get(wizard.root_tid+';'+name+';btnAddMappingColumn')??[]).filter(e=>wizardForms[0].contains(e) && visible(e) && !sensitive(e)).length===1);
+      const forms=['ColumnsMappingEngineOutputPortWizard','DerivedDataSourceOutputSocketWizard','DerivedDataSourceMappingEngineOutputPortWizard','TuneDataSourceMappingWizard','TuneDataSourceInputPortWizard'].filter(name=>
+        (tids.get(wizard.root_tid+';'+name+';'+(name==='TuneDataSourceInputPortWizard'?'grdTargetColumns':'btnAddMappingColumn'))??[]).filter(e=>wizardForms[0].contains(e) && visible(e) && !sensitive(e)).length===1);
       const base=wizard.root_tid+';'+(forms.length===1?forms[0]:'__unobserved__')+';';
       const unique=key=>{const es=tids.get(base+key)??[];return es.length===1 && wizardForms[0].contains(es[0])
         && visible(es[0]) && !sensitive(es[0])?es[0]:null;};
       const body=unique('grdTargetColumns;tbl'),filter=unique('TargetFilter'),tableMode=unique('rbTable'),linksMode=unique('rbLinks');
+      const roleGrid=forms[0]==='TuneDataSourceInputPortWizard';
       const auto=unique('btnAutoSyncThroughColumns');
       wizard.output_columns.auto_sync=auto?{status:'observed',value:auto.classList.contains('x-btn-pressed'),ref:refOf(auto)}:{status:'unobserved'};
       if(body && filter && tableMode && linksMode) {
@@ -889,7 +892,7 @@ export function workspaceUiCapability(page, task, readNodeContext, captureProces
                 || rb.y!==(previous?previous.y+previous.height:cb.y) || matches.length!==1 || matches[0].status!=='observed'
                 || nameCells.length!==1)return false;
               const key=getTid(nameCells[0]).slice((base+'colName_').length);
-              return ['colName_','colDisplayName_','colSourceDisplayName_','colDataKind_',wizard.stage==='input_mapping'?'colUsageType_':'colDefaultUsageType_'].every(prefix=>{
+              return ['colName_','colDisplayName_',...(roleGrid?[]:['colSourceDisplayName_']),'colDataKind_',wizard.stage==='input_mapping'?'colUsageType_':'colDefaultUsageType_'].every(prefix=>{
                 const es=tids.get(base+prefix+key)??[];
                 return es.length===1 && row.contains(es[0]) && inside(es[0],row);
               });
@@ -920,7 +923,7 @@ export function workspaceUiCapability(page, task, readNodeContext, captureProces
         const noEditors=!all.some(e=>{charge();return ((getTid(e)??'').startsWith(base+'grdTargetColumns;tbl;celleditor')
           || (['EditColumnDefForm','EditTuneColumnDefForm'].some(form=>getTid(e)===wizard.root_tid+';'+form||getTid(e)===form)))&&visible(e);});
         let complete=body && container && containers.length===1 && rows.length>0 && rows.length<=1000 && rows.length===fields.length
-          && inputs.length===1 && String(inputs[0].value??'')==='' && tableMode?.classList.contains('x-form-cb-checked')
+          && inputs.length===1 && String(inputs[0].value??'')==='' && (roleGrid||tableMode?.classList.contains('x-form-cb-checked'))
           && !linksMode?.classList.contains('x-form-cb-checked') && noEditors && !dialogs.length
           && !select('.bg-mask-message,.x-mask-msg').some(visible) && boundId
           && container.children.length===rows.length && [...container.children].every(e=>rows.includes(e))
@@ -940,7 +943,7 @@ export function workspaceUiCapability(page, task, readNodeContext, captureProces
                 || row.getAttribute('data-boundview')!==boundId || !nativeInside(row,container)
                 || rb.y!==(previous?previous.y+previous.height:cb.y) || matches.length!==1 || matches[0].status!=='observed' || names.length!==1)return false;
               const key=getTid(names[0]).slice((base+'colName_').length);
-              return ['colName_','colDisplayName_','colSourceDisplayName_','colDataKind_',wizard.stage==='input_mapping'?'colUsageType_':'colDefaultUsageType_'].every(prefix=>{
+              return ['colName_','colDisplayName_',...(roleGrid?[]:['colSourceDisplayName_']),'colDataKind_',wizard.stage==='input_mapping'?'colUsageType_':'colDefaultUsageType_'].every(prefix=>{
                 const es=tids.get(base+prefix+key)??[];return es.length===1 && row.contains(es[0]) && nativeInside(es[0],row);
               });
             }) && boxOf(rows.at(-1)).y+boxOf(rows.at(-1)).height===cb.y+cb.height;
@@ -951,7 +954,7 @@ export function workspaceUiCapability(page, task, readNodeContext, captureProces
         let window=null;
         if(definitionPrefix && body && container && containers.length===1 && rows.length===fields.length && rows.length>0
           && rows.length<=1000 && inputs.length===1 && String(inputs[0].value??'')===''
-          && tableMode?.classList.contains('x-form-cb-checked') && !linksMode?.classList.contains('x-form-cb-checked')
+          && (roleGrid||tableMode?.classList.contains('x-form-cb-checked')) && !linksMode?.classList.contains('x-form-cb-checked')
           && noEditors && !dialogs.length && !select('.bg-mask-message,.x-mask-msg').some(visible)) {
           const view=globalThis.Ext?.getCmp?.(boundId),store=view?.el?.dom===body?view.getStore?.():null;
           const records=store?.$className==='Ext.data.Store' && !store.isBufferedStore && !store.isLoading?.()
@@ -986,7 +989,7 @@ export function workspaceUiCapability(page, task, readNodeContext, captureProces
               && rows.every((row,i)=>{
                 charge();const index=first+i,r=records[index],f=fields[i],b=boxOf(row),previous=i?boxOf(rows[i-1]):null;
                 const cells=[...row.querySelectorAll('[data-tid]')];
-                const completeCells=cells.length<=32 && ['colName_','colDisplayName_','colSourceDisplayName_','colDataKind_',wizard.stage==='input_mapping'?'colUsageType_':'colDefaultUsageType_'].every(prefix=>{
+                const completeCells=cells.length<=32 && ['colName_','colDisplayName_',...(roleGrid?[]:['colSourceDisplayName_']),'colDataKind_',wizard.stage==='input_mapping'?'colUsageType_':'colDefaultUsageType_'].every(prefix=>{
                   const matches=cells.filter(e=>getTid(e)===base+prefix+r.data.Name);
                   return matches.length===1 && nativeInside(matches[0],row);
                 });
@@ -1418,7 +1421,7 @@ function readRenderedInputMapping(observation) {
       if(!portalBound && forms.length===1) {
         const form=forms[0],native=globalThis.Ext?.getCmp?.(form.id)?.Controller;
         const active=globalThis.bg?.app?.Application?.FInstance?.FMainForm?.Items?.Workspace?.getActiveTab?.()?.Controller?.FController;
-        const grids=['ColumnsMappingEngineOutputPortWizard','DerivedDataSourceOutputSocketWizard','TuneDataSourceMappingWizard']
+        const grids=['ColumnsMappingEngineOutputPortWizard','DerivedDataSourceOutputSocketWizard','TuneDataSourceMappingWizard','TuneDataSourceInputPortWizard']
           .flatMap(form=>tids.get(wizard.root_tid+';'+form+';grdTargetColumns;tbl')??[])
           .filter(grid=>wizardForms[0].contains(grid)&&visible(grid));
         const view=grids.length===1?globalThis.Ext?.getCmp?.(grids[0].id):null,store=view?.getStore?.();
@@ -1446,7 +1449,7 @@ function readRenderedInputMapping(observation) {
             if(['name','label'].includes(name) && selection && value.length<=256 && enabled(input) && !input.readOnly)
               wizardFields.set(input,{name,scope:'output_column',max_length_utf16:Math.min(nativeMax,256),stage:wizard.stage,
                 root_ref:refOf(forms[0]),wizard_root_ref:wizard.root_ref,owner_ref:refOf(owners[0]),selected_column:selection});
-            if(name==='type_label' && selection && value.length<=256 && enabled(input))
+            if((name==='type_label'||name==='usage'&&wizard.stage==='input_mapping'&&(tids.get(wizard.root_tid+';TuneDataSourceInputPortWizard;grdTargetColumns;tbl')??[]).some(visible)) && selection && value.length<=256 && enabled(input))
               wizardCombos.set(base+';'+key,{name,scope:'output_column',owner_ref:refOf(owners[0]),input_ref:refOf(input),
                 root_ref:wizard.root_ref,parameter_root_ref:refOf(forms[0]),selected_column:selection,value});
             return [name,{status:'observed',value:value.slice(0,256),value_length_utf16:value.length,truncated:value.length>256,
@@ -2163,7 +2166,7 @@ function readRenderedInputMapping(observation) {
       &&visible(storageRootPanels[0])&&storageRootPanels[0].contains(storageRootCandidates[0])
       &&visible(storageRootCandidates[0])&&!sensitive(storageRootCandidates[0])
       &&textOf(storageRootCandidates[0],true)==='Файлы'?storageRootCandidates[0]:null;
-    const interesting = element => /;btnProduceType;mn;dpt(?:Default|Supplement|Replace)$/.test(getTid(element)??'') || replacementCells.has(state.ids.get(element)) || unionCells.has(state.ids.get(element)) || joinCells.has(state.ids.get(element)) || /^MF;TF(?:-\d+)?;ModelForm;PreviewWindow;p\.h;close$/.test(getTid(element)??'') || element===storageRoot || filterCells.has(state.ids.get(element)) || reformColumnCells.has(state.ids.get(element)) || outputColumnCells.has(state.ids.get(element)) || tableScrollers.has(state.ids.get(element)) || viewerControls.has(state.ids.get(element)) || /;ViewsForm;colVendors_Визуализаторы>[^;]+;TreeText$/.test(getTid(element)??'') || processGridControls.has(state.ids.get(element)) || processExpanders.has(state.ids.get(element)) || outputScroller(element) || importScroller(element) || processCells.has(state.ids.get(element)) || processMenuControls.has(state.ids.get(element)) || sortingCells.has(state.ids.get(element)) || groupingCells.has(state.ids.get(element)) || !!comboPart(element) || importColumnCellRefs.has(state.ids.get(element)) || element.matches('button,input,textarea,select,[contenteditable="true"],[role="button"],[role="checkbox"],[role="radio"],[role="combobox"],[role="menuitem"],[role="tab"],[role="treeitem"],[role="option"],[role="spinbutton"]')
+    const interesting = element => !!graphNodeOf(element) || /;btnProduceType;mn;dpt(?:Default|Supplement|Replace)$/.test(getTid(element)??'') || replacementCells.has(state.ids.get(element)) || unionCells.has(state.ids.get(element)) || joinCells.has(state.ids.get(element)) || /^MF;TF(?:-\d+)?;ModelForm;PreviewWindow;p\.h;close$/.test(getTid(element)??'') || element===storageRoot || filterCells.has(state.ids.get(element)) || reformColumnCells.has(state.ids.get(element)) || outputColumnCells.has(state.ids.get(element)) || tableScrollers.has(state.ids.get(element)) || viewerControls.has(state.ids.get(element)) || /;ViewsForm;colVendors_Визуализаторы>[^;]+;TreeText$/.test(getTid(element)??'') || processGridControls.has(state.ids.get(element)) || processExpanders.has(state.ids.get(element)) || outputScroller(element) || importScroller(element) || processCells.has(state.ids.get(element)) || processMenuControls.has(state.ids.get(element)) || sortingCells.has(state.ids.get(element)) || groupingCells.has(state.ids.get(element)) || !!comboPart(element) || importColumnCellRefs.has(state.ids.get(element)) || element.matches('button,input,textarea,select,[contenteditable="true"],[role="button"],[role="checkbox"],[role="radio"],[role="combobox"],[role="menuitem"],[role="tab"],[role="treeitem"],[role="option"],[role="spinbutton"]')
       || /;(?:Input|Output)_[^;]+$|;Label;Label$|;Graph;[^;]+$|;btn[^;]+$|;edt[^;]+$|;mi[^;]+$|;tb(?:-\d+)?$/.test(getTid(element) ?? '')
       // Pinned E2E bg/selectors.ts:272,279,286: palette tree labels and
       // expanders are spans without button/treeitem roles in some UI builds.
@@ -2198,9 +2201,14 @@ function readRenderedInputMapping(observation) {
     const graphNodeOf=element=>{
       const tid=getTid(element)??'';
       if(!ownedGraph(element))return null;
-      const body=tid.slice(graphPrefix.length),parts=body.split(';'),label=parts[0];
-      if(!graphLabels.has(label) || graphElements.filter(e=>getTid(e)===graphPrefix+label).length!==1)return null;
-      const part=parts.length===1?'body':parts.slice(1).join(';')==='Label;Label'?'label':parts.length===2 && parts[1]==='Setting'?'settings':parts.length===2 && parts[1]==='Visualizers'?'visualizers':null;
+      const body=tid.slice(graphPrefix.length);
+      // Native automatic labels may themselves contain semicolons. Resolve
+      // against complete observed label keys, never the first split token.
+      const matches=[...graphLabels].filter(label=>['',';Label;Label',';Setting',';Visualizers'].some(suffix=>body===label+suffix));
+      if(matches.length!==1)return null;
+      const label=matches[0],suffix=body.slice(label.length);
+      if(graphElements.filter(e=>getTid(e)===graphPrefix+label).length!==1)return null;
+      const part=suffix===''?'body':suffix===';Label;Label'?'label':suffix===';Setting'?'settings':suffix===';Visualizers'?'visualizers':null;
       return part?{node_label:label,part,...(part==='label'?{label_text:textOf(element,false,'')}: {})}:null;
     };
     const priority = { graph_editor: 0, dialog: 1, graph: 2, workflow: 3, global: 4 };
@@ -2512,7 +2520,7 @@ function readRenderedInputMapping(observation) {
         ports: graphElements.filter(element => (getTid(element) ?? '').startsWith(nodeTid + ';') && /;(?:Input|Output)_[^;]+$/.test(getTid(element)))
           .slice(0, 100).map(element => ({ tid: getTid(element), bounding_box: boxOf(element), ui_ref: refOf(element) })) };
     });
-    const links = [...new Set(graphElements.map(getTid).filter(tid => { const body = tid.slice(graphPrefix.length); return body.split('|').length === 4 && !body.includes(';'); }))].sort();
+    const links = [...new Set(graphElements.map(getTid).filter(tid => { const body = tid.slice(graphPrefix.length); return /^[^|]+\|Output_[^;|]+\|[^|]+\|Input_[^;|]+$/.test(body); }))].sort();
     let packageIdentity = null;
     try {
       const app = globalThis.bg?.app;
@@ -2936,6 +2944,7 @@ function readRenderedInputMapping(observation) {
     tableFormatPage:task.table_format_page??(task.snapshot?.table_settings?.format?.page?{offset:task.snapshot.table_settings.format.page.offset,limit:task.snapshot.table_settings.format.page.limit}:null),
     preparedWorkflowPath:task.prepared_node_context?.workflow_ref.navigation_path??null,
     preparedNodeId:task.prepared_node_context?.node.node_id??null,
+    preparedGraphTid:nodeContext?.surface==='graph'?nodeContext.tid:null,
     preparedOutputPort:nodeContext?.output_port??null,preparedInputPort:nodeContext?.input_port??null,
     cacheReadPredicates:!!task.prepared_node_context,definitionPrefix:task.prepared_node_context?.workflow_ref.prefix??null});
     if (observed?.ui_read_failure) {
@@ -3024,7 +3033,7 @@ function readRenderedInputMapping(observation) {
     handles.push(handle);
     const graphPrefix = task.snapshot.graph_identity?.status==='observed'?task.snapshot.graph_identity.native_prefix:null;
     const graphBody = graphPrefix && current.scope==='graph' && current.tid?.startsWith(graphPrefix) ? current.tid.slice(graphPrefix.length) : null;
-    const isGraphLink = graphBody !== null && graphBody.split('|').length === 4 && !graphBody.includes(';');
+    const isGraphLink = graphBody !== null && /^[^|]+\|Output_[^;|]+\|[^|]+\|Input_[^;|]+$/.test(graphBody);
     const valid = await handle.evaluate((element, ref) => element.isConnected && globalThis[Symbol.for('loginom-dock.workspace-ui.identity.v1')]?.ids.get(element) === ref, current.ref);
     // Playwright treats zero-height/width SVG geometry as invisible even when
     // the stroke is painted. Links use the same style check as observation and
@@ -3367,7 +3376,21 @@ function readRenderedInputMapping(observation) {
             // E2E Format maps whitespace to underscores and removes commas.
             // Wrapped SVG labels may lose whitespace at BR boundaries, so
             // require both the exact native key and rendered punctuation.
-            const key=expected.replace(/\s/g,'_').replace(/,/g,'');
+            // Port breadcrumbs collapse whitespace in their displayed text.
+            // Retain the exact node key from the already bound breadcrumb;
+            // deriving it from display text loses multiline automatic labels.
+            const nodePrefix=workflowPath.at(-1)?.tid+'>';
+            const bound=fresh.prepared_node_context,graphPrefix=fresh.workflow_ref?.prefix+';Graph;';
+            // Automatic labels can contain newlines stripped by the Done
+            // input. The prepared GUID reader binds the exact current graph
+            // body, including its newly generated key; rendered text must
+            // still match the completion label below.
+            const boundKey=!port&&bound?.verified===true&&bound.surface==='graph'
+              &&bound.node_id===task.prepared_node_context?.node.node_id&&bound.tid?.startsWith(graphPrefix)
+              ?bound.tid.slice(graphPrefix.length):null;
+            const key=boundKey??(port&&finishOwner.node.tid?.startsWith(nodePrefix)
+              ?finishOwner.node.tid.slice(nodePrefix.length)
+              :expected.replace(/\s/g,'_').replace(/,/g,''));
             const labels=fresh.ui.elements.filter(e=>e.graph_node?.part==='label'
               && e.graph_node.node_label===key && typeof e.graph_node.label_text==='string'
               && e.graph_node.label_text.replace(/\s/g,'')===expected.replace(/\s/g,''));

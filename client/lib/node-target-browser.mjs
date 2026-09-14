@@ -74,8 +74,9 @@ async function readGraph(page, task) {
     }).sort((a,b)=>a.ref.node_id.localeCompare(b.ref.node_id));
     const links=[],foreign_links=[];
     for(const e of containers[0].querySelectorAll('[data-tid]')) {
-      const tid=e.getAttribute('data-tid'), parts=tid.split(';Graph;'); if(parts.length!==2 || parts[1].includes(';'))continue;
-      const endpoints=parts[1].split('|');if(endpoints.length!==4)continue;
+      const tid=e.getAttribute('data-tid'), parts=tid.split(';Graph;'); if(parts.length!==2)continue;
+      const body=parts[1];if(!/^[^|]+\|Output_[^;|]+\|[^|]+\|Input_[^;|]+$/.test(body))continue;
+      const endpoints=body.split('|');
       const prefix=parts[0]+';Graph;',s=byTid.get(prefix+endpoints[0]+';'+endpoints[1]),t=byTid.get(prefix+endpoints[2]+';'+endpoints[3]);
       if(s&&t)links.push({source:s.node,output:s.index,target:t.node,input:t.index});else foreign_links.push(tid);
     }
@@ -119,7 +120,7 @@ async function mutateGraph(page, task, read) {
     const p=task.effect.parameters,kind=task.effect.kind;
     if(kind==='create'){
       const title=task.types[p.type].title.replace(/\s/g,'_');
-      const palette=task.request.workflow_ref.prefix+';ModelForm;colVendors_Компоненты>'+(p.type==='imports.text'?'Импорт':'Трансформация')+'>'+title+';TreeText';
+      const palette=task.request.workflow_ref.prefix+';ModelForm;colVendors_Компоненты>'+(p.type==='imports.text'?'Импорт':p.type==='research.duplicates'?'Исследование':'Трансформация')+'>'+title+';TreeText';
       const origin=await find(task.request.workflow_ref.prefix+';ModelForm;cmpDiagram').boundingBox();
       const target={x:origin.x+p.position.x,y:origin.y+p.position.y};
       const reachable=await find(task.request.workflow_ref.prefix+';ModelForm;cmpDiagram').evaluate((e,p)=>{
@@ -127,6 +128,10 @@ async function mutateGraph(page, task, read) {
         return p.x>=0&&p.y>=0&&p.x<innerWidth&&p.y<innerHeight&&p.x>=b.x&&p.x<b.right&&p.y>=b.y&&p.y<b.bottom&&!!hit&&(hit===e||e.contains(hit));
       },target);
       if(!reachable)throw new Error('Requested drop surface is not reachable');
+      // Research components can be below the palette viewport even in a
+      // maximized window. Reveal only the exact pinned component; drag still
+      // checks the hit target and unchanged graph before mouse-down.
+      await find(palette).scrollIntoViewIfNeeded({timeout:remaining()});
       await drag(find(palette),target);
     }else if(kind==='rename'){
       const tid=await targetTid(p.ref);await point(find(tid+';Label;Label'));effectPossible=true;
@@ -246,7 +251,7 @@ export function createNodeTargetBrowserAdapter({execute,origin,build,pinned}) {
       if(!graph.interaction_ready)throw new Error('Drag surface is not ready');
       if(value.target.kind==='new'){
         const title=NODE_TYPES[value.target.type].title.replace(/\s/g,'_');
-        const tid=value.workflow_ref.prefix+';ModelForm;colVendors_Компоненты>'+(value.target.type==='imports.text'?'Импорт':'Трансформация')+'>'+title+';TreeText';
+        const tid=value.workflow_ref.prefix+';ModelForm;colVendors_Компоненты>'+(value.target.type==='imports.text'?'Импорт':value.target.type==='research.duplicates'?'Исследование':'Трансформация')+'>'+title+';TreeText';
         const available=await call(`async page => page.locator('[data-tid='+${JSON.stringify(JSON.stringify(tid))}+']').evaluateAll(es=>es.length===1 && !!es[0].getBoundingClientRect().width && !es[0].closest('.x-item-disabled,.x-grid-row-disabled'))`,deadline);
         if(!available)throw new Error('Component unavailable in the observed platform/license or palette');
       }

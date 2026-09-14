@@ -467,3 +467,19 @@ are explicitly empty. All fixture, runtime pinning and domain gates still apply.
 Use the subscription base URL from the existing Hermes Xiaomi credential-pool
 entry associated with XIAOMI_API_KEY. Copy only that explicit XIAOMI_BASE_URL
 into the isolated process environment. Do not substitute the normal metered API.
+
+### Дубликаты и противоречия — подготовка приёмки
+
+`run.py --goal duplicates-node-complete` использует три замороженных CSV из
+`fixtures/duplicates/` и задачу `goals/duplicates-node-complete.txt`: 16 полных
+node-операций, три доставки, checkpoint и явное save/reopen. Итоговая проверка:
+`duplicates_node_acceptance.py --run-dir <каталог-прогона>`. Аудитор сверяет
+исходные байты, все 10/8/0 строк, состав групп вместо номеров, роли до изменения
+после открытия, GUID/связи, отсутствие UI-резерва и закреплённые версии.
+
+Запуск требует явно выданного координатором слота Hermes, существующей подписки
+ChatGPT `openai-codex / gpt-5.6-sol / low`, точного candidate URI/SHA, адреса
+Loginom, аккаунта и storage directory. Здесь подготовлен runner; автономная
+приёмка не объявляется завершённой по прямой Codex QA или модульным тестам.
+Отдельный candidate-каталог для узла 12 должен быть подготовлен до этого запуска;
+не переключать production-каталог и не подставлять другой провайдер/модель.

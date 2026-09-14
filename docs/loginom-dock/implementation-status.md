@@ -1143,6 +1143,29 @@ fix-раунд N11-R1 на `91dee921`; повторное ревью не тре
 Hermes, review, следующий узел, push/merge, production build/deploy и обновление
 общего плагина в этом этапе не запускались.
 
+> 13 сентября: отдельный пересмотр неизменного run20260913-072904-3cc4ad0e
+> verifier identity-import-v1 прошёл **122/122**. Исходный frozen **FAIL112/118** сохранён.
+> Нового Hermes run не было; production/goal не менялись. Отчёт:
+> `docs/plans/loginom-dock/node12-identity-auditor-followup-1/README.md`.
+
+> 13 сентября: кандидат12.2 прошёл новый автономный run, но frozen аудит **FAIL112/118**.
+> Причина: три identity import mappings вне закреплённого scope аудитора (шесть gates).
+> Save/close/open и16 node operations прошли. Полная приёмка остаётся незавершённой.
+> Отчёт: `docs/plans/loginom-dock/node12-acceptance-preparation-2/attempt-20260913-072904.md`.
+
+# Поток 12: прямая отладка не завершена — 12 сентября 2026
+
+В `codex/node-12-duplicates` добавлен кандидат research.duplicates / mark.
+Ручной Loginom подтвердил роли и разметку контрольных 12 строк, но полный
+node.apply пока не прошёл до execution/readback. Последний source-прогон
+остановился при разрыве связи; новые подключения к Dock API получили таймаут.
+Автономная приёмка не запускалась, готовность не объявлена.
+
+Клиент до последнего изменения readback: 1398 PASS / 1 SKIP; после него
+профильные suites: 12 PASS. Python: 508 PASS. Эти проверки не заменяют
+оставшуюся живую матрицу и независимый аудит сохранённого пакета.
+[Подробный checkpoint и следующий шаг](duplicates-progress-2026-09-12.md).
+
 ---
 
 # План трёх управляемых потоков подготовлен — 12 сентября 2026
@@ -8597,3 +8620,65 @@ SHA-256 снимка —
 прошли HTTPS, readiness, аутентификация, роль user, каталог из 15 MCP-инструментов,
 редирект Studio и изоляция `/mcp` на домене лендинга. API, Studio, модели и
 credentials не изменялись.
+
+## 2026-09-13 — подплан 12, development завершён в отдельной ветке
+
+В `codex/node-12-duplicates` реализован `research.duplicates / mark`: полные роли
+входных/выходных полей, сохранение исходных строк, четыре служебных столбца,
+новый/существующий узел, execute/Done/Close и подтверждённый отказ при неверной схеме.
+Прямая QA на Loginom 7.4.2 подтвердила main10/null8/empty, key-only, восстановление
+после отказа и все шесть узлов после save/reopen. 17 независимых проверок цепочки
+сохранения прошли. Клиент: 1403 PASS / 1 SKIP; Python: 516 PASS.
+Подготовлены fixtures, goal из 16 операций и независимый сценарный auditor.
+
+Подробности и точные доказательства — [checkpoint node12](duplicates-progress-2026-09-12.md).
+Это завершение разработки, не автономная приёмка подплана: ревью/Hermes не запускались,
+отдельный candidate не опубликован; VPS build, install, push и merge не выполнялись.
+
+## 2026-09-13 — узел 12, N12-R1 закрыт; подготовлен автономный этап
+
+Координатор принял один раунд исправлений N12-R1 (`ce10e177`, HEAD `7bf88255`);
+прежнее ожидание ревью для узла 12 больше не актуально. Подготовлены pins,
+независимые полные expected, исходный архив для VPS, инструкции build/stage и
+изолированная команда Hermes Sol/low. 14 профильных и 4 preflight теста прошли,
+source/runtime совпали с фиксированным commit.
+[Комплект и границы приёмки](../plans/loginom-dock/node12-acceptance-preparation-1/README.md).
+Stage/readback закреплён за координатором, candidate URI/SHA и слот ещё не выданы.
+Hermes не запускался; автономной приёмки, merge/push/install/deploy нет.
+
+### Узел 12 — candidate preflight пройден
+
+Координатор выполнил VPS stage/readback `2026.09.13-node12.1-candidate`,
+manifest SHA `1a5a46312501d20ec7e23a2db12ed95bf34d784ead45628b12cdcf1492a276ce`;
+activated=false. Полный локальный launch preflight прошёл, зарегистрированный
+Dock read подтвердил SHA манифеста. Runtime/harness/native skill неизменны.
+Сценарий Hermes не запускался, слот ожидается после узла 11.
+[Сводка](../plans/loginom-dock/node12-acceptance-preparation-1/candidate-preflight-summary.json).
+
+### Узел 12 — первая автономная попытка остановилась до модели
+
+Run `20260913-060042-78fec37f`: FAILED_BEFORE_MODEL, MCP_TOOL_PRECHECK_FAILED.
+Read-only precheck вне sandbox прошёл; сценарий Hermes не запускался.
+Полный аудитор вызван, но evidence.json отсутствует: PASS не заявляется.
+Собственные процессы завершены, слот освобождён; повтор требует новой выдачи.
+[Отчёт](../plans/loginom-dock/node12-acceptance-preparation-1/attempt-20260913-060042.md).
+
+### Узел 12 — вторая автономная попытка: FAIL
+
+Run 20260913-060514-47b236af завершён, 16 node operations SUCCEEDED,
+полный audit 103/112 PASS — общий FAIL. Save/reopen AMBIGUOUS
+(packages.close cardinality 0); сохранность после открытия не доказана.
+Также выявлены требования аудитора к sample_rows=10 для 8 строк и opening
+receipt для пустого settings. Исходники не изменялись, слот освобождён.
+[Полный отчёт](../plans/loginom-dock/node12-acceptance-preparation-1/attempt-20260913-060514.md).
+
+### Узел 12 — точечный follow-up проверен напрямую
+
+Source 0e11a3fb: подтверждена гонка закрытия меню Save As после overwrite;
+существующее ожидание save-flow перенесено перед ветвлением keepOpen/reopen.
+Persisted imports теперь проверяются только после настоящего save/reopen binding;
+пустой settings допустим, дополнительных открытий мастера от Hermes нет.
+Full read принимает полные 8 строк; persisted schema сравнивается независимо.
+Native34/34, параметры6/6, подмены13/13; клиент1404 PASS/1 SKIP, Python524 PASS.
+Старый failed run неизменён и остаётся FAIL. Новый Hermes не запускался.
+[Отчёт, pins и комплект node12.2](../plans/loginom-dock/node12-acceptance-preparation-2/README.md).

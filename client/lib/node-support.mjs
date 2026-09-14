@@ -1,4 +1,5 @@
 import {createReplacementNodeSupport} from './replacement-node.mjs';
+import {createDuplicatesNodeSupport} from './duplicates-node.mjs';
 import {createUnionNodeSupport} from './union-node.mjs';
 import {createJoinNodeSupport} from './join-node.mjs';
 import {createFilterNodeSupport} from './filter-node.mjs';
@@ -11,10 +12,11 @@ import {createCalculatorNodeSupport} from './calculator-node.mjs';
 // Candidate implementations share one lifecycle, gate and browser. Dispatch by
 // the already validated request; never infer a handler from the current UI.
 export function createCandidateNodeSupport(config) {
- const replacement=createReplacementNodeSupport(config),union=createUnionNodeSupport(config),join=createJoinNodeSupport(config),filter=createFilterNodeSupport(config),imports=createTextImportNodeSupport(config),calculator=createCalculatorNodeSupport(config),grouping=createGroupingNodeSupport(config),sorting=createSortingNodeSupport(config),reform=createReformNodeSupport(config);
- const nodeApplyHandlers=new Map([...replacement.nodeApplyHandlers,...imports.nodeApplyHandlers,...calculator.nodeApplyHandlers,...grouping.nodeApplyHandlers,...sorting.nodeApplyHandlers,...reform.nodeApplyHandlers,...filter.nodeApplyHandlers,...join.nodeApplyHandlers,...union.nodeApplyHandlers]);
+ const duplicates=createDuplicatesNodeSupport(config),replacement=createReplacementNodeSupport(config),union=createUnionNodeSupport(config),join=createJoinNodeSupport(config),filter=createFilterNodeSupport(config),imports=createTextImportNodeSupport(config),calculator=createCalculatorNodeSupport(config),grouping=createGroupingNodeSupport(config),sorting=createSortingNodeSupport(config),reform=createReformNodeSupport(config);
+ const nodeApplyHandlers=new Map([...duplicates.nodeApplyHandlers,...replacement.nodeApplyHandlers,...imports.nodeApplyHandlers,...calculator.nodeApplyHandlers,...grouping.nodeApplyHandlers,...sorting.nodeApplyHandlers,...reform.nodeApplyHandlers,...filter.nodeApplyHandlers,...join.nodeApplyHandlers,...union.nodeApplyHandlers]);
  return {nodeApplyHandlers,nodeApplyDriverFactory:options=>{
   const type=options.operation.parameters?.target?.type;
+  if(type==='research.duplicates')return duplicates.nodeApplyDriverFactory(options);
   if(type==='transform.union_data')return union.nodeApplyDriverFactory(options);
   if(type==='transform.join_data')return join.nodeApplyDriverFactory(options);
   if(type==='transform.filter_data')return filter.nodeApplyDriverFactory(options);

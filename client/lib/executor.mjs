@@ -415,12 +415,12 @@ function browserCapability(page, task) {
       const native=prefixes[0]??null,tids=graph.map(e=>e.getAttribute('data-tid'));
       const labels=[...new Set(tids.filter(t=>t.endsWith(';Label;Label')).map(t=>t.slice(native.length).replace(/;Label;Label$/,''))
         .filter(t=>t && t!=='Переменные_сценария'))].sort();
-      const actionable=tids.filter(t=>{charge();const body=t.slice(native.length);return body.split('|').length===4 && !body.includes(';')
+      const actionable=tids.filter(t=>{charge();const body=t.slice(native.length);return /^[^|]+\|Output_[^;|]+\|[^|]+\|Input_[^;|]+$/.test(body)
         || labels.some(label=>body===label || body===label+';Label;Label' || body===label+';Setting'
           || body.startsWith(label+';') && /;(?:Input|Output)_[^;]+$/.test(body));});
       if(new Set(actionable).size!==actionable.length)throw new Error('Duplicate actionable graph identifiers');
       return {native_prefix:native,nodes:labels.map(label=>({label,ports:tids.filter(t=>t.startsWith(native+label+';') && /;(?:Input|Output)_[^;]+$/.test(t)).sort()})),
-        links:tids.filter(t=>{const body=t.slice(native.length);return body.split('|').length===4 && !body.includes(';');}).sort()};
+        links:tids.filter(t=>{const body=t.slice(native.length);return /^[^|]+\|Output_[^;|]+\|[^|]+\|Input_[^;|]+$/.test(body);}).sort()};
     },prefix);
     const binding={container_tid:containerTid,native_prefix:data.native_prefix};
     if(graphBinding && (graphBinding.container_tid!==containerTid || graphBinding.native_prefix!==null && graphBinding.native_prefix!==binding.native_prefix))

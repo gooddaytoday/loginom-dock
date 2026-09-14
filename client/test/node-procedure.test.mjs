@@ -479,3 +479,20 @@ test('Join link menu uses a unique bounded portal only during Join observation',
 });
 
 test('pre-gesture recovery retains the handler stability condition',async()=>{const f=recoveryFixture({confirmIdentity:s=>s.binding});await f.perform();const observations=f.records.filter(e=>e.phase==='node_observation_completed');assert.equal(observations.length,2);assert.ok(observations.every(e=>e.readiness.required_samples===2));assert.equal(f.records.filter(e=>e.phase==='node_observation_sample').length,4);assert.equal(f.mutations,2);});
+
+test('duplicate global role editor and its dropdown use bounded roots with strict owner guards',async()=>{
+ for(const mode of ['bound','dropdown','unbound','foreign','busy','duplicate']){
+  const base='MF;TF-1;WizrdMCF',editor='EditTuneColumnDefForm';
+  const state={origin:'http://example.test',loginom_build:'7.4.2',workflow_ref:{prefix:'MF;TF-1',tab_tid:'tab'},dom_epoch:{document:'doc'},scan:{complete:true},
+   wizard:{status:'observed',stage:'input_mapping',root_tid:base,root_ref:'wizard',column_parameters:{status:'observed',portal_bound:mode!=='unbound',root_tid:editor,root_ref:'editor',selected_column:{status:'observed',name:'Amount'}}},
+   ui:{elements:[{tid:editor,ref:'editor'}],masks:mode==='busy'?[{kind:'loading',target_tid:base,ref:'wizard'}]:[],
+    dialogs:[{ref:mode==='foreign'?'other':'editor',identity:{anchor_tid:editor}}],truncated:{dialogs:false,masks:false}}};
+  if(mode==='dropdown')state.ui.elements.push({tid:editor+';cbxUsageType;boundlist',ref:'choices'});
+  if(mode==='duplicate')state.ui.elements.push({tid:editor,ref:'duplicate'});
+  let clock=1;const roots=[];
+  const channel=createNodeProcedure({operation:{id:'reform',action:{action_key:'node.apply',revision:'1'},deadline:10000,checkpoint:{document_id:'doc',workflow_ref:state.workflow_ref}},targetOrigin:state.origin,targetBuild:state.loginom_build,
+   now:()=>clock++,wait:async()=>{clock+=1000},record:async e=>structuredClone(e),execute:async code=>{if(!code.includes('"discover_roots":true'))roots.push(/"root_ref":"([^"]+)"/.exec(code)?.[1]);return {status:'SUCCEEDED',output:structuredClone(state)};}});
+  const read=()=>channel.observe({condition:'bound duplicate editor',ready:()=>true,timeoutMs:2000});
+  if(['bound','dropdown'].includes(mode)){await read();assert.deepEqual(roots,[mode==='dropdown'?'choices':'editor']);}else await assert.rejects(read());
+ }
+});
