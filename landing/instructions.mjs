@@ -15,7 +15,7 @@ export function installation(release, agent, platform) {
       : `tar -xzf ${filename}\ncd loginom-dock\n${installer}`,
     sha256: entry.sha256,
     size: `${(entry.bytes / 1048576).toFixed(1).replace('.', ',')} МБ`,
-    update: windows ? `${installer} --config-from "$env:USERPROFILE\\.loginom-dock\\config.json"` : `${installer} --config-from "$HOME/.loginom-dock/config.json"`,
+    update: installer,
     rollback: `${installer} --rollback`,
     uninstall: `${installer} --uninstall`,
   };

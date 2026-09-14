@@ -85,3 +85,37 @@ cleanup SUCCEEDED, packages1→0, несохранённое не отбрасы
 виртуальная папка и таймаут возврата. Старые пустые диагностические сессии не
 являются доказательством native cleanup. Новые source changes требуют обновлённой
 серверной сборки; затем один native Hermes и независимая проверка его результата.
+
+### Итоговая обычная установка и native Hermes приняты
+
+Финальный client source `0df6da8246be905445f1c127e57755b9379ac7ce` собран на VPS
+для macOS, Linux и Windows; манифесты4315файлов проверены до и после66адресных
+тестов Linux. Обновление обоих native-плагинов на Mac завершено; текущий runtime
+`0.1.0-rc.6-b85bccf2723b`. Ранее установка→откат→повторная установка была
+проверена на d445db38; эти процедуры не объявляются новым полным прогоном Windows/Linux.
+
+Настоящий Hermes `20260914_200053_384093` на существующей ChatGPT-подписке,
+openai-codex/gpt-5.6-sol/low, завершил задачу за1м45с. Native @file зарегистрировал
+49байт CSV, SHA256 `57fb261b90c62e01f6f22074b3df5a461f17733884731619ce55e2a0adbb1c9d`.
+Обычный профиль вернул14handlers и выбранные каталоги. Без mode/catalog overrides
+Hermes загрузил файл, создал единственный Sales/imports.text, проверил Region:string,
+Amount:integer и строки Север52, Юг10, Запад0, сохранил
+`/orcestrator/RC public 20260914/Native-attachment-RC6-20260914.lgp`.
+
+Независимый аудит всех9проверок native-пути прошёл; fresh reader
+`311c4292-5c69-44be-80f3-4be7e6f659ff` подтвердил исходный GUID, новый документ,
+единственный узел/ноль связей, выполнение и точные значения без переоткрытия
+мастера. Пять проверок reader также PASS. Writer штатно закрыл сохранённый пакет
+без discard; reader закрыл его с разрешённым удалением только временных изменений
+своего диагностического просмотра. Оба выполнили Logout. Временные настройки
+профиля и Hermes восстановлены побайтно; auth guard не обнаружил refresh/import.
+
+Evidence: `.dock/public-installation/native-final/{pre-audit,final-audit}.json`,
+`native-public-evidence.json`, `reopened/`. В local diagnostics сериализованный
+`action_key` скрывается слишком широким redactor; для аудита использованы
+оригинальные tool envelopes только этой сессии из Hermes DB, без system/reasoning.
+Это диагностическое ограничение не меняет реальные квитанции выполнения.
+
+Полный native composer event Codex отдельно не воспроизводился: проверены
+контракт/привязка host metadata и scripted путь передачи. Linux/Windows GUI
+исключение пользователя и отсутствие XLSX-обработчиков сохранены в release notes.

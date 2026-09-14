@@ -43,6 +43,6 @@ test('Windows instructions keep zip, PowerShell and selected agent in one flow',
   const info = installation(release, 'hermes', 'win32-x64');
   assert.match(info.filename, /win32-x64\.zip$/);
   assert.match(info.install, /install\.ps1 --agent hermes/);
-  assert.match(info.update, /USERPROFILE/);
+  assert.doesNotMatch(info.update, /--config-from/, "the selected agent keeps its own existing profile");
   assert.match(info.rollback, /--agent hermes --rollback/);
 });

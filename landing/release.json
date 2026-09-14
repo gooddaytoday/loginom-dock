@@ -1,24 +1,24 @@
 {
-  "version": "0.1.0-rc.2-fix",
-  "tag": "loginom-dock@0.1.0-rc.2-fix",
+  "version": "0.1.0-rc.6",
+  "tag": "loginom-dock@0.1.0-rc.6",
   "repository": "https://github.com/kartamyshev-dev/loginom-dock",
-  "sourceCommit": "487ada8e3bdfe99d827033a519d6be610c707d91",
+  "sourceCommit": "0df6da8246be905445f1c127e57755b9379ac7ce",
   "endpoint": "https://loginom.duckdns.org/mcp",
   "platforms": {
     "darwin-arm64": {
       "label": "macOS · Apple Silicon",
-      "bytes": 46935092,
-      "sha256": "872e8c25a0108635a4f9408b454bf252a28e5b80dacf22462ce8bfdd8d4c0f80"
+      "bytes": 47874287,
+      "sha256": "f8282cabb5202ab3500598ca2bff5f55ecc8bf8b7819777cc3dea7f83a78e000"
     },
     "linux-x64": {
       "label": "Linux · x64",
-      "bytes": 52074209,
-      "sha256": "c6df87bc7abaf546fb6e0e92bd221e9f640f5f51e44aafa44fad88d6b86956d3"
+      "bytes": 53015240,
+      "sha256": "fb351dee3ab54c4987f83eb7368ceffc95b7c48860f31fea3d3013a2dc9f073e"
     },
     "win32-x64": {
       "label": "Windows 11 · x64",
-      "bytes": 44300908,
-      "sha256": "f26ff67e2f8a29bdd7ba3459e59e85ba21f710edf9dcddd2b7c55c6b94dad906"
+      "bytes": 45422106,
+      "sha256": "a423059db8dc30d7debb4bdd372499c1d2d7473749e569cb0ef4a2fa70025739"
     }
   }
 }
