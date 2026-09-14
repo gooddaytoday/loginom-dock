@@ -61,10 +61,9 @@ def native_input_paths(message, cwd=None):
                     continue
                 path = Path(cwd) / path
             paths.append(str(path))
-        # Remove every reference, including ranges, before scanning explicit
-        # paths so a partial-file reference never grants the whole dataset.
-        for ref in sorted(refs, key=lambda r: r.start, reverse=True):
-            message = message[:ref.start] + " " + message[ref.end:]
+        # The native attachment envelope is authoritative. Other paths in the
+        # request may be destinations in Loginom, not local input files.
+        return list(dict.fromkeys(paths))
     quoted = r'''["`']((?:/|[A-Za-z]:[\\/])[^"`'\n]+)["`']'''
     paths.extend(re.findall(quoted, message))
     unquoted = re.sub(quoted, ' ', message)

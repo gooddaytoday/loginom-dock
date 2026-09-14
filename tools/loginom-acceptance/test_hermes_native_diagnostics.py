@@ -56,6 +56,14 @@ class NativeDiagnosticsTest(unittest.TestCase):
             capture(session_id='one',turn_id='t2',user_message='New task without a file')
             self.assertIsNone(prepare(session_id='one',turn_id='t2',tool_name='loginom_dock_prepare',args={}))
 
+    def test_native_attachment_does_not_capture_server_output_paths(self):
+        text='@file:/local/input.csv'
+        ref=types.SimpleNamespace(kind='file',target='/local/input.csv',start=0,end=len(text),line_start=None,line_end=None)
+        parser=types.SimpleNamespace(parse_context_references=lambda message:[ref])
+        with patch.dict(sys.modules, {'agent.context_references':parser}):
+            message=text+' Save package to /orcestrator/result.lgp and CSV to "/orcestrator/result.csv".'
+            self.assertEqual(native.native_input_paths(message,'/workspace'),['/local/input.csv'])
+
     def test_remote_workspace_does_not_authorize_a_matching_local_path(self):
         ctx=Context()
         with patch.object(native,'install_usage_presence'), patch.object(native,'input_host_environment',return_value=('/remote',Path('/profile/attachments'),False)), patch.object(native.subprocess,'run',return_value=types.SimpleNamespace(returncode=0,stdout=json.dumps({'token':'a'*64}))) as run:

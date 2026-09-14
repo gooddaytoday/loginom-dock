@@ -23,6 +23,30 @@ test('delivery navigates exact authorized folders and reuses upload and byte ver
  result.outcome.sha256='forged';assert.equal(f.service.status('delivery').outcome.sha256,'a'.repeat(64));
  assert.throws(()=>f.service.deliver({...request,budget_ms:1000}),/different parameters/);
 });
+for(const change of [null,'document','tab','directory'])test('delivery scrolls a virtual folder and refuses changed '+(change??'nothing'),async()=>{
+ const f=fixture(),observe=f.runtime.observe,act=f.runtime.uiAct;let scrolled=false;
+ f.runtime.observe=async options=>{
+  const r=await observe(options),s=r.output,prefix=s.workflow_ref.prefix;
+  if(s.file_storage.directory==='/'&&!scrolled){
+   s.ui.elements=s.ui.elements.filter(e=>!e.tid.endsWith(';colName_user'));
+   if(!options.storageName)s.ui.elements.push({tid:prefix+';FileStorageForm;colName_anchor',ref:'anchor',label:'anchor',
+    scroll:{ref:'table-owner',top:0,max_top:2000},allowed_actions:['scroll'],interaction:{state:'point_observed'}});
+  }
+  if(scrolled&&change==='document')s.dom_epoch.document='foreign';
+  if(scrolled&&change==='tab')s.active_tab_ref='foreign';
+  if(scrolled&&change==='directory')s.file_storage.directory='/foreign';
+  return r;
+ };
+ f.runtime.uiAct=async(a,options)=>{
+  if(a.verb==='scroll'){assert.equal(a.delta_y,1000);assert.equal(options.observationId,'obs');scrolled=true;}
+  return act(a,options);
+ };
+ const result=await f.service.deliver(request);
+ assert.equal(f.calls.filter(c=>c==='scroll').length,1);
+ assert.equal(result.outcome.status,change?'AMBIGUOUS':'SUCCEEDED');
+ assert.equal(f.calls.filter(c=>c==='upload').length,change?0:1);
+ if(change)assert.equal(result.outcome.upload_submitted_or_unknown,false);
+});
 for(const fault of ['upload','verify','digest','journal'])test('delivery preserves '+fault+' uncertainty without resubmission',async()=>{
  const f=fixture(fault),promise=f.service.deliver(request),result=await promise;assert.equal(result.outcome.status,'AMBIGUOUS');assert.equal(result.outcome.inspection_required,true);
  assert.equal(f.service.deliver(request),promise);assert.equal(f.calls.filter(c=>c==='upload').length,1);

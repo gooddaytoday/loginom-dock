@@ -1,4 +1,5 @@
 import {storageTidSuffix} from './storage-policy.mjs';
+import {findNativeStorageRow} from './text-export-output.mjs';
 import {createHash} from 'node:crypto';
 const requireValue=(value,message)=>{if(!value)throw Error(message);};
 const hash=value=>createHash('sha256').update(JSON.stringify(value)).digest('hex');
@@ -49,9 +50,9 @@ export function createArtifactDelivery({runtime,artifactStore,record,admit,admit
    }
   };
   const roots=()=>observe({scope:'roots'});
-  const click=async(s,element,verb='click')=>{
+  const click=async(s,element,verb='click',extra={})=>{
    check();const id=job.id+':nav'+(++step);
-   effectPossible=true;const r=await runtime.uiAct({verb,ref:element.ref},{operationId:id,observationId:s.observation_id,signal});
+   effectPossible=true;const r=await runtime.uiAct({verb,ref:element.ref,...extra},{operationId:id,observationId:s.observation_id,signal});
    requireValue(r.status==='SUCCEEDED'&&r.cleanup_complete===true,'Delivery navigation requires inspection: '+id);
   };
   const detail=async(r,element)=>observe({rootRef:element.ref,observationId:r.observation_id});
@@ -70,11 +71,21 @@ export function createArtifactDelivery({runtime,artifactStore,record,admit,admit
    requireValue(bars.length<=1,'Storage navigation is ambiguous');
    return bars.length?detail(r,bars[0]):null;
   },s=>s.file_storage?.status==='observed'&&(expected===undefined||s.file_storage.directory===expected));
-  const readRow=name=>ready('authorized storage entry '+name,async()=>{
-   const r=await observe({scope:'roots',storageName:name});
-   const rows=r.ui.elements.filter(e=>e.tid===r.workflow_ref.prefix+';FileStorageForm;colName_'+storageTidSuffix(name));
-   requireValue(rows.length<=1,'Storage row is ambiguous');return rows.length?detail(r,rows[0]):null;
-  },s=>s.ui.elements.some(e=>e.tid===s.workflow_ref.prefix+';FileStorageForm;colName_'+storageTidSuffix(name)));
+  const readRow=async(name,parent)=>{
+   const owner=JSON.stringify({document:parent.dom_epoch?.document,workflow:parent.workflow_ref});
+   let last=null;
+   const read=async options=>{
+    const s=await observe(options.root_ref
+     ? {rootRef:options.root_ref,observationId:last?.observation_id}
+     : {scope:'roots',...(options.storage_name===undefined?{}:{storageName:options.storage_name})});
+    requireValue(JSON.stringify({document:s.dom_epoch?.document,workflow:s.workflow_ref})===owner,'Delivery search owner changed');
+    if(s.file_storage?.status==='observed')requireValue(s.file_storage.directory===parent.file_storage.directory
+     &&s.active_tab_ref===parent.active_tab_ref,'Delivery search folder or tab changed');
+    last=s;return s;
+   };
+   return findNativeStorageRow({name,read,roots:()=>read({discover_roots:true}),
+    ready:(read,predicate)=>ready('authorized storage entry '+name,read,predicate),act:click,guard:check});
+  };
   try {
    let upload,inspected;
    if(resumeId) {
@@ -113,7 +124,7 @@ export function createArtifactDelivery({runtime,artifactStore,record,admit,admit
     let current=s.file_storage.directory==='/'?'':s.file_storage.directory;
     requireValue(artifact.upload.directory.startsWith(current+'/'),'Files root did not open');
     for(const part of artifact.upload.directory.slice(current.length).split('/').filter(Boolean)) {
-     check();const rowRead=await readRow(part),folder=one(rowRead.ui.elements.filter(e=>e.tid===rowRead.workflow_ref.prefix+';FileStorageForm;colName_'+storageTidSuffix(part)&&e.label===part
+     check();const rowRead=await readRow(part,s),folder=one(rowRead.ui.elements.filter(e=>e.tid===rowRead.workflow_ref.prefix+';FileStorageForm;colName_'+storageTidSuffix(part)&&e.label===part
        &&e.storage_entry?.kind==='folder'&&e.allowed_actions.includes('double_click')),'Destination segment is not a verified folder');
      requireValue(rowRead.file_storage?.directory===(current||'/'),'Storage parent changed');
      await click(rowRead,folder,'double_click');current+='/'+part;s=await directory(current);

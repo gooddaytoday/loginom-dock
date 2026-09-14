@@ -145,7 +145,8 @@ async function prepareWorkspace(page, options) {
       effectPossible=old.phase!=='reserved';
     } else {
       if (options.recoverOnly) return result('NOT_READY','RECEIPT_LOST',{authenticated:true});
-      const before=await wait('workspace_entry_ready',async()=>{const state=await inspect('observe');return state.hard_blocked || (!state.blocked && (state.ready || state.home_ready)) ? state : null;});
+      const before=await wait('workspace_entry_ready',async()=>{const state=await inspect('observe');return state.hard_blocked || (!state.blocked && (state.ready || state.home_ready
+        || options.intent==='existing_workflow'&&state.requested_tab_present)) ? state : null;});
       if (before.blocked) return result('NOT_READY',before.unsaved?'UNSAVED_CHANGES':'UI_BLOCKED',{authenticated:true});
       if(options.intent==='existing_workflow' && (before.document_id!==options.workflowRef.document_id || !before.requested_tab_present)) return result('NOT_READY','WORKFLOW_LOST',{authenticated:true});
       const reserved=await inspect('reserve');

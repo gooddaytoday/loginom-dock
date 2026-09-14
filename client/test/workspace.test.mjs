@@ -100,7 +100,7 @@ function pageFixture({ authenticated = false, workflow = false, actualBuild = bu
     async fill(value) { events.push({ fill: value });if(selector.includes('edtFileName'))openedPath=value; },
     locator(child) { return locator(selector + ' ' + child); },
   });
-  return { events, tabs, context, page: {
+  return { events, tabs, context, openFiles() {add(null);const tab=tabs.at(-1);tab.graph=null;tab.area=null;packages.delete(tab);}, page: {
     url: () => url,
     async goto(value) { url = value; events.push('navigate'); },
     async evaluate(fn,args) {context.args=args;return runInContext(`(${fn.toString()})(args)`,context);},
@@ -317,6 +317,19 @@ test('explicit existing workflow requires matching document, tab and navigation 
   assert.equal((await execute(fixture,{operationId:'damaged-ref',intent:'existing_workflow',workflowRef:damaged})).reason,'WORKFLOW_CHANGED');
   const lost=await execute(fixture,{operationId:'bad-ref',intent:'existing_workflow',workflowRef:{...workflowRef,document_id:'foreign'}});
   assert.equal(lost.reason,'WORKFLOW_LOST');assert.equal(lost.effect_possible,false);
+});
+
+test('existing workflow returns from Files without requiring a graph on the active tab',async()=>{
+  const fixture=pageFixture({authenticated:true}),first=await execute(fixture);
+  const workflowRef={...first.workflow_ref,document_id:first.document_id};
+  fixture.openFiles();
+  const result=await execute(fixture,{operationId:'return-from-files',intent:'existing_workflow',workflowRef,timeoutMs:1000});
+  assert.equal(result.status,'READY');assert.equal(result.created_draft,false);
+  assert.equal(result.workflow_ref.tab_tid,first.workflow_ref.tab_tid);
+  assert.equal(fixture.events.filter(e=>e==='create_draft').length,1);
+  fixture.openFiles();
+  const foreign=await execute(fixture,{operationId:'foreign-from-files',intent:'existing_workflow',workflowRef:{...workflowRef,document_id:'foreign'},timeoutMs:1000});
+  assert.equal(foreign.reason,'WORKFLOW_LOST');assert.equal(foreign.effect_possible,false);
 });
 
 test('a new attempt after a no-effect refusal is uncertain until its own reply arrives',async()=>{
