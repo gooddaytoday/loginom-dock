@@ -1648,14 +1648,29 @@ function readRenderedInputMapping(observation) {
         const count=ordered.length;
         const first=nativeHeaders.filter(e=>{charge();return e.classList.contains('x-column-header-first');});
         const last=nativeHeaders.filter(e=>{charge();return e.classList.contains('x-column-header-last');});
+        // Loginom reserves the preview's vertical scrollbar in this header.
+        // Its scrollWidth can include that empty gutter even when every field
+        // fits. Accept only the measured gutter, with all content inside the
+        // actual client area; real horizontal clipping remains partial.
+        const clientContainsX=(element,owner)=>{
+          const b=boxOf(element),v=boxOf(owner);
+          return owner.clientLeft===0 && owner.offsetWidth===v.width
+            && Number.isFinite(owner.clientWidth) && owner.clientWidth>0
+            && b.x>=v.x && b.x+b.width<=v.x+owner.clientWidth;
+        };
+        const headerGutterOnly=globalThis.getComputedStyle(container).overflowY==='scroll'
+          && container.scrollLeft===0 && container.scrollWidth===container.offsetWidth
+          && container.scrollWidth>container.clientWidth && container.clientWidth===body.clientWidth
+          && nativeHeaders.every(h=>clientContainsX(h,container));
         const everyCell=ordered.every((header,index)=>[0,1,2,3,4].every(row=>{
           const peers=definitionTids.get(columnBase+index+'_'+row)??[];
-          return peers.length===1 && body.contains(peers[0]) && contained(peers[0],body);
+          return peers.length===1 && body.contains(peers[0]) && contained(peers[0],body)
+            && (!headerGutterOnly || clientContainsX(peers[0],body));
         }));
         if(count>0 && count<=8 && nativeHeaders.length===count && columns.length===count
           && wizardForms[0].contains(grid) && grid.contains(container) && grid.contains(body)
           && contained(grid,grid) && contained(container,grid) && contained(body,grid)
-          && noOverflow(grid) && noOverflow(container) && noOverflow(body) && !all.some(e=>{charge();const tid=getTid(e);return tid?.startsWith(editorBase)
+          && noOverflow(grid) && (noOverflow(container)||headerGutterOnly) && noOverflow(body) && !all.some(e=>{charge();const tid=getTid(e);return tid?.startsWith(editorBase)
             && /^celleditor(?:-\d+)?;(?:cbx|txt)$/.test(tid.slice(editorBase.length)) && visible(e);})
           && ordered.every((header,index)=>getTid(header)===columnBase+index && nativeHeaders.includes(header)
             && contained(header,container) && columns[index]?.index===index && columns[index].status==='observed'

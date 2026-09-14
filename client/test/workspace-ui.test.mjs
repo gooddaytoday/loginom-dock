@@ -2868,6 +2868,28 @@ function importCoverageFixture(page, count=3) {
   return {...c,base,grid,header,body,cols};
 }
 
+test('import header vertical gutter preserves only fully visible field coverage',async()=>{
+ for(const mode of ['valid','clipped_header','clipped_cell','horizontal_overflow','not_vertical_gutter','scrolled','mismatched_body','unmeasured_client']) {
+  const page=new Page(),c=importCoverageFixture(page,5);
+  for(const e of [c.grid,c.header,c.body]){e.box.width=719;e.clientWidth=e.scrollWidth=719;}
+  for(const e of [c.header,c.body]){e.clientWidth=704;e.clientLeft=0;e.offsetWidth=719;}
+  c.body.scrollWidth=704;c.header.scrollLeft=0;c.header.style.overflowY='scroll';
+  if(mode==='clipped_header')c.cols[4].header.box.x=680;
+  if(mode==='clipped_cell')c.cols[4].cells[3].box.x=680;
+  if(mode==='horizontal_overflow')c.header.scrollWidth=720;
+  if(mode==='not_vertical_gutter')c.header.style.overflowY='hidden';
+  if(mode==='scrolled')c.header.scrollLeft=1;
+  if(mode==='mismatched_body')c.body.clientWidth=703;
+  if(mode==='unmeasured_client')delete c.header.offsetWidth;
+  const raw=await page.execute({mode:'observe'}),coverage=raw.output.wizard.import_columns.definition_coverage;
+  assert.equal(coverage.status,mode==='valid'?'complete_configured_columns':'partial',mode);
+  for(const scope of [{discover_roots:true},{root_ref:raw.output.wizard.root_ref}]){
+   const scoped=await page.execute({mode:'observe',...scope});
+   assert.deepEqual(scoped.output.wizard.import_columns.definition_coverage,coverage,mode);
+  }
+ }
+});
+
 test('configured import definition coverage requires the entire owned bounded grid',async()=>{
   for(const mode of ['valid','missing_bounds','hidden_extra','gap','overflow','duplicate','foreign_owner','editor','clipped_header','clipped_cell','missing_last','hidden_cell','duplicate_cell','sensitive_header','unknown_header','too_many']) {
     const page=new Page(),c=importCoverageFixture(page);

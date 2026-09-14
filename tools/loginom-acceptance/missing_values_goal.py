@@ -6,7 +6,7 @@ from destinations import render_goal,storage_segments
 WORK=Path(__file__).parent
 VERSION='2026.09.13-node14-test4.2-candidate'
 MANIFEST_URI='viking://resources/loginom-dock/catalogs/executor-preview/releases/'+VERSION+'/manifest.json'
-PIN='e75075de3ea5b8619d6115fd9185040fe8b72f7beb7ffe33a0ce44aae2326262'
+PIN='e909a974f924fe2be856eb9508cd85c42ac18245ea16df01c6bb75d8b4e874fc'
 FILES=['core.csv','precision.csv','skew.csv','boundary.csv','one-in-120.csv','all-null.csv','empty.csv','changed.csv']
 SCHEMA=[dict(name=n,label=n,type='real' if n=='Amount' else 'string' if n=='Note' else 'integer',data_kind='Непрерывный' if n in ('Amount','Count') else 'Дискретный') for n in ('Id','Amount','Count','Note','Untouched')]
 # Every label survives in the saved package. The main/source-change intermediate
