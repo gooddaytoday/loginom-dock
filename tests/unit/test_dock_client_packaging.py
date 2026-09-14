@@ -224,6 +224,11 @@ class ClientPackagingTest(unittest.TestCase):
                 self.assertFalse((target / "executor/catalog/operator-private.json").exists())
                 self.assertTrue((target / "executor/catalog/actions.json").is_file())
                 self.assertTrue((target / "executor/schemas/replay-acceptance.schema.json").is_file())
+                for fixture in (
+                    "tools/loginom-acceptance/collapse/review-fix/loaded-runtime-sources.json",
+                    "tools/loginom-acceptance/collapse/variant-contract/observed.json",
+                ):
+                    self.assertEqual((target / fixture).read_bytes(), (self.source / fixture).read_bytes())
                 self.assertFalse((target / "runtime").exists())
                 self.assertFalse((target / "release.json").exists())
 
@@ -259,6 +264,7 @@ class ClientPackagingTest(unittest.TestCase):
         )
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
         self.assertFalse((staged / "release.json").exists())
+        self.assertFalse(list((staged / "tools").rglob("*.pyc")))
 
 
 if __name__ == "__main__":

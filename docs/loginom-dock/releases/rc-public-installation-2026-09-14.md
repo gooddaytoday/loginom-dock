@@ -31,3 +31,29 @@ config.mjs, setup.mjs, dispatch.mjs, bridge.mjs, user-results.mjs; host-artifact
 Source refs для вложений: Codex26.908.40834/codex0.154.0-alpha.6.2 native composer Files mentioned by the user; официальные hooks https://developers.openai.com/codex/hooks . Hermes693641aa8b4359c602283bdbbc14041e03bc47bc: file.attach→@file, context_references исходный префикс, host pre_llm_call/pre_api_request+pre_tool_call и scoped cwd/backend. Native producer не меняет Hermes core и не сканирует историю. Исключены paths из Attached Context, чужие sessions/turns, remote workspace read на host; разрешены локально staged remote attachments текущего profile.
 
 Повтор четырёх suites, использующих реальные локальные сокеты/процессы:14/14PASS. Итого полного набора после подтверждённого sandbox-only повтора —1819PASS/1SKIP; исходный FAIL report сохранён. Синтетические attachment и profile проверки не заменяют предстоящую Mac native приёмку.
+
+### Каталоги и проверка обычного профиля
+
+На VPS собраны и прочитаны обратно immutable rc6 candidate-каталоги для трёх
+платформ. Их точные URI/SHA закреплены в `client/lib/release-workflow.json`;
+production current не переключён. Source4b452787 включил привязку Codex input
+ticket к переданным самим host thread_id/turn_id;11адресных проверок прошли.
+
+Через обычный source MCP (без mode/catalog overrides) на Mac подтверждены
+LOGIN_REQUIRED→READY, фактический orcestrator,14типов, развёрнутое окно и
+выбранный каталог. Пакет `/orcestrator/RC public 20260914/Проверка установки.lgp`
+сохранён; попытка записи вне разрешённой папки отклонена до эффекта.
+Evidence: `.dock/public-installation/ordinary-live/001`–`004` в интеграционном
+worktree. После сохранения transport закрыт; native ClosePackage/Logout именно
+для этой пробы не подтверждены. Сквозная native-передача вложения ещё не принята.
+По последнему указанию пользователя дальнейшие проверки — только скриптами
+Loginom Dock, без computer use.
+
+Первая серверная сборка4b452787 сохранена как неуспешная проверка упаковки:
+три теста не нашли два JSON Collapse, а Python-тест создал лишний pyc, из-за чего
+строгая проверка manifest остановила установщик до изменения runtime/config.
+Добавлены оба JSON, тестовый Python запускается с `-B`. Две большие DOM fixtures
+используют существующие тестовые часы; рабочие лимиты и отдельные timeout-тесты
+не изменены. Три проверки source packaging, включая полный suite из чистой
+изолированной копии и отсутствие pyc после него, прошли (76.314с).
+Нужна новая серверная сборка и проверка готовых комплектов; старый архив не публиковать.

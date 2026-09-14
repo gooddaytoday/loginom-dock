@@ -55,6 +55,8 @@ def copy_client_sources(source, target, *, windows=False):
         "landing/instructions.mjs",
         "landing/release.json",
         "tools/loginom-acceptance/rename_effect.py",
+        "tools/loginom-acceptance/collapse/review-fix/loaded-runtime-sources.json",
+        "tools/loginom-acceptance/collapse/variant-contract/observed.json",
     ]:
         destination = target / relative
         destination.parent.mkdir(parents=True, exist_ok=True)

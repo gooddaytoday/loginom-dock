@@ -50,6 +50,8 @@ INDIVIDUAL = {
     "landing/instructions.mjs",
     "landing/release.json",
     "tools/loginom-acceptance/rename_effect.py",
+    "tools/loginom-acceptance/collapse/review-fix/loaded-runtime-sources.json",
+    "tools/loginom-acceptance/collapse/variant-contract/observed.json",
 }
 
 def is_client_source(name):

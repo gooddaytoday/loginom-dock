@@ -3757,7 +3757,7 @@ test('native Table coverage survives actual pager and independent journal compar
  const delivered=createObservationPages().retain(clone(raw)),{spawnSync}=await import('node:child_process');
  assert.deepEqual(delivered.output.table_coverage,raw.output.table_coverage);
  const script="import sys,json,copy;from rename_effect import journal_equal;r,d=json.load(sys.stdin);d['output'].pop('operation',None);assert journal_equal(r,d);d['output']['table_coverage']['rendered_rows']['count']=7;assert not journal_equal(r,d)";
- const check=spawnSync('python3',['-c',script],{cwd:new URL('../../tools/loginom-acceptance/',import.meta.url),input:JSON.stringify([raw,delivered]),encoding:'utf8'});
+ const check=spawnSync('python3',['-B','-c',script],{cwd:new URL('../../tools/loginom-acceptance/',import.meta.url),input:JSON.stringify([raw,delivered]),encoding:'utf8'});
  assert.equal(check.status,0,check.stderr);
 });
 
@@ -4063,7 +4063,7 @@ test('horizontal scroll changes only its exact observed owner and refuses stale 
 });
 
 test('addressed output definitions cover clipped rows while legacy coverage stays partial',async()=>{
- const page=new Page(),c=mappingCoverageFixture(page,66);
+ const page=new Page({ clock: fixtureClock().Date }),c=mappingCoverageFixture(page,66);
  const first=await page.execute({mode:'observe',output_column_page:{offset:0,limit:8}});
  assert.equal(first.output.wizard.output_columns.definition_coverage.status,'partial');
  const defs=first.output.wizard.output_columns;assert.equal(defs.page.status,'complete_definition_page');assert.equal(defs.page.total_columns,66);
@@ -4707,7 +4707,7 @@ test('partly clipped import definition cells use a freshly verified visible poin
 });
 
 test('compact filter observation retains visible final rows ahead of clipped saved rows',async()=>{
- const page=new Page(),base='MF;TF-1;WizrdMCF;FilterDataWizard;FilterDataPanel';
+ const page=new Page({ clock: fixtureClock().Date }),base='MF;TF-1;WizrdMCF;FilterDataWizard;FilterDataPanel';
  page.context.innerWidth=1000;page.context.innerHeight=800;
  const wizard=page.add('div','MF;TF-1;WizrdMCF','',{x:20,y:50,width:900,height:700});
  const grid=page.add('div',base,'',{x:30,y:100,width:850,height:600},wizard);grid.id='filter-grid';grid.attrs.id=grid.id;
