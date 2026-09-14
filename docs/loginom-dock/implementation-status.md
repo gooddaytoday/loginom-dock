@@ -7751,3 +7751,10 @@ Source40873812 исправил ложное partial coverage при верти�
 закрыты, новая модель не запускалась. Run7 остаётся FAIL; требуется новый
 Hermes-слот и полная приёмка с независимым save/reopen.
 [Исправление, доказательства и команда запуска](missing-values-import-layout-fix-2026-09-14.md).
+# Node14: run8 выполнил сценарий, frozen audit FAIL — 14 сентября 2026
+
+27 операций и native save успешны,1 доказанный NOT_APPLIED placement.
+Model/launcher0, без timeout, слот локально освобождён. Из145проверок143PASS:
+блокер — existing import проверялся как новый; independent reopen не запускался.
+Run8 сохранён как FAIL, начата адресная правка аудитора без ослабления цели.
+[Результат и ограничения](missing-values-autonomous-acceptance-8-2026-09-14.md).
