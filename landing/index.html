@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="theme-color" content="#A23938">
   <title>Loginom Dock — установка и работа с Codex и Hermes</title>
-  <meta name="description" content="Подключите Codex или Hermes к Loginom. Пошаговая установка плагина на macOS и Linux, примеры задач и общая база знаний Loginom Dock.">
+  <meta name="description" content="Подключите Codex или Hermes к Loginom. Пошаговая установка плагина на macOS, Linux и Windows, примеры задач и общая база знаний Loginom Dock.">
   <meta property="og:title" content="Loginom Dock — от задачи к сценарию">
   <meta property="og:description" content="Ваш AI-агент, знания Loginom и работающий браузер. Установка, первые шаги и примеры.">
   <meta property="og:type" content="website">
@@ -69,7 +69,7 @@
         <a class="aside-link" href="#faq">Не уверены в совместимости? <span aria-hidden="true">↘</span></a>
       </aside>
       <div class="install-guide" aria-label="Шаги установки">
-        <article class="install-step"><div class="step-index">01</div><div class="step-content"><h3>Скачайте готовый комплект</h3><p>В архиве — плагин, среда выполнения и мастер подключения. Системные Node.js и Python переустанавливать не нужно.</p><a class="button download-button" id="download-link" href="{{MAC_URL}}"><span aria-hidden="true">↓</span> <span id="download-label">Скачать для macOS</span><span class="download-size" id="download-size">44,8 МБ</span></a><div class="download-notes"><span>Версия {{VERSION}}</span><a href="{{RELEASE_URL}}">Все файлы выпуска ↗</a></div>
+        <article class="install-step"><div class="step-index">01</div><div class="step-content"><h3>Скачайте готовый комплект</h3><p>В архиве — плагин, среда выполнения и мастер подключения. Системные Node.js и Python переустанавливать не нужно.</p><a class="button download-button" id="download-link" href="{{MAC_URL}}"><span aria-hidden="true">↓</span> <span id="download-label">Скачать для macOS</span><span class="download-size" id="download-size">{{MAC_SIZE}}</span></a><div class="download-notes"><span>Версия {{VERSION}}</span><a href="{{RELEASE_URL}}">Все файлы выпуска ↗</a></div>
           <details class="checksum"><summary>Как проверить скачанный файл?</summary><p>В папке со скачанным архивом откройте терминал и выполните команду. Сравните результат с SHA-256 ниже — они должны совпасть.</p><div class="code-block"><pre><code id="checksum-command">shasum -a 256 {{MAC_FILE}}</code></pre><button type="button" class="copy-button" data-copy-target="checksum-command" aria-label="Копировать команду проверки">Копировать</button></div><span class="mini-label">Ожидаемый SHA-256</span><code class="hash" id="checksum-value">{{MAC_HASH}}</code><a href="{{SUMS_URL}}">Скачать контрольные суммы</a></details>
         </div></article>
         <article class="install-step"><div class="step-index">02</div><div class="step-content"><h3>Запустите мастер установки</h3><p>Откройте терминал в папке со скачанным архивом. Команды распакуют комплект и запустят мастер для <strong data-agent-name>Codex</strong>.</p><div class="code-block terminal"><div class="terminal-top"><span>Терминал</span><button type="button" class="copy-button" data-copy-target="install-command" aria-label="Копировать команды установки">Копировать</button></div><pre><code id="install-command">tar -xzf {{MAC_FILE}}

@@ -2,6 +2,7 @@ import { readFile, writeFile, mkdir, cp, rm } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createHash } from 'node:crypto';
+import { installation } from './instructions.mjs';
 
 const root = dirname(fileURLToPath(import.meta.url));
 const out = join(root, 'dist');
@@ -22,6 +23,7 @@ const tokens = {
   LINUX_URL: release.platforms['linux-x64'].url, ENDPOINT: release.endpoint,
   SUMS_URL: `${release.downloadBase}/SHA256SUMS`, INSTALL_URL: `${release.downloadBase}/INSTALL.md`,
   MAC_FILE: release.platforms['darwin-arm64'].filename, MAC_HASH: release.platforms['darwin-arm64'].sha256,
+  MAC_SIZE: installation(release, 'codex', 'darwin-arm64').size,
 };
 const template = await readFile(join(root, 'index.html'), 'utf8');
 const html = template.replace(/\{\{([A-Z_]+)\}\}/g, (_, name) => {
