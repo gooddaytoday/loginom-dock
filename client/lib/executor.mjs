@@ -2077,7 +2077,12 @@ export function createActionRuntime({ pinned, execute, artifactStore, allowCandi
           };
           operation.nodeApplyDrivers=nodeApplyDriverFactory({operation,execute:executeNodeScript,onRecord,now,
             receiptOptions:(id,key,signature)=>receiptOptions(operation,id,key,signature),
-            readReceipt:reference=>readReceipt({...operation,lastReceipt:structuredClone(reference)}),
+            readReceipt:reference=>readReceipt(operation,reference),
+            nodeHistory:()=>[...operations.values()].map((o,sequence)=>({o,sequence})).filter(({o})=>o!==operation&&o.action.capability==='node.apply')
+              .map(({o,sequence})=>structuredClone({sequence,request:o.parameters,outcome:o.outcome,cleanup_confirmed:o.cleanupConfirmed})),
+            uploadHistory:()=>({complete:true,records:[...operations.values()].map((o,sequence)=>({o,sequence})).filter(({o})=>o.action.capability==='artifact.upload')
+              .map(({o,sequence})=>structuredClone({sequence,operation_id:o.id,destination:o.parameters.destination,artifact:o.checkpoint.artifact,outcome:o.outcome,cleanup_confirmed:o.cleanupConfirmed===true,transport_uncertain:o.transportUncertain===true}))}),
+            exclusiveNodeOperation:()=>running===true&&pending===operation&&operation.nodeApply?.pending?.phase==='read',
             verifiedUploads:()=>[...operations.values()].filter(o=>o.action.capability==='artifact.upload'
               && o.outcome?.status==='SUCCEEDED'&&o.cleanupConfirmed===true)
               .map(o=>structuredClone({operation_id:o.id,artifact:o.checkpoint.artifact,outcome:o.outcome}))});

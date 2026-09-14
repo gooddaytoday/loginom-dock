@@ -1354,6 +1354,164 @@ source/model evidence. Hermes, merge, публикация и установка
 [Итоговый отчёт](node-13-development-report.md), [checkpoint](node-13-checkpoint.md).
 Ревью и Hermes-приёмка не запускались; публикация, merge и установка не выполнялись.
 
+# Node16: полная автономная приёмка завершена — 14 сентября 2026
+
+Source `8cd5c281`, runtime `17b0ede0`, model run `20260914-004604-475bb0c8`:
+**10 случаев / 470 ячеек и 10 свежих открытий / 470 ячеек; полный аудит14/14PASS**.
+Done/Close, negatives и current-run потеря ответа проверены. Исходный wrapper
+exit2 после model exit0 сохранён; отдельный versioned auditor восстановил
+transport dedup/spillover без изменения исходного evidence/harness.
+[Итог, хеши и границы](node16-final-acceptance-2026-09-14.md).
+Merge/deploy/shared plugin не выполнялись.
+
+---
+
+# Node16: исправлена смена файла импорта — 14 сентября 2026
+
+Source `8cd5c281`, runtime `17b0ede0`: existing import all-null → mapped
+получил семь полей; новый Collapse прошёл полную сверку 75 ячеек.
+Клиентские тесты: 1533 PASS / 1 SKIP. Пакет сохранён, диагностические сессии закрыты.
+Четвёртый Hermes run остался FAIL; новый кандидат готов к staging,
+**автономная приёмка не пройдена**. Новый запуск закрыт до candidate/rehearsal/слота.
+[Причина, доказательства и точный checkpoint](node16-source-replacement-result-2026-09-14.md).
+
+---
+
+# Node16: исправлен отпечаток схемы до первого выполнения — 13 сентября 2026
+
+Source `b0709ec0`, runtime `e4e9ecbe`. В живом Loginom прошли Done → Close →
+readback → Execute/full 192 cells и отрицательные проверки; клиентские тесты
+1525 PASS / 1 SKIP. Минимальный новый candidate packet готов к staging.
+Полная Hermes-приёмка остаётся **НЕ пройдена**, новый запуск требует нового
+candidate/rehearsal и слота координатора.
+[Доказательства, verifier delta и следующий checkpoint](node16-hash-fix-result-2026-09-13.md).
+
+---
+
+# Node16: native диагностика и исправление existing-input — 13 сентября 2026
+
+Source621bf7a4/runtimee33dd667:1506client PASS/1SKIP. Missing field отказал до
+открытия порта; сохранённое EntityId подтверждено75+75ячейками. Исторические10cases/
+470cells и10fresh sessions проверены на runtime51; не обозначены как новый runtime.
+32native/auditor+8runner+2wire PASS. Readonly native producer реализован;
+coordinator candidate/slot и полный Hermes/audit ещё впереди. Node16 НЕ принят.
+[Точный статус и evidence](node16-native-gates-progress-2026-09-13.md).
+
+---
+
+# Node16: зарегистрирована цель полного аудита, запуск закрыт — 13 сентября 2026
+
+Назначение `node16:acceptance-runner-integration:1:1d6cdc31`. В acceptance run.py
+добавлена collapse-node-complete, fixture admission и FULL outer auditor.
+27локальных тестов PASS; component replay60cells/6negative PASS с явно synthetic
+transport/model_run=false. CLI preflight BLOCKED до auth/config/processes.
+Handler/source77385e36 и runtime db6d9571 не менялись. Нет readonly-byte producer,
+не закрыты topology/readback/loss bridge, live/candidate/resource/slot gates.
+Никакие prepared CASE_PASS не считаются приёмкой. [Отчёт и интерфейсы](../../tools/loginom-acceptance/collapse/runner-integration/README.md),
+[машинный итог](../../tools/loginom-acceptance/collapse/runner-integration/result.json).
+Старый kit freeze сохранён; текущие harness pins закреплены отдельно.
+Node16 и Hermes **не приняты**; memory summary об обратном ошибочно.
+
+---
+
+# Node16: подготовлен комплект полной приёмки — 13 сентября 2026
+
+Назначение `node16:acceptance-preparation:1:77385e36`. Handler/runtime не менялись.
+Заморожены10таблиц ожиданий,5CSV, полный goal и независимый case auditor;
+21адресный тест, offline replay3results/164cells и5negative mutations PASS.
+[Kit и bounded diagnostic план](../../tools/loginom-acceptance/collapse/acceptance-kit/README.md),
+[машинный checkpoint](../../tools/loginom-acceptance/collapse/acceptance-kit/preparation-result.json).
+Все live/resource/admission gates OPEN. Не хватает Collapse goal в штатном runner;
+default catalog7.5alpha не соответствует target7.4.2, подготовлен явный профиль
+и source-packet manifest только для coordinator-owned stage. Нужна независимая
+проверка server CSV до записи в новой сессии. Никакие browser/model/VPS запуски
+не выполнялись; это подготовка, не readiness и не Hermes acceptance.
+
+---
+
+# Node16: исправлены R16-1–3 после одного review — 13 сентября 2026
+
+Private upload lineage отклоняет устаревший/неопределённый источник; native read
+связан с53реально загруженными функциями и8constants. Типы sample/full/native
+проверены TypeScript5.2.2. Fullclient1483PASS/1SKIP/0FAIL; независимый final-source
+verifier3public cases/164cells PASS, полное save/newsession сравнение PASS.
+Header-only/all-null дополнительные live остановки сохранены и не засчитаны.
+Один correction round, без повторного review; полная node/Hermes acceptance
+остаётся незавершённой. [Результат и ограничения](node16-review-fix-result-2026-09-13.md).
+
+---
+
+# Node16: bounded exact-full подключён к исходникам — 13 сентября 2026
+
+Этап `node16:exact-wiring:1:7e1bbab9` завершён: private static provenance,
+native полный результат до50×8, строгий user-v1, общий MCP serializer и budgets.
+1477PASS/1SKIP/0FAIL; независимый аудит7public cases/244cells PASS, полное
+save/newsession/reexecute сравнение PASS;3native change negatives PASS.
+Даты только native_serial_only; server atomicity/ABA/cancel не заявлены.
+Hermes и полная приёмка узла ещё не выполнены; shared plugin/main не менялись.
+[Итог и ограничения](node16-exact-wiring-result-2026-09-13.md).
+
+---
+
+# Node16: проект exact variant контракта подготовлен — 13 сентября 2026
+
+Предложены cell_type/native bytes, отдельные coverage/binding/consistency и bounded
+exact_table в user-v1; подготовлен pure adapter без public wiring. 27 tests и
+независимый replay38native cells прошли. Native32/server cancel/server atomicity
+не являются дополнительными требованиями исходного16goal. Полная приёмка ждёт
+подключения и полного сравнения после save/newsession/reexecute.
+[Контракт, module owners и acceptance mapping](node16-variant-contract-design-2026-09-13.md).
+
+# Node16: изолированный variant hardening проверен — 13 сентября 2026
+
+Добавлен lifecycle прототипа: deadline/cancel, запрет поздней публикации и повторного
+чтения после сбоя. Live deactivation, cancellation с поздним ответом, offline/socket
+разрыв с pending deadline и очисткой проверены. 19 tests, independent audit и
+14 negative evidence substitutions PASS. Подтверждены свежие DST gap/fold и
+диапазон0100–9999; int32/real32 в UI нормализованы к tags20/5. Full variant_io
+**BLOCKED**: atomic snapshot и server cancellation не доказаны. Public handlers
+и shared plugin не менялись. Подробности: [hardening report](collapse-variant-hardening-result-2026-09-13.md).
+
+# Node16: ограниченный variant-прототип проверен — 13 сентября 2026
+
+После прямого разрешения пользователя fixed method321/interface116 прочитал
+native typed bytes в собственной test-1 копии. Проверены integer/real/string1,
+Null/boolean/empty, signed64 границы, ±значения вне2^53, binary64/−0/subnormal и
+локальный datetime .123ms.12tests PASS,23payload replay PASS,16live отказов доRPC,
+реальный stale execution отказ безRPC,8отрицательных подмен независимого аудитора.
+[Результат, provenance и ограничения](collapse-variant-prototype-result-2026-09-13.md).
+Prototype не интегрирован в handler/plugin. Полный variant_io BLOCKED; native
+real32, общий временной контракт и серверная snapshot-consistency не заявлены.
+
+---
+
+# Node16: пустой результат после открытия проверен — 13 сентября 2026
+
+В своей ветке подтверждены сохранные owner/port/link IDs и полная схема пустого
+результата после save/reopen/reexecute. Причина прежнего предупреждения —
+неактивный upstream перед входным мастером; добавлен ранний NOT_APPLIED без мутации.
+Source:1409PASS/1SKIP; Collapse:21PASS. Exact non-null variant всё ещё BLOCKED.
+[Follow-up и доказательства](collapse-empty-persistence-2026-09-13.md),
+[план ограниченного read-прототипа для отдельного решения](collapse-variant-prototype-plan-2026-09-13.md).
+Полная development acceptance/Hermes/release не заявлены.
+
+---
+
+# Node16: независимая часть реализована, полная приёмка заблокирована — 13 сентября 2026
+
+Только ветка `codex/node-16-collapse-columns`, база `a3b419bde8a660e1905284ee62a46362d5a49e09`.
+Реализованы роли/порядок, политика пустых значений, сопоставления, exclusions,
+Done/Close/Execute и readback. Source:1405PASS/1SKIP; финальные focused:29PASS.
+Живые проверки включают mixed15/9 строк, wide52 строки/260 ячеек,
+сохранение/повторное открытие mapped и отказ повторного жеста после потери ответа.
+Полный exact variant_io заблокирован отсутствием самостоятельного integer/real
+subtype в проверенном Preview. Дополнительный reopen empty остановлен native
+предупреждением о потерянных связях; его причина остаётся открытой.
+После AMBIGUOUS исходная runtime-сессия остаётся pending; автоматическое
+восстановление не заявлено. Hermes и финальная автономная приёмка не проводились.
+[Проверки, ограничения и checkpoint](collapse-columns-development-2026-09-13.md).
+Это не готовность main/установленного клиента и не разрешение на релиз.
+
 ---
 
 # План трёх управляемых потоков подготовлен — 12 сентября 2026

@@ -282,3 +282,26 @@ test('inline derived reorder retains exclusion groups and native group indices',
  assert.deepEqual(result.definition.target_fields.map(f=>[f.record_id,f.excluded,f.group_index]),[['t1',false,0],['t0',false,1],['t3',true,0],['t2',true,1]]);
  assert.equal(f.actions(),4);
 });
+
+test('exclusion resets a distinct source label while preserving its actual source identity',async()=>{
+ const {configureOutputFields}=await import('../lib/port-mapping-procedure.mjs');
+ const f=exclusionFixture();f.native.source_fields[1].label='Типы данных';f.native.target_fields[1].label='Типы данных';
+ const configured=f.native.source_fields.map(s=>({...s,used:true}));
+ const mapping={direction:'output',port:0,fields:configured.map(s=>({source:{kind:'configured_field',name:s.name},excluded:s.name==='B'}))};
+ const r=await configureOutputFields(f.channel,mapping,configured);assert.equal(r.verified,true);
+ const removed=r.definition.target_fields.at(-1);assert.equal(removed.label,'B');assert.equal(removed.exclusion_source.label,'Типы данных');
+ assert.equal((await configureOutputFields(f.channel,mapping,configured)).effect_possible,false);assert.equal(f.count(),2);
+ const bad=exclusionFixture();bad.native.source_fields[1].label='Типы данных';bad.native.target_fields[1].label='Типы данных';
+ bad.channel.afterExclude=n=>{n.target_fields.at(-1).label='Типы данных';};
+ const {excludeOutputField}=await import('../lib/port-mapping-procedure.mjs');await assert.rejects(excludeOutputField(bad.channel,'s1'),/Excluded record identity/);
+});
+
+test('exclusion of a renamed field restores source name and refuses explicit wrong label before mutation',async()=>{
+ const {configureOutputFields}=await import('../lib/port-mapping-procedure.mjs');
+ const f=exclusionFixture();f.native.source_fields[1].label='Исходная метка';Object.assign(f.native.target_fields[1],{name:'Renamed',label:'Новая метка'});
+ const configured=f.native.source_fields.map(s=>({...s,used:true}));
+ const mapping={direction:'output',port:0,fields:configured.map(s=>({source:{kind:'configured_field',name:s.name},excluded:s.name==='B'}))};
+ const bad=structuredClone(mapping);bad.fields[1].label='Исходная метка';await assert.rejects(configureOutputFields(f.channel,bad,configured),/source name as name and label/);assert.equal(f.count(),0);
+ const r=await configureOutputFields(f.channel,mapping,configured);assert.equal(r.definition.target_fields.at(-1).name,'B');assert.equal(r.definition.target_fields.at(-1).label,'B');
+ assert.equal(r.definition.target_fields.at(-1).exclusion_source.label,'Исходная метка');
+});

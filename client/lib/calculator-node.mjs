@@ -15,6 +15,7 @@ import {readOutputDefinitionPages} from './import-definition-pages.mjs';
 import {openNewOutputTable,configureTablePrecision,restoreTablePrecision,prepareTableRead,returnFromOutputTable} from './node-output-procedure.mjs';
 import {readTableOutputPages} from './table-output-pages.mjs';
 import {decodeTableOutput} from './table-output-values.mjs';
+import {readCollapseNativeOutput} from './collapse-native-output.mjs';
 import {finishedImportSurface,verifyFinishedImportContinuation,verifyWaitingExecutionContinuation} from './node-import-continuation.mjs';
 
 const requireValue=(ok,message)=>{if(!ok)throw Error(message);};
@@ -154,6 +155,7 @@ export function createTabularTransformNodeSupport({targetOrigin,targetBuild},imp
       return verified({not_applicable:true,mappings:[]});
      }
      enter(ctx);
+     if(implementation?.beforeInput)await implementation.beforeInput(options,ctx,{targetOrigin,targetBuild});
      if(implementation?.configureInputs)return implementation.configureInputs(channel,mappings,ctx,operation.nodeApply.request,finishWizard);
      const recoveryGraph=implementation?.inputMappingRecovery?await graphForInput():null;
      await channel.openInputPort(0);
@@ -236,6 +238,10 @@ export function createTabularTransformNodeSupport({targetOrigin,targetBuild},imp
    async readOutput(read,ctx) {
     enter(ctx);requireValue(executionReceipt?.verified&&executionReceipt.owner_verified&&executionReceipt.execution_id===ctx.execution.execution_id,'Calculator execution proof missing');
     if(!read.ports.length)return verified({status:'complete',ports:[],execution_id:ctx.execution.execution_id,evidence_ref:ctx.receipt_id});
+    if(read.coverage==='full'){
+     requireValue(implementation?.nativeFullOutput===true,'Full native output is unavailable for this handler');
+     return readCollapseNativeOutput(channel,read,ctx,options,{targetOrigin,targetBuild});
+    }
     if(implementation?.readOutputs){requireValue(multipleOutputs?.verified,'Verified output schemas missing');return implementation.readOutputs(channel,read,ctx,multipleOutputs);}
     const table=await openNewOutputTable(channel,0),formatProof=read.require_exact_numbers?await configureTablePrecision(channel,table.table):null;
     let readSettings,data,formatRestoration;

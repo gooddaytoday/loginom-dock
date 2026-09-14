@@ -34,6 +34,7 @@ function fixture(count,{editLabels=false,drift=false,nullMarker=null,optionMode=
   if(action.verb==='wizard_step'){stage=action.expected_stage;return;}
   if(action.verb==='click'&&action.ref==='marker-picker'){opened=true;return;}
   if(action.verb==='select_wizard_option'){assert.equal(action.ref,'option-'+nullMarker);marker=optionMode==='bad_readback'?'null':nullMarker;opened=false;selected=true;return;}
+  if(action.verb==='set_wizard_field'&&action.ref==='marker-input'){assert.equal(action.text,nullMarker);marker=action.text;return;}
   if(action.verb==='click'){
    const [property,index]=action.ref.split(':'),c=columns[Number(index)];assert.equal(property,'label');
    editor={...c,property,original_value:c.label,input_ref:'editor',value:c.label};return;
@@ -92,6 +93,10 @@ test('complete narrow definitions do not require a data scroller on empty input'
 for(const marker of ['NULL','null'])test('Null marker selects exact native option '+marker,async()=>{
  const f=fixture(1,{nullMarker:marker});const result=await configureTextImportFields(f.channel,f.parameters,f.owner);
  assert.equal(result.verified,true);assert.equal(f.gestures,3);
+});
+test('arbitrary Null marker retains the observed input path',async()=>{
+ const f=fixture(1,{nullMarker:'\\N'});const result=await configureTextImportFields(f.channel,f.parameters,f.owner);
+ assert.equal(result.verified,true);assert.equal(f.gestures,2);
 });
 for(const optionMode of ['duplicate','foreign_owner','foreign_root','wrong_case','bad_readback','replaced_input'])test('Null marker refuses '+optionMode+' without typing fallback',async()=>{
  const f=fixture(1,{nullMarker:'NULL',optionMode});await assert.rejects(configureTextImportFields(f.channel,f.parameters,f.owner));

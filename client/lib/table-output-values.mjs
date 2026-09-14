@@ -54,11 +54,11 @@ export function decodeTableOutput(output,{formatProof,readSettings,expectedColum
         limits.add('datetime_display_precision');
       }
       else if(type==='string')return {type,is_null:false,value:cell.text,representation:'cached_display_text',precision:'display_text'};
-      else limits.add(type+'_display_precision');
+      else {requireValue(type!=='variant'||!requireExactNumbers,'Exact variant value and native subtype are not verified');limits.add(type+'_display_precision');}
       return {type,is_null:false,display_text:cell.text,representation:'formatted_display',precision:'unverified'};
     });
   });
   return {table,schema,row_count:output.row_total,sample:values,sample_rows:values.length,sample_complete:output.sample_complete,
-    precision:{numbers_verified:!limits.has('numeric_display_precision'),limitations:[...limits],strings:'cached UI text; source completeness requires independent audit'},
+    precision:{numbers_verified:!limits.has('numeric_display_precision')&&!limits.has('variant_display_precision'),limitations:[...limits],strings:'cached UI text; source completeness requires independent audit'},
     table_schema_id:output.schema_id,filter_enabled:false};
 }

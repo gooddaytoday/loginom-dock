@@ -88,7 +88,7 @@ def recovery_contexts(value, depth=0):
     return transport_documents(value, 'dock_recovery_context', depth)
 
 
-def export_history(home, secrets):
+def export_history(home, secrets, *, retain_raw_tools=False):
     """Keep execution occurrences distinct; document proven compaction copies.
 
     Hermes replace_messages archives rows and persists the retained conversation
@@ -208,6 +208,7 @@ def export_history(home, secrets):
                     **({'pairing_error':'missing_or_ambiguous_call'} if not call else {}),
                     **({'recovery_contexts':recovery_contexts(content),
                         'verifications':transport_documents(content,'dock_outcome_verification')} if name in LOCAL_TOOLS | NODE_TOOLS else {})}
+            if retain_raw_tools:record["raw_content"]=content
             tools.append(record)
             originals.append({'row':row,'session':session,'identifier':identifier,'content':content,'timestamp':stamp,'active':is_active,'record':record})
         return clean(calls,secrets),clean(tools,secrets)

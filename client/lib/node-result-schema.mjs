@@ -1,3 +1,4 @@
+import {nativeCellSchema,nativePortProperties} from './variant-native-schema.mjs';
 // Public result data, including partial effects. Validation is not an independent
 // acceptance audit: a valid schema alone never proves the user's goal complete.
 const str={type:'string'},bool={type:'boolean'},integer={type:'integer',minimum:0};
@@ -11,14 +12,16 @@ const phase=values('validate','source','workflow','target','input_mapping','open
 const execution={anyOf:[object({status:values('not_requested','pending','completed','cancelled'),execution_id:nullable(str),stop_verified:bool},['status','execution_id']),
  object({status:values('failed'),execution_id:str,failure_verified:{type:'boolean',const:true},root_id:str,group_id:str,group_record_id:str})]};
 const receipt=object({phase,receipt_id:str,status:values('pending','verified','not_requested'),effect_possible:bool});
-const cell=object({type:str,is_null:bool,value:{type:['string','number','boolean','null']},decimal:str,
- representation:str,precision:str,display_text:str,timezone:str},['type','is_null','precision']);
+const legacyCell=object({type:str,is_null:bool,value:{type:['string','number','boolean','null']},decimal:str,
+ representation:str,precision:{type:'string',pattern:'^(?!exact_native$)'},display_text:str,timezone:str},['type','is_null','precision']);
+const cell={anyOf:[legacyCell,nativeCellSchema]};
 const column=object({index:integer,name:str,label:str,type:str,header_tid:str,data_kind:str},['index','name','label','type'],true);
-const port=object({port:integer,port_guid:str,fresh:bool,freshness_basis:str,execution_id:str,
+const port=object({...nativePortProperties,port:integer,port_guid:str,fresh:bool,freshness_basis:str,execution_id:str,
  table:object({view_guid:str,port_guid:str,table_tid:str}),schema:array(column),row_count:integer,
  sample:{type:'array',items:array(cell),maxItems:10},sample_rows:{type:'integer',minimum:0,maximum:10},sample_complete:bool,
  precision:object({numbers_verified:bool,limitations:array(str),strings:str}),table_schema_id:str,filter_enabled:bool},
  ['port','port_guid','fresh','execution_id','schema','row_count','sample','sample_rows','sample_complete','precision'],true);
+export const nodeOutputPortSchema=port;
 const output=object({status:values('not_refreshed','partial','complete'),evidence_ref:nullable(str),execution_id:str,ports:array(port),
  verified:bool,cleanup_complete:bool,effect_possible:bool,no_output_requested:bool},['status','evidence_ref'],true);
 const readbackColumn=object({index:integer,name:str,label:str,type:str,data_kind:str,used:bool});
@@ -58,6 +61,13 @@ const replacementRule=object({field:object({kind:values('input_field'),name:str}
 const replacementConfigurationReadback=object({kind:values('replacement'),scope:values('observed_before_verified_finish'),node:ref,
  receipt_ids:{...array(str),minItems:5,maxItems:5},values_are:values('observed_ui_values'),mode:values('exact'),
  rules:{...array(replacementRule),minItems:1,maxItems:128},output_mode:values('replace','add'),
+ input_mapping:object({port:{type:'integer',const:0},autosync:bool,fields:boundedFields(readbackMappingField)}),
+ output_mapping:object({port:{type:'integer',const:0},autosync:bool,fields:boundedFields(object({...readbackMappingField.properties,excluded:bool}))}),
+ package_persistence_verified:{type:'boolean',const:false}});
+const collapseConfigurationReadback=object({kind:values('collapse'),scope:values('observed_before_verified_finish'),node:ref,
+ receipt_ids:{...array(str),minItems:5,maxItems:5},values_are:values('observed_ui_values'),mode:values('unpivot'),
+ information:{...array(object({name:str,label:str,type:str,order:integer})),maxItems:128},
+ transposed:{...array(object({name:str,label:str,type:str,order:integer})),minItems:1,maxItems:128},ignore_empty:bool,
  input_mapping:object({port:{type:'integer',const:0},autosync:bool,fields:boundedFields(readbackMappingField)}),
  output_mapping:object({port:{type:'integer',const:0},autosync:bool,fields:boundedFields(object({...readbackMappingField.properties,excluded:bool}))}),
  package_persistence_verified:{type:'boolean',const:false}});
@@ -119,7 +129,7 @@ const duplicatesConfigurationReadback=object({kind:values('duplicates'),scope:va
  input_mapping:object({port:{type:'integer',const:0},fields:boundedFields(object({name:str,source_name:str}))}),
  output_mapping:object({port:{type:'integer',const:0},fields:boundedFields(object({name:str,label:str,type:str,source_name:str}))}),
  package_persistence_verified:{type:'boolean',const:false}});
-const configurationReadback={anyOf:[missingValuesConfigurationReadback,dateTimeConfigurationReadback,replacementConfigurationReadback,importConfigurationReadback,calculatorConfigurationReadback,groupingConfigurationReadback,sortingConfigurationReadback,reformConfigurationReadback,filterConfigurationReadback,joinConfigurationReadback,unionConfigurationReadback,duplicatesConfigurationReadback]};
+const configurationReadback={anyOf:[collapseConfigurationReadback,missingValuesConfigurationReadback,dateTimeConfigurationReadback,replacementConfigurationReadback,importConfigurationReadback,calculatorConfigurationReadback,groupingConfigurationReadback,sortingConfigurationReadback,reformConfigurationReadback,filterConfigurationReadback,joinConfigurationReadback,unionConfigurationReadback,duplicatesConfigurationReadback]};
 export const nodeApplyResultSchema=object({operation_id:str,status:values('SUCCEEDED','FAILED','NOT_APPLIED','AMBIGUOUS'),
  effect_possible:bool,phases:array(receipt),node:nullable(ref),execution,output,
  package_saved:{type:'boolean',const:false},cleanup_complete:bool,warnings:array(str),

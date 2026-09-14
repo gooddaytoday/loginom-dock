@@ -21,6 +21,7 @@ from destinations import storage_segments, render_goal
 import upload_probe
 import duplicates_upload_probe
 import missing_values_goal
+import collapse_acceptance
 import union_upload_probe
 import replacement_upload_probe
 import union_review_upload_probe
@@ -144,6 +145,8 @@ def validate_inputs(args):
         raise ValueError('Xiaomi comparison is authorized only for the full data-pipeline goal')
     max_turns_limit=300 if getattr(args,'goal','basic-graph') in ('data-pipeline','calculator-roundtrip','missing-values-complete') else 100
     timeout_limit = 14400 if getattr(args, 'goal', None) == 'date-time-sales' else 3600
+    if getattr(args,'goal',None)==collapse_acceptance.GOAL_ID:
+        timeout_limit=7200;max_turns_limit=140
     if not 30 <= args.timeout <= timeout_limit or not 1 <= args.max_turns <= max_turns_limit:
         raise ValueError("Invalid acceptance budget")
     if args.manifest_uri is not None and not re.fullmatch(re.escape(MANIFEST_ROOT) + r"[0-9A-Za-z.+-]+/manifest\.json", args.manifest_uri):
@@ -171,6 +174,14 @@ def execute(args):
     if getattr(args, 'goal', None) == 'date-time-sales':
         from date_time_launch import guard
         date_admission = guard(args)
+    if getattr(args,'goal',None)==collapse_acceptance.GOAL_ID:
+        # Deliberately before auth/config reads, dependency checks and subprocesses.
+        admission=collapse_acceptance.admission(args)
+        if not args.run and not admission['ready']:
+            write(args.output,admission)
+            print(json.dumps({k:v for k,v in admission.items() if k!='harness_inputs'}))
+            return 0
+        collapse_acceptance.require_admission(args)
     validate_inputs(args)
     profile=getattr(args,'model_profile','chatgpt-sol')
     provider,model=('xiaomi','mimo-v2.5') if profile=='xiaomi-mimo' else ('openai-codex','gpt-5.6-sol')
@@ -178,6 +189,7 @@ def execute(args):
     model_env=xiaomi_connection(args.hermes_home) if profile=='xiaomi-mimo' else {}
     connection_values = connection(args.hermes_home) if profile=='chatgpt-sol' else {'version':1,'providers':{}}
     dock = json.loads(args.dock_config.read_text())
+    if getattr(args,'goal',None)==collapse_acceptance.GOAL_ID:collapse_acceptance.require_user_profile(dock)
     loginom_url = getattr(args, 'loginom_url', None) or dock.get('loginom_url')
     if loginom_url is not None:
         validate_loginom_url(loginom_url)
@@ -231,6 +243,8 @@ def execute(args):
             harness_inputs['fixtures/missing-values/'+name]=sha(WORK/'fixtures/missing-values'/name)
         for name in ('fixtures/missing-values-refusal-live.json.gz','node14/refusal-live.mjs','fixtures/import-placement-refusal-live.json.gz','node14/import-refusal-live.mjs'):
             harness_inputs[name]=sha(WORK/name)
+    if goal_id==collapse_acceptance.GOAL_ID:
+        harness_inputs.update(collapse_acceptance.harness_pins())
     info = {"schema_version": 2, "loginom_url": loginom_url, "storage_directory":getattr(args,"storage_directory",None), "scope": "source_runtime", "model_started": False,
             "provider": provider, "model": model, "reasoning_effort": reasoning, "hermes_version": "0.21.0",
             "model_profile": profile, "provider_selection": "explicit CLI; effective usage identity checked after the run",
@@ -251,6 +265,9 @@ def execute(args):
         info['acceptance_inputs_sha256'] = sha(INPUTS)
         info['series']['pass_criteria'] = 'date_time_sales_acceptance.py including independent post-run diagnostics'
     if goal_id=='missing-values-complete':info['series']['pass_criteria']='missing_values_acceptance.py full goal plus independent reopen/full rows'
+    if goal_id==collapse_acceptance.GOAL_ID:
+        info['collapse_admission']=admission
+        info['series']['pass_criteria']='collapse_node_acceptance.py FULL goal + independent new session; CASE_PASS is insufficient'
     if profile == 'chatgpt-sol':
         info['auth_policy'] = AUTH_POLICY
         with tempfile.TemporaryDirectory(prefix='dock-auth-guard-') as guard_temp:
@@ -279,6 +296,7 @@ def execute(args):
     package = args.storage_directory + "/packages/Dock-acceptance-" + run_id + ".lgp"
     if date_admission is not None:
         package = '/test-3/packages/Dock-date-time-'+run_id+'.lgp'
+    if goal_id==collapse_acceptance.GOAL_ID:package=args.storage_directory+'/Dock-acceptance-'+run_id+'.lgp'
     info.update(run_id=run_id, package_path=package)
     prompt = render_goal(goal.read_text(),package,args.storage_directory)
     if goal_id in ('file-upload-probe','file-upload-verify','data-pipeline','import-roundtrip','calculator-roundtrip','node-import-roundtrip','node-apply-complete','calculator-node-complete','grouping-node-complete','sales-sorting-complete','reform-node-complete','filter-node-complete'):
@@ -296,6 +314,9 @@ def execute(args):
     if goal_id=='missing-values-complete':
         info['input_artifacts']=missing_values_goal.descriptors(run_id,args.storage_directory)
         prompt=missing_values_goal.prompt(goal.read_text(),package,args.storage_directory,run_id)
+    if goal_id==collapse_acceptance.GOAL_ID:
+        info['input_artifacts']=collapse_acceptance.fixtures(run_id,args.storage_directory)
+        prompt=collapse_acceptance.prompt(package,args.storage_directory,run_id)
     write(run / "scenario.txt", prompt)
     write(run / "request.json", info)
     # No key is persisted in the child config. Dock reads its own explicit config.
@@ -318,6 +339,9 @@ def execute(args):
     if goal_id=='missing-values-complete':
         for name,artifact in zip(missing_values_goal.FILES,info['input_artifacts']):
             command.extend(['--input-artifact',json.dumps({**artifact,'sourcePath':str(WORK/'fixtures/missing-values'/name)},ensure_ascii=False)])
+    if goal_id==collapse_acceptance.GOAL_ID:
+        for path,artifact in zip(collapse_acceptance.fixture_paths(),info['input_artifacts']):
+            command.extend(['--input-artifact',json.dumps({**artifact,'sourcePath':str(path)},ensure_ascii=False)])
     # Hermes oneshot otherwise snapshots tools after 15s, even while this
     # server is still connecting. A measured cold start took 16.5s; use the
     # same bounded wait as the declared MCP connection budget.
@@ -349,6 +373,7 @@ def execute(args):
             raise ValueError("Source changed before model launch")
         if date_admission is not None:
             guard(args)
+        if goal_id==collapse_acceptance.GOAL_ID:collapse_acceptance.require_admission(args)
         write(hermes_home / "auth.json", connection_values)
         env = environment(model_env, hermes_home, run)
         argv = [str(args.hermes), "--provider", provider, "--model", model, "--reasoning", reasoning,
@@ -359,7 +384,7 @@ def execute(args):
         child = subprocess.Popen(argv, cwd=run, env=env, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, start_new_session=True)
         started = True
         status = "FAILED_MODEL_OR_EXPORT"
-        print(json.dumps({"run_id": run_id, "stage": "model_started", "provider": provider, "model": model, "reasoning_effort": reasoning}), flush=True)
+        print(json.dumps({"run_id": run_id, "stage": "model_started", "pid": child.pid, "provider": provider, "model": model, "reasoning_effort": reasoning}), flush=True)
         timed_out = False
         try:
             child.wait(timeout=args.timeout)
@@ -372,7 +397,7 @@ def execute(args):
                 os.killpg(child.pid, signal.SIGKILL); child.wait(timeout=15)
         usage_path = run / "private/usage.json"
         usage = json.loads(usage_path.read_text()) if usage_path.exists() else {}
-        calls, tool_results = export_history(hermes_home, secrets)
+        calls, tool_results = export_history(hermes_home, secrets, retain_raw_tools=goal_id==collapse_acceptance.GOAL_ID)
         evidence = {"schema_version": 1, "run_id": run_id, "export_complete": True,
                     "runtime_source_unchanged": runtime_pin(REPO) == frozen,
                     "harness_unchanged": harness_unchanged(harness_inputs),
@@ -394,6 +419,9 @@ def execute(args):
             evidence['efficiency'] = node_efficiency(evidence)
             write(run / 'efficiency.json', evidence['efficiency'])
         write(run / "evidence.json", clean(evidence, secrets))
+        if goal_id==collapse_acceptance.GOAL_ID:
+            import collapse_node_acceptance
+            write(run/'collapse-audit.json',collapse_node_acceptance.audit(info,evidence,prompt,None))
         status = "EXPORTED_PENDING_AUDIT"
         return 0
     finally:
@@ -430,7 +458,7 @@ def main():
     parser.add_argument("--require-delivered-context", action="store_true",
                         help="Require automatic E2E/Help delivery bound to a failure and journal before successful continuation")
     parser.add_argument("--model-profile",choices=["chatgpt-sol","xiaomi-mimo"],default="chatgpt-sol")
-    parser.add_argument("--goal", choices=["missing-values-complete", "duplicates-node-complete", "replacement-node-complete", "union-review-complete", "union-node-complete", "join-review-complete", "join-node-complete", "prepare-workspace", "basic-graph", "auto-link-retain", "auto-link-remove", "palette-inventory", "checkbox-roundtrip", "context-menu-checkbox", "root-checkbox", "file-storage-inspect", "file-upload-probe", "file-upload-verify", "data-pipeline", "import-roundtrip", "calculator-roundtrip", "node-import-roundtrip", "node-apply-complete", "calculator-node-complete", "grouping-node-complete", "sales-sorting-complete", "reform-node-complete", "filter-node-complete"], default="basic-graph")
+    parser.add_argument("--goal", choices=["collapse-node-complete", "missing-values-complete", "duplicates-node-complete", "replacement-node-complete", "union-review-complete", "union-node-complete", "join-review-complete", "join-node-complete", "prepare-workspace", "basic-graph", "auto-link-retain", "auto-link-remove", "palette-inventory", "checkbox-roundtrip", "context-menu-checkbox", "root-checkbox", "file-storage-inspect", "file-upload-probe", "file-upload-verify", "data-pipeline", "import-roundtrip", "calculator-roundtrip", "node-import-roundtrip", "node-apply-complete", "calculator-node-complete", "grouping-node-complete", "sales-sorting-complete", "reform-node-complete", "filter-node-complete"], default="basic-graph")
     parser.add_argument("--allow-manual-reopen", action="store_true")
     args = parser.parse_args()
     if args.fault=="save_reopen" and not args.allow_manual_reopen:

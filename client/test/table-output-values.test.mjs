@@ -77,3 +77,10 @@ test('sole numeric column requires committed format when selected-field readback
   const altered=structuredClone(f);change(altered.output.applied_format);assert.throws(()=>decodeTableOutput(altered.output,altered.options));
  }
 });
+
+test('variant display never proves a native numeric subtype or exact value',()=>{
+ for(const text of ['1','1.0','true','9223372036854775807']){const f=fixture(['variant']);f.output.rows[0].cells[0].text=text;
+ assert.throws(()=>decodeTableOutput(f.output,f.options),/native subtype/);
+ f.options.requireExactNumbers=false;const r=decodeTableOutput(f.output,f.options);assert.equal(r.precision.numbers_verified,false);assert.deepEqual(r.precision.limitations,['variant_display_precision']);assert.equal(r.sample[0][0].value,undefined);assert.equal(r.sample[0][0].type,'variant');}
+ const empty=fixture(['variant']);empty.output.rows=[];empty.output.row_total=0;assert.equal(decodeTableOutput(empty.output,empty.options).sample.length,0);
+});
