@@ -118,8 +118,14 @@ class DateTimeSalesPreparation(unittest.TestCase):
     def test_natural_prompt_has_no_api_recipe_or_hidden_reopen(self):
         text = render('20260913-120000-1234abcd')
         self.assertNotIn('__', text)
+        # Prompt revision 2 explicitly clarifies the excluded source contract.
+        # Keep this one approved recipe exact; do not allow unrelated API recipes.
+        clarification = ('В запросах node.apply запись mappings.fields для исключения DateB задавай ровно как '
+            '{"source":{"kind":"configured_field","name":"DateB"},"excluded":true}')
+        self.assertEqual(text.count(clarification), 1)
+        remaining = text.replace(clarification, '')
         for token in ('node.apply', 'sample_rows', 'package.save_as', 'package.save_checkpoint', 'operation_id', 'fault injection'):
-            self.assertNotIn(token, text)
+            self.assertNotIn(token, remaining)
         self.assertIn('Повторное открытие сохранённого пакета выполнит отдельная независимая диагностика', text)
 
     def test_absent_admission_and_fake_passes_refuse_without_launch(self):

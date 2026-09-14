@@ -477,12 +477,26 @@ export function workspaceUiCapability(page, task, readNodeContext, captureProces
       let portContext={status:panels.length>1?'ambiguous':'unobserved',opening_verified:false};
       if(panels.length===1) {
         const prefix=workflow.prefix+';cnrNaviMode;b.s_';
+        // A long breadcrumb toolbar hides the output socket as well as Settings.
+        // Only a current native opening receipt may supply this overflow context;
+        // the visible wizard, full ancestry and actionable Done remain required.
+        const boundOutputOverflow=preparedOutputPort?.direction==='output'
+          && Number.isInteger(preparedOutputPort.port)&&preparedOutputPort.port>=0&&preparedOutputPort.port<100
+          && preparedOutputPort.native_index===preparedOutputPort.port
+          && typeof preparedOutputPort.port_guid==='string'&&preparedOutputPort.port_guid.length>0
+          && typeof preparedOutputPort.opening_operation_id==='string'&&preparedOutputPort.opening_operation_id.length>0;
+        const overflowSocket=e=>boundOutputOverflow&&getComputedStyle(e).display==='none'
+          &&getComputedStyle(e).visibility==='visible'&&getComputedStyle(e).opacity!=='0'&&!e.hasAttribute('hidden')
+          &&e.querySelectorAll('.bg-vendor-icon-deriveddatasourceoutputsocketdef,.bg-vendor-icon-outputdatasourcesocketdef').length===1
+          &&(tids.get(getTid(e)+'>Настройка')??[]).filter(child=>panels[0].contains(child)
+            &&child.querySelectorAll('.maptree-icon-wizard').length===1).length===1;
         const crumbs=all.filter(e=>{charge();return (getTid(e)??'').startsWith(prefix) && panels[0].contains(e) && !sensitive(e)
-          && (visible(e)||preparedOutputPort?.direction==='output'&&(getTid(e)??'').endsWith('>Настройка')
+          && (visible(e)||overflowSocket(e)||preparedOutputPort?.direction==='output'&&(getTid(e)??'').endsWith('>Настройка')
             &&e.querySelectorAll('.maptree-icon-wizard').length===1);});
         if(crumbs.length>32)ownerContext.status='bounded';
         else if(crumbs.length) {
-          const items=crumbs.map(e=>({ref:refOf(e),tid:getTid(e),label:textOf(e,true),
+          const items=crumbs.map(e=>({ref:refOf(e),tid:getTid(e),label:overflowSocket(e)?short(e.textContent):textOf(e,true),
+            overflow_context:overflowSocket(e),
             wizard_icon:e.querySelectorAll('.maptree-icon-wizard').length===1,
             workflow_icon:e.querySelectorAll('.maptree-icon-workflow').length===1,
             outputs_icon:e.querySelectorAll('.maptree-icon-modeloutputports').length===1,
@@ -510,6 +524,9 @@ export function workspaceUiCapability(page, task, readNodeContext, captureProces
             && items.at(-3)?.outputs_icon && items.at(-4)?.vendor_icon && items.at(-4)?.label && items.at(-5)?.workflow_icon) {
             const parent=items.at(-4);
             portContext={status:'observed',opening_verified:false,kind:'output_data',panel_ref:refOf(panels[0]),
+              ...(node.overflow_context?{overflow_context:{source:'native_opening_bound_toolbar_overflow',
+                port_guid:preparedOutputPort.port_guid,native_index:preparedOutputPort.native_index,
+                opening_operation_id:preparedOutputPort.opening_operation_id}}:{}),
               node:{ref:parent.ref,tid:parent.tid,label:parent.label},port:{ref:node.ref,tid:node.tid,label:node.label},
               path:items.map(({ref,tid,label})=>({ref,tid,label}))};
           }

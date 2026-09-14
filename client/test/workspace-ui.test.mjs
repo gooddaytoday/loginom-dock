@@ -3821,6 +3821,42 @@ test('typed output-port finish requires complete output mapping and its own port
   }
 });
 
+test('overflow output socket requires a current native owner and visible actionable Done',async()=>{
+  for(const mode of ['valid','unbound','stale_owner','foreign_port','missing_guid','missing_opening','wrong_index',
+    'duplicate_socket','wrong_socket_icon','missing_settings','hidden_ancestor','hidden_visibility','disabled_done','hidden_done']){
+    const {page}=outputPortFinishFixture();
+    const find=suffix=>page.document.all().find(e=>e.attrs['data-tid']?.endsWith(suffix));
+    const socket=find('>Result'),settings=find('>Settings'),done=find(';btnDone');
+    settings.attrs['data-tid']=settings.attrs['data-tid'].replace('>Settings','>Настройка');settings.ownText='Настройка';
+    socket.style.display='none';settings.style.display='none';
+    const port={direction:'output',port:0,native_index:0,port_guid:'out-guid',opening_operation_id:'open-output'};
+    if(mode==='foreign_port')port.direction='input';
+    if(mode==='missing_guid')delete port.port_guid;
+    if(mode==='missing_opening')delete port.opening_operation_id;
+    if(mode==='wrong_index')port.native_index=1;
+    if(mode==='duplicate_socket'){
+      const duplicate=page.add('a',socket.attrs['data-tid'],'Result',undefined,socket.parentElement);duplicate.style.display='none';
+      page.add('span',null,'',undefined,duplicate).attrs.class='bg-vendor-icon-deriveddatasourceoutputsocketdef';
+    }
+    if(mode==='wrong_socket_icon')socket.children[0].attrs.class='bg-vendor-icon-inputdatasourcesocketdef';
+    if(mode==='missing_settings')settings.remove();
+    if(mode==='hidden_ancestor')find('>Outputs').style.display='none';
+    if(mode==='hidden_visibility')socket.style.visibility='hidden';
+    if(mode==='disabled_done')done.disabled=true;
+    if(mode==='hidden_done')done.style.display='none';
+    page.execute=async options=>clone(await vm.runInContext('('+workspaceUiCapability.toString()+')',page.context)(page,
+      {expected_build:build,expected_origin:origin,...(mode==='unbound'?{}:{prepared_node_context:{node:{node_id:'node'},workflow_ref:{prefix:'MF;TF-1',navigation_path:[]}}}),...options},
+      async()=>mode==='stale_owner'?{verified:false,reason:'node'}:{verified:true,surface:'wizard',node_id:'node',output_port:port}));
+    const raw=await page.execute({mode:'observe'});
+    if(mode==='stale_owner'){assert.notEqual(raw.status,'SUCCEEDED');assert.equal(raw.error.code,'PREPARED_NODE_CONTEXT_CHANGED');continue;}
+    assert.equal(raw.status,'SUCCEEDED',mode);
+    const controls=raw.output.ui.elements.filter(e=>e.allowed_actions.includes('finish_wizard'));
+    assert.equal(controls.length,mode==='valid'?1:0,mode);
+    if(mode==='valid'){assert.equal(raw.output.wizard.port_context.status,'observed');assert.equal(controls[0].wizard_finish.mode,'output_port');}
+    assert.equal(page.events.filter(e=>e==='click').length,0,mode);
+  }
+});
+
 test('typed output-port finish confirms one gesture and quiet return to the exact graph',async()=>{
   for(const mode of ['valid','wrong_workflow','wrong_node','still_open','mask','churn']){
     const {page}=outputPortFinishFixture(mode),s=await page.observe(),done=s.ui.elements.find(e=>e.wizard_finish?.mode==='output_port');assert.ok(done,mode);

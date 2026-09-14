@@ -32,7 +32,9 @@ DateB/Дата и native excluded target DateB/DateB. На реальном nati
 В исполняемый goal добавлена эта точная запись для обоих календарей.
 Frozen-v4 сохраняет семантику, prompt_revision=2 фиксирует уточнение.
 CSV, expected tables, девять запросов и runtime/candidate не изменились.
-Python 548 PASS, inputs275 PASS; [проверка неизменности](node13-live-preflight/hermes-prompt-clarification.json).
+Уточнение 14 сентября: исходный лог Python содержал 547 PASS и 1 FAIL
+(устаревший запрет API-рецепта после prompt_revision2), а прежнее утверждение
+«548 PASS» было ошибочным. Входы275 прошли проверку хешей; [проверка неизменности](node13-live-preflight/hermes-prompt-clarification.json).
 Предыдущий успешный model-free сценарий/save/reopen остаётся применимым
 к тем же данным и клиентскому коду; повторять его целиком ради уточнения текста
 не требуется. Дефект runtime не заявляется и исправления runtime не вводились.
