@@ -15,7 +15,7 @@ function matches(element, selector) {
   selector = selector.trim();
   const breadcrumbLabel=/^(\[data-tid\*=";cnrNaviMode;b\.s"\]) (\.x-btn-inner-default-toolbar-small)$/.exec(selector);
   if(breadcrumbLabel)return matches(element,breadcrumbLabel[2]) && !!element.parentElement?.closest(breadcrumbLabel[1]);
-  const ownedInput=/^((?:\[data-tid[$^*]?="[^"]+"\])+) (input|textarea|\.x-form-error-msg)$/.exec(selector);
+  const ownedInput=/^((?:\[data-tid[$^*]?="[^"]+"\])+) (input|textarea|\.x-form-error-msg|img\.x-grid-checkcolumn)$/.exec(selector);
   if(ownedInput)return matches(element,ownedInput[2]) && !!element.parentElement?.closest(ownedInput[1]);
   const not = [...selector.matchAll(/:not\(([^)]+)\)/g)];
   if (not.some(([, inner]) => matches(element, inner))) return false;
@@ -2113,6 +2113,45 @@ for(const completion of ['done','execute'])test('wizard '+completion+' waits for
   }
 });
 
+test('date/time exposes untagged native checkbox images only for the exact cached row and flag',async()=>{
+ for(const mode of ['valid','record_changed','flag_changed','duplicate_image','foreign_store']){
+  const page=new Page(),base='MF;TF-1;WizrdMCF;DateReformWizard;';
+  page.context.innerWidth=1000;page.context.innerHeight=800;
+  const form=page.add('div','MF;TF-1;WizrdMCF','',{x:10,y:80,width:1000,height:600});
+  const root=page.add('div',base.slice(0,-1),'',{x:20,y:90,width:900,height:500},form);
+  const grid=page.add('div',base+'grdDataFormat;tbl','',{x:30,y:100,width:800,height:400},root);grid.attrs.id='date-grid';grid.id='date-grid';
+  const row=page.add('table',null,'',{x:35,y:120,width:700,height:30},grid);Object.assign(row.attrs,{class:'x-grid-item','data-recordindex':'0','data-recordid':mode==='record_changed'?'other':'r0','data-boundview':'date-grid'});
+  const cell=page.add('td',base+'colDoDateTimeFirst_0','',{x:160,y:120,width:100,height:30},row);
+  const image=page.add('img',null,'',{x:200,y:125,width:16,height:16},cell);image.attrs.class='x-grid-checkcolumn';
+  if(mode==='duplicate_image'){const second=page.add('img',null,'',{x:220,y:125,width:16,height:16},cell);second.attrs.class='x-grid-checkcolumn';}
+  const record={isModel:true,internalId:'r0',data:{Func:0,ISO8601:false,DoDateTimeFirst:mode==='flag_changed',DoDateTimeLast:false,DoNumber:false,DoString:false}};
+  page.context.Ext={getCmp:id=>id==='date-grid'?{el:{dom:grid},getStore:()=>({$className:mode==='foreign_store'?'Other':'Ext.data.Store',isLoading:()=>false,getData:()=>({items:[record]})})}:undefined};
+  const s=await page.observe(),flags=s.ui.elements.filter(e=>e.date_time_cell?.role==='flag');
+  assert.equal(flags.length,mode==='valid'?1:0,mode+JSON.stringify({wizard:s.wizard,elements:s.ui.elements.map(e=>({tid:e.tid,role:e.date_time_cell}))}));
+  if(mode==='valid'){assert.equal(flags[0].date_time_cell.record_id,'r0');assert.equal(flags[0].date_time_cell.checked,false);assert.ok(flags[0].allowed_actions.includes('click'),JSON.stringify(flags[0]));assert.equal(flags[0].identity.anchor_tid,base+'colDoDateTimeFirst_0');}
+ }
+});
+
+test('date orphan delete cells require the date wizard, exact cached row and an unbound optional output',async()=>{
+ for(const mode of ['valid','linked','required','record_changed','other_wizard']){
+  const page=new Page(),base='MF;TF-1;WizrdMCF;DerivedDataSourceMappingEngineOutputPortWizard;';
+  page.context.innerWidth=1000;page.context.innerHeight=800;
+  const form=page.add('div','MF;TF-1;WizrdMCF','',{x:10,y:80,width:900,height:600});
+  if(mode!=='other_wizard'){const date=page.add('div','MF;TF-1;WizrdMCF;DateReformWizard','',{x:10,y:80,width:900,height:500},form);date.style.display='none';}
+  const root=page.add('div',base.slice(0,-1),'',{x:20,y:90,width:850,height:500},form);
+  page.add('button',base+'btnAddMappingColumn','',{x:30,y:90,width:20,height:20},root);
+  const grid=page.add('div',base+'grdTargetColumns;tbl','',{x:30,y:100,width:800,height:400},root);grid.attrs.id='orphan-grid';grid.id='orphan-grid';
+  const row=page.add('table',null,'',{x:35,y:120,width:700,height:30},grid);Object.assign(row.attrs,{class:'x-grid-item','data-recordindex':'0','data-recordid':mode==='record_changed'?'other':'r0','data-boundview':'orphan-grid'});
+  const cell=page.add('td',base+'colTargetDelete_RenamedYear','',{x:650,y:120,width:30,height:30},row);
+  const icon=page.add('img',null,'',{x:655,y:125,width:16,height:16},cell);icon.attrs.role='button';icon.attrs.class='x-action-col-icon';
+  const record={isModel:true,internalId:'r0',data:{Name:'RenamedYear',Required:mode==='required',ConnectedRecord:mode==='linked'?{}:null}};
+  page.context.Ext={getCmp:id=>id==='orphan-grid'?{el:{dom:grid},getStore:()=>({$className:'Ext.data.Store',isLoading:()=>false,getData:()=>({items:[record]})})}:undefined};
+  const state=await page.observe(),cells=state.ui.elements.filter(e=>e.date_time_cell?.role==='output_delete');
+  assert.equal(cells.length,mode==='valid'?1:0,mode+JSON.stringify({wizard:state.wizard,elements:state.ui.elements.map(e=>({tid:e.tid,date:e.date_time_cell}))}));
+  if(mode==='valid'){assert.equal(cells[0].date_time_cell.record_id,'r0');assert.ok(cells[0].allowed_actions.includes('click'));}
+ }
+});
+
 function groupingFixture() {
   const page=new Page(),base='MF;TF-1;WizrdMCF;GroupDataWizard;';
   page.context.innerWidth=1000;page.context.innerHeight=800;
@@ -3418,16 +3457,18 @@ test('input port context observes exact node path and display caption without po
 });
 
 test('input port overflow caption requires native binding and the exact hidden caption',async()=>{
- for(const mode of ['bound','unbound','wrong_caption','missing_icon']) {
+ for(const mode of ['bound','unbound','wrong_caption','missing_icon','port_bound','port_unbound','port_wrong_caption']) {
   const {page,crumbs}=await inputPortContextFixture();crumbs[8].style.display='none';
+  if(mode.startsWith('port_'))crumbs[7].style.display='none';
+  if(mode==='port_wrong_caption')crumbs[7].ownText='Other';
   if(mode==='wrong_caption')crumbs[8].ownText='Other';
   if(mode==='missing_icon')crumbs[8].children[0].remove();
-  if(mode!=='unbound')page.execute=async options=>clone(await vm.runInContext('('+workspaceUiCapability.toString()+')',page.context)(page,
+  if(!mode.endsWith('unbound'))page.execute=async options=>clone(await vm.runInContext('('+workspaceUiCapability.toString()+')',page.context)(page,
    {expected_build:build,expected_origin:origin,prepared_node_context:{node:{node_id:'node'},workflow_ref:{prefix:'MF;TF-5',navigation_path:[]}},...options},
    async()=>({verified:true,surface:'wizard',node_id:'node',input_port:{direction:'input',port:0}})));
   const full=await page.observe(),narrow=await page.execute({mode:'observe',root_ref:full.wizard.root_ref});
   assert.deepEqual(narrow.output.wizard.input_port_context,full.wizard.input_port_context);
-  assert.equal(full.wizard.input_port_context.status==='observed',mode==='bound',mode);
+  assert.equal(full.wizard.input_port_context.status==='observed',['bound','port_bound'].includes(mode),mode);
  }
 });
 
@@ -3502,6 +3543,7 @@ async function inputPortFinishFixture(mode='valid') {
     graph=page.add('div','MF;TF-5;ModelForm;cmpDiagram','',{x:48,y:71,width:1392,height:929});
     const key=mode==='wrong_node'?'Other':mode==='multiline'?'Duplicates:__in:_Key_Sub':'Revenue';node=page.add('g','MF;TF-5;Graph;'+key,'',{x:100,y:200,width:150,height:80},graph);
     label=page.add('span','MF;TF-5;Graph;'+key+';Label;Label',mode==='multiline'?'Duplicates:in: Key, Sub':key,{x:110,y:220,width:120,height:30},node);
+    if(mode.startsWith('ellipsis'))label.ownText=mode==='ellipsis_wrong_text'?'Other…':'Reve…';
     if(mode==='duplicate_node')page.add('g','MF;TF-5;Graph;'+key,'',node.box,graph);
     if(['toast','foreign_toast','permanent_toast'].includes(mode)){toast=page.add('div',mode==='foreign_toast'?'foreign':'toast','Сохранено',{x:1000,y:800,width:300,height:75});toast.attrs.role='dialog';}
     if(mode==='mask')page.add('div','mask','Загрузка').attrs.class='x-mask-msg';
@@ -3511,6 +3553,9 @@ async function inputPortFinishFixture(mode='valid') {
     if(mode==='churn')page.mutationObserver.pending.push({type:'attributes',target:node,attributeName:'style'});
     if(mode==='late_tab'&&waits===2)page.tab.attrs['data-tid']='MF;cntMain;cntWorkspace;Workspace;t.br;tb-2';
   };
+  if(mode.startsWith('ellipsis')&&mode!=='ellipsis_unbound')page.execute=async options=>clone(await vm.runInContext('('+workspaceUiCapability.toString()+')',page.context)(page,
+    {expected_build:build,expected_origin:origin,prepared_node_context:{node:{node_id:'node'},workflow_ref:{prefix:'MF;TF-5',navigation_path:[]}},...options},
+    async()=>({verified:true,node_id:'node',surface:graph?'graph':'wizard',tid:graph?(mode==='ellipsis_wrong_body'?'foreign':node.attrs['data-tid']):'MF;TF-5;WizrdMCF',...(!graph?{input_port:{direction:'input',port:0}}:{})})));
   return {...f,done,waits:()=>waits};
 }
 
@@ -3527,10 +3572,10 @@ test('typed input-port finish is offered only with full mapping and exact owner 
 });
 
 test('typed input-port finish uses one gesture and quiet exact graph return without applied claims',async()=>{
-  for(const mode of ['valid','multiline','late_body','wrong_node','wrong_workflow','still_open','mask','duplicate_node','churn','late_tab']){
+  for(const mode of ['valid','multiline','late_body','wrong_node','wrong_workflow','still_open','mask','duplicate_node','churn','late_tab','ellipsis_bound','ellipsis_unbound','ellipsis_wrong_body','ellipsis_wrong_text']){
     const {page,waits}=await inputPortFinishFixture(mode),snapshot=await page.observe();
     const done=snapshot.ui.elements.find(e=>e.wizard_finish?.mode==='input_port');assert.ok(done,mode);
-    const result=await page.act({verb:'finish_wizard',ref:done.ref},snapshot),success=['valid','multiline','late_body'].includes(mode);
+    const result=await page.act({verb:'finish_wizard',ref:done.ref},snapshot),success=['valid','multiline','late_body','ellipsis_bound'].includes(mode);
     assert.equal(result.status,success?'SUCCEEDED':'AMBIGUOUS',mode+JSON.stringify(result.error));
     assert.equal(page.events.filter(e=>e==='click').length,1,mode);
     const event=result.trace.find(e=>e.event==='input_port_finish_verified');assert.equal(!!event,success,mode);
@@ -3786,6 +3831,42 @@ test('typed output-port finish requires complete output mapping and its own port
   for(const mode of ['valid','missing_context','filtered','duplicate_done','missing_auto']){
     const {page}=outputPortFinishFixture(mode),s=await page.observe();const controls=s.ui.elements.filter(e=>e.wizard_finish?.mode==='output_port');
     assert.equal(controls.length,mode==='valid'?1:0,mode);
+  }
+});
+
+test('overflow output socket requires a current native owner and visible actionable Done',async()=>{
+  for(const mode of ['valid','unbound','stale_owner','foreign_port','missing_guid','missing_opening','wrong_index',
+    'duplicate_socket','wrong_socket_icon','missing_settings','hidden_ancestor','hidden_visibility','disabled_done','hidden_done']){
+    const {page}=outputPortFinishFixture();
+    const find=suffix=>page.document.all().find(e=>e.attrs['data-tid']?.endsWith(suffix));
+    const socket=find('>Result'),settings=find('>Settings'),done=find(';btnDone');
+    settings.attrs['data-tid']=settings.attrs['data-tid'].replace('>Settings','>Настройка');settings.ownText='Настройка';
+    socket.style.display='none';settings.style.display='none';
+    const port={direction:'output',port:0,native_index:0,port_guid:'out-guid',opening_operation_id:'open-output'};
+    if(mode==='foreign_port')port.direction='input';
+    if(mode==='missing_guid')delete port.port_guid;
+    if(mode==='missing_opening')delete port.opening_operation_id;
+    if(mode==='wrong_index')port.native_index=1;
+    if(mode==='duplicate_socket'){
+      const duplicate=page.add('a',socket.attrs['data-tid'],'Result',undefined,socket.parentElement);duplicate.style.display='none';
+      page.add('span',null,'',undefined,duplicate).attrs.class='bg-vendor-icon-deriveddatasourceoutputsocketdef';
+    }
+    if(mode==='wrong_socket_icon')socket.children[0].attrs.class='bg-vendor-icon-inputdatasourcesocketdef';
+    if(mode==='missing_settings')settings.remove();
+    if(mode==='hidden_ancestor')find('>Outputs').style.display='none';
+    if(mode==='hidden_visibility')socket.style.visibility='hidden';
+    if(mode==='disabled_done')done.disabled=true;
+    if(mode==='hidden_done')done.style.display='none';
+    page.execute=async options=>clone(await vm.runInContext('('+workspaceUiCapability.toString()+')',page.context)(page,
+      {expected_build:build,expected_origin:origin,...(mode==='unbound'?{}:{prepared_node_context:{node:{node_id:'node'},workflow_ref:{prefix:'MF;TF-1',navigation_path:[]}}}),...options},
+      async()=>mode==='stale_owner'?{verified:false,reason:'node'}:{verified:true,surface:'wizard',node_id:'node',output_port:port}));
+    const raw=await page.execute({mode:'observe'});
+    if(mode==='stale_owner'){assert.notEqual(raw.status,'SUCCEEDED');assert.equal(raw.error.code,'PREPARED_NODE_CONTEXT_CHANGED');continue;}
+    assert.equal(raw.status,'SUCCEEDED',mode);
+    const controls=raw.output.ui.elements.filter(e=>e.allowed_actions.includes('finish_wizard'));
+    assert.equal(controls.length,mode==='valid'?1:0,mode);
+    if(mode==='valid'){assert.equal(raw.output.wizard.port_context.status,'observed');assert.equal(controls[0].wizard_finish.mode,'output_port');}
+    assert.equal(page.events.filter(e=>e==='click').length,0,mode);
   }
 });
 
@@ -4240,7 +4321,7 @@ test('scrolled process window refuses detached, foreign and clipped row bindings
 });
 
 test('global output editor is typed only when its native record belongs to the active mapping',async()=>{
- for(const mappingForm of ['ColumnsMappingEngineOutputPortWizard','DerivedDataSourceOutputSocketWizard']) for(const mode of ['bound','foreign_record','foreign_wizard','wrong_index']) {
+ for(const mappingForm of ['ColumnsMappingEngineOutputPortWizard','DerivedDataSourceOutputSocketWizard','DerivedDataSourceMappingEngineOutputPortWizard']) for(const mode of ['bound','foreign_record','foreign_wizard','wrong_index']) {
   const page=new Page(),base='MF;TF-1;WizrdMCF;',wizard=page.add('div',base.slice(0,-1));
   const stem=base+mappingForm+';';page.add('button',stem+'btnAddMappingColumn','',undefined,wizard);
   const grid=page.add('div',stem+'grdTargetColumns;tbl','',undefined,wizard);grid.id='mapping-view';grid.attrs.id=grid.id;
@@ -4653,4 +4734,25 @@ test('graph observation retains automatic-label links and excludes their child d
  page.add('g',link,'',{x:300,y:140,width:100,height:1});
  page.add('g',link+';Decoration','',{x:300,y:140,width:100,height:1});
  const s=await page.observe();assert.deepEqual(s.links.map(e=>e.tid??e),[link]);
+});
+test('output-port Close returns through the port breadcrumb path after exactly one confirmation',async()=>{
+ for(const mode of ['valid','wrong_workflow','wrong_node','still_open','missing_context']) {
+  const {page}=outputPortFinishFixture(mode);
+  const dialog=page.add('div',null,'',{x:400,y:200,width:400,height:150});dialog.attrs.class='x-window';
+  page.add('h1',null,'Подтвердить',undefined,dialog).attrs.role='heading';
+  page.add('span',null,'Вы действительно хотите закрыть мастер настройки?',undefined,dialog);
+  page.add('button','msgbox;tlb;yes','Да',{x:600,y:300,width:50,height:30},dialog);
+  page.add('button','msgbox;tlb;no','Нет',{x:670,y:300,width:50,height:30},dialog);
+  const binding={node:{node_id:'node'},workflow_ref:{prefix:'MF;TF-1',navigation_path:[]}};
+  const execute=options=>vm.runInContext('('+workspaceUiCapability.toString()+')',page.context)(page,
+   {expected_build:build,expected_origin:origin,prepared_node_context:binding,...options},async()=>({verified:true,surface:'wizard',output_port:{direction:'output',port:0,native_index:0,port_guid:'out',opening_operation_id:'open'}}));
+  const snapshot=(await execute({mode:'observe'})).output;
+  const button=snapshot.ui.elements.find(e=>e.allowed_actions.includes('confirm_wizard_close'));
+  if(mode==='missing_context'){assert.equal(button,undefined);continue;}
+  assert.ok(button,mode);
+  const click=page.mouse.click;page.mouse.click=async(...args)=>{await click(...args);dialog.remove();};
+  const result=await execute({mode:'act',operation_id:'output-close',action:{verb:'confirm_wizard_close',ref:button.ref},snapshot});
+  assert.equal(result.status,mode==='valid'?'SUCCEEDED':'AMBIGUOUS',mode+JSON.stringify(result.error));
+  assert.equal(page.events.filter(e=>e==='click').length,1);
+ }
 });

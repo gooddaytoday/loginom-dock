@@ -8,7 +8,8 @@ const nullable=schema=>({anyOf:[schema,{type:'null'}]});
 const ref=object({document_id:str,workflow_id:str,node_id:str});
 const error=object({code:str,message:str,cause:object({code:str,message:str})},['code','message']);
 const phase=values('validate','source','workflow','target','input_mapping','open','configure','node_finish','output_mapping','finish','execute','read');
-const execution=object({status:values('not_requested','pending','completed','cancelled'),execution_id:nullable(str),stop_verified:bool},['status','execution_id']);
+const execution={anyOf:[object({status:values('not_requested','pending','completed','cancelled'),execution_id:nullable(str),stop_verified:bool},['status','execution_id']),
+ object({status:values('failed'),execution_id:str,failure_verified:{type:'boolean',const:true},root_id:str,group_id:str,group_record_id:str})]};
 const receipt=object({phase,receipt_id:str,status:values('pending','verified','not_requested'),effect_possible:bool});
 const cell=object({type:str,is_null:bool,value:{type:['string','number','boolean','null']},decimal:str,
  representation:str,precision:str,display_text:str,timezone:str},['type','is_null','precision']);
@@ -87,6 +88,13 @@ const unionConfigurationReadback=object({kind:values('union'),scope:values('obse
  input_mappings:{...array(object({port:{type:'integer',minimum:0,maximum:14},autosync:bool,fields:boundedFields(readbackMappingField)})),minItems:2,maxItems:15},
  output_mapping:object({port:{type:'integer',const:0},autosync:bool,fields:boundedFields(object({...readbackMappingField.properties,excluded:bool}))}),
  package_persistence_verified:{type:'boolean',const:false}});
+const dateTimeConfigurationReadback=object({kind:values('date_time'),scope:values('observed_before_verified_finish'),node:ref,
+ receipt_ids:{...array(str),minItems:5,maxItems:5},values_are:values('observed_ui_values'),mode:values('calendar'),
+ fields:{...boundedFields(object({name:str,matrix:{...array(object({index:integer,record_id:str,func:{type:'integer',minimum:0,maximum:18},iso:bool,
+  first:bool,last:bool,number:bool,string:bool,string_format:str})),minItems:29,maxItems:29}})),minItems:1},
+ input_mapping:object({port:{type:'integer',const:0},autosync:bool,fields:boundedFields(readbackMappingField)}),
+ output_mapping:object({port:{type:'integer',const:0},autosync:bool,fields:boundedFields(object({...readbackMappingField.properties,excluded:bool}))}),
+ package_persistence_verified:{type:'boolean',const:false}});
 const duplicatesConfigurationReadback=object({kind:values('duplicates'),scope:values('observed_before_verified_finish'),node:ref,
  receipt_ids:{...array(str),minItems:5,maxItems:5},values_are:values('observed_ui_values'),
  fields:boundedFields(object({index:integer,field_id:str,name:str,label:str,type:str,data_kind:str,
@@ -95,12 +103,12 @@ const duplicatesConfigurationReadback=object({kind:values('duplicates'),scope:va
  input_mapping:object({port:{type:'integer',const:0},fields:boundedFields(object({name:str,source_name:str}))}),
  output_mapping:object({port:{type:'integer',const:0},fields:boundedFields(object({name:str,label:str,type:str,source_name:str}))}),
  package_persistence_verified:{type:'boolean',const:false}});
-const configurationReadback={anyOf:[replacementConfigurationReadback,importConfigurationReadback,calculatorConfigurationReadback,groupingConfigurationReadback,sortingConfigurationReadback,reformConfigurationReadback,filterConfigurationReadback,joinConfigurationReadback,unionConfigurationReadback,duplicatesConfigurationReadback]};
+const configurationReadback={anyOf:[dateTimeConfigurationReadback,replacementConfigurationReadback,importConfigurationReadback,calculatorConfigurationReadback,groupingConfigurationReadback,sortingConfigurationReadback,reformConfigurationReadback,filterConfigurationReadback,joinConfigurationReadback,unionConfigurationReadback,duplicatesConfigurationReadback]};
 export const nodeApplyResultSchema=object({operation_id:str,status:values('SUCCEEDED','FAILED','NOT_APPLIED','AMBIGUOUS'),
  effect_possible:bool,phases:array(receipt),node:nullable(ref),execution,output,
  package_saved:{type:'boolean',const:false},cleanup_complete:bool,warnings:array(str),
  configuration:object({status:values('applied','discarded'),readback:configurationReadback},['status']),
- checkpoint_kind:values('local_node_checkpoint','local_node_cancellation','local_node_stopped'),
+ checkpoint_kind:values('local_node_checkpoint','local_node_cancellation','local_node_stopped','local_node_failed'),
  persisted_package_verified:{type:'boolean',const:false},pending_phase:nullable(phase),error},
  ['operation_id','status','effect_possible','phases','node','execution','output','package_saved','cleanup_complete','warnings']);
 const outcome=object({status:values('SUCCEEDED','FAILED','NOT_APPLIED','AMBIGUOUS'),action_key:{type:'string',const:'node.apply'},

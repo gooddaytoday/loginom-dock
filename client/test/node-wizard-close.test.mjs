@@ -65,3 +65,20 @@ test('second input cancellation binds its own opening receipt',()=>{
  const binding=wizardCloseBinding(state);assert.equal(boundWizardCloseConfirmation(state,binding),true);
  state.prepared_node_context.input_port.port=0;assert.equal(boundWizardCloseConfirmation(state,binding),false);
 });
+
+test('output-port cancellation binds both the native opening receipt and observed breadcrumb owner',()=>{
+ const {state}=fixture();state.wizard.stage='output_mapping';state.wizard.owner_context={status:'unobserved'};
+ state.prepared_node_context.output_port={direction:'output',port:0,native_index:0,port_guid:'out0',opening_operation_id:'open-output'};
+ state.wizard.port_context={status:'observed',kind:'output_data',node:{ref:'node-ref'},port:{ref:'port-ref'},path:[]};
+ const binding=wizardCloseBinding(state);assert.equal(boundWizardCloseConfirmation(state,binding),true);
+ for(const change of [s=>delete s.prepared_node_context.output_port,s=>s.prepared_node_context.output_port.port_guid='foreign',
+  s=>s.prepared_node_context.output_port.native_index=1,s=>s.prepared_node_context.output_port.direction='input',
+  s=>s.prepared_node_context.output_port.opening_operation_id='other',s=>s.wizard.port_context.port.ref='other',
+  s=>s.wizard.port_context.node.ref='other',s=>s.wizard.port_context.status='unobserved',s=>s.wizard.stage='done']) {
+  const altered=structuredClone(state);change(altered);assert.equal(boundWizardCloseConfirmation(altered,binding),false);
+ }
+ for(const change of [s=>s.prepared_node_context.output_port.native_index=-1,s=>s.prepared_node_context.output_port.direction='input',
+  s=>s.prepared_node_context.output_port.port_guid='',s=>s.wizard.port_context.kind='input_data',s=>delete s.wizard.port_context.node.ref]) {
+  const altered=structuredClone(state);change(altered);assert.throws(()=>wizardCloseBinding(altered),/prepared wizard/);
+ }
+});

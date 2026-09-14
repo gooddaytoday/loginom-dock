@@ -130,7 +130,7 @@ export async function reorderOutputFields(channel,recordIds) {
   const baseline=state.node_mapping;
   if(!Array.isArray(recordIds)||recordIds.length!==baseline.target_fields.length||new Set(recordIds).size!==recordIds.length
     ||recordIds.some(id=>!baseline.target_fields.some(f=>f.record_id===id)))throw Error('Reorder requires every native output record exactly once');
-  const grouped=baseline.mapping_wizard==='DerivedDataSourceOutputSocketWizard';
+  const grouped=['DerivedDataSourceOutputSocketWizard','DerivedDataSourceMappingEngineOutputPortWizard'].includes(baseline.mapping_wizard);
   if(grouped) {
     if(baseline.target_fields.some(f=>typeof f.excluded!=='boolean'))throw Error('Native output groups required for reorder');
     const excluded=new Set(baseline.target_fields.filter(f=>f.excluded).map(f=>f.record_id));
@@ -211,10 +211,13 @@ export async function configureOutputFields(channel,mapping,configured) {
   const before=await channel.observe({condition:'complete native mapping before field edits',readMappings:true,ready});
   const resolved=resolveConfiguredOutputMapping(mapping,configured,before.node_mapping);
   if(resolved.fields===null)return {verified:true,effect_possible:false,cleanup_complete:true,edits:[],settings_applied:false};
-  const exclusions=resolved.fields.filter(f=>f.excluded),edits=[];
+  // An existing exclusion is preserved as native state; only a new exclusion
+  // requires the separately verified exclusion gesture.
+  const exclusions=resolved.fields.filter(f=>f.excluded&&f.current.excluded!==true),edits=[];
   if(exclusions.length&&before.node_mapping.mapping_wizard!=='DerivedDataSourceOutputSocketWizard')throw Error('Verified separate output wizard required for exclusions');
   // Validate the complete post-exclusion namespace before any mutation. Native
-  // exclusion replaces the output record and restores the source name/label.
+  // exclusion replaces the output record. Its service label defaults to the
+  // source name; the source's original label remains on exclusion_source.
   const planned=resolved.fields.map(f=>f.excluded?{...f,current:{...f.current,name:f.source.name,label:f.source.label}}:f);
   const steps=planOutputFieldEdits(planned);
   let expected=structuredClone(before.node_mapping);
@@ -277,7 +280,7 @@ export async function excludeOutputField(channel,sourceRecordId) {
   if(added.length!==1)throw Error('One new exclusion record required');
   const excluded=added[0];
   if(excluded.excluded!==true||excluded.inherited!==false||excluded.required!==false||excluded.source!==null
-    ||!same(excluded.exclusion_source,source[0])||excluded.name!==source[0].name||excluded.label!==source[0].label
+    ||!same(excluded.exclusion_source,source[0])||excluded.name!==source[0].name||excluded.label!==source[0].name
     ||excluded.type!==source[0].type||excluded.data_kind!=='Неопределенное'
     ||baseline.target_fields.some(f=>f.field_id===excluded.field_id)||after.target_fields.some(f=>f.record_id===field.record_id))
     throw Error('Excluded record identity differs from the selected optional source');

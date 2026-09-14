@@ -13,7 +13,7 @@ export function verifyGroupingSourceFetch(before,after){
 }
 // Native "Get source columns" retrieves the schema without executing the node.
 // The temporary Links view is restored before any field configuration.
-export async function ensureGroupingOutputSources(channel,initial){
+export async function ensureGroupingOutputSources(channel,initial,{verify=verifyGroupingSourceFetch}={}){
  if(initial.node_mapping.source_fields.length)return initial;
  const before=initial.node_mapping,owner=before.node_context,root=initial.wizard.root_ref;
  const bound=s=>s.wizard?.stage==='output_mapping'&&s.wizard.root_ref===root&&same(s.prepared_node_context,owner);
@@ -28,5 +28,5 @@ export async function ensureGroupingOutputSources(channel,initial){
   resolve:s=>({verb:'click',ref:control(s,'rbTable;DisplayEl').ref})});
  const after=await channel.observe({condition:'complete grouping sources and retained output links',readMappings:true,
   ready:s=>bound(s)&&s.node_mapping?.verified===true&&s.node_mapping.source_fields.length>0});
- verifyGroupingSourceFetch(before,after.node_mapping);return after;
+ verify(before,after.node_mapping);return after;
 }

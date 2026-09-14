@@ -60,3 +60,17 @@ test('replacement public readback admits typed Null and exact Int64 without clai
  assert.equal(validate(r).valid,true);
  for(const patch of [{output_mode:'external'},{package_persistence_verified:true},{mode:'regex'}]){const bad=structuredClone(r);Object.assign(bad.configuration.readback,patch);assert.equal(validate(bad).valid,false);}
 });
+
+test('date/time readback crosses the public schema with complete matrices and source mappings',()=>{
+ const r=result(),mapping={port:0,autosync:true,fields:[{index:0,name:'A',label:'Дата',type:'datetime',data_kind:'Дискретный',source_name:'A'}]};
+ const rows=[...Array.from({length:19},(_,func)=>({func,iso:false})),...[0,1,2,4,5,6,7,8,10,18].map(func=>({func,iso:true}))];
+ r.configuration={status:'applied',readback:{kind:'date_time',scope:'observed_before_verified_finish',node:{document_id:'d',workflow_id:'w',node_id:'n'},
+ receipt_ids:['op:input_mapping','op:configure','op:node_finish','op:output_mapping','op:finish'],values_are:'observed_ui_values',mode:'calendar',
+ fields:[{name:'A',matrix:rows.map((row,index)=>({...row,index,record_id:String(index),first:false,last:false,number:row.func===4&&!row.iso,string:false,string_format:''}))}],
+ input_mapping:mapping,output_mapping:{...mapping,fields:mapping.fields.map(f=>({...f,excluded:false}))},package_persistence_verified:false}};
+ assert.equal(validate(r).valid,true);
+ for(const change of [v=>v.kind='calculator',v=>v.mode='iso',v=>v.fields[0].matrix.pop(),v=>delete v.fields[0].matrix[0].record_id,
+  v=>v.fields[0].matrix[0].func=19,v=>v.receipt_ids.pop(),v=>v.package_persistence_verified=true,v=>delete v.output_mapping.fields[0].source_name]){
+  const bad=structuredClone(r);change(bad.configuration.readback);assert.equal(validate(bad).valid,false);
+ }
+});

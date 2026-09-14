@@ -91,6 +91,28 @@ export function readMappingBrowser(prefix) {
   }
   if(sources.some(s=>s.data.ConnectedRecord!=null&&(!targets.includes(s.data.ConnectedRecord)
     ||s.data.ConnectedRecord.data.ConnectedRecord!==s)))return fail('mapping_reverse_record');
+  const linkModes=exact(base+'rbLinks');
+  const links=grouped&&linkModes.length===1&&linkModes[0].classList.contains('x-form-cb-checked');
+  let sourceSelection;
+  if(links){
+    const radio=globalThis.Ext?.getCmp?.(linkModes[0].id),table=exact(base+'rbTable');
+    if(radio?.el?.dom!==linkModes[0]||radio.getValue?.()!==true||table.length!==1
+      ||globalThis.Ext?.getCmp?.(table[0].id)?.getValue?.()!==false)return fail('mapping_links_mode');
+    const selected=views[0].getSelectionModel?.()?.getSelection?.();
+    if(!Array.isArray(selected)||selected.some(r=>!sources.includes(r))||new Set(selected).size!==selected.length)return fail('mapping_source_selection');
+    const sourceRows=[...elements[0].querySelectorAll('table.x-grid-item')],seen=new Set();
+    if(!sourceRows.length||sourceRows.length>200)return fail('mapping_source_render_bound');
+    for(const row of sourceRows){
+      const index=Number(row.getAttribute('data-recordindex')),source=sources[index];
+      if(!Number.isSafeInteger(index)||!source||seen.has(index)||row.getAttribute('data-recordid')!==String(source.internalId)
+        ||row.getAttribute('data-boundview')!==elements[0].id)return fail('mapping_source_render_identity');
+      const cells=exact(base+'colSourceName_'+source.data.Name).filter(c=>row.contains(c));
+      if(cells.length!==1||cells[0].textContent.trim()!==source.data.DisplayName
+        ||row.classList.contains('x-grid-item-selected')!==selected.includes(source))return fail('mapping_source_render_value');
+      seen.add(index);
+    }
+    sourceSelection={verified:true,record_ids:selected.map(r=>String(r.internalId))};
+  }
   const rows=[...elements[1].querySelectorAll('table.x-grid-item')],rendered=new Set();
   if(!rows.length||rows.length>200)return fail('mapping_render_bound');
   for(const row of rows) {
@@ -98,8 +120,8 @@ export function readMappingBrowser(prefix) {
     if(!Number.isSafeInteger(index)||index<0||!target||rendered.has(index)
       ||row.getAttribute('data-recordid')!==String(target.internalId)||row.getAttribute('data-boundview')!==elements[1].id)
       return fail('mapping_render_identity');
-    for(const [key,value] of [['colName_',target.data.Name],['colDisplayName_',target.data.DisplayName],
-      ['colSourceDisplayName_',target.data.ConnectedRecord?.data.DisplayName??'']]) {
+    for(const [key,value] of (links?[['colDisplayName_',target.data.DisplayName]]:[['colName_',target.data.Name],['colDisplayName_',target.data.DisplayName],
+      ['colSourceDisplayName_',target.data.ConnectedRecord?.data.DisplayName??'']])) {
       const cells=exact(base+key+target.data.Name).filter(c=>row.contains(c));
       if(cells.length!==1||cells[0].textContent.trim()!==value)return fail('mapping_render_value');
     }
@@ -114,6 +136,7 @@ export function readMappingBrowser(prefix) {
   const produceMode=produceNative?.el?.dom===produce[0]?{'bg-TBGDerivedProxyProduceType-dptSupplement':'supplement','bg-TBGDerivedProxyProduceType-dptReplace':'replace','bg-TBGDerivedProxyProduceType-dptDefault':'default'}[produceNative.iconCls]:null;
   return {...(produceMode?{produce_mode:produceMode}:{}),verified:true,source_identity_verified:sources.length>0||targets.length===0,inventory_complete:true,
     ...(grouped||input?{mapping_wizard:form}:{}),
+    ...(links?{source_selection:sourceSelection}:{}),
     state_source:'cached_mapping_stores',autosync:native.pressed,
     source_fields:sources.map(describe),target_fields:targets.map((t,i)=>({...describe(t),
       ...(input?{usage_type:t.data.UsageType,default_usage_type:t.data.DefaultUsageType,origin_type:t.data.OriginType,inherited:t.data.IsDerived}:{}),

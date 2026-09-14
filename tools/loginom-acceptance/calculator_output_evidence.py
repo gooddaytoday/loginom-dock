@@ -10,7 +10,7 @@ from import_execution_evidence import verify_execution_observations
 from import_output_evidence import verify_table_output_observations
 
 
-def verify_calculator_output(events,request,expected_columns,expected_rows):
+def verify_calculator_output(events,request,expected_columns,expected_rows, *, launch_mode='graph'):
     failures=[];execution_id=None
     try:
         sequence=verify_internal_sequence(events,request['operation_id'],max_steps=4096)
@@ -18,7 +18,9 @@ def verify_calculator_output(events,request,expected_columns,expected_rows):
         checkpoints=[r['result'] for r in events if r.get('operation_id')==request['operation_id'] and r.get('phase')=='node_checkpoint']
         if len(checkpoints)!=1 or checkpoints[0].get('status')!='SUCCEEDED':raise ValueError('calculator_output_checkpoint')
         checkpoint=checkpoints[0]
-        proof=verify_execution_observations(sequence['observations'],sequence['mutations'],checkpoint['node'],launch_mode='graph')
+        if launch_mode not in ('graph', 'wizard'):
+            raise ValueError('unsupported_output_launch_mode')
+        proof=verify_execution_observations(sequence['observations'],sequence['mutations'],checkpoint['node'],launch_mode=launch_mode)
         failures.extend(proof['failures']);execution_id=proof['execution_id']
         # Reuse the independently tested native table/format/cell auditor with a
         # CSV serialization of the expected *output*, not a simulated import.

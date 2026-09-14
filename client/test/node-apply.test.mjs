@@ -68,7 +68,7 @@ for(const [name,alter] of Object.entries({doneRead:p=>{p.finish='done'},budget:p
 for(const [phase,value,error] of [
  ['target',{node:{document_id:'other',workflow_id:'workflow',node_id:'node1'}},/foreign node/],
  ['finish',{mode:'done'},/finish mode/],['finish',{execution_id:null},/execution identity/],
- ['execute',{execution_id:'previous'},/freshly completed/],['execute',{status:'running'},/freshly completed/],
+ ['execute',{execution_id:'previous'},/verified terminal outcome/],['execute',{status:'running'},/verified terminal outcome/],
  ['read',{execution_id:'previous'},/bound/],['read',{ports:[{port:1,fresh:true}]},/bound/],['read',{ports:[{port:0,fresh:false}]},/bound/],
  ['configure',{verified:false},/did not verify/],['finish',{cleanup_complete:false},/did not verify/]]){
  test('reject bad '+phase+' fact '+JSON.stringify(value),async()=>{const f=fixture({badPhase:phase,badResult:value}),r=await f.run();assert.equal(r.status,'AMBIGUOUS');assert.match(r.error.message,error);assert.equal(r.pending_phase,phase);assert.ok(!f.records.some(e=>e.phase==='node_checkpoint'));assert.ok(!f.records.some(e=>e.phase==='node_phase_completed'&&e.receipt.phase===phase))});
@@ -212,5 +212,41 @@ test('invalid Duplicates input ends conclusively only with durable unchanged-dra
   const r=await f.run(p);assert.equal(r.status,failure==='none'?'FAILED':'AMBIGUOUS',failure);
   assert.equal(r.cleanup_complete,failure==='none',failure);assert.equal(r.pending_phase,failure==='none'?null:'input_mapping',failure);
   assert.ok(!f.calls.includes('configure')&&!f.calls.includes('execute'));
+ }
+});
+
+test('date configure resumes the original pending phase only after its verifier',async()=>{
+ const f=fixture(),p=request();p.target.type='transform.date_time';p.mode='calendar';p.finish='done';p.read.ports=[];
+ const original=f.handlers.get('imports.text');let calls=0,verified=0;
+ f.handlers.set('transform.date_time',{...original,modes:['calendar'],configure:async()=>{calls++;if(calls===1)throw Error('lost flag');assert.equal(verified,1);return {verified:true,cleanup_complete:true,effect_possible:true};}});
+ const first=await f.run(p);assert.equal(first.pending_phase,'configure');const boundary=structuredClone(f.operation.nodeApply.pending);
+ f.drivers.verifyPendingConfigure=async state=>{verified++;assert.deepEqual(state.pending,boundary);return true;};
+ const result=await f.run(p,{resume:true});assert.equal(result.status,'SUCCEEDED');assert.equal(result.operation_id,p.operation_id);
+ assert.equal(f.records.filter(e=>e.phase==='node_phase_prepared'&&e.receipt.phase==='configure').length,1);
+ assert.equal(f.records.filter(e=>e.phase==='node_phase_completed'&&e.receipt.phase==='configure').length,1);
+});
+test('refused date configure proof preserves the original pending boundary',async()=>{
+ const f=fixture({failAfter:'configure'}),p=request();p.target.type='transform.date_time';p.mode='calendar';
+ f.handlers.set('transform.date_time',{...f.handlers.get('imports.text'),modes:['calendar']});
+ await f.run(p);const boundary=structuredClone(f.operation.nodeApply.pending),count=f.calls.length;
+ f.drivers.verifyPendingConfigure=async()=>false;
+ await assert.rejects(f.run(p,{resume:true}),/Live package/);assert.deepEqual(f.operation.nodeApply.pending,boundary);assert.equal(f.calls.length,count);
+});
+
+test('verified failed execution settles once without output and refuses unproven failure receipts',async()=>{
+ const proof={verified:true,cleanup_complete:true,status:'failed',execution_id:'doc:root:1',node:{document_id:'doc',workflow_id:'workflow',node_id:'node1'},
+  root_id:'root',group_id:'1',group_record_id:'record',failure_verified:true,output_refreshed:false,error:{code:'NODE_EXECUTION_FAILED',message:'Input file not found'}};
+ for(const mutate of [null,p=>p.failure_verified=false,p=>p.cleanup_complete=false,p=>p.node.node_id='foreign',p=>p.root_id='other',p=>p.error.message='',p=>p.output_refreshed=true]){
+  const f=fixture(),p=structuredClone(proof);mutate?.(p);
+  f.drivers.finish=async()=>({mode:'execute',verified:true,cleanup_complete:true,execution_id:'doc:root:1',execution_started:true});
+  f.drivers.waitExecution=async()=>p;
+  const result=await f.run();assert.equal(result.status,mutate?'AMBIGUOUS':'FAILED');assert.ok(!f.calls.includes('read'));
+  if(!mutate){assert.equal(result.execution.status,'failed');assert.equal(result.cleanup_complete,true);assert.equal(result.error.message,proof.error.message);
+   const calls=f.calls.length;assert.deepEqual(await f.run(),result);assert.equal(f.calls.length,calls);}
+ }
+ for(const failure of ['phase','checkpoint']) {
+  const f=fixture();f.drivers.finish=async()=>({mode:'execute',verified:true,cleanup_complete:true,execution_id:'doc:root:1'});f.drivers.waitExecution=async()=>proof;
+  const result=await f.run(request(),{record:async e=>{if(failure==='phase'&&e.phase==='node_phase_completed'&&e.receipt.phase==='execute'||failure==='checkpoint'&&e.phase==='node_checkpoint')throw Error('disk unavailable');return structuredClone(e);}});
+  assert.equal(result.status,'AMBIGUOUS');assert.equal(f.operation.nodeApply.result,undefined);
  }
 });

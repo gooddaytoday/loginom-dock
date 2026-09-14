@@ -3,13 +3,13 @@ import assert from 'node:assert/strict';
 import {createNodeExecutionProcedure} from '../lib/node-execution-procedure.mjs';
 const node={document_id:'doc',workflow_id:'flow',node_id:'node'};
 const button='MF;cntMain;tlbMainToolbar;btnProgress',grid='ConsoleForm;ProgressForm;trpProgress;grd;tbl';
-async function fixture({hide=true,replace=false,lost=false}={}){
+async function fixture({hide=true,replace=false,lost=false,failure=false,closeFault=false}={}){
  let opened=true,launched=false,selected=false,menu=false,shown=false;
  const actions=[],el=(tid,allowed_actions=['click'])=>({tid,ref:tid,allowed_actions});
  const state=()=>({prepared_node_context:{...node,verified:true,surface:'graph'},navigation_context:{status:'observed'},
   node_outputs:{verified:true,node_selected:shown},
   node_processes:{verified:opened,inventory_complete:true,show_completed:true,root_id:'root',node_context:{...node,verified:true},processes:launched?[
-   {process_id:'1',record_id:'group',parent_id:null,state:'completed',error:false,children_loaded:true,expanded:true,rendered:true},
+   {process_id:'1',record_id:'group',parent_id:null,state:failure?'pending_or_failed':'completed',error:failure,children_loaded:true,expanded:true,rendered:true,...(failure?{error_details:'Missing own CSV',progress_state:{verified:true,state:'failed',terminal:true,can_cancel:false,source:'native_progress_record'}}:{})},
    {process_id:'1.1',record_id:replace&&shown?'replaced':'child',parent_id:'1',state:'completed',error:false,rendered:true,selected,process_tid:'child-row'}]:[]},
   ui:{elements:[el(button),...(opened?[el(grid,['right_click']),el('ConsoleForm;btnClose'),el('child-row',['right_click'])]:[]),
    ...(menu?[el('mnContextMenu;mniShowCompletedProcesses',['click','press']),el('mnContextMenu;mniShowNodeToProcess',['show_process_node'])]:[])]}});
@@ -19,7 +19,7 @@ async function fixture({hide=true,replace=false,lost=false}={}){
   if(a.verb==='press')menu=false;
   if(a.verb==='show_process_node'){shown=true;opened=!hide;menu=false;if(lost)throw Error('lost Show reply');}
   if(a.ref===button)opened=true;
-  if(a.ref==='ConsoleForm;btnClose')opened=false;
+  if(a.ref==='ConsoleForm;btnClose'){opened=false;if(launched&&closeFault)throw Error('Lost cleanup reply');}
   return {status:'SUCCEEDED'};
  }};
  const driver=createNodeExecutionProcedure(channel,node);await driver.prepare();launched=true;await driver.identify();actions.length=0;
@@ -51,4 +51,11 @@ test('long completed history refreshes before baseline and retains every server 
  assert.ok(baseline.roots.every(p=>p.record_id.startsWith('2:')));
  assert.equal(actions.filter(a=>a.ref==='mnContextMenu;mniShowCompletedProcesses').length,2);
  assert.equal(actions.some(a=>a.verb==='execute_graph_node'),false);
+});
+
+for(const closeFault of [false,true])test('failed group cleans only its console and preserves uncertain cleanup: '+closeFault,async()=>{
+ const f=await fixture({failure:true,closeFault});
+ if(closeFault)await assert.rejects(f.driver.waitCompleted(),/Lost cleanup reply/);
+ else {const r=await f.driver.waitCompleted();assert.equal(r.status,'failed');assert.equal(r.cleanup_complete,true);assert.equal(r.error.message,'Missing own CSV');}
+ assert.deepEqual(f.actions.map(a=>a.ref),['ConsoleForm;btnClose']);
 });

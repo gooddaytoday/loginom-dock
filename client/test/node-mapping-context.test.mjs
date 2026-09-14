@@ -157,3 +157,25 @@ test('only a settled local CollectionProxy may retain the previous total after a
   mutate();assert.equal(f.read().reason,'mapping_filtered_store');
  }
 });
+
+function linksFixture(){
+ const f=fixture({grouped:true});f.selected=[f.source[0]];
+ for(const [name,value] of [['rbLinks',true],['rbTable',false]]){
+  const e=f.el(f.base+name,'',f.root);e.classList={contains:k=>k==='x-form-cb-checked'&&value};
+  f.views[e.id]={el:{dom:e},getValue:()=>value};
+ }
+ f.views[f.grids[0].id].getSelectionModel=()=>({getSelection:()=>f.selected});
+ f.sourceRows=f.source.map((s,i)=>{const r=f.el(null,'',f.grids[0]);r.row=true;r.attrs={'data-recordindex':String(i),'data-recordid':s.internalId,'data-boundview':f.grids[0].id};
+  r.classList={contains:k=>k==='x-grid-item-selected'&&f.selected.includes(s)};f.el(f.base+'colSourceName_'+s.data.Name,s.data.DisplayName,r);return r;});
+ // Links has no editable name/source-display columns from the Table view.
+ for(const e of f.all)if(e.tid?.includes(';colName_')||e.tid?.includes(';colSourceDisplayName_'))e.tid=null;
+ return f;
+}
+test('links mapping binds native selection and rendered source rows',()=>{
+ const f=linksFixture(),r=f.read();assert.equal(r.verified,true);assert.deepEqual(Array.from(r.source_selection.record_ids),['s0']);
+ assert.equal(r.target_fields[0].name,'Out0');assert.equal(r.autosync,false);
+});
+for(const [name,change] of Object.entries({foreignSelection:f=>f.selected=[{...f.source[0]}],wrongRow:f=>f.sourceRows[0].attrs['data-recordid']='foreign',
+ wrongView:f=>f.sourceRows[0].attrs['data-boundview']='foreign',wrongLabel:f=>f.all.find(e=>e.tid===f.base+'colSourceName_A').textContent='other',
+ selectionMismatch:f=>f.sourceRows[0].classList={contains:()=>false},radio:f=>f.views[f.all.find(e=>e.tid===f.base+'rbLinks').id].getValue=()=>false}))
+ test('links mapping refuses '+name,()=>{const f=linksFixture();change(f);assert.equal(f.read().verified,false);});

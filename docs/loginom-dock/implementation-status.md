@@ -1166,6 +1166,194 @@ node.apply пока не прошёл до execution/readback. Последни�
 оставшуюся живую матрицу и независимый аудит сохранённого пакета.
 [Подробный checkpoint и следующий шаг](duplicates-progress-2026-09-12.md).
 
+# Узел 13: полный Hermes и независимый reopen прошли — 14 сентября 2026
+
+Hermes Sol/low `20260914-091807-4289644a`: девять запросов и один финальный save.
+Итоговый frozen аудит **45/45 PASS**, включая **30/30 PASS** независимой
+сохранности всех шести узлов в новом сеансе. Source77e9cf50/runtime d5fd1ba7.
+Клиент1478 PASS/1 skip, Python548 PASS; собственные процессы завершены,
+диагностический пакет закрыт без сохранения. Модельный слот освобождён.
+
+[Итог, доказательства и ограничения](node-13-hermes-full-3.md).
+Служебное `node_admitted=false` оставлено без изменения: аудитор всегда
+выставляет этот флаг, отдельно вычисляя `passed=true` по checks.
+Review, merge/push, новые узлы, сборка/поставка не выполнялись.
+Ниже сохранены исторические состояния, включая недействительный admission r2.
+
+---
+
+# Узел 13: исправлен overflow выходного порта — 14 сентября 2026
+
+Исправлено распознавание скрытого breadcrumb текущего native output socket
+в длинной навигации. Client1478 PASS/1 skip, Python548 PASS; адресный live
+прогон на исходном пакете и независимая persistence-проверка 15/15 PASS.
+Runtime d5fd1ba7. [Исправление и доказательства](node-13-overflow-owner-fix.md).
+
+Hermes r2 на runtime2488fdaa выполнил9 запросов и один save; fresh reopen
+прошёл5/6 до найденного overflow. Полный PASS не заявлен. Кроме того,
+исторический regression gate r2 ошибочно помечен passed при одном FAIL теста.
+Старые receipts/FAIL/raw сохранены; исправление теста и текущие548 PASS
+не легализуют старый admission. Новая модель требует отдельного слота
+координатора и новых source/runtime/inputs pins; сейчас не запускалась.
+Все собственные диагностические процессы отсутствуют после прерывания;
+закрытие holder-пакета не подтверждено, остальные cleanup отражены в отчёте.
+
+---
+
+# Узел 13: первый Hermes FAIL разобран, готов повтор — 13 сентября 2026
+
+Hermes Sol/low, run20260913-183818-3412861d: импорт прошёл, календарь/Done
+отказал на попытке переименовать источник исключения. Модель перенесла служебную
+метку DateB из readback в label запроса вместо исходной «Дата». Отказ сохранён;
+модель остановлена после подтверждения причины, её процессы завершены, слот освобождён.
+
+Живое read-only наблюдение и resolver на фактическом mapping подтвердили
+правильную запись без name/label. Уточнён только исполняемый goal (prompt_revision2),
+runtime/candidate, CSV/expected и девять запросов неизменны. Уточнение 14 сентября:
+исходный Python-прогон имел 547 PASS/1 FAIL, прежнее утверждение 548 PASS ошибочно.
+[Итог, диагностика и план повтора](node-13-hermes-full-1.md).
+Следующий полный Hermes ожидает нового слота координатора; автономная приёмка открыта.
+
+---
+
+# Узел 13 готов к Hermes — 13 сентября 2026
+
+Полный model-free frozen-v4: 9/9 публичных запросов, один финальный save,
+общий аудит 23/23 PASS. Независимый reopen всех шести узлов: 31/31 PASS,
+включая 13/13 подмен source evidence; обе пары Done→Execute — по 9/9 негативных
+проверок. Python 548 PASS, continuation 31 PASS. Runtime/candidate сохранены.
+Исправлено только диагностическое чтение дорисовывающегося хранилища и добавлена
+ссылка/SHA на журнал вместо большого дублирующего export.
+
+[Результат, доказательства и ограничения](node-13-resume-frozen-v4-1.md).
+Hermes ожидает единственного слота координатора. Автономная приёмка узла ещё
+не заявляется; новые узлы и поставка не запускались.
+
+---
+
+# Узел 13: candidate live-preflight, offline frozen-v4 и ресурсная пауза — 13 сентября 2026
+
+[Текущий отчёт](node-13-candidate-live-preflight-1.md). Candidate db38f7f2 и
+runtime 2488fdaa проверены без модели. R1/current-runtime и адресная persistence
+4×8 прошли. Public persisted-import в новой сессии отказал до UI; согласован
+диагностический read/cancel/download/graph-execute протокол для полного reopen.
+
+Полный frozen-v2 подтвердил import 10×4, но первый календарь получил
+30-минутный AMBIGUOUS/read, cleanup=false. Исходный pending и FAIL сохранены;
+свой несохранённый пакет отброшен, сессия закрыта. Согласован frozen-v3: два
+new/Done + семь Execute, без изменения шести узлов, схем и данных. Новый import
+10×4 прошёл независимый аудит; Done завершён за 1211,5 с, cleanup=true.
+Независимый Done-audit FAIL: source DateB/Дата отличается от служебной метки
+excluded target DateB/DateB; frozen-v3 ожидал Дата. Входы/FAIL сохранены.
+Перед Execute действует ресурсная пауза координатора (~1 GiB свободно);
+свой несохранённый Package1 и сеанс оставлены открытыми, новых тяжёлых
+шагов/сессий/export не запускать до решения. Разделение source/target-меток
+согласовано во frozen-v4: offline Done reassessment PASS, 8/8 подмен отвергнуты,
+публичная схема подтверждена; v3 FAIL не изменён. Python 546 PASS.
+Полные 10×27/save/reopen, живые отрицательные проверки нового протокола и
+admission ещё открыты. Hermes, review, main/push, VPS/activation не запускались.
+
+---
+
+# Узел 13: подготовлен новый комплект полной приёмки
+
+[Отчёт](node-13-acceptance-candidate-preparation-1.md): source 5a4c46fc / runtime 2488fdaa, неизменённые 10 строк, exact source archive для VPS, current skill/frontend/environment pins и guarded launcher. Review1/fix1 completed; повторный review не назначен. Полная автономная приёмка остаётся открытой до candidate/live gates и отдельного слота Hermes. В этой фазе модель, браузер, VPS build/stage/activation не запускались.
+
+---
+
+# Узел13: R2 terminal failure интегрирован и проверен — 13 сентября 2026
+
+Применён разрешённый patch47830abe… (11 файлов/18 hunks) из a63586fe… без
+остальных изменений14. Real missing-source fault под test-3: FAILED/
+local_node_failed/cleanup:true, native reason/group/owner и отсутствие stale read
+проверены независимо.15/15 negatives, repeat/resume без эффекта, pending released.
+После восстановления CSV новый запрос дал свежие4×8/config/raw/values PASS;
+manual mappings/autosync=false/Amount excluded сохранены. Сеанс закрыт exit0.
+Focused135 PASS; клиент1477 PASS/1 SKIP; Python533 PASS.
+[Отчёт](node-13-r2-integration-1.md), [доказательства](node-13-r2-integration-evidence.json).
+R2_terminal_live=PASS. Полная автономная приёмка/Hermes остаются OPEN;
+main/push/deploy/plugin/routing не менялись. Ниже сохранена история прежних состояний.
+
+---
+
+# Узел13: ручная выходная схема проверена — 13 сентября 2026
+
+Исправлено добавление quarter/hour существующего Date/time при autosync=false.
+Старые имена/связи и Amount excluded сохранены. Live bafafea6: public SUCCEEDED,
+config/raw/values/manual-schema PASS, **4×8**, repeat/resume без новых действий.
+Отдельный exact reopen df361bf1 без перенастройки: свежие4×8, persistence PASS.
+7/7 подмен доказательств отклонены. Client1472 PASS/1 SKIP; Python533 PASS.
+[Отчёт](node-13-manual-output-followup-1.md), [доказательства](node-13-manual-output-evidence.json).
+Прежние неуспехи ниже остаются историческими фактами своих ревизий.
+R2 не интегрирован; его live gate и Hermes остаются OPEN. Перенос/публикация,
+новый review и следующий узел не запускались.
+
+---
+
+# Узел13: целевое configure recovery проверено — 13 сентября 2026
+
+Реализовано Date/time-specific восстановление исходной configure после потерянного
+ответа flag click. Live 1de08440: тот же ID/session/runtime, полные 2×29 матрицы,
+без повторных флагов, remaining hour/Next/mapping/execute/read, **4×8**.
+Независимые recovery/config/raw/values PASS, 8/8 evidence negatives; реальный отказ
+при чужом выбранном поле. Client1449 PASS/1 SKIP, focused164, Python533.
+[Отчёт](node-13-configure-recovery-1.md), [план R2](node-13-r2-integration-plan.md).
+
+Ограничение: добавление новых выходов existing узла с autosync=false остановилось
+на 9 sources / 7 targets; это не успешный end-to-end случай. R2 не интегрирован,
+его live gate OPEN. Полная новая приёмка, final pins/catalog и Hermes не запускались.
+R3 и accepted10rowgoal не менялись. Следующий шаг требует dispatch координатора;
+не продолжать автоматически расширение scope, интеграцию или следующую приёмку.
+
+---
+
+# Узел13: вход приёмки приведён к public лимиту — 13 сентября2026
+
+Новая fixture10строк сохраняет все12 преобразований по двум датам и объявленные
+NULL/границы/группировки/пустую ветку. Frozen10×27,0×27,8×3,6×3; сумма407.
+Python533 PASS; реальные public схемы приняли8 ответов/8 read, отвергли4 oversized
+варианта. [Отчёт и новые pins](node-13-acceptance-input-limit-fix-1.md).
+Предыдущий881793e1/12строк ниже — исторический несовместимый комплект.
+R1/R2 и новая live/Hermes приёмка остаются открытыми, клиентский runtime не менялся.
+
+---
+
+# Узел 13: входы приёмки подготовлены — 13 сентября 2026
+
+Подготовлены естественное ТЗ продаж, CSV/байты, frozen независимые expected,
+полный аудитор и отдельный guarded launch scaffold. Новый declared scope:
+12×27 по двум датам, 0×27 пустой ветки, месячные/квартальные суммы 8×3 и 6×3.
+Это ожидаемые результаты; нового live/Hermes исполнения не было.
+R1/R2 остаются открытыми; final source/archive/catalog и слот не назначены.
+[Отчёт и admission](node-13-acceptance-input-preparation-1.md).
+
+---
+
+# Узел 13: post-review fix завершён — 13 сентября 2026
+
+N13-R3 закрыто: независимый output-аудитор проверяет requested name/label/excluded
+сквозных и сохранённых вычисленных полей, включая parameters={}.
+Свежие live mapping и save/reopen/execute: **4×27**, все 12 операций по двум датам,
+raw/config/values и strict persistence PASS; negatives 89/89 + 8/8.
+Python 519 PASS; SDK schema 180 публичных ответов без ошибок.
+N13-R1/R2 остаются зависимостями общей части владельца 14; R2 подтверждён только
+source/model evidence. Hermes, merge, публикация и установка не выполнялись.
+[Отчёт исправления](node-13-fix-1.md), [ревью](node-13-review-1.md),
+[checkpoint](node-13-checkpoint.md).
+
+---
+
+# Узел 13 готов к отдельному ревью — 13 сентября 2026
+
+В `codex/node-13-date-time` завершены development и прямые проверки обработчика
+12 календарных преобразований. Проверены добавление/удаление, Close, безопасные
+отказы, потеря ответа без повторного переключения и сохранение/открытие/выполнение.
+Последний strict persistence audit PASS при input/output autosync=false;
+при input autosync=true обнаружена нативная перестановка входов.
+Клиент: 1415 PASS / 1 SKIP; Python: 511 PASS.
+[Итоговый отчёт](node-13-development-report.md), [checkpoint](node-13-checkpoint.md).
+Ревью и Hermes-приёмка не запускались; публикация, merge и установка не выполнялись.
+
 ---
 
 # План трёх управляемых потоков подготовлен — 12 сентября 2026

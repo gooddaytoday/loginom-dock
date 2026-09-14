@@ -82,3 +82,17 @@ test('one oldest completed eviction preserves the unique next execution identity
  }
  before.processes[0].state='pending_or_failed';assert.throws(()=>identifyNewExecution(captureExecutionBaseline(before,node),after));
 });
+
+test('failed launch retains its native group and reason without claiming that the target child executed',async()=>{
+ const {verifyFailedExecution}=await import('../lib/node-execution-evidence.mjs');
+ const s=structuredClone(next),e=identifyNewExecution(captureExecutionBaseline(initial,node),s);
+ Object.assign(s.processes[1],{state:'pending_or_failed',error:true,error_details:'Input file not found',progress_state:{verified:true,state:'failed',terminal:true,can_cancel:false,source:'native_progress_record'}});
+ s.processes[2].state='pending_or_failed';
+ const r=verifyFailedExecution(e,s);assert.equal(r.status,'failed');assert.equal(r.group_record_id,'record-2');assert.equal(r.error.message,'Input file not found');assert.equal(r.output_refreshed,false);
+ for(const change of [x=>x.root_id='foreign',x=>x.node_context.node_id='foreign',x=>x.inventory_complete=false,
+  x=>x.processes[1].record_id='foreign',x=>x.processes[1].error=false,x=>x.processes[1].error_details='',
+  x=>x.processes[1].progress_state.verified=false,x=>x.processes[1].progress_state.state='parent_failed',
+  x=>x.processes[1].progress_state.terminal=false,x=>x.processes[1].progress_state.can_cancel=true,x=>x.processes[1].progress_state.source='caption']){
+  const bad=structuredClone(s);change(bad);assert.throws(()=>verifyFailedExecution(e,bad));
+ }
+});

@@ -1,4 +1,5 @@
 import {makeReplacementContextCode} from './replacement-context.mjs';
+import {makeDateTimeContextCode} from './date-time-context.mjs';
 import { createHash } from 'node:crypto';
 import { makeWorkspaceUiCode, validateUiAction } from './workspace-ui.mjs';
 import {validatePreparedNodeContext} from './node-context.mjs';
@@ -49,6 +50,7 @@ export function createNodeProcedure({ operation, execute, record, wrapMutation,
   let sequence = 0;
   const nextStep=()=>{sequence++;return operation.nodeStepSequence=(operation.nodeStepSequence??0)+1;};
   let snapshot = null;
+  let lastPreparedStep = null;
   let evidenceSnapshot = null;
   let snapshotTableDialog = null;
   let snapshotWizardConfirmation = null;
@@ -163,7 +165,7 @@ export function createNodeProcedure({ operation, execute, record, wrapMutation,
         throw new NodeProcedureStepError(result);
       return structuredClone(result);
     },
-    async observe({ condition, ready, confirmIdentity, timeoutMs = 15000, importColumnPage, outputColumnPage, readProcesses = false, readOutputs = false, readMappings = false, readCalculator = false, readGrouping = false, readSorting = false, readReplacement = false, readDuplicates = false, readReform = false, readFilter = false, readJoin = false, readUnion = false, readPreview = false, readNavigation = false, tablePage, tableDialog, tableFormatPage, wizardConfirmation } = {}) {
+    async observe({ condition, ready, confirmIdentity, timeoutMs = 15000, importColumnPage, outputColumnPage, readProcesses = false, readOutputs = false, readMappings = false, readCalculator = false, readGrouping = false, readDateTime = false, readSorting = false, readReplacement = false, readDuplicates = false, readReform = false, readFilter = false, readJoin = false, readUnion = false, readPreview = false, readNavigation = false, tablePage, tableDialog, tableFormatPage, wizardConfirmation } = {}) {
       checkBudget();
       if (typeof condition !== 'string' || !condition.trim() || typeof ready !== 'function'
         || !Number.isFinite(timeoutMs) || timeoutMs <= 0 || timeoutMs > 15000) {
@@ -174,7 +176,7 @@ export function createNodeProcedure({ operation, execute, record, wrapMutation,
       if(tableDialog && (!['format','filter'].includes(tableDialog.kind)||!tableDialog.table))throw new Error('A typed Table dialog binding is required');
       if(tablePage)makeNodeTableContextCode(preparedNodeContext,tablePage.table,tablePage.page);
       if(tableDialog)makeNodeTableContextCode(preparedNodeContext,tableDialog.table,{row_offset:0,row_limit:0,column_offset:0,column_limit:1});
-      if ((readProcesses || readOutputs || readMappings || readCalculator || readGrouping || readSorting || readReplacement || readDuplicates || readReform || readFilter || readJoin || readUnion || readPreview) && !preparedNodeContext) throw new Error('Native process/output reads require a prepared node');
+      if ((readProcesses || readOutputs || readMappings || readCalculator || readGrouping || readDateTime || readSorting || readReplacement || readDuplicates || readReform || readFilter || readJoin || readUnion || readPreview) && !preparedNodeContext) throw new Error('Native process/output reads require a prepared node');
       // A failed wait must invalidate even a previously usable observation.
       snapshot = null;
       evidenceSnapshot = null;
@@ -276,7 +278,7 @@ export function createNodeProcedure({ operation, execute, record, wrapMutation,
         // observation; they are not an execution or data-freshness claim.
         for (const [requested,key,makeCode] of [[readProcesses,'node_processes',makeNodeProcessContextCode],
           [readOutputs,'node_outputs',makeNodeOutputContextCode], [readMappings,'node_mapping',makeNodeMappingContextCode],
-          [readDuplicates,'node_duplicates',makeDuplicatesContextCode], [readUnion,'node_union',makeUnionContextCode], [readJoin,'node_join',makeJoinContextCode], [readCalculator,'node_calculator',makeCalculatorContextCode], [readGrouping,'node_grouping',makeGroupingContextCode], [readReplacement,'node_replacement',makeReplacementContextCode], [readSorting,'node_sorting',makeSortingContextCode], [readReform,'node_reform',makeReformContextCode]]) {
+          [readDateTime,'node_date_time',makeDateTimeContextCode], [readDuplicates,'node_duplicates',makeDuplicatesContextCode], [readUnion,'node_union',makeUnionContextCode], [readJoin,'node_join',makeJoinContextCode], [readCalculator,'node_calculator',makeCalculatorContextCode], [readGrouping,'node_grouping',makeGroupingContextCode], [readReplacement,'node_replacement',makeReplacementContextCode], [readSorting,'node_sorting',makeSortingContextCode], [readReform,'node_reform',makeReformContextCode]]) {
           if (!requested) continue;
           if (observationNow() >= deadline) break;
           const native=await execute(makeCode(preparedNodeContext),{timeout:Math.min(35000,Math.max(1,deadline-observationNow()))});
@@ -354,6 +356,7 @@ export function createNodeProcedure({ operation, execute, record, wrapMutation,
       evidenceSnapshot = null;
       if (!persisted || JSON.stringify(persisted.action) !== JSON.stringify(action)
         || persisted.signature !== signature) throw new Error('Prepared step was not durably preserved after redaction');
+      lastPreparedStep = structuredClone(persisted);
       signal?.throwIfAborted();
       if (now() >= operation.deadline) throw new Error('Node procedure deadline elapsed before mutation');
       const code = makeWorkspaceUiCode({ mode: 'act', operation_id: id, action,
@@ -409,6 +412,7 @@ export function createNodeProcedure({ operation, execute, record, wrapMutation,
           readMappings:initialObservation?.node_mapping!==undefined,
           readCalculator:initialObservation?.node_calculator!==undefined,
           readGrouping:initialObservation?.node_grouping!==undefined,
+          readDateTime:initialObservation?.node_date_time!==undefined,
           readSorting:initialObservation?.node_sorting!==undefined,
           readReplacement:initialObservation?.node_replacement!==undefined,
           readReform:initialObservation?.node_reform!==undefined,
@@ -454,6 +458,7 @@ export function createNodeProcedure({ operation, execute, record, wrapMutation,
       }
     },
     get steps() { return sequence; },
+    get lastPreparedStep() { return structuredClone(lastPreparedStep); },
   };
   return Object.freeze(channel);
 }
