@@ -1,3 +1,15 @@
+# Node16: полная автономная приёмка завершена — 14 сентября 2026
+
+Source `8cd5c281`, runtime `17b0ede0`, model run `20260914-004604-475bb0c8`:
+**10 случаев / 470 ячеек и 10 свежих открытий / 470 ячеек; полный аудит14/14PASS**.
+Done/Close, negatives и current-run потеря ответа проверены. Исходный wrapper
+exit2 после model exit0 сохранён; отдельный versioned auditor восстановил
+transport dedup/spillover без изменения исходного evidence/harness.
+[Итог, хеши и границы](node16-final-acceptance-2026-09-14.md).
+Merge/deploy/shared plugin не выполнялись.
+
+---
+
 # Node16: исправлена смена файла импорта — 14 сентября 2026
 
 Source `8cd5c281`, runtime `17b0ede0`: existing import all-null → mapped

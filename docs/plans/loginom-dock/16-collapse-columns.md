@@ -1,10 +1,11 @@
 # 16. Свёртка столбцов
 
-Последний checkpoint: [исправление hash до первого выполнения; full acceptance открыт](../../loginom-dock/node16-hash-fix-result-2026-09-13.md).
+Последний checkpoint: [полная независимая приёмка 14/14 PASS](../../loginom-dock/node16-final-acceptance-2026-09-14.md).
 
-Статус: **development / bounded exact-full source wiring**. Полное точное чтение
-выхода подключено для проверенного собственного статического импорта;
-автономная приёмка всего узла ещё не выполнена.
+Статус: **полная автономная приёмка завершена на source8cd5c281/runtime17b0**.
+Модель:10случаев/470ячеек; независимые свежие открытия:10/470; Done/Close,
+negatives/current-run loss PASS. Merge и выпуск не выполнялись.
+Следующие ссылки сохраняют исторические этапы и снятые blockers.
 [Текущий этап и ограничения](../../loginom-dock/node16-exact-wiring-result-2026-09-13.md).
 [Отчёт разработки](../../loginom-dock/collapse-columns-development-2026-09-13.md),
 [конкретный blocker чтения](../../loginom-dock/collapse-variant-blocker-2026-09-13.md).
