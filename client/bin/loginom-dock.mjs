@@ -19,6 +19,7 @@ try {
     'replay-login-user': { type: 'string' },
     'replay-loginom-url': { type: 'string' },
     'replay-bootstrap': { type: 'boolean', default: false },
+    'acceptance-cleanup-package': { type: 'string' },
     'input-artifact': { type: 'string', multiple: true },
     headless: { type: 'boolean', default: false },
   } });
@@ -29,6 +30,7 @@ try {
     actionManifestUri: values['action-manifest-uri'], actionManifestSha256: values['action-manifest-sha256'],
     replayBootstrap: values['replay-bootstrap'], replayLoginUser: values['replay-login-user'] ?? null,
     replayLoginomUrl: values['replay-loginom-url'] ?? null,
+    acceptanceCleanupPackage: values['acceptance-cleanup-package'] ?? null,
   });
   const session = await createSession(config, { headless: values.headless });
   if (values['input-artifact']?.length && !['executor-preview','executor-replay'].includes(config.mode)) {

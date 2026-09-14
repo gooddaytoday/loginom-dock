@@ -15,7 +15,7 @@ export function installManagedShutdown({ close, host = process }) {
       // Keep the owner alive even when another handle disappears during failed
       // cleanup. This is a stop state, not a timeout-based recovery or new lock.
       keepAlive ??= setInterval(() => {}, 2147483647);
-      host.stderr.write('Loginom Dock shutdown is unconfirmed. The client remains running to preserve pending clipboard protection; do not start another clipboard operation. Forced termination removes kernel locks.\n');
+      host.stderr.write('Loginom Dock shutdown is unconfirmed. The client remains running to preserve the Loginom session and pending clipboard protection. Inspect its cleanup receipt and browser before recovery. Forced termination cannot confirm package cleanup and removes kernel locks.\n');
       return result;
     })();
     return pending;

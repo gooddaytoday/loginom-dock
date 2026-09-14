@@ -22,6 +22,7 @@ import upload_probe
 import duplicates_upload_probe
 import missing_values_goal
 import collapse_acceptance
+import rc_combined_goal
 from text_export_readiness import require_reject_baseline_reader,REJECT_BASELINE_BLOCKER,isolated_user_config
 import text_export_upload_probe
 import union_upload_probe
@@ -136,6 +137,8 @@ def validate_loginom_url(value):
 
 
 def validate_inputs(args):
+    if getattr(args, 'goal', None) in rc_combined_goal.GOALS:
+        rc_combined_goal.validate(args)
     if getattr(args, "goal", None)=="text-export-node-complete" and getattr(args, "run", False):
         require_reject_baseline_reader()
     if getattr(args, 'goal', None) in ('duplicates-node-complete','union-node-complete','union-review-complete') and not getattr(args, 'loginom_url', None):
@@ -253,9 +256,11 @@ def execute(args):
             harness_inputs[name]=sha(WORK/name)
     if goal_id==collapse_acceptance.GOAL_ID:
         harness_inputs.update(collapse_acceptance.harness_pins())
+    if goal_id in rc_combined_goal.GOALS:
+        harness_inputs.update(rc_combined_goal.fixture_pins())
     if goal_id=="text-export-node-complete":
         harness_inputs.update({p.relative_to(WORK).as_posix():sha(p) for p in sorted((WORK/"fixtures/text-export").rglob("*")) if p.is_file()})
-    info = {"schema_version": 2, "loginom_url": loginom_url, "storage_directory":getattr(args,"storage_directory",None), "scope": "source_runtime", "model_started": False,
+    info = {"schema_version": 2, "loginom_url": loginom_url, "loginom_user":args.loginom_user, "storage_directory":getattr(args,"storage_directory",None), "scope": "source_runtime", "model_started": False,
             "provider": provider, "model": model, "reasoning_effort": reasoning, "hermes_version": "0.21.0",
             "model_profile": profile, "provider_selection": "explicit CLI; effective usage identity checked after the run",
             "fallback_allowed": False, "dependencies": dependencies,
@@ -275,6 +280,9 @@ def execute(args):
         info['acceptance_inputs_sha256'] = sha(INPUTS)
         info['series']['pass_criteria'] = 'date_time_sales_acceptance.py including independent post-run diagnostics'
     if goal_id=='missing-values-complete':info['series']['pass_criteria']='missing_values_acceptance.py full goal plus independent reopen/full rows'
+    if goal_id in rc_combined_goal.GOALS:
+        info['series']['pass_criteria']='rc_combined_acceptance.py: declared graph, independent expected values, public results, save and independent reopen'
+        info['result_profile']='user-v1'
     if goal_id==collapse_acceptance.GOAL_ID:
         info['collapse_admission']=admission
         info['series']['pass_criteria']='collapse_node_acceptance.py FULL goal + independent new session; CASE_PASS is insufficient'
@@ -327,6 +335,9 @@ def execute(args):
     if goal_id==collapse_acceptance.GOAL_ID:
         info['input_artifacts']=collapse_acceptance.fixtures(run_id,args.storage_directory)
         prompt=collapse_acceptance.prompt(package,args.storage_directory,run_id)
+    if goal_id in rc_combined_goal.GOALS:
+        info['input_artifacts']=rc_combined_goal.descriptors(goal_id,run_id,args.storage_directory)
+        prompt=rc_combined_goal.prompt(goal_id,goal.read_text(),package,args.storage_directory,run_id)
     write(run / "scenario.txt", prompt)
     write(run / "request.json", info)
     # No key is persisted in the child config. Dock reads its own explicit config.
@@ -354,6 +365,10 @@ def execute(args):
     if goal_id==collapse_acceptance.GOAL_ID:
         for path,artifact in zip(collapse_acceptance.fixture_paths(),info['input_artifacts']):
             command.extend(['--input-artifact',json.dumps({**artifact,'sourcePath':str(path)},ensure_ascii=False)])
+    if goal_id in rc_combined_goal.GOALS:
+        command.extend(['--acceptance-cleanup-package', package])
+        for name,artifact in zip(rc_combined_goal.GOALS[goal_id],info['input_artifacts']):
+            command.extend(['--input-artifact',json.dumps({**artifact,'sourcePath':str(rc_combined_goal.FIXTURES/name)},ensure_ascii=False)])
     # Hermes oneshot otherwise snapshots tools after 15s, even while this
     # server is still connecting. A measured cold start took 16.5s; use the
     # same bounded wait as the declared MCP connection budget.
@@ -421,6 +436,17 @@ def execute(args):
                     "tools": tool_results, "calls": calls,
                     "events": exported_events(dock_home, secrets)}
         receipt = dock_home / "fault-receipt.json"
+        if goal_id in rc_combined_goal.GOALS:
+            evidence['package_cleanup'] = []
+            for metadata_path in sorted((dock_home/'sessions').glob('*/session.json')):
+                metadata = json.loads(metadata_path.read_text())
+                if not metadata.get('workspacePreparation',{}).get('attempted'):
+                    continue  # listTools precheck never opens Loginom or a package
+                cleanup_path = metadata_path.parent/'package-cleanup.json'
+                cleanup = json.loads(cleanup_path.read_text()) if cleanup_path.is_file() else {'status':'MISSING'}
+                evidence['package_cleanup'].append({'session_id':metadata.get('sessionId'),
+                    'profile_owned':metadata.get('sessionId')==metadata_path.parent.name and metadata.get('profile')==str(metadata_path.parent/'browser-profile'),
+                    'receipt':cleanup})
         if profile == 'chatgpt-sol':
             guard = run / 'private/auth-guard.json'
             evidence['auth_guard'] = json.loads(guard.read_text()) if guard.is_file() else {}
@@ -471,7 +497,7 @@ def main():
     parser.add_argument("--require-delivered-context", action="store_true",
                         help="Require automatic E2E/Help delivery bound to a failure and journal before successful continuation")
     parser.add_argument("--model-profile",choices=["chatgpt-sol","xiaomi-mimo"],default="chatgpt-sol")
-    parser.add_argument("--goal", choices=["text-export-node-complete", "collapse-node-complete", "missing-values-complete", "duplicates-node-complete", "replacement-node-complete", "union-review-complete", "union-node-complete", "join-review-complete", "join-node-complete", "prepare-workspace", "basic-graph", "auto-link-retain", "auto-link-remove", "palette-inventory", "checkbox-roundtrip", "context-menu-checkbox", "root-checkbox", "file-storage-inspect", "file-upload-probe", "file-upload-verify", "data-pipeline", "import-roundtrip", "calculator-roundtrip", "node-import-roundtrip", "node-apply-complete", "calculator-node-complete", "grouping-node-complete", "sales-sorting-complete", "reform-node-complete", "filter-node-complete"], default="basic-graph")
+    parser.add_argument("--goal", choices=[*rc_combined_goal.GOALS, "text-export-node-complete", "collapse-node-complete", "missing-values-complete", "duplicates-node-complete", "replacement-node-complete", "union-review-complete", "union-node-complete", "join-review-complete", "join-node-complete", "prepare-workspace", "basic-graph", "auto-link-retain", "auto-link-remove", "palette-inventory", "checkbox-roundtrip", "context-menu-checkbox", "root-checkbox", "file-storage-inspect", "file-upload-probe", "file-upload-verify", "data-pipeline", "import-roundtrip", "calculator-roundtrip", "node-import-roundtrip", "node-apply-complete", "calculator-node-complete", "grouping-node-complete", "sales-sorting-complete", "reform-node-complete", "filter-node-complete"], default="basic-graph")
     parser.add_argument("--allow-manual-reopen", action="store_true")
     args = parser.parse_args()
     if args.fault=="save_reopen" and not args.allow_manual_reopen:

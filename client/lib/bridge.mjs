@@ -7,7 +7,7 @@ import { CallToolRequestSchema, ListToolsRequestSchema, McpError, ErrorCode } fr
 import { readCatalog, combineCatalogs, connectRemote, selectToolGroups } from './catalog.mjs';
 import { makeClipboardCode, runClipboardTransfer, createSerialGate, clipboardTool } from './clipboard.mjs';
 import { createSkillLoader, skillTransport, skillUri, prepareTool } from './skill.mjs';
-import { readFile } from 'node:fs/promises';
+import { readFile, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { openArchive } from './archive.mjs';
 import { diagnoseConnection } from './diagnostics.mjs';
@@ -24,6 +24,7 @@ import { createHostArtifactAdmission } from './host-artifacts.mjs';
 import { compactActionResult, userResultSchema, compactKnowledgeBundle, userWorkflowInstructions } from './user-results.mjs';
 import { recordLocalDiagnostics } from './local-diagnostics.mjs';
 import { createUserWorkflowBindings, userNodeTool } from './user-workflow.mjs';
+import { makePackageCleanupCode, parsePackageCleanupResult } from './package-cleanup.mjs';
 
 // Keep the runtime receipt byte-for-byte meaningful to reconciliation/journal
 // consumers; recovery advice is a separate MCP content block, never an effect.
@@ -99,6 +100,8 @@ export async function createBridge(config, session) {
   const closeClients = () => Promise.allSettled([remote?.close(), browser.close()]);
   const browserGate = createSerialGate();
   const heldLeases = new Set();
+  const savedPackages = new Map();
+  let closing, shutdownStarted = false;
   const skill = createSkillLoader({ directory: session.directory, transport: skillTransport(config) });
   let clipboardUncertain = false;
   let actionRuntime = null;
@@ -154,6 +157,7 @@ export async function createBridge(config, session) {
     });
     server.setRequestHandler(ListToolsRequestSchema, async () => ({ tools: structuredClone(catalog.tools) }));
     server.setRequestHandler(CallToolRequestSchema, async (request, extra) => {
+      if (shutdownStarted) throw new McpError(ErrorCode.InvalidRequest, 'Dock shutdown has started');
       const owner = catalog.routes.get(request.params.name);
       if (!owner) throw new McpError(ErrorCode.InvalidParams, 'Unknown Dock tool');
       if (request.params.name === 'dock_diagnostics') {
@@ -291,6 +295,8 @@ export async function createBridge(config, session) {
                     { observationId: args.observation_id, operationId: args.operation_id, recoveryOperationId: args.recovery_operation_id, signal: extra.signal })
                     : await actionRuntime.run(args.action_key, args.parameters, { signal: extra.signal, operationId: args.operation_id });
             await logResult(request.params.name,outcome);
+            if (outcome.status === 'SUCCEEDED' && ['package.save_as','package.save_checkpoint'].includes(outcome.action_key)
+                && outcome.output?.package_ref?.path) savedPackages.set(outcome.output.package_ref.path, outcome.operation_id);
             if (userProfile && outcome.status === 'SUCCEEDED' && ['package.save_as','package.save_checkpoint'].includes(outcome.action_key))
               for (const continuation of outcome.output?.workflow_continuations ?? []) userWorkflows.remember(continuation);
             const reply = actionReply(userProfile?compactActionResult(outcome):outcome, { observe: request.params.name === 'dock_workspace_observe', userProfile });
@@ -346,9 +352,42 @@ export async function createBridge(config, session) {
         return { isError: true, content: [{ type: 'text', text: message }] };
       }
     });
-    let closing;
     return { server, catalog, close() {
+      shutdownStarted = true;
       closing ??= (async () => {
+        if (config.acceptanceCleanupPackage) {
+          let cleanup;
+          const prepared = session.metadata.workspacePreparation;
+          if (!prepared?.attempted) cleanup = {status:'SKIPPED_UNPREPARED', session_id:session.metadata.sessionId};
+          else {
+            try {
+              // Refuse unsettled background node jobs before waiting on the
+              // browser gate. Shutdown never cancels them to force a close.
+              actionRuntime.assertPreparationAllowed();
+              if (session.metadata.workspaceReady !== true || !savedPackages.has(config.acceptanceCleanupPackage)) {
+                cleanup = {status:'BLOCKED', reason:'CONFIRMED_SAVE_REQUIRED'};
+              } else cleanup = await browserGate(async () => {
+                actionRuntime.assertPreparationAllowed();
+                const cleanupOptions = {
+                  sessionId:session.metadata.sessionId, documentId:prepared.state.document_id,
+                  tabTid:prepared.state.workflow_ref.tab_tid, account:config.replayLoginUser,
+                  packagePath:config.acceptanceCleanupPackage, loginomUrl:config.loginomUrl,
+                  loginomBuild:session.metadata.targetIdentity.loginom_build,
+                };
+                const response = await browser.callTool({name:'browser_run_code_unsafe', arguments:{code:makePackageCleanupCode(cleanupOptions)}}, undefined, {timeout:30000});
+                return parsePackageCleanupResult(response, cleanupOptions);
+              });
+            } catch { cleanup = {status:'BLOCKED', reason:'CLEANUP_OR_OPERATION_UNCONFIRMED'}; }
+          }
+          cleanup = {...cleanup, session_id:session.metadata.sessionId,
+            save_operation_id:savedPackages.get(config.acceptanceCleanupPackage) ?? null};
+          await writeFile(join(session.directory,'package-cleanup.json'), JSON.stringify(cleanup,null,2)+'\n', {mode:0o600});
+          await recordExecution({event:'isolated_package_cleanup', cleanup});
+          if (!['SUCCEEDED','SKIPPED_UNPREPARED'].includes(cleanup.status)) return {
+            browser_transport_closed:false, browser_process_terminated:false, clipboard_leases_retained:heldLeases.size,
+            package_cleanup:cleanup,
+          };
+        }
         await server.close(); const closed=await closeClients();
         if (closed[1].status === 'fulfilled') await awaitBrowserExit();
         const browserTransportClosed = closed[1].status === 'fulfilled' && browserProcessTerminated;

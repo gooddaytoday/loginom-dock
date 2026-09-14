@@ -47,6 +47,12 @@ test('restricts credential files, endpoint and identity before connecting', asyn
   assert.equal(replay.mode, 'executor-replay');
   assert.equal(replay.replayBootstrap, true);
   assert.equal(replay.replayLoginUser,'test-account');
+  const cleanupOptions={...options,mode:'executor-replay',actionManifestUri:replay.actionManifestUri,
+    actionManifestSha256:replay.actionManifestSha256,replayBootstrap:true,replayLoginUser:'test-account'};
+  assert.equal((await loadConfig({...cleanupOptions,acceptanceCleanupPackage:'/test-account/result.lgp'})).acceptanceCleanupPackage,'/test-account/result.lgp');
+  for(const acceptanceCleanupPackage of ['relative.lgp','/test-account/../other.lgp','/test-account/result.csv'])
+    await assert.rejects(loadConfig({...cleanupOptions,acceptanceCleanupPackage}),/Acceptance cleanup/);
+  await assert.rejects(loadConfig({...options,acceptanceCleanupPackage:'/test-account/result.lgp'}),/Acceptance cleanup/);
   await assert.rejects(loadConfig({...options,mode:'executor-replay',actionManifestUri:replay.actionManifestUri,
     actionManifestSha256:replay.actionManifestSha256,replayBootstrap:true}),/explicit Loginom account/);
   await assert.rejects(loadConfig({ ...options, mode: 'classic', actionManifestUri: replay.actionManifestUri,

@@ -8,7 +8,8 @@ import { ACTION_CATALOG_ROOT } from './action-catalog.mjs';
 const SHA256 = /^[a-f0-9]{64}$/;
 
 export async function loadConfig({ configPath, stateDir, agent, adapterRevision, mode,
-  actionManifestUri = null, actionManifestSha256 = null, replayBootstrap = false, replayLoginUser = null, replayLoginomUrl = null }) {
+  actionManifestUri = null, actionManifestSha256 = null, replayBootstrap = false, replayLoginUser = null, replayLoginomUrl = null,
+  acceptanceCleanupPackage = null }) {
   if (!configPath) throw new Error('An explicit Dock config path is required');
   if (!['codex', 'hermes'].includes(agent) || !adapterRevision?.trim()) {
     throw new Error('Explicit agent and adapter revision are required');
@@ -48,6 +49,12 @@ export async function loadConfig({ configPath, stateDir, agent, adapterRevision,
   if (replayBootstrap && mode !== 'executor-replay') throw new Error('Replay bootstrap is only allowed in executor-replay');
   if (replayBootstrap && (typeof replayLoginUser !== 'string' || !replayLoginUser.trim() || replayLoginUser.length>200 || /[\x00-\x1f\x7f]/.test(replayLoginUser))) throw new Error('Replay bootstrap requires an explicit Loginom account');
   if (!replayBootstrap && replayLoginUser !== null) throw new Error('Replay login account requires replay bootstrap');
+  if (acceptanceCleanupPackage !== null && (mode !== 'executor-replay' || !replayBootstrap
+      || typeof acceptanceCleanupPackage !== 'string' || acceptanceCleanupPackage.length > 1024
+      || !/^\/(?:[^/\\\x00-\x1f]+\/)*[^/\\\x00-\x1f]+\.lgp$/.test(acceptanceCleanupPackage)
+      || acceptanceCleanupPackage.split('/').some(p => p === '.' || p === '..'))) {
+    throw new Error('Acceptance cleanup requires an explicit replay account and exact package path');
+  }
   if (replayLoginomUrl !== null && mode !== 'executor-replay') throw new Error('Replay Loginom address is only allowed in executor-replay');
   const endpoint = new URL(data.endpoint);
   if (endpoint.protocol !== 'https:' || endpoint.username || endpoint.password
@@ -70,7 +77,7 @@ export async function loadConfig({ configPath, stateDir, agent, adapterRevision,
   return Object.freeze({
     endpoint: endpoint.href, apiKey: data.api_key, loginomUrl,
     account: data.account, user: data.user, agent, adapterRevision, mode,
-    actionManifestUri, actionManifestSha256, replayBootstrap, replayLoginUser,
+    actionManifestUri, actionManifestSha256, replayBootstrap, replayLoginUser, acceptanceCleanupPackage,
     resultProfile: profile?.result_profile ?? 'diagnostic',
     stateDir: normalizeConfigPath(stateDir || join(homedir(), '.loginom-dock')),
   });
