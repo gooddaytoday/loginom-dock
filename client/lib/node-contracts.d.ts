@@ -1,6 +1,6 @@
 /** Shared 02/03 contract. Runtime publication of node.apply belongs to 03. */
 export type NodeType = 'imports.text' | 'transform.calculator' | 'transform.reform_columns'
-  | 'transform.filter_data' | 'transform.group_data' | 'transform.sorting'
+  | 'transform.replace_columns' | 'transform.filter_data' | 'transform.group_data' | 'transform.sorting'
   | 'transform.join_data' | 'transform.union_data';
 export interface WorkflowRef { workflow_id: string; tab_tid: string; prefix: string; navigation_path: {tid: string; label: string}[] }
 export interface NodeRef { document_id: string; workflow_id: string; node_id: string }
@@ -35,7 +35,7 @@ export interface NodeHandler<T extends NodeType, P> {
   configure(context: NodeProcedureContext, parameters: P): Promise<VerifiedNodePhase>;
   /** Pure projection of accepted receipts; never executes or rereads the UI. */
   configurationReadback?(context: {node: NodeRef; operation_id: string;
-    phases: Array<PhaseReceipt & {value: VerifiedNodePhase}>}): TextImportConfigurationReadback | CalculatorConfigurationReadback | GroupingConfigurationReadback | SortingConfigurationReadback | JoinConfigurationReadback;
+    phases: Array<PhaseReceipt & {value: VerifiedNodePhase}>}): TextImportConfigurationReadback | CalculatorConfigurationReadback | GroupingConfigurationReadback | SortingConfigurationReadback | ReplacementConfigurationReadback | JoinConfigurationReadback;
 }
 export interface VerifiedNodePhase { verified: true; cleanup_complete: true; effect_possible: boolean }
 export interface NodeProcedureContext {
@@ -52,7 +52,7 @@ export interface NodeApplyResult {
   execution: NodeExecution; output: NodeOutput;
   /** A local node checkpoint never proves that the package was saved. */
   package_saved: false; cleanup_complete: boolean; warnings: string[];
-  configuration?: {status: 'applied' | 'discarded'; readback?: TextImportConfigurationReadback | CalculatorConfigurationReadback | GroupingConfigurationReadback | SortingConfigurationReadback | JoinConfigurationReadback};
+  configuration?: {status: 'applied' | 'discarded'; readback?: TextImportConfigurationReadback | CalculatorConfigurationReadback | GroupingConfigurationReadback | SortingConfigurationReadback | ReplacementConfigurationReadback | JoinConfigurationReadback};
   checkpoint_kind?: 'local_node_checkpoint' | 'local_node_cancellation' | 'local_node_stopped';
   persisted_package_verified?: false; pending_phase?: PhaseName | null; error?: NodeError;
 }
@@ -113,6 +113,25 @@ export interface SortingConfigurationReadback {
   keys: Array<{name: string; label: string; type: string; order: number; direction: 'ASC' | 'DESC'; case_sensitive: boolean}>;
   options: {chkLocaleAware: {value: boolean; switch_pressed: boolean}; chkBufferWhole: {value: boolean; switch_pressed: boolean}; cbxMaxThreadCount: {value: number; switch_pressed: boolean}};
   comparison: {mode: 'binary' | 'user_locale'; locale: string | null; locale_verified: boolean; case_insensitivity: 'latin_only' | 'locale_dependent'};
+  input_mapping: GroupingConfigurationReadback['input_mapping'];
+  output_mapping: GroupingConfigurationReadback['output_mapping'];
+}
+export type ReplacementValue = {type: 'string'; value: string | null}
+  | {type: 'integer'; value: number | string | null} | {type: 'real'; value: number | null};
+export type ReplacementRule = {
+  field: {kind: 'input_field'; name: string};
+  pairs: Array<{from: ReplacementValue; to: ReplacementValue}>;
+  other: {mode: 'keep' | 'null'} | {mode: 'value'; value: ReplacementValue};
+} & ({type: 'string'; case_sensitive: boolean} | {type: 'integer' | 'real'; precision: 0});
+export interface ReplacementParameters {
+  /** Each listed field replaces its entire table; unlisted fields are preserved. */
+  rules?: ReplacementRule[];
+  output_mode?: 'replace' | 'add';
+}
+export interface ReplacementConfigurationReadback {
+  kind: 'replacement'; scope: 'observed_before_verified_finish'; node: NodeRef;
+  receipt_ids: string[]; values_are: 'observed_ui_values'; package_persistence_verified: false;
+  mode: 'exact'; rules: ReplacementRule[]; output_mode: 'replace' | 'add';
   input_mapping: GroupingConfigurationReadback['input_mapping'];
   output_mapping: GroupingConfigurationReadback['output_mapping'];
 }

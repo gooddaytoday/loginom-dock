@@ -1474,7 +1474,7 @@ test('wizard step clicks once and verifies only the requested stage in the same 
 });
 
 test('supported transforms accept only owned conditional destinations after one click',async()=>{
- for(const marker of [';CalcDataWizard;btnAddExpr',';GroupDataWizard;grdUsedFields;tbl',';SortingWizard;SortingColumnCollection;grdSorting;tbl',';ReformColumnsWizard;grdTargetColumns;tbl'])for(const destination of ['done','output_mapping','input_mapping']) {
+ for(const marker of [';CalcDataWizard;btnAddExpr',';GroupDataWizard;grdUsedFields;tbl',';SortingWizard;SortingColumnCollection;grdSorting;tbl',';ReplaceColumnsWizard;grdDataList;tbl',';ReformColumnsWizard;grdTargetColumns;tbl'])for(const destination of ['done','output_mapping','input_mapping']) {
   const page=new Page(),c=wizardStepFixture(page);c.marker.attrs['data-tid']=c.base+marker;
   const snapshot=await page.observe(),button=snapshot.ui.elements.find(e=>e.wizard_step);
   page.waitForTimeout=async()=>{};const click=page.mouse.click;

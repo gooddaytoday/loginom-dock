@@ -6,6 +6,7 @@ import { createSession } from '../lib/session.mjs';
 import { createBridge } from '../lib/bridge.mjs';
 import { admitStartupArtifacts } from '../lib/artifacts.mjs';
 import { installManagedShutdown } from '../lib/managed-shutdown.mjs';
+import { observeMcpTransport } from '../lib/mcp-origin.mjs';
 
 process.umask(0o077);
 let bridge, shutdownController;
@@ -39,7 +40,7 @@ try {
   }));
   bridge = await createBridge(config, session);
   shutdownController = installManagedShutdown({ close: () => bridge.close() });
-  await bridge.server.connect(new StdioServerTransport());
+  await bridge.server.connect(observeMcpTransport(new StdioServerTransport(), session));
 } catch {
   // Config parsing and upstream failures may embed secrets. Startup logs are fixed.
   process.stderr.write('Loginom Dock could not start. Check its explicit config, pinned runtime, browser installation and server availability.\n');

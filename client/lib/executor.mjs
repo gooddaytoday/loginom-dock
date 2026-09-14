@@ -992,13 +992,14 @@ function browserCapability(page, task) {
     await poll(async () => !(await resolve('file_dialog.file_name', {}, { cardinality: 'zeroOrOne', stable: false })));
     const errorMessage = await resolve('message.error', {}, { cardinality: 'zeroOrOne', stable: false });
     if (errorMessage) throw new Error((await errorMessage.innerText()).slice(0, 500));
+    // The file dialog disappears before the awaited Save As handler hides its
+    // menu, especially after overwrite. Wait for that owner transition before
+    // toggling the menu again to close the saved package.
+    await poll(async () => !(await resolve('packages.save_as', {}, { cardinality: 'zeroOrOne', stable: false })));
+    const saveError = await resolve('message.error', {}, { cardinality: 'zeroOrOne', stable: false });
+    if (saveError) throw new Error((await saveError.innerText()).slice(0, 500));
+    record('save_flow_completed', { path: before.path });
     if (keepOpen) {
-      // Native btnSaveAsPackageHandler awaits DoSavePackage before hiding its
-      // menu. btnSavePackageHandler does not, so it cannot supply this receipt.
-      await poll(async () => !(await resolve('packages.save_as', {}, { cardinality: 'zeroOrOne', stable: false })));
-      const saveError = await resolve('message.error', {}, { cardinality: 'zeroOrOne', stable: false });
-      if (saveError) throw new Error((await saveError.innerText()).slice(0, 500));
-      record('save_flow_completed', { path: before.path });
       const prefix = await ensureReady();
       const actualPath = normalizeStoredPath((await packageIdentity()).path);
       const graph = await graphSnapshot(prefix);

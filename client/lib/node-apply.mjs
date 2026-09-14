@@ -164,9 +164,17 @@ export async function applyNode({request, operation, handlers, drivers, record,
       // Explicit trusted-driver proof is required: a transport exception alone
       // never clears uncertainty, even in a nominally non-mutating phase.
       const refusal=error.nodePhaseRefusal;
-      if(name==='target'&&refusal?.phase===name&&refusal.status==='FAILED'
+      const replacementClosed=refusal?.proof?.closed;
+      const replacementRefusal=name==='configure'&&request.target.type==='transform.replace_columns'
+        &&refusal?.verification==='replacement_effective_preflight_completed'
+        &&replacementClosed?.verified===true&&replacementClosed.cleanup_complete===true
+        &&replacementClosed.draft_discarded===true&&replacementClosed.settings_applied===false
+        &&replacementClosed.node_context?.verified===true
+        &&['document_id','workflow_id','node_id'].every(k=>replacementClosed.node_context[k]===state.node?.[k]);
+      if((name==='target'&&refusal?.verification==='reform_mapped_preflight_completed'||replacementRefusal)
+        &&refusal?.phase===name&&refusal.status==='FAILED'
         &&refusal.effect_possible===true&&refusal.cleanup_complete===true&&refusal.settings_unchanged===true
-        &&refusal.verification==='reform_mapped_preflight_completed'){
+      ){
         await acknowledge({phase:'node_phase_refused',signature,receipt:{...pending,...refusal}});
         state.effect_possible=true;state.pending=null;state.cleanup_complete=true;state.verified_refusal=true;
       }

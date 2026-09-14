@@ -651,10 +651,11 @@
       "unit_evidence": [],
       "live_evidence": [],
       "known_gaps": [
-        "Нет принятого сквозного контракта",
-        "Разделы Help найдены; детальные режимы и live доступность требуют проверки"
+        "Source-кандидат exact реализован; автономная приёмка не проведена",
+        "Прямая разработка и save/reopen проверены; N11-R1 исправлено, целевая матрица 13/13 PASS, 16/16 negative; отчёт docs/plans/loginom-dock/11-fix-results-2026-09-13.md",
+        "Loginom 7.4.2 ограничивает other/value real двумя знаками; other Null flag=true расходится с примером Help"
       ],
-      "next_step": "Source review мастера и отдельная цепочка с настройкой, данными и save/reopen",
+      "next_step": "Ожидать назначения координатором автономной приёмки Hermes Sol/low; статус planned сохраняется до принятия",
       "documented_sections": [
         {
           "section": "Мастер настройки",
