@@ -62,7 +62,7 @@ export function resolveConfiguredOutputMapping(mapping,configured,native) {
     const source=sources.find(s=>s.name===field.source.name);requireValue(source,'Mapping source field does not exist');seen.add(source.name);
     const matches=targets.filter(t=>{const s=t.source??t.exclusion_source;return s?.record_id===source.record_id&&s.field_id===source.field_id;});
     requireValue(matches.length===1,'One native output per configured source is required');
-    const current=matches[0],name=field.name??(field.excluded?source.name:current.name),label=field.label??(field.excluded?(native.mapping_wizard==='DerivedDataSourceOutputSocketWizard'?source.name:source.label):current.label);
+    const current=matches[0],name=field.name??(field.excluded&&current.excluded!==true?source.name:current.name),label=field.label??(field.excluded&&current.excluded!==true?(native.mapping_wizard==='DerivedDataSourceOutputSocketWizard'?source.name:source.label):current.label);
     requireValue(field.excluded!==true||(source.required===false&&current.required===false),'Required or unverified output fields cannot be excluded');
     if(field.excluded===true&&native.mapping_wizard==='DerivedDataSourceOutputSocketWizard') {
       requireValue(current.inherited===false,'Inherited output fields cannot be excluded');
@@ -217,7 +217,7 @@ export async function configureOutputFields(channel,mapping,configured) {
   if(exclusions.length&&before.node_mapping.mapping_wizard!=='DerivedDataSourceOutputSocketWizard')throw Error('Verified separate output wizard required for exclusions');
   // Validate the complete post-exclusion namespace before any mutation. Native
   // exclusion replaces the output record and sets both name and label to the source name.
-  const planned=resolved.fields.map(f=>f.excluded?{...f,current:{...f.current,name:f.source.name,label:f.source.name}}:f);
+  const planned=resolved.fields.map(f=>f.excluded&&f.current.excluded!==true?{...f,current:{...f.current,name:f.source.name,label:f.source.name}}:f);
   const steps=planOutputFieldEdits(planned);
   let expected=structuredClone(before.node_mapping);
   const semantic=({rendered_indices,...rest})=>rest;

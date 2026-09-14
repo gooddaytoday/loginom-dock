@@ -4,6 +4,7 @@ import {createDateTimeNodeSupport} from './date-time-node.mjs';
 import {createMissingValuesNodeSupport} from './missing-values-node.mjs';
 import {createCollapseNodeSupport} from './collapse-node.mjs';
 import {createUnionNodeSupport} from './union-node.mjs';
+import {createTextExportNodeSupport} from './text-export-node.mjs';
 import {createJoinNodeSupport} from './join-node.mjs';
 import {createFilterNodeSupport} from './filter-node.mjs';
 import {createTextImportNodeSupport} from './text-import-node.mjs';
@@ -15,10 +16,12 @@ import {createCalculatorNodeSupport} from './calculator-node.mjs';
 // Candidate implementations share one lifecycle, gate and browser. Dispatch by
 // the already validated request; never infer a handler from the current UI.
 export function createCandidateNodeSupport(config) {
- const collapse=createCollapseNodeSupport(config),missingValues=createMissingValuesNodeSupport(config),dateTime=createDateTimeNodeSupport(config),duplicates=createDuplicatesNodeSupport(config),replacement=createReplacementNodeSupport(config),union=createUnionNodeSupport(config),join=createJoinNodeSupport(config),filter=createFilterNodeSupport(config),imports=createTextImportNodeSupport(config),calculator=createCalculatorNodeSupport(config),grouping=createGroupingNodeSupport(config),sorting=createSortingNodeSupport(config),reform=createReformNodeSupport(config);
- const nodeApplyHandlers=new Map([...collapse.nodeApplyHandlers,...missingValues.nodeApplyHandlers,...dateTime.nodeApplyHandlers,...duplicates.nodeApplyHandlers,...replacement.nodeApplyHandlers,...imports.nodeApplyHandlers,...calculator.nodeApplyHandlers,...grouping.nodeApplyHandlers,...sorting.nodeApplyHandlers,...reform.nodeApplyHandlers,...filter.nodeApplyHandlers,...join.nodeApplyHandlers,...union.nodeApplyHandlers]);
+ const exports=createTextExportNodeSupport(config),collapse=createCollapseNodeSupport(config),missingValues=createMissingValuesNodeSupport(config),dateTime=createDateTimeNodeSupport(config),duplicates=createDuplicatesNodeSupport(config),replacement=createReplacementNodeSupport(config),union=createUnionNodeSupport(config),join=createJoinNodeSupport(config),filter=createFilterNodeSupport(config),imports=createTextImportNodeSupport(config),calculator=createCalculatorNodeSupport(config),grouping=createGroupingNodeSupport(config),sorting=createSortingNodeSupport(config),reform=createReformNodeSupport(config);
+ const nodeApplyHandlers=new Map([...exports.nodeApplyHandlers,...collapse.nodeApplyHandlers,...missingValues.nodeApplyHandlers,...dateTime.nodeApplyHandlers,...duplicates.nodeApplyHandlers,...replacement.nodeApplyHandlers,...imports.nodeApplyHandlers,...calculator.nodeApplyHandlers,...grouping.nodeApplyHandlers,...sorting.nodeApplyHandlers,...reform.nodeApplyHandlers,...filter.nodeApplyHandlers,...join.nodeApplyHandlers,...union.nodeApplyHandlers]);
  return {nodeApplyHandlers,nodeApplyDriverFactory:options=>{
   const type=options.operation.parameters?.target?.type;
+  if(type==='preprocessing.data_recovery')return missingValues.nodeApplyDriverFactory(options);
+  if(type==='exports.text')return exports.nodeApplyDriverFactory(options);
   if(type==='transform.collapse_columns')return collapse.nodeApplyDriverFactory(options);
   if(type==='transform.date_time')return dateTime.nodeApplyDriverFactory(options);
   if(type==='research.duplicates')return duplicates.nodeApplyDriverFactory(options);

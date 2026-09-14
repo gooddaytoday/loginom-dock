@@ -250,3 +250,11 @@ test('verified failed execution settles once without output and refuses unproven
   assert.equal(result.status,'AMBIGUOUS');assert.equal(f.operation.nodeApply.result,undefined);
  }
 });
+
+test('unsupported retained export settings require acknowledged cleanup proof before refusal',async()=>{
+ for(const fail of [null,'cleanup_complete','settings_unchanged','verification','journal']){
+  const f=fixture({failJournal:fail==='journal'?'node_phase_refused':undefined}),p=request();p.target={kind:'existing',type:'exports.text',ref:{document_id:'doc',workflow_id:'workflow',node_id:'node1'}};p.read={ports:[],sample_rows:0,require_exact_numbers:false};
+  f.handlers.set('exports.text',{...f.handlers.get('imports.text'),configure:async()=>{const e=Error('Unsupported retained export decimal_separator');e.nodePhaseRefusal={phase:'configure',status:'FAILED',effect_possible:true,cleanup_complete:true,settings_unchanged:true,verification:'text_export_unsupported_retained'};if(fail&&fail!=='journal')delete e.nodePhaseRefusal[fail];throw e;}});
+  const r=await f.run(p);assert.equal(r.status,fail?'AMBIGUOUS':'FAILED');assert.equal(r.cleanup_complete,!fail);assert.equal(r.pending_phase,fail?'configure':null);assert.ok(!f.calls.includes('finish')&&!f.calls.includes('execute')&&!f.calls.includes('read'));
+ }
+});

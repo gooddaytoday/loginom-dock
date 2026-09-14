@@ -1,3 +1,5 @@
+> **14 сентября 2026: шесть принятых веток объединены для RC.** Реестр содержит 14 обработчиков; локальные проверки пройдены с адресными повторами. Совместная живая проверка и выпуск ещё не выполнялись. [Итог интеграции](releases/rc-integration-2026-09-14.md). Новые узлы не запускаются; оптимизация чтения отложена.
+
 # Узел17: bootstrap и enrollment завершены, actor probe назначен
 
 Реальные cwd/branch/base/HEAD и изоляция подтверждены задачей17; coordinator
@@ -1511,6 +1513,174 @@ subtype в проверенном Preview. Дополнительный reopen e
 восстановление не заявлено. Hermes и финальная автономная приёмка не проводились.
 [Проверки, ограничения и checkpoint](collapse-columns-development-2026-09-13.md).
 Это не готовность main/установленного клиента и не разрешение на релиз.
+
+# Node17: полная приёмка v5 —54/54 PASS
+
+Закрыта независимая проверка точного оригинала run8:4 свежих экспорта131/138/3005/0байт, неизменённые GUID/граф/связи/параметры, Empty0/5, отсутствие Done/Close-файлов. Все54 проверки полного versioned-аудита прошли;41 адресный Python-тест PASS. Исходные model-файлы,283frozen harness blobs и прежние FAIL сохранены. Оригинал закрыт без сохранения диагностики, logout подтверждён, PID отсутствуют. Нового Hermes, runtime-правок, merge/deploy/установки не было. [Итоговая приёмка v5](../plans/loginom-dock/17-text-export-full-acceptance-v5.md).
+
+---
+
+# Node17: после перерыва оригинал доступен, fresh-аудит неполон
+
+Оригинал run8 один раз открыт под test-2 без read-only. Три свежих экспорта и независимое сравнение131/138/3005байт, настроек/связей/GUID прошли. Пустой экспорт остановился на mapping неактивного Empty; после штатного выполнения Empty сохранённые поля появились. Требуется исправить диагностическую подготовку, а также привязку фактических fresh preparation receipts в независимом аудиторе. Pending/FAIL сохранены. Оригинал закрыт без сохранения диагностических изменений, logout подтверждён, PID отсутствуют. Полная приёмка=false; прежние52 model gates неизменны. [Результат возобновления](../plans/loginom-dock/17-text-export-resume-fresh-20260914.md).
+
+---
+
+# Node17: v4 —52 модельные проверки PASS, свежий оригинал ожидается
+
+Run8 переоценён с отдельным provenance исходных283harness blobs: все модельные проверки импортов,11 файловых результатов, reject observer,4 сохранённых экспортов и3 saves прошли. Исправлены проверочные контракты imports/origin и доказана цепочка owned draft→save/close/reopen→тот же native GUID/граф без подмены draft-only флага ownership. **37 Python PASS**. Полный PASS не объявлен: независимая persistence оригинала остаётся закрытым gate; координатор проверяет фактическое read-only состояние. Новый Hermes и повторное открытие не выполнялись. [Итог v4](../plans/loginom-dock/17-text-export-reevaluation-v4.md).
+
+---
+
+# Node17: v3-переоценка импортов и origin, полная приёмка не закрыта
+
+Адресно исправлены контракт пустых настроек существующего импорта и временная привязка origin. В отдельной переоценке run8 прошли три импорта после reopen, семь выполненных экспортов до reopen и reject-baseline observer. **34 Python PASS**. Исходный frozen FAIL и283harness hashes сохранены. Оставлены закрытыми owner gate (`open_package` возвращает `ownership_verified=false` по реализации) и независимая persistence оригинала. Новый Hermes и повторное открытие не выполнялись. [Подробности и provenance](../plans/loginom-dock/17-text-export-import-origin-v3.md).
+
+---
+
+# Node17: full8 — модель завершилась, независимая приёмка заблокирована
+
+Run `20260914-000803-18fad485` / candidate `908c9b7d`: 22 nodeops, save/reopen/final checkpoint и observer dispatch=1; exit0, timeout=false, собственные PID отсутствуют. Frozen runtime/harness/skill/auth неизменны. Полный аудит **FAIL**: требование `parameters={}` для повторного импорта противоречит обработчику, требующему `source,settings`. Модель передала прежние source ID и пустой settings. Свежий оригинал дополнительно открылся только для чтения; копией проверка не заменена. Полный PASS и готовность к слиянию не заявлены. [Причины, доказательства и следующий шаг](../plans/loginom-dock/17-text-export-full8-blocker.md).
+
+---
+
+# Node17: full7 FAIL локализован, исправлена точка открытия мастера
+
+Девять операций прошли; смена CSV→TSV остановилась до открытия/выполнения.
+Старая реализация игнорировала наблюдаемую видимую точку кнопки и проверяла
+перекрытый центр. На одинаковой живой геометрии старый отказ и новое успешное
+открытие ExportCSV подтверждены;341 JavaScript/24 Python PASS.
+Component `20260913-235110-fb8639df` и независимый user-v1 аудит PASS;
+исправленный кандидат готов к новому Hermes по отдельному слоту.
+[Run7, исправление, актуальные component/pins](../plans/loginom-dock/17-text-export-wizard-point-fix.md).
+Полная приёмка не пройдена, новая модель требует нового слота.
+
+# Node17: исправлены ожидание Save As и поиск виртуальной строки
+
+Полная приёмка остаётся незавершённой. Full6 FAIL и read-only original audit
+сохранены. В диагностике подтверждены save/close/reopen копии и поиск точного
+CSV, ранее отсутствовавшего в DOM насыщенной папки test-2. Клиент66/66,
+Text export Python24/24; итоговый набор80 JavaScript PASS. Component
+`20260913-224754-cbf8ef54` и независимый аудит PASS, готовность к новому Hermes
+при сохранении незавершённой полной приёмки. Pins и исторические ограничения —
+в [отчёте исправлений](../plans/loginom-dock/17-text-export-save-reopen-fix.md).
+Повторного полного review, Hermes без слота, merge и выпуска не было.
+
+# Node17: account probe локализован; кандидат подготовлен к отдельной попытке
+
+Назначение `node17:account-probe-diagnosis:1:95a8105c`: source/SDK проверка не
+обнаружила удержания prepare gate; один diagnostic-only live probe вернул raw
+partial за 3.14 с. Видимый test-2 и actual session/document/profile подтверждены.
+Escape завершился, но меню осталось видимым в 29 последующих чтениях; closure
+не подтверждён. Узко заменено закрытие на один клик свежего Avatar с тем же
+owner, без авто-повторов. 6 focused Node + 20 Python PASS; новый close ещё не
+live-verified. Браузер закрыт, фоновых процессов нет; baseline/upload/node/
+observer/replace/Hermes не запускались. Старый timeout сохранён как FAIL с
+неизвестным подшагом. Full admission закрыт, user-v1 component/fullgoal не приняты.
+Следующий trigger координатору: отдельная минимальная user-v1 попытка кандидата.
+[Диагноз, pins и evidence](../plans/loginom-dock/17-text-export-account-diagnosis.md).
+
+# Node17: fixed account probe — единственная попытка остановлена до baseline
+
+Назначение `node17:user-v1-account-preflight:1:0f37df75`: acceptance-only probe
+закреплён в `0bda0f6e`; 4 focused Node и 20 Text export Python тестов прошли.
+Один новый real stdio run `20260913-152128-6b736e15` подготовил document внутри
+runtime, но account probe не вернул raw result за 30 секунд. Public prepare reply,
+account identity и menu closure не подтверждены. Delivery/node/observer/replace
+не запускались. Браузер закрыт, процессов нет; global config/runtime неизменны.
+Full admission закрыт, user-v1 component/full goal не приняты, Hermes не запускался.
+Автоповтора нет. Следующий trigger координатору: адресная диагностика подшага
+account probe с ограниченным partial evidence до host timeout.
+[Checkpoint и исходное evidence](../plans/loginom-dock/17-text-export-account-preflight.md).
+
+# Node17: candidate admission реализован; user-v1 preflight остановлен до узлов
+
+Назначение `node17:final-admission-preflight:1:79e648b2`: unconditional blocker
+заменён проверкой source/runtime/harness/goal и native evidence pins. Реальный
+stdio entry дважды подтвердил effective user-v1 в isolated config, не меняя
+установленную конфигурацию. Baseline/reject/observer/replace не запускались:
+проверка account identity сначала не учла пагинацию, а один исправленный вход
+получил runtime rejection устаревшего snapshot cursor. Оба браузера закрыты,
+процессов нет. Full admission закрыт до real user-v1 component evidence;
+Hermes не запускался, полного PASS нет. 19 Node + 20 Text export Python + 6 user
+projection тестов прошли. Следующий trigger принадлежит координатору: адресный
+способ наблюдения аккаунта для stdio entry и продолжение component preflight.
+[Полный checkpoint, диагноз и frozen launch plan](../plans/loginom-dock/17-text-export-final-admission-preflight.md).
+
+# Node17: native observer исправлен — candidate evidence-ready
+
+Назначение `node17:observer-navigation-origin-fix:1:e74d14d2` выполнено только
+в harness. Checkpoint `79e648b2`: ожидание свежих roots/path/owner после одного
+жеста в исходном дедлайне; origin связан с browser/preparation evidence и
+фактическим profile/build/platform/browser, без подстановки requested URL.
+19 Node и 16 Python проверок прошли. Один новый diagnostic smoke
+`20260913-145112-3a826200` прошёл: observer 1464 ms, download 1, actual dispatch 1,
+replace prepared 1, baseline/replacement 124 байта полностью совпали с эталоном.
+Native proof и outer auditor прошли; отклонены 24 proof + 12 origin + 9 event
+негативных вариантов. Runtime155/harness265 неизменны; браузер закрыт, процессов
+сессии нет, серверный logout не подтверждён. Старый INCOMPLETE ниже исторический.
+Статус только candidate evidence-ready: Hermes не запускался, user-v1 не доказан,
+полный goal22/3/save-reopen не принят, admission остаётся закрыт. Следующий trigger
+принадлежит координатору: оценка evidence и отдельное выделение Hermes Sol/low.
+[Отчёт и pins](../plans/loginom-dock/17-text-export-navigation-origin-fix.md).
+
+# Node17: native observer smoke остановлен до download/replace
+
+Один smoke в новой test-2 session проверил native baseline124 bytes/golden и
+terminal reject. Observer завершился incomplete за765ms: папка ещё не успела
+перейти в /test-2. Поздний read-only snapshot подтвердил завершение навигации
+без повторного жеста. Download0, replace dispatch0; readiness остаётся false.
+Также выявлено требование отсутствующего target.origin в старом byte-аудиторе
+для actual bridge journal. 15 Node/14 Python PASS не заменяют native proof.
+Собственный браузер закрыт, процессов нет; UI logout не подтверждён.
+[Checkpoint, pins и два конкретных блокера](../plans/loginom-dock/17-text-export-native-observer-smoke.md).
+
+# Node17: observer contract2 подключён офлайн — native smoke ожидает допуска
+
+По назначению `node17:observer-contract-refinement:1:7e9922f4` интегрированы
+acceptance-only SDK wrapper, native adapter, actual-dispatch ledger и outer auditor.
+14 Node + 14 Python PASS, включая cross-runtime synthetic proof и real SDK
+InMemoryTransport. Runtime155, goal22/3 и save/reopen сохранены.
+Readiness=false: native/browser/Hermes не запускались, native admission закрыт.
+Applied settings явно исключены из claim observer; их отдельные gates сохранены.
+[Текущий checkpoint, pins и ресурсный trigger](../plans/loginom-dock/17-text-export-read-observer-v2.md).
+Предыдущий snapshot blocker ниже исторический, снят уточнением contract2.
+
+# Node17: acceptance observer — локальная часть, native gate не закрыт
+
+Назначение `node17:acceptance-read-observer:1:77de0909`: добавлены отдельные
+observer core/verifier и их негативные проверки (8 Node + 12 Python PASS).
+Runtime/source сохранены. Native adapter и SDK integration остановлены:
+нет подтверждённого чтения текущих export/source settings из закрытого графа
+без открытия мастера. Readiness остаётся false; live/Hermes не запускались.
+[Checkpoint и ограниченный план дальнейшей проверки](../plans/loginom-dock/17-text-export-read-observer.md).
+
+# Text export: разработка кандидата завершена — 13 сентября 2026
+
+Текущий acceptance blocker: [reject-baseline read](../plans/loginom-dock/17-text-export-reject-baseline-gate.md).
+Запуск Hermes и полный PASS закрыты до согласованного независимого чтения
+между reject и replace; runtime обработчика не изменён.
+
+В ветке `codex/node-17-text-export` реализован кандидат `exports.text`: CSV/TSV
+UTF-8, настройка мастера, один вход, Execute/Done/Close и независимое чтение
+нативного файла через отдельный output lease. Тестовый scope — `/test-2`.
+
+Source suite: 1398 PASS / 1 SKIP / 0 FAIL; после последней проверки сохранённых
+форматов — 10/10 focused tests и fresh-runtime live. Независимый полный byte audit
+прошёл для 11 native случаев, включая 40 полей, 0 строк, replace и save/reopen;
+в каждом отклонены 9 подмен evidence. Default reject сохранил SHA старого файла;
+идемпотентный повтор выполнил 0 browser calls.
+
+[План, доказательства и ограничения](../plans/loginom-dock/17-text-export.md).
+Единственное review и один correction round R1/R2 завершены: отмена/срок Next
+и проверка сохранённых параметров исправлены, 91/91 focused tests и native
+проверки затронутых путей прошли.
+[Отчёт исправлений](../plans/loginom-dock/17-text-export-fix.md).
+[Пакет подготовки автономной приёмки](../plans/loginom-dock/17-text-export-acceptance-preparation.md)
+закреплён: текущая матрица 8/8 и независимое новое переоткрытие 4/4, полный goal
+и аудитор, immutable candidate, Sol/low preflight. Hermes ещё не запускался;
+нужны слот координатора и запас места для evidence. Main, сервер и общий
+установленный клиент этим результатом не изменены.
 
 ---
 
@@ -9370,3 +9540,43 @@ run8 получил отдельную оценку V2: **206/206 PASS**, пос
 
 [Итог, версии и ограничения](missing-values-run8-reevaluation-v2-2026-09-14.md),
 [машинные квитанции](missing-values-run8-reevaluation-v2-pins-2026-09-14.json).
+
+## Node17 — исправление зависимости Typed import, 13 сентября 2026
+
+Второй Hermes `20260913-193235-fa902eea` не прошёл полную приёмку: редактор вида
+поля Typed получил безопасный отказ `UI_EPOCH_CHANGED` до жеста. Открытие
+редактора переведено на существующее ограниченное обновление ссылки.
+98 Node-тестов и 21 Python-тест прошли; отдельный Loginom импортировал 3×5,
+независимо подтверждены исходные байты, настройки и значения результата.
+Кандидат ожидает слот координатора для полной приёмки 22/3/save/reopen.
+[Подробности и ограничения](../plans/loginom-dock/17-text-export-import-editor-fix.md).
+
+## Node17 — исправление порядка JSON в наблюдателе, 13 сентября 2026
+
+Третий Hermes дошёл до 10 успешных узлов и ожидаемого reject, затем приёмочный
+наблюдатель ошибочно отклонил переставленные ключи одной и той же ссылки узла.
+Сравнение стало структурным; текущий product runtime не изменён. Реальный
+компонентный прогон подтвердил одно скачивание и одну замену точных 124 байт,
+независимый аудит PASS, 50 отрицательных подмен отклонены; тесты 27 Node/21 Python.
+Полная приёмка пока FAIL; следующий запуск ожидает слот координатора.
+[Доказательства, уточнение и ограничения](../plans/loginom-dock/17-text-export-binding-fix.md).
+
+## Node17 — возврат наблюдателя, 13 сентября 2026
+
+Четвёртый full run остановился до замены на отказе возврата наблюдателя до жеста.
+Точный код старый сокращённый журнал не сохранил; причина не объявлена установленной.
+Добавлена безопасная диагностика UI-кодов и максимум два обновления возврата только
+при явно доказанном no-effect UI_EPOCH_CHANGED. Product runtime прежний.
+30 Node/22 Python PASS; живая проверка 1download/1return/1replace/124B и независимый
+аудит PASS, 50 подмен отклонены. Полная приёмка остаётся FAIL; ожидается слот.
+[Ограничения и доказательства](../plans/loginom-dock/17-text-export-return-fix.md).
+
+## Node17 — раскрытие строки файла наблюдателем, 13 сентября 2026
+
+Пятый full run остановился до скачивания: точный CSV найден, но вне viewport.
+Подтверждённая причина отделена от неизвестного return-отказа full4. Наблюдатель
+получил явное ограниченное разрешение для существующего native one-scroll helper.
+32 Node/23 Python PASS; живая проверка воспроизвела outside_viewport, одну прокрутку
+на 491px, один download/replace и точные124B. Независимый аудит PASS,50 подмен
+отклонены. Product runtime прежний. Полная приёмка FAIL; следующий запуск по слоту.
+[Доказательства и ограничения](../plans/loginom-dock/17-text-export-reveal-fix.md).

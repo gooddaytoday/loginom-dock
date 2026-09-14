@@ -1,5 +1,7 @@
 """Full unfiltered live fixture plus independently damaged proof obligations."""
-import copy,gzip,json,unittest
+import copy,gzip,json,unittest,hashlib
+from unittest.mock import patch
+from fixtures.missing_values_refusal_legacy import project_node as legacy_project
 from pathlib import Path
 from missing_values_refusals import audit_accounting,classify
 from user_result_evidence import normalize_user_evidence
@@ -20,6 +22,12 @@ def edit(phase,path,value,op=OP):
  return mutate
 
 class ImportPlacementTests(unittest.TestCase):
+ # The immutable live fixture used the scalar projection before node16.
+ # Keep the current projection strict and pin its historical reader only here.
+ def setUp(self):
+  self.assertEqual(hashlib.sha256(FIXTURE.read_bytes()).hexdigest(),'906978351031c45d2cc5b2489c16e65b4fe0fb9596550ad48391f19eac03f19b')
+  replacement=patch('user_result_evidence.project_node',legacy_project)
+  replacement.start();self.addCleanup(replacement.stop)
  def test_whole_live_fixture_and_effect_boundary(self):
   before=json.dumps(ORIGINAL);a=check(ORIGINAL);self.assertTrue(a['passed'],a)
   self.assertEqual((a['total_prepared'],a['successful_count'],a['refusal_count']),(3,2,1))

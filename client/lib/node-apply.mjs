@@ -172,6 +172,11 @@ export async function applyNode({request, operation, handlers, drivers, record,
       // Explicit trusted-driver proof is required: a transport exception alone
       // never clears uncertainty, even in a nominally non-mutating phase.
       const refusal=error.nodePhaseRefusal;
+      if(name==='configure'&&request.target.type==='exports.text'&&refusal?.phase===name&&refusal.status==='FAILED'
+        &&refusal.effect_possible===true&&refusal.cleanup_complete===true&&refusal.settings_unchanged===true&&['text_export_conflict_rejected','text_export_unsupported_retained'].includes(refusal.verification)){
+        await acknowledge({phase:'node_phase_refused',signature,receipt:{...pending,...refusal}});
+        state.effect_possible=true;state.pending=null;state.cleanup_complete=true;state.verified_refusal=true;
+      }
       if(name==='input_mapping'&&request.target.type==='research.duplicates'&&refusal?.phase===name
         &&refusal.status==='FAILED'&&refusal.effect_possible===true&&refusal.cleanup_complete===true
         &&refusal.settings_unchanged===true&&refusal.verification==='duplicates_input_validation_refused'){
@@ -283,7 +288,7 @@ export async function applyNode({request, operation, handlers, drivers, record,
         return result;
       }
       state.execution={status:'completed',execution_id:execution.execution_id};
-      const output=await phase('read',ctx=>drivers.readOutput(request.read,ctx),{mutation:request.read.ports.length>0,verify:value=>requireValue(
+      const output=await phase('read',ctx=>drivers.readOutput(request.read,ctx),{mutation:request.read.ports.length>0||handler.fileOutput===true,verify:value=>requireValue(
         value.execution_id===state.execution.execution_id && ['partial','complete'].includes(value.status)
         && typeof value.evidence_ref==='string' && value.evidence_ref.length>0 && Array.isArray(value.ports)
         && value.ports.length===request.read.ports.length

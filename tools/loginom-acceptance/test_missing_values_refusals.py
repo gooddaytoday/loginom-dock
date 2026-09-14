@@ -1,4 +1,6 @@
-import gzip,json,unittest,copy
+import gzip,json,unittest,copy,hashlib
+from unittest.mock import patch
+from fixtures.missing_values_refusal_legacy import bound_wizard_close_confirmation as legacy_close, project_node as legacy_project
 from pathlib import Path
 from missing_values_refusals import audit_accounting,classify
 from user_result_evidence import normalize_user_evidence
@@ -12,6 +14,13 @@ def row(e,phase,op=OP):return next(x for x in e['events'] if x.get('phase')==pha
 def check(e):return audit_accounting(e,runtime_revision=RUNTIME,manifest_sha256=MANIFEST,save_ids=['refusal-save'])
 
 class RefusalTests(unittest.TestCase):
+ # This immutable live fixture predates the stricter Close binding from node13
+ # and the native cell projection from node16. Pin only its historical readers;
+ # do not retrofit the original events or weaken the current verifier.
+ def setUp(self):
+  self.assertEqual(hashlib.sha256(FIXTURE.read_bytes()).hexdigest(),'b82fe54ef9e0779ea5836d1208a115df3f1b6004429b577dfe4c20aaf68dff46')
+  for target,value in [('node_procedure_evidence.bound_wizard_close_confirmation',legacy_close),('user_result_evidence.project_node',legacy_project)]:
+   replacement=patch(target,value);replacement.start();self.addCleanup(replacement.stop)
  def test_live_accounting_preserves_all_input_and_does_not_claim_full_goal(self):
   before=json.dumps(ORIGINAL);r=check(ORIGINAL)
   self.assertTrue(r['passed'],r.get('failures'));self.assertEqual((r['total_prepared'],r['successful_count'],r['refusal_count']),(3,2,1));self.assertFalse(r['full_goal_accepted'])

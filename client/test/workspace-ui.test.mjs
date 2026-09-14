@@ -1912,7 +1912,7 @@ test('wizard owner context uses bounded active-tab breadcrumbs and survives narr
 });
 
 test('typed wizard opening verifies node and workflow path after one settings click',async()=>{
-  for(const mode of ['bound_begin_pending','bound_begin_lock','bound_begin_foreign','bound_begin_churn','success','formatted_name','same_label_wrong_key','renamed_tab','replaced_tab','wrong_node','wrong_workflow','dialog','lost_reply',
+  for(const mode of ['bound_begin_pending','bound_begin_lock','bound_begin_foreign','bound_begin_churn','success','clipped_settings','clipped_settings_covered','formatted_name','same_label_wrong_key','renamed_tab','replaced_tab','wrong_node','wrong_workflow','dialog','lost_reply',
     'stale_region','stale_origin','stale_document','stale_tab','stale_wrong_owner','stale_exhausted']) {
     const page=new Page(),base='MF;TF-1;',panel=page.add('div',base+'NavigationBar;NavigationPanel');
     let path='';
@@ -1926,7 +1926,7 @@ test('typed wizard opening verifies node and workflow path after one settings cl
     const graph=page.add('div',base+'ModelForm;cmpDiagram');
     const body=page.add('g',base+'Graph;'+nodeKey,'',undefined,graph);
     page.add('span',base+'Graph;'+nodeKey+';Label;Label',nodeLabel,undefined,body);
-    page.add('g',base+'Graph;'+nodeKey+';Setting','',{x:500,y:300,width:30,height:30},graph);
+    page.add('g',base+'Graph;'+nodeKey+';Setting','',mode.startsWith('clipped_settings')?{x:500,y:86,width:24,height:24}:{x:500,y:300,width:30,height:30},graph);
     if(mode.startsWith('bound_begin_')) {
       let post=0;
       const reader=async()=>{const clicked=page.events.includes('click');if(clicked)post++;
@@ -1937,6 +1937,7 @@ test('typed wizard opening verifies node and workflow path after one settings cl
       page.execute=async options=>clone(await vm.runInContext('('+workspaceUiCapability.toString()+')',page.context)(page,
         {expected_build:build,expected_origin:origin,kind:'workspace-ui',prepared_node_context:{node:{node_id:'node'},workflow_ref:{prefix:'MF;TF-1',navigation_path:[]}},...options},reader));
     }
+    if(mode.startsWith('clipped_settings')){page.context.innerWidth=1000;page.context.innerHeight=800;Object.assign(graph,{box:{x:0,y:103,width:1000,height:600},clientWidth:1000,clientHeight:600,scrollHeight:724,scrollTop:120,style:{overflowY:'auto'}});page.add('div','GraphTopToolbar','',{x:0,y:0,width:1000,height:103});}
     const snapshot=await page.observe(),button=snapshot.ui.elements.find(e=>e.wizard_open);
     assert.ok(button);
     let pending=false,detached=null,waits=0;
@@ -1979,10 +1980,11 @@ test('typed wizard opening verifies node and workflow path after one settings cl
       if(mode==='stale_tab'){page.tab.remove();page.add('div','MF;cntMain;cntWorkspace;Workspace;t.br;tb-2','Настройка').attrs.class='x-tab-active';}
       if(mode==='stale_document')vm.runInContext('delete globalThis[Symbol.for("loginom-dock.workspace-ui.identity.v1")]',page.context);
     };
+    if(mode==='clipped_settings_covered')page.document.querySelectorAll('[data-tid="GraphTopToolbar"]')[0].box.height=115;
     const result=await page.act({verb:mode.startsWith('bound_begin_')?'begin_wizard':'open_wizard',ref:button.ref},snapshot);
-    const success=['bound_begin_pending','bound_begin_lock','success','formatted_name','renamed_tab','stale_region'].includes(mode);
-    assert.equal(result.status,success?'SUCCEEDED':'AMBIGUOUS',mode+JSON.stringify(result.error));
-    assert.equal(page.events.filter(e=>e==='click').length,1);
+    const success=['bound_begin_pending','bound_begin_lock','success','clipped_settings','formatted_name','renamed_tab','stale_region'].includes(mode);
+    assert.equal(result.status,success?'SUCCEEDED':mode==='clipped_settings_covered'?'NOT_APPLIED':'AMBIGUOUS',mode+JSON.stringify(result.error));
+    assert.equal(page.events.filter(e=>e==='click').length,mode==='clipped_settings_covered'?0:1);
     assert.equal(result.trace.some(e=>e.event==='wizard_open_verified'),success);
     if(mode==='bound_begin_pending')assert.equal(result.trace.filter(e=>e.event==='node_surface_wait').length,90);
     if(mode==='bound_begin_lock')assert.equal(result.trace.filter(e=>e.event==='node_graph_lock_rediscovery').length,1);

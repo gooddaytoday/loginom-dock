@@ -24,6 +24,21 @@ class UserResultTests(unittest.TestCase):
         self.assertEqual(normalized['tools'][1]['result']['outcome'],e['events'][2]['outcome'])
         self.assertEqual(len(e['tools'][1]['result']['output']['ports'][0]['sample']),6)
 
+    def test_native_projection_retains_typed_cells_and_rejects_omissions(self):
+        e=fixture();outcome=e['events'][2]['outcome'];port=outcome['output']['output']['ports'][0]
+        cell=dict(type='integer',value='9223372036854775807',representation='decimal_integer',precision='exact_integer',is_null=False)
+        port.update(sample=[[cell]],exact_table=True,read_coverage='full',read_consistency='stable',cell_precision='exact',binding={'node_id':'n'},limitations=[])
+        snapshot=dict(operation_id='node',attempt=1,state='settled',outcome=outcome,error=None)
+        e['tools'][1]['result']=project_node(snapshot)
+        self.assertTrue(normalize_user_evidence(e)[1]['passed'])
+        self.assertEqual(e['tools'][1]['result']['output']['ports'][0]['sample'][0][0],cell)
+        for key in ('exact_table','read_coverage','read_consistency','cell_precision','binding'):
+            damaged=deepcopy(e);del damaged['tools'][1]['result']['output']['ports'][0][key]
+            with self.subTest(key=key):self.assertFalse(normalize_user_evidence(damaged)[1]['passed'])
+        for key in ('type','representation'):
+            damaged=deepcopy(e);del damaged['tools'][1]['result']['output']['ports'][0]['sample'][0][0][key]
+            with self.subTest(key=key):self.assertFalse(normalize_user_evidence(damaged)[1]['passed'])
+
     def test_unallocated_rejection_before_corrected_same_id_does_not_expand_invalid_request(self):
         import json
         e=fixture()

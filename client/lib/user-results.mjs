@@ -32,6 +32,7 @@ export function compactNodeResult(result) {
     value.sample_complete = port.sample_complete && value.sample.length === port.sample.length;
     return value;
   });
+  if (data?.file_artifacts) output.file_artifacts = data.file_artifacts.map(file => pick(file, ['artifact_id', 'destination', 'bytes', 'sha256', 'execution_id', 'verification_id', 'freshness_basis']));
   if (data?.format_restoration) output.format_restoration = pick(data.format_restoration, ['restored', 'table']);
   if (data?.workflow_return) output.workflow_returned = data.workflow_return.verified === true;
   // Delivery jobs carry their byte-verified destination in outcome directly.
@@ -79,6 +80,9 @@ export const userWorkflowInstructions = `Используй закреплённ
 require_exact_numbers:true; обработчик временно меняет формат и восстанавливает его.
 Повторное выполнение Параметров полей без перенастройки: parameters:{changes:[]},
 inputs:[], mappings:[]; поля выбираются по входным именам, даже после переименования.
+Экспорт текста exports.text возвращает output.file_artifacts с размером и SHA-256
+фактического файла после Execute; портов данных на выходе у него нет. Сверь
+назначение и формат с заданием. Done и Close файл не подтверждают.
 Сохрани готовый пакет в конце через package.save_checkpoint, дождись квитанции.
 Промежуточное сохранение — по просьбе пользователя или перед риском потери работы.
 package.save_as с переоткрытием используй при запросе переоткрытия. package_saved:false

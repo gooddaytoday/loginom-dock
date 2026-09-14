@@ -17,18 +17,20 @@ def project_node(snapshot):
     if 'ports' in data:
         output['ports']=[]
         for port in data['ports']:
-            p=pick(port,'port port_guid fresh execution_id schema row_count sample sample_rows sample_complete precision table')
+            p=pick(port,'port port_guid fresh execution_id schema row_count sample sample_rows sample_complete precision table exact_table read_coverage read_consistency cell_precision binding limitations')
             p['schema']=[pick(c,'index name label type data_kind') for c in port['schema']]
             p['sample']=[]
             for row in port['sample']:
                 cells=[]
                 for c in row:
-                    cell=pick(c,'value display_text precision is_null timezone')
+                    cell=pick(c,'type value decimal representation display_text precision is_null timezone cell_type native')
                     if 'value' in cell and cell.get('display_text')==cell['value']:cell.pop('display_text',None)
                     cells.append(cell)
                 p['sample'].append(cells)
             p['sample_rows']=len(p['sample']);p['sample_complete']=port.get('sample_complete',False)
             output['ports'].append(p)
+    if 'file_artifacts' in data:
+        output['file_artifacts']=[pick(f,'artifact_id destination bytes sha256 execution_id verification_id freshness_basis') for f in data['file_artifacts']]
     if 'format_restoration' in data:output['format_restoration']=pick(data['format_restoration'],'restored table')
     if 'workflow_return' in data:output['workflow_returned']=data['workflow_return'].get('verified') is True
     if not node:output.update(deepcopy(outcome))
@@ -66,6 +68,7 @@ def normalize_user_evidence(evidence, *, terminal_outcomes=None):
         for call,reply in sorted(pairs,key=lambda pair:pair[0]['row']):
             tool=call['tool'];args=call.get('arguments',{});value=reply.get('result',{})
             if proven_validation_refusal(call,reply,events,accepted_ids,pairs):continue
+            if tool in {PREFIX+x for x in ('dock_node_apply','dock_node_wait','dock_node_status','dock_artifact_deliver','dock_artifact_delivery_status')} and value.get('result_version')!='user-v1':raise ValueError('user_mixed_result_profile')
             if tool==PREFIX+'dock_prepare':
                 if value.get('prepared') is True:
                     state=value['workspace']
@@ -86,11 +89,17 @@ def normalize_user_evidence(evidence, *, terminal_outcomes=None):
                 call['arguments']=expanded
             if value.get('result_version')!='user-v1':continue
             operation=args.get('operation_id')
-            if value.get('error') is not None and tool in {PREFIX+x for x in ('dock_node_apply','dock_node_wait','dock_node_status')} and operation not in terminal_outcomes:raise ValueError('user_node_error')
+            if value.get('error') is not None and tool in {PREFIX+x for x in ('dock_node_apply','dock_node_wait','dock_node_status')} and operation not in terminal_outcomes:
+                # The Text export goal intentionally proves native overwrite rejection.
+                refused=[e for e in events if e.get('operation_id')==operation and e.get('phase')=='node_phase_refused' and e.get('receipt',{}).get('verification')=='text_export_conflict_rejected' and e['receipt'].get('cleanup_complete') is True]
+                executed=any(e.get('operation_id')==operation and e.get('phase')=='node_execution_prepared' for e in events)
+                if not (value.get('state')=='settled' and value.get('status')=='FAILED' and value.get('cleanup_complete') is True and value['error'].get('code')=='NODE_APPLY_STOPPED' and len(refused)==1 and not executed):raise ValueError('user_node_error')
+
             if tool in {PREFIX+x for x in ('dock_node_apply','dock_node_wait','dock_node_status')}:
                 if value.get('state')=='settled':
                     end=one([e for e in events if e.get('phase')=='completed' and e.get('operation_id')==operation and e.get('action_key')=='node.apply'],'user_node_end')
                     if operation in terminal_outcomes and (end['outcome']!=terminal_outcomes[operation] or end['outcome']['status'] not in ('FAILED','NOT_APPLIED')):raise ValueError('unbound_terminal_outcome')
+                    if operation not in terminal_outcomes and value.get('error')!=end['outcome'].get('error'):raise ValueError('user_node_error_projection')
                     raw={**pick(value,'operation_id attempt state cancel_requested server_stop_requested'),'outcome':end['outcome'],'error':None if operation in terminal_outcomes else value.get('error')}
                 elif value.get('state')=='running':
                     raw={**pick(value,'operation_id attempt state cancel_requested server_stop_requested progress'),'outcome':None,'error':None if operation in terminal_outcomes else value.get('error')}

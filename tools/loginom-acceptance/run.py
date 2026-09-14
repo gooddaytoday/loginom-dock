@@ -22,6 +22,8 @@ import upload_probe
 import duplicates_upload_probe
 import missing_values_goal
 import collapse_acceptance
+from text_export_readiness import require_reject_baseline_reader,REJECT_BASELINE_BLOCKER,isolated_user_config
+import text_export_upload_probe
 import union_upload_probe
 import replacement_upload_probe
 import union_review_upload_probe
@@ -134,6 +136,8 @@ def validate_loginom_url(value):
 
 
 def validate_inputs(args):
+    if getattr(args, "goal", None)=="text-export-node-complete" and getattr(args, "run", False):
+        require_reject_baseline_reader()
     if getattr(args, 'goal', None) in ('duplicates-node-complete','union-node-complete','union-review-complete') and not getattr(args, 'loginom_url', None):
         raise ValueError('This node acceptance requires an explicit Loginom target')
     if getattr(args, 'loginom_url', None) is not None:
@@ -143,6 +147,10 @@ def validate_inputs(args):
     profile=getattr(args,'model_profile','chatgpt-sol')
     if profile not in ('chatgpt-sol','xiaomi-mimo') or profile=='xiaomi-mimo' and getattr(args,'goal',None)!='data-pipeline':
         raise ValueError('Xiaomi comparison is authorized only for the full data-pipeline goal')
+    if getattr(args,'goal',None)=='text-export-node-complete':
+        text_export_upload_probe.validate_catalog(args.manifest_uri,args.manifest_sha256,args.storage_directory)
+        if args.loginom_user!='test-2' or args.loginom_url!='http://logi-test-plan.bg.local/app/?testable=true':raise ValueError('Node17 fixed live identity required')
+        text_export_upload_probe.verify_expected()
     max_turns_limit=300 if getattr(args,'goal','basic-graph') in ('data-pipeline','calculator-roundtrip','missing-values-complete') else 100
     timeout_limit = 14400 if getattr(args, 'goal', None) == 'date-time-sales' else 3600
     if getattr(args,'goal',None)==collapse_acceptance.GOAL_ID:
@@ -195,8 +203,8 @@ def execute(args):
         validate_loginom_url(loginom_url)
     secrets = [*connection_values.get("providers",{}).get("openai-codex",{}).get("tokens",{}).values(), model_env.get("XIAOMI_API_KEY"), dock.get("api_key")]
     goal_id = getattr(args, "goal", "basic-graph")
-    join_probe=duplicates_upload_probe if goal_id=="duplicates-node-complete" else replacement_upload_probe if goal_id=="replacement-node-complete" else union_review_upload_probe if goal_id=="union-review-complete" else union_upload_probe if goal_id=="union-node-complete" else join_review_upload_probe if goal_id=="join-review-complete" else join_upload_probe
-    join_fixture_dir="fixtures/duplicates" if goal_id=="duplicates-node-complete" else "fixtures/replacement" if goal_id=="replacement-node-complete" else "fixtures/union-review" if goal_id=="union-review-complete" else "fixtures/union" if goal_id=="union-node-complete" else "fixtures/join-review" if goal_id=="join-review-complete" else "fixtures/join"
+    join_probe=text_export_upload_probe if goal_id=="text-export-node-complete" else duplicates_upload_probe if goal_id=="duplicates-node-complete" else replacement_upload_probe if goal_id=="replacement-node-complete" else union_review_upload_probe if goal_id=="union-review-complete" else union_upload_probe if goal_id=="union-node-complete" else join_review_upload_probe if goal_id=="join-review-complete" else join_upload_probe
+    join_fixture_dir="fixtures/text-export/input" if goal_id=="text-export-node-complete" else "fixtures/duplicates" if goal_id=="duplicates-node-complete" else "fixtures/replacement" if goal_id=="replacement-node-complete" else "fixtures/union-review" if goal_id=="union-review-complete" else "fixtures/union" if goal_id=="union-node-complete" else "fixtures/join-review" if goal_id=="join-review-complete" else "fixtures/join"
     goal = WORK / "goals" / (goal_id + ".txt")
     if goal_id != "basic-graph" and getattr(args, "fault", "none") != "none":
         raise ValueError("Auto-link goals require no fault injection")
@@ -225,7 +233,7 @@ def execute(args):
         harness_inputs[probe.FIXTURE]=sha(fixture)
     if goal_id in ('data-pipeline','import-roundtrip','calculator-roundtrip','node-import-roundtrip','node-apply-complete','calculator-node-complete'):
         harness_inputs.update({name:sha(WORK / name) for name in data_pipeline.FIXTURES})
-    if goal_id in ('duplicates-node-complete','replacement-node-complete','join-node-complete','join-review-complete','union-node-complete','union-review-complete'):
+    if goal_id in ('text-export-node-complete','duplicates-node-complete','replacement-node-complete','join-node-complete','join-review-complete','union-node-complete','union-review-complete'):
         for name,(expected_sha,expected_bytes) in join_probe.FIXTURES.items():
             fixture=WORK / join_fixture_dir / name
             if sha(fixture)!=expected_sha or fixture.stat().st_size!=expected_bytes:raise ValueError('Join fixture changed')
@@ -245,6 +253,8 @@ def execute(args):
             harness_inputs[name]=sha(WORK/name)
     if goal_id==collapse_acceptance.GOAL_ID:
         harness_inputs.update(collapse_acceptance.harness_pins())
+    if goal_id=="text-export-node-complete":
+        harness_inputs.update({p.relative_to(WORK).as_posix():sha(p) for p in sorted((WORK/"fixtures/text-export").rglob("*")) if p.is_file()})
     info = {"schema_version": 2, "loginom_url": loginom_url, "storage_directory":getattr(args,"storage_directory",None), "scope": "source_runtime", "model_started": False,
             "provider": provider, "model": model, "reasoning_effort": reasoning, "hermes_version": "0.21.0",
             "model_profile": profile, "provider_selection": "explicit CLI; effective usage identity checked after the run",
@@ -259,7 +269,7 @@ def execute(args):
             "require_verification": getattr(args, "require_verification", False),
             "require_delivered_context": getattr(args, "require_delivered_context", False),
             "budget": {"timeout_seconds": args.timeout, "max_turns": args.max_turns},
-            "series": {"planned_attempts": 1, "variant": fault, "pass_criteria": "duplicates_node_acceptance.py full scenario contract" if goal_id=="duplicates-node-complete" else "replacement_acceptance.py full declared scenario and reopening" if goal_id=="replacement-node-complete" else "union_review_acceptance.py full scenario contract" if goal_id=="union-review-complete" else "union_node_acceptance.py full scenario contract" if goal_id=="union-node-complete" else "join_node_acceptance.py full scenario contract" if goal_id in ("join-node-complete","join-review-complete") else "filter_node_acceptance.py full scenario contract" if goal_id == 'filter-node-complete' else "reform_node_acceptance.py full scenario contract" if goal_id == 'reform-node-complete' else "sales_sorting_acceptance.py full scenario contract" if goal_id == 'sales-sorting-complete' else "grouping_node_acceptance.py full scenario contract" if goal_id == 'grouping-node-complete' else "calculator_node_acceptance.py full scenario contract" if goal_id == 'calculator-node-complete' else "node_apply_acceptance.py full scenario contract" if goal_id == 'node-apply-complete' else "audit.py declared variant contract"},
+            "series": {"planned_attempts": 1, "variant": fault, "pass_criteria": "text_export_acceptance.py full declared scenario plus independent fresh-session gates" if goal_id=="text-export-node-complete" else "duplicates_node_acceptance.py full scenario contract" if goal_id=="duplicates-node-complete" else "replacement_acceptance.py full declared scenario and reopening" if goal_id=="replacement-node-complete" else "union_review_acceptance.py full scenario contract" if goal_id=="union-review-complete" else "union_node_acceptance.py full scenario contract" if goal_id=="union-node-complete" else "join_node_acceptance.py full scenario contract" if goal_id in ("join-node-complete","join-review-complete") else "filter_node_acceptance.py full scenario contract" if goal_id == 'filter-node-complete' else "reform_node_acceptance.py full scenario contract" if goal_id == 'reform-node-complete' else "sales_sorting_acceptance.py full scenario contract" if goal_id == 'sales-sorting-complete' else "grouping_node_acceptance.py full scenario contract" if goal_id == 'grouping-node-complete' else "calculator_node_acceptance.py full scenario contract" if goal_id == 'calculator-node-complete' else "node_apply_acceptance.py full scenario contract" if goal_id == 'node-apply-complete' else "audit.py declared variant contract"},
             "manifest_uri": args.manifest_uri, "manifest_sha256": args.manifest_sha256}
     if date_admission is not None:
         info['acceptance_inputs_sha256'] = sha(INPUTS)
@@ -302,7 +312,7 @@ def execute(args):
     if goal_id in ('file-upload-probe','file-upload-verify','data-pipeline','import-roundtrip','calculator-roundtrip','node-import-roundtrip','node-apply-complete','calculator-node-complete','grouping-node-complete','sales-sorting-complete','reform-node-complete','filter-node-complete'):
         info['input_artifact']=probe.descriptor(run_id,args.storage_directory)
         prompt=probe.prompt(goal.read_text(),package,args.storage_directory,run_id)
-    if goal_id in ('duplicates-node-complete','replacement-node-complete','join-node-complete','join-review-complete','union-node-complete','union-review-complete'):
+    if goal_id in ('text-export-node-complete','duplicates-node-complete','replacement-node-complete','join-node-complete','join-review-complete','union-node-complete','union-review-complete'):
         info['input_artifacts']=join_probe.descriptors(run_id,args.storage_directory)
         prompt=join_probe.prompt(goal.read_text(),package,args.storage_directory,run_id)
     if goal_id == 'data-pipeline':
@@ -322,7 +332,9 @@ def execute(args):
     # No key is persisted in the child config. Dock reads its own explicit config.
     entry = REPO / "client/bin/loginom-dock.mjs" if fault == "none" else WORK / {"lost_receipt": "lost-receipt-client.mjs", "rename": "rename-client.mjs", "partial_link": "partial-link-client.mjs", "position": "position-client.mjs", "save_reopen": "save-reopen-client.mjs"}[fault]
     if goal_id=='missing-values-complete':entry=WORK/'missing-values-client.mjs'
-    command = [str(entry), "--config", str(args.dock_config.resolve()),
+    if goal_id=='text-export-node-complete':entry=WORK/'text-export-observer-client.mjs'
+    launch_config=isolated_user_config(args.dock_config.resolve(),run/'private/user-v1-config.json') if goal_id=='text-export-node-complete' else args.dock_config.resolve()
+    command = [str(entry), "--config", str(launch_config),
                "--state-dir", str(dock_home), "--agent", "hermes", "--adapter-revision", "0.1.0-rc.4-acceptance",
                "--mode", "executor-replay", "--action-manifest-uri", args.manifest_uri,
                "--action-manifest-sha256", args.manifest_sha256, "--replay-bootstrap", "--replay-login-user", args.loginom_user]
@@ -330,7 +342,7 @@ def execute(args):
         command.extend(['--replay-loginom-url', args.loginom_url])
     if goal_id in ('file-upload-probe','file-upload-verify','data-pipeline','import-roundtrip','calculator-roundtrip','node-import-roundtrip','node-apply-complete','calculator-node-complete','grouping-node-complete','sales-sorting-complete','reform-node-complete','filter-node-complete'):
         command.extend(['--input-artifact',json.dumps({**info['input_artifact'],'sourcePath':str(WORK / probe.FIXTURE)},ensure_ascii=False)])
-    if goal_id in ('duplicates-node-complete','replacement-node-complete','join-node-complete','join-review-complete','union-node-complete','union-review-complete'):
+    if goal_id in ('text-export-node-complete','duplicates-node-complete','replacement-node-complete','join-node-complete','join-review-complete','union-node-complete','union-review-complete'):
         for file,artifact in zip(join_probe.FIXTURES,info['input_artifacts']):
             command.extend(['--input-artifact',json.dumps({**artifact,'sourcePath':str(WORK / join_fixture_dir / file)},ensure_ascii=False)])
     if date_admission is not None:
@@ -349,6 +361,7 @@ def execute(args):
               "mcp_servers": {"loginom-dock": {"command": str(args.node), "args": command,
               "connect_timeout": 180, "timeout": 360, "enabled": True,
               "env": {"DOCK_ACCEPTANCE_RUN_DIR": str(run),
+                      "DOCK_ACCEPTANCE_DEADLINE_EPOCH_MS": str(int(time.time()*1000)+args.timeout*1000),
                       "DOCK_ACCEPTANCE_EXECUTOR_SHA256": frozen["inputs"]["client/lib/executor.mjs"]}}},
               "agent": {"max_turns": args.max_turns, "reasoning_effort": reasoning},
               # Keep the small Dock-only surface as direct typed tools. The
@@ -415,7 +428,7 @@ def execute(args):
                 'providers', {}).get('openai-codex', {}).get('tokens') == connection_values['providers']['openai-codex']['tokens']
         if receipt.is_file():
             evidence["operator_fault_receipt"] = clean(json.loads(receipt.read_text()), secrets)
-        if args.goal in ('missing-values-complete','duplicates-node-complete','replacement-node-complete','union-review-complete','union-node-complete','join-review-complete','join-node-complete','node-apply-complete','calculator-node-complete','grouping-node-complete','sales-sorting-complete','reform-node-complete','filter-node-complete'):
+        if args.goal in ('text-export-node-complete','missing-values-complete','duplicates-node-complete','replacement-node-complete','union-review-complete','union-node-complete','join-review-complete','join-node-complete','node-apply-complete','calculator-node-complete','grouping-node-complete','sales-sorting-complete','reform-node-complete','filter-node-complete'):
             evidence['efficiency'] = node_efficiency(evidence)
             write(run / 'efficiency.json', evidence['efficiency'])
         write(run / "evidence.json", clean(evidence, secrets))
@@ -458,7 +471,7 @@ def main():
     parser.add_argument("--require-delivered-context", action="store_true",
                         help="Require automatic E2E/Help delivery bound to a failure and journal before successful continuation")
     parser.add_argument("--model-profile",choices=["chatgpt-sol","xiaomi-mimo"],default="chatgpt-sol")
-    parser.add_argument("--goal", choices=["collapse-node-complete", "missing-values-complete", "duplicates-node-complete", "replacement-node-complete", "union-review-complete", "union-node-complete", "join-review-complete", "join-node-complete", "prepare-workspace", "basic-graph", "auto-link-retain", "auto-link-remove", "palette-inventory", "checkbox-roundtrip", "context-menu-checkbox", "root-checkbox", "file-storage-inspect", "file-upload-probe", "file-upload-verify", "data-pipeline", "import-roundtrip", "calculator-roundtrip", "node-import-roundtrip", "node-apply-complete", "calculator-node-complete", "grouping-node-complete", "sales-sorting-complete", "reform-node-complete", "filter-node-complete"], default="basic-graph")
+    parser.add_argument("--goal", choices=["text-export-node-complete", "collapse-node-complete", "missing-values-complete", "duplicates-node-complete", "replacement-node-complete", "union-review-complete", "union-node-complete", "join-review-complete", "join-node-complete", "prepare-workspace", "basic-graph", "auto-link-retain", "auto-link-remove", "palette-inventory", "checkbox-roundtrip", "context-menu-checkbox", "root-checkbox", "file-storage-inspect", "file-upload-probe", "file-upload-verify", "data-pipeline", "import-roundtrip", "calculator-roundtrip", "node-import-roundtrip", "node-apply-complete", "calculator-node-complete", "grouping-node-complete", "sales-sorting-complete", "reform-node-complete", "filter-node-complete"], default="basic-graph")
     parser.add_argument("--allow-manual-reopen", action="store_true")
     args = parser.parse_args()
     if args.fault=="save_reopen" and not args.allow_manual_reopen:

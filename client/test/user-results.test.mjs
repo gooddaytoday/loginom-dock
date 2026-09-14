@@ -47,3 +47,10 @@ test('user-v1 retains exact scalar representation and an explicitly unverified v
  const sample=[[{type:'integer',value:'9223372036854775807',representation:'decimal_integer',precision:'exact_integer',is_null:false},{type:'real',value:1,decimal:'1E+00',representation:'binary64',precision:'17_significant_digits',is_null:false},{type:'variant',display_text:'1',representation:'formatted_display',precision:'unverified',is_null:false}]];
  const r=compactNodeResult({operation_id:'x',outcome:{status:'SUCCEEDED',output:{output:{ports:[{sample,schema:[]}]}}}});assert.deepEqual(r.output.ports[0].sample,sample);assert.equal(validate(r).valid,true);
 });
+
+test('export result retains byte evidence but excludes host paths and private binding',()=>{
+ const file={artifact_id:'file',destination:'/test-2/file.csv',bytes:12,sha256:'a'.repeat(64),execution_id:'run',verification_id:'download',freshness_basis:'native_absence_check_and_completed_execution',path:'/private/host/file.csv',session_id:'private-session'};
+ const r=compactNodeResult({operation_id:'export',state:'settled',outcome:{status:'SUCCEEDED',output:{output:{status:'complete',ports:[],file_artifacts:[file]}}}});
+ assert.equal(r.output.file_artifacts[0].sha256,file.sha256);assert.equal(r.output.file_artifacts[0].destination,file.destination);
+ assert.equal(r.output.file_artifacts[0].path,undefined);assert.equal(r.output.file_artifacts[0].session_id,undefined);assert.equal(validate(r).valid,true);
+});

@@ -201,3 +201,22 @@ test('post-scroll failure retains effect and never retries reveal or download',a
     assert.equal(f.waitCount(),mode==='still_hidden'?11:mode==='context_while_settling'?1:0);
   }
 });
+
+test('native export download requires its fresh output binding without an input grant',async()=>{
+ const {makeNativeOutputDownloadCode}=await import('../lib/executor.mjs');
+ const f=fixture('native.csv');f.page.directory='/test-2';
+ const original=f.page.uiSnapshot.bind(f.page);
+ f.page.uiSnapshot=()=>{const s=original();for(const e of s.ui.elements)if(e.label==='native.csv')e.storage_entry={bytes:3,kind:'file'};return s;};
+ const snapshot=f.page.uiSnapshot(),file=snapshot.ui.elements.find(e=>e.label==='native.csv');
+ const options={...f.options,artifact:{artifact_id:'output',name:'native.csv'},snapshot,file_ref:file.ref,expected_bytes:3,output_binding:{session_id:'session',document_id:'doc',workflow_id:'flow',node_id:'node',execution_id:'execution',directory:'/test-2',destination:'/test-2/native.csv'}};
+ const result=await f.page.execute(makeNativeOutputDownloadCode(options));assert.equal(result.status,'SUCCEEDED');assert.equal(result.output.upload_operation_id,undefined);assert.equal(result.output.output_binding.execution_id,'execution');
+ for(const patch of [{expected_bytes:4},{output_binding:{...options.output_binding,execution_id:''}},{artifact:{name:'other.csv'}}])assert.throws(()=>makeNativeOutputDownloadCode({...options,...patch}));
+});
+test('changed native output size refuses download before the gesture',async()=>{
+ const {makeNativeOutputDownloadCode}=await import('../lib/executor.mjs');const f=fixture('native.csv');f.page.directory='/test-2';
+ const original=f.page.uiSnapshot.bind(f.page);let bytes=3;
+ f.page.uiSnapshot=()=>{const s=original();for(const e of s.ui.elements)if(e.label==='native.csv')e.storage_entry={bytes,kind:'file'};return s;};
+ const snapshot=f.page.uiSnapshot(),file=snapshot.ui.elements.find(e=>e.label==='native.csv');
+ const code=makeNativeOutputDownloadCode({...f.options,artifact:{artifact_id:'output',name:'native.csv'},snapshot,file_ref:file.ref,expected_bytes:3,output_binding:{session_id:'session',node_id:'node',execution_id:'execution',directory:'/test-2',destination:'/test-2/native.csv'}});
+ bytes=4;const result=await f.page.execute(code);assert.equal(result.status,'NOT_APPLIED');assert.equal(result.error.code,'DOWNLOAD_OUTPUT_SIZE_CHANGED');assert.deepEqual(f.calls,[]);
+});

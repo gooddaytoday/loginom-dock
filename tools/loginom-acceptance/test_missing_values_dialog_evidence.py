@@ -21,6 +21,8 @@ class MissingDialogEvidence(unittest.TestCase):
  def test_output_close_requires_native_port_binding(self):
   port=dict(direction='output',port=0,native_index=0,port_guid='port-guid',opening_operation_id='opening');node=dict(verified=True,document_id='d',workflow_id='w',node_id='n',surface='wizard',output_port=port)
   s=dict(prepared_node_context=node,node_wizard_confirmation=dict(kind='close',root_ref='root',root_tid='wizard',stage='output_mapping',owner=dict(output_port=port),node={k:node[k] for k in ['document_id','workflow_id','node_id']}),wizard=dict(status='observed',root_ref='root',root_tid='wizard',stage='output_mapping'),ui=dict(masks=[dict(kind='modal_background',ref='root')],dialogs=[dict(ref='dialog',title='Подтвердить',text='Подтвердить Вы действительно хотите закрыть мастер настройки? Да Нет')],elements=[dict(tid='msgbox;tlb;'+tid,label=label,signature=dict(dialog_ref='dialog'),allowed_actions=['click']) for tid,label in [('yes','Да'),('no','Нет')]]))
+  context=dict(status='observed',kind='output_data',node=dict(ref='node-ref'),port=dict(ref='port-ref'))
+  s['wizard']['port_context']=copy.deepcopy(context);s['node_wizard_confirmation']['owner']['port_context']=copy.deepcopy(context)
   self.assertTrue(bound_wizard_close_confirmation(s))
   for fault in ['port','node','stage','opening']:
    c=copy.deepcopy(s)
