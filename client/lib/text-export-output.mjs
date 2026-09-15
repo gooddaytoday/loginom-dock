@@ -9,6 +9,8 @@ const need=(v,m)=>{if(!v)throw Error(m);},one=xs=>{need(xs.length===1,'Unique ex
 export async function findNativeStorageRow({name,read,roots,ready,act,guard}) {
  const suffix=';FileStorageForm;colName_'+storageTidSuffix(name);
  let binding=null,owner=null,lastTop=null,direction=null;
+ const unavailable=(s,reason)=>Object.assign(new Error('Storage entry is unavailable in the observed folder: '+JSON.stringify(name)+' in '+JSON.stringify(s.file_storage.directory)),
+  {code:'STORAGE_ENTRY_UNAVAILABLE',storage_entry:{name,directory:s.file_storage.directory,reason}});
  const bind=s=>{
   need(s.file_storage?.status==='observed','Export search folder unavailable');
   const value=JSON.stringify({workflow:s.workflow_ref,directory:s.file_storage.directory});
@@ -28,14 +30,14 @@ export async function findNativeStorageRow({name,read,roots,ready,act,guard}) {
   if(matches.length){const found=await read({root_ref:matches[0].ref});bind(found);need(found.ui.elements.filter(e=>e.tid===found.workflow_ref.prefix+suffix&&e.label===name).length===1,'Export file name changed');return found;}
   s=await table();bind(s);
   const anchors=s.ui.elements.filter(e=>e.tid?.startsWith(s.workflow_ref.prefix+';FileStorageForm;colName_')&&e.scroll&&e.allowed_actions.includes('scroll')&&e.interaction?.state==='point_observed');
-  if(!anchors.length)throw Error('Export file absent from rendered folder; no scroll owner');
+  if(!anchors.length)throw unavailable(s,'no_scroll_owner');
   const e=anchors[0],scroll=e.scroll;
   need(anchors.every(a=>a.scroll.ref===scroll.ref),'Export search scroll owner ambiguous');
   if(owner===null){owner=scroll.ref;direction=scroll.top>0?'up':'down';}
   need(scroll.ref===owner,'Export search scroll owner changed');
   if(lastTop!==null)need(direction==='up'?scroll.top<lastTop:scroll.top>lastTop,'Export search scroll did not advance');
   if(direction==='up'&&scroll.top===0){direction='down';lastTop=null;}
-  if(direction==='down'&&scroll.top>=scroll.max_top)throw Error('Export file absent at folder end');
+  if(direction==='down'&&scroll.top>=scroll.max_top)throw unavailable(s,'folder_end');
   need(step<12,'Export file search scroll budget exhausted');
   const delta=direction==='up'?-Math.min(1000,scroll.top):Math.min(1000,scroll.max_top-scroll.top);
   lastTop=scroll.top;await act(s,e,'scroll',{delta_y:delta});

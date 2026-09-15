@@ -3,8 +3,10 @@ import { join } from 'node:path';
 
 // Positive local protocol provenance; deliberately stores no arguments, output,
 // prompts, credentials or model text. Recording failure stops message dispatch.
-export function observeMcpTransport(transport, session) {
-  const receipt = { version: 1, source: 'official_stdio_transport',
+export function observeMcpTransport(transport, session, { source = 'official_stdio_transport' } = {}) {
+  if (!['official_stdio_transport', 'native_hermes_router'].includes(source))
+    throw new Error('Unknown MCP transport origin');
+  const receipt = { version: 1, source,
     session_id: session.metadata.sessionId, pid: process.pid,
     runtime_revision: session.metadata.clientRevision,
     manifest_sha256: session.metadata.actionManifestDigest ?? null,

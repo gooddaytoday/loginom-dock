@@ -54,7 +54,25 @@ class NativeDiagnosticsTest(unittest.TestCase):
             self.assertEqual(prepare(session_id='one',turn_id='t2',tool_name='loginom_dock_prepare',args={'host_context_token':'a'*64})['action'],'block')
             self.assertEqual(prepare(session_id='two',turn_id='t1',tool_name='loginom_dock_prepare',args={'host_context_token':'a'*64})['action'],'block')
             capture(session_id='one',turn_id='t2',user_message='New task without a file')
-            self.assertIsNone(prepare(session_id='one',turn_id='t2',tool_name='loginom_dock_prepare',args={}))
+            self.assertEqual(prepare(session_id='one',turn_id='t2',tool_name='loginom_dock_prepare',args={})['args'], {'_dock_session_token':'a'*64})
+
+    def test_every_call_uses_its_native_task_even_without_an_attachment(self):
+        ctx=Context()
+        def run(argv, **kwargs):
+            payload=json.loads(kwargs['input'])
+            if argv[1]=='context':
+                token=('a' if payload['session_id']=='A' else 'b')*64
+                return types.SimpleNamespace(returncode=0,stdout=json.dumps({'token':token}))
+            return types.SimpleNamespace(returncode=0,stdout='{}')
+        with patch.object(native,'install_usage_presence'), patch.object(native,'input_host_environment',return_value=(None,None,True)), patch.object(native.subprocess,'run',side_effect=run):
+            native.register(ctx)
+            capture=ctx.hooks['pre_llm_call'][0]; hook=ctx.hooks['pre_tool_call'][0]
+            for session in ['A','B']:
+                capture(session_id=session,turn_id='one',user_message='Continue',platform='desktop')
+            for session in ['A','B','A']:
+                value=hook(session_id=session,turn_id='one',tool_name='mcp_loginom_dock_dock_diagnostics',args={'_dock_session_token':'forged'})
+                self.assertEqual(value['args'],{'_dock_session_token':('a' if session=='A' else 'b')*64})
+            self.assertEqual(hook(session_id='C',turn_id='one',tool_name='mcp_loginom_dock_dock_diagnostics',args={})['action'],'block')
 
     def test_native_attachment_does_not_capture_server_output_paths(self):
         text='@file:/local/input.csv'
@@ -127,8 +145,8 @@ class NativeDiagnosticsTest(unittest.TestCase):
         with patch.object(native, "install_usage_presence"):
             native.register(ctx)
         with patch.object(native.subprocess, 'run', return_value=types.SimpleNamespace(returncode=0)):
-            self.assertIsNone(ctx.hooks["pre_tool_call"][0](session_id="session", tool_name="mcp_loginom_dock_dock_prepare",
-                                                           args={"sourcePath": "/private/secret.csv"}))
+            self.assertEqual(ctx.hooks["pre_tool_call"][0](session_id="session", tool_name="mcp_loginom_dock_dock_prepare",
+                                                           args={"sourcePath": "/private/secret.csv"})["action"], "block")
 
     def test_nested_api_error_keeps_type_and_duration_without_network_body(self):
         ctx = Context()

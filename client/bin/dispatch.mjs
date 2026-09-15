@@ -14,7 +14,7 @@ if (command === 'report') {
 const root = process.env.LOGINOM_DOCK_HOME || join(homedir(), '.loginom-dock');
 const hermesProfile = join(root, 'profiles', 'hermes-user.json');
 const configPath = agent === 'hermes' && existsSync(hermesProfile) ? hermesProfile : join(root, 'config.json');
-const entry = { mcp: 'loginom-dock.mjs', hook: 'hook.mjs', flush: 'hook.mjs', diagnostic: 'diagnostic.mjs', input: 'input.mjs' }[command];
+const entry = { mcp: agent === 'hermes' ? 'hermes-mcp.mjs' : 'loginom-dock.mjs', hook: 'hook.mjs', flush: 'hook.mjs', diagnostic: 'diagnostic.mjs', input: 'input.mjs', context: 'host-session.mjs' }[command];
 if (!entry || !isAbsolute(root) || !['codex', 'hermes'].includes(agent) || !revision) {
   process.stderr.write('Loginom Dock: неверные параметры запуска.\n'); process.exit(2);
 }

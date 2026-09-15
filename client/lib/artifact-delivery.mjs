@@ -178,7 +178,11 @@ export function createArtifactDelivery({runtime,artifactStore,record,admit,admit
    if(lostVerification)await acknowledge(job,'artifact_delivery_verification_reconciled',{inspection:final});
    await finish(job,artifact,final);
   } catch(error) {
-   job.error={code:'ARTIFACT_DELIVERY_INCOMPLETE',message:String(error.message).slice(0,1000)};
+   job.error=error.code==='STORAGE_ENTRY_UNAVAILABLE'&&!submitted
+    ? {code:'ARTIFACT_DESTINATION_UNAVAILABLE',message:String(error.message).slice(0,1000),
+      artifact_id:artifact.artifact_id,input_artifact_admitted:true,directory:artifact.upload.directory,
+      storage_entry:error.storage_entry,recovery:'Check the selected input directory and the signed-in Loginom account. The attachment was received; do not ask to attach it again.'}
+    : {code:'ARTIFACT_DELIVERY_INCOMPLETE',message:String(error.message).slice(0,1000)};
    job.outcome={status:effectPossible?'AMBIGUOUS':'NOT_APPLIED',effect_possible:effectPossible,upload_submitted_or_unknown:submitted,upload_operation_id:job.uploadId,inspection_required:true};
   } finally {job.state='settled';active=null;}
   return snapshot(job);

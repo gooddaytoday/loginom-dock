@@ -346,3 +346,21 @@ test('a new attempt after a no-effect refusal is uncertain until its own reply a
   await assert.rejects(prepareWorkspaceSession(args),/reply lost/);
   await assert.rejects(prepareWorkspaceSession(args),/receipt missing/);
 });
+
+for(const variant of ['lost','effect','created','unauthenticated','cancelled','same-id'])
+ test('new explicit preparation after missing workflow: '+variant,async()=>{
+  const metadata={skillRevision:'skill'},request={operation_id:'old',intent:'existing_workflow'};
+  const state={status:'NOT_READY',reason:variant==='cancelled'?'CANCELLED':'WORKFLOW_LOST',
+   effect_possible:variant==='effect',created_draft:variant==='created',authenticated:variant!=='unauthenticated'};
+  let calls=0;
+  const args={metadata,request,assertAllowed(){},assertTarget(){},record:async()=>{},save:async()=>{},
+   prepare:async()=>{calls++;return state;}};
+  await prepareWorkspaceSession(args);
+  const next={...args,request:{operation_id:variant==='same-id'?'old':'new',intent:'new_draft'},
+   prepare:async({recoverOnly})=>{calls++;assert.equal(recoverOnly,false);return {status:'READY',effect_possible:true,created_draft:true,target:{},workflow_ref:{}};}};
+  if(variant==='lost'){
+   assert.equal((await prepareWorkspaceSession(next)).status,'READY');assert.equal(calls,2);
+  }else{
+   await assert.rejects(prepareWorkspaceSession(next),/conflict/);assert.equal(calls,1);
+  }
+ });

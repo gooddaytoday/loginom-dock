@@ -212,3 +212,21 @@ test('delivery reads the observed toolbar when a populated graph only yields roo
  f.runtime.uiAct=async(a,o)=>{if(a.ref==='files'){assert.equal(o.observationId,'toolbar-observation');opened=true;return {status:'SUCCEEDED',cleanup_complete:true};}return act(a,o);};
  const result=await f.service.deliver(request);assert.equal(result.outcome.status,'SUCCEEDED');assert.equal(opened,true);
 });
+
+test('an inaccessible input folder reports an admitted artifact and never uploads',async()=>{
+ const f=fixture(),observe=f.runtime.observe;
+ f.runtime.observe=async options=>{
+  const r=await observe(options),s=r.output;
+  if(s.file_storage.directory==='/')s.ui.elements=s.ui.elements.filter(e=>!e.tid.endsWith(';colName_user'));
+  return r;
+ };
+ const result=await f.service.deliver(request);
+ assert.equal(result.error.code,'ARTIFACT_DESTINATION_UNAVAILABLE');
+ assert.equal(result.error.input_artifact_admitted,true);
+ assert.equal(result.error.artifact_id,'artifact');
+ assert.equal(result.error.directory,'/user/dock-p3');
+ assert.deepEqual(result.error.storage_entry,{name:'user',directory:'/',reason:'no_scroll_owner'});
+ assert.equal(result.outcome.upload_submitted_or_unknown,false);
+ assert.ok(!f.calls.includes('upload'));assert.ok(!f.calls.includes('verify'));
+ assert.equal(await f.service.deliver(request),result);
+});

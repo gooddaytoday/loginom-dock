@@ -8,7 +8,7 @@ import re
 import functools
 from pathlib import Path
 
-ADAPTER_REVISION = "0.1.0-rc.6"
+ADAPTER_REVISION = "0.1.0-rc.7"
 
 
 def user_input_prefix(message):
@@ -143,6 +143,26 @@ def register(ctx):
     input_tickets = {}
 
     native_inputs = {}
+    session_tickets = {}
+
+    def native_session_ticket(session, turn):
+        cached = session_tickets.get(session)
+        if cached and cached["turn_id"] == turn:
+            return cached["token"]
+        dock_root = Path(os.environ.get("LOGINOM_DOCK_HOME", str(Path.home() / ".loginom-dock")))
+        launcher = dock_root / ("bin/loginom-dock.cmd" if os.name == "nt" else "bin/loginom-dock")
+        try:
+            result = subprocess.run([str(launcher), "context", "hermes", ADAPTER_REVISION],
+                input=json.dumps({"session_id": session, "turn_id": turn}), text=True, timeout=15,
+                check=False, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL)
+            value = json.loads(result.stdout) if result.returncode == 0 else {}
+            token = value.get("token") if isinstance(value, dict) else None
+            if isinstance(token, str) and re.fullmatch(r"[a-f0-9]{64}", token):
+                session_tickets[session] = {"turn_id": turn, "token": token}
+                return token
+        except (OSError, ValueError, TypeError, subprocess.TimeoutExpired):
+            pass
+        return None
 
     def capture_inputs(**kwargs):
         session, turn = kwargs.get("session_id"), kwargs.get("turn_id")
@@ -191,9 +211,17 @@ def register(ctx):
     def host_context(**kwargs):
         name = kwargs.get("tool_name", "")
         session = kwargs.get("session_id")
-        preparing = isinstance(name, str) and "loginom" in name and name.endswith("dock_prepare")
+        dock_call = isinstance(name, str) and "loginom" in name
+        preparing = dock_call and name.endswith("dock_prepare")
         current = native_inputs.get(session)
         turn_matches = current and bool(kwargs.get("turn_id")) and kwargs["turn_id"] == current["turn_id"]
+        routing = None
+        if dock_call:
+            if not turn_matches:
+                return {"action": "block", "message": "Loginom Dock: текущая задача Hermes не подтверждена native hook. Вызов не отправлен в чужую сессию."}
+            routing = native_session_ticket(session, kwargs["turn_id"])
+            if not routing:
+                return {"action": "block", "message": "Loginom Dock: не удалось подготовить изолированную сессию. Проверьте совместимость и загрузку плагина и runtime; повторное вложение это не исправит."}
         if preparing and turn_matches and session not in input_tickets:
             admit_user_paths(session, prompts.get(session, ""))
         item = input_tickets.get(session)
@@ -207,8 +235,8 @@ def register(ctx):
                 event["args"] = kwargs.get("args", {})
             if not diagnostic_send(session, pending.pop(session, []) + [event]):
                 pending[session] = [{"event": "diagnostic.truncated", "reason": "local_writer_failed", "host_pid": os.getpid()}]
-        if ticket and "loginom" in name and name.endswith("dock_prepare"):
-            return {"action": "modify", "args": {"host_context_token": ticket}}
+        if routing:
+            return {"action": "modify", "args": {"_dock_session_token": routing, **({"host_context_token": ticket} if preparing and ticket else {})}}
 
     def diagnostic_send(session, events, prune=False):
         dock_root = Path(os.environ.get("LOGINOM_DOCK_HOME", str(Path.home() / ".loginom-dock")))

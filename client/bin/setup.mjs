@@ -201,7 +201,7 @@ try {
     // Reinstalling an identical version must not erase the useful rollback target.
     await saveRecord(recordFile, workflowRegistration(prior, { state: 'installed', agent: values.agent, profile, before, previousRelease, release: 'releases/' + installed.manifest.id, configName:selectedConfigName,
       workflowChange:{previous:existingData?.workflow_profile??null,installed:data.workflow_profile} }));
-    if (values.agent === 'codex') console.log('Перед первой задачей проверьте обработчики Loginom Dock в /hooks. Решения о доверии установщик не изменяет.');
+    if (values.agent === 'codex') console.log('После установки или обновления проверьте доверие к обработчикам Loginom Dock в /hooks. Без него вложения Codex не передаются в Dock. Решения о доверии установщик не изменяет.');
     else console.log('Плагин Hermes включён. Если gateway запущен, перезапустите его для загрузки новой версии.');
   }
   recovery = undefined;
