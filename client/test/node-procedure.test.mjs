@@ -536,3 +536,15 @@ for(const kind of ['cancel','deadline'])test('source body refresh respects fresh
  onRefresh:()=>{if(kind==='cancel')controller.abort();else clock=10000;}});
  await assert.rejects(f.perform());assert.equal(f.mutations,1);
 });
+
+
+test('an incomplete observation preserves the original refusal in the journal',async()=>{
+ const f=fixture({staleReads:3});
+ await assert.rejects(f.channel.observe({condition:'closed dialog',ready:()=>true}),error=>{
+  assert.match(error.message,/UI_ROOT_STALE/);
+  assert.equal(error.nodeObservationRefusal.error.code,'UI_ROOT_STALE');return true;
+ });
+ const refused=f.records.filter(r=>r.phase==='node_observation_refused');
+ assert.equal(refused.length,1);assert.equal(refused[0].outcome.error.code,'UI_ROOT_STALE');
+ assert.ok(!f.events.includes('mutated'));
+});

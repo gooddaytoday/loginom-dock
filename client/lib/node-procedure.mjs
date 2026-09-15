@@ -277,7 +277,12 @@ export function createNodeProcedure({ operation, execute, record, wrapMutation,
             confirmations=0;previousIdentity=undefined;
             continue;
           }
-          throw new Error('Node procedure observation is incomplete');
+          await entry('node_observation_refused', {step, sample, internal_operation_id:id,
+            condition, outcome:structuredClone(result)});
+          const error = new Error('Node procedure observation is incomplete' +
+            (typeof result.error?.code === 'string' ? ': ' + result.error.code : ''));
+          error.nodeObservationRefusal = structuredClone(result);
+          throw error;
         }
         if(readPreview){
           result.output.node_preview_schema=await execute(makeNodePreviewSchemaCode(preparedNodeContext),{timeout:Math.min(35000,Math.max(1,deadline-observationNow()))});

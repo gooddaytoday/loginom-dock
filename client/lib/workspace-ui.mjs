@@ -214,6 +214,12 @@ export function workspaceUiCapability(page, task, readNodeContext, captureProces
       if(new RegExp('^'+definitionPrefix+';ViewsForm;BrowseView(?:-[0-9]+)?;grdData$').test(tid)) {
         omittedRegions.add('table_data_cells');return 2;
       }
+      if(tid===definitionPrefix+';ModelForm;PreviewWindow;PreviewForm;DataSetForm;grdDataTable') {
+        // Prepared node procedures read the preview schema through its owned
+        // native column store. Data rows are not controls or schema evidence;
+        // their size must not prevent closing this temporary preview.
+        omittedRegions.add('preview_data_cells');return 2;
+      }
       if(tid===base+'ImportTextFileParamsWizard;ColumnDefsTuning;grdData') {
         omittedRegions.add('import_data_preview');return 2; // FILTER_REJECT: subtree is not configuration.
       }
@@ -300,6 +306,11 @@ export function workspaceUiCapability(page, task, readNodeContext, captureProces
       charge();for (const element of tableOwners) {
         charge();if(/^MF;TF(?:-\d+)?;ViewsForm;BrowseView(?:-[1-9][0-9]*)?$/.test(element.getAttribute('data-tid')??''))include(element);
       }
+    }
+    if(!requestedRoot && !discoverRoots && omittedRegions.has('preview_data_cells')) {
+      // A bound whole-page read also needs blockers inside omitted row trees.
+      const blockers=document.querySelectorAll('[role="dialog"],.x-window,.bg-dialog,.bg-mask-message,.x-mask-msg,[role="alert"],[role="status"],.bg-message,.x-message-box,.x-form-invalid-under');
+      charge();for(const element of blockers)include(element);
     }
     // The exact process context menu is a portal. Read its owning console
     // through the same bounded DOM scanner, never another workflow subtree.

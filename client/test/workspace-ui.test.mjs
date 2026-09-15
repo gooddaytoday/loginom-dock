@@ -4832,3 +4832,23 @@ test('bound output scans omit inactive Table interiors while keeping live contro
  assert.ok(result.output.scan.visited_elements<1000);
  assert.ok(result.output.ui.elements.some(e=>e.tid==='MF;TF-1;ViewsForm;btnRename'));
 });
+
+
+test('bound preview schema controls do not enumerate data rows but retain blockers',async()=>{
+ const page=new Page(),base='MF;TF-1;ModelForm;PreviewWindow';
+ const root=page.add('div',base),data=page.add('div',base+';PreviewForm;DataSetForm','',undefined,root);
+ page.add('button',base+';p.h;close','Close',undefined,root);
+ const grid=page.add('div',data.attrs['data-tid']+';grdDataTable','',undefined,data);
+ const rows=page.add('div',grid.attrs['data-tid']+';grd-1;tbl','',undefined,grid);
+ for(let i=0;i<6200;i++)page.add('span',null,'portfolio data',undefined,rows);
+ const mask=page.add('div',null,'Loading',undefined,rows);mask.attrs.class='x-mask-msg';
+ const result=await vm.runInContext('('+workspaceUiCapability.toString()+')',page.context)(page,
+  {expected_build:build,expected_origin:origin,mode:'observe',prepared_node_context:{node:{node_id:'node'},workflow_ref:{prefix:'MF;TF-1',navigation_path:[]}}},
+  async()=>({verified:true,surface:'graph'}));
+ assert.equal(result.status,'SUCCEEDED',JSON.stringify(result.error));
+ assert.ok(result.output.scan.omitted_regions.includes('preview_data_cells'));
+ assert.ok(result.output.scan.visited_elements<1000);
+ assert.ok(result.output.ui.elements.some(e=>e.tid===base+';p.h;close'));
+ assert.ok(result.output.ui.masks.length>0,'omitting rows must not omit loading guards');
+ assert.equal(result.output.ui.table_cells.filter(c=>c.data_cell).length,0);
+});

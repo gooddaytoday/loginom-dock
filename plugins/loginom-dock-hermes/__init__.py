@@ -8,7 +8,7 @@ import re
 import functools
 from pathlib import Path
 
-ADAPTER_REVISION = "0.1.0-rc.7"
+ADAPTER_REVISION = "0.1.0-rc.8"
 
 
 def user_input_prefix(message):
