@@ -122,6 +122,57 @@ function clickFixture(options = {}) {
   };
 }
 
+test('initial scene awaits incremental preparation before mounting its renderer', async () => {
+  const p = pageFixture();
+  const ready = deferred();
+  let mounted = false;
+  const scene = { draw() {} };
+  const mounting = mountHeroCycle(p.root, p.win, p.doc, {
+    loadScene: async () => ({
+      createScene() { assert.fail('must not rebuild synchronously'); },
+      prepareScene: () => ready.promise,
+    }),
+    mountScene(factory) {
+      assert.equal(factory(), scene);
+      mounted = true;
+      return () => {};
+    },
+  });
+  await settle();
+  assert.equal(mounted, false);
+  assert.equal(p.root.hasAttribute('data-rendered'), false);
+  assert.equal(p.poster.getAttribute('src'), '/variants/clouds-poster.jpg');
+  ready.resolve(scene);
+  const dispose = await mounting;
+  assert.equal(mounted, true);
+  dispose();
+});
+
+test('warmup and a click share the incremental factory and wait before advancing storage', async () => {
+  const s = clickFixture();
+  const ready = deferred();
+  let preparations = 0;
+  s.behavior.load = async id => id === 'clouds' ? sceneModule(id) : ({
+    createScene() { assert.fail('must not use the blocking factory'); },
+    prepareScene() { preparations++; return ready.promise; },
+  });
+  s.behavior.prepare = factory => factory({});
+  const dispose = await s.mount();
+  s.idle();
+  await settle();
+  s.next.click();
+  await settle();
+  assert.equal(preparations, 1);
+  assert.equal(s.transitions.length, 0);
+  assert.equal(s.storage.backing.get(HERO_STORAGE_KEY), 'glyphs');
+  ready.resolve({ id: 'glyphs' });
+  await settle();
+  assert.equal(s.transitions.length, 1);
+  assert.equal(s.root.getAttribute('data-variant'), 'glyphs');
+  assert.equal(s.storage.backing.get(HERO_STORAGE_KEY), 'ribbons');
+  dispose();
+});
+
 test('hero rotation starts with clouds and keeps the agreed four-variant order', () => {
   assert.deepEqual(HERO_VARIANTS, ['clouds', 'glyphs', 'ribbons', 'voids']);
   assert.equal(HERO_STORAGE_KEY, 'loginom-dock.hero.next-variant.v1');

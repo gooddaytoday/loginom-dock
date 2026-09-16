@@ -159,14 +159,60 @@ function makeGlow(createCanvas, color) {
   return canvas;
 }
 
-export function createScene({ createCanvas }) {
+// Both paths consume the same deterministic construction, so incremental
+// preparation changes scheduling without changing geometry or random seeds.
+export function createScene(options) {
+  return completeSteps(buildScene(options));
+}
+
+function completeSteps(steps) {
+  let step;
+  do { step = steps.next(); } while (!step.done);
+  return step.value;
+}
+
+export function prepareScene(options) {
+  return runPreparation(buildScene(options), options);
+}
+
+async function runPreparation(steps, options) {
+  const {
+    signal, now = () => performance.now(),
+    yieldControl = () => new Promise(resolve => setTimeout(resolve, 0)),
+  } = options;
+  let deadline = now() + 6;
+  try {
+    while (true) {
+      signal?.throwIfAborted();
+      const step = steps.next();
+      if (step.done) {
+        // Let input/painting run before the engine renders the first bitmap.
+        await yieldControl();
+        signal?.throwIfAborted();
+        return step.value;
+      }
+      if (now() >= deadline) {
+        await yieldControl();
+        deadline = now() + 6;
+      }
+    }
+  } finally { steps.return(); }
+}
+
+function* buildScene({ createCanvas }) {
   const rng = random(928517);
   const glows = COLORS.map(color => makeGlow(createCanvas, color));
-  const routes = FLOW_ROUTES.map((route, routeIndex) => {
+  const routes = [];
+  for (const [routeIndex, route] of FLOW_ROUTES.entries()) {
     const stepCount = route.input ? 170 : 330;
-    const sections = Array.from({ length: stepCount + 1 }, (_, i) => sectionAt(route, i / stepCount));
+    const sections = [];
+    for (let i = 0; i <= stepCount; i++) {
+      sections.push(sectionAt(route, i / stepCount));
+      if (i % 16 === 0) yield;
+    }
     const fiberCount = route.input ? 22 : 94;
-    const fibers = Array.from({ length: fiberCount }, (_, i) => {
+    const fibers = [];
+    for (let i = 0; i < fiberCount; i++) {
       const lane = (i / (fiberCount - 1) - .5) * 1.98;
       const lanes = sections.map((_, j) => clamp(lane + Math.sin(j / stepCount * 8.5 + lane * 3.1) * .016, -.999, .999));
       const raw = sections.map((section, j) => pointInSection(section, lanes[j]));
@@ -185,15 +231,17 @@ export function createScene({ createCanvas }) {
       // Static distances keep the interactive path as inexpensive as the
       // original cached fibers, even with hundreds of thousands of samples.
       const clearances = points.map(point => point ? voidDistance(...point) : 0);
-      return { points, clearances, lane, phase: rng() * TAU, light: rng() };
-    });
+      fibers.push({ points, clearances, lane, phase: rng() * TAU, light: rng() });
+      yield;
+    }
     const particles = Array.from({ length: route.count }, () => ({
       phase: rng(), lane: (rng() + rng() - 1) * .99,
       speed: .022 + rng() * .029, light: rng(), size: .55 + rng() * .87,
       color: rng() < .14 ? 2 : rng() < .025 ? 3 : route.color,
     }));
-    return { ...route, index: routeIndex, sections, fibers, particles };
-  });
+    routes.push({ ...route, index: routeIndex, sections, fibers, particles });
+    yield;
+  }
 
   // The translucent body is also constructed from free sections. No opaque
   // mask, destination-out pass, letter stroke or glyph bitmap exists here.
@@ -223,9 +271,12 @@ export function createScene({ createCanvas }) {
         for (const [low, high] of section.intervals) {
           bodyCtx.fillRect(section.x, low, next.x - section.x + .35, high - low);
         }
+        if (i % 16 === 0) yield;
       }
     }
   }
+
+  yield;
 
   // Feather the cached translucent matter itself. This lets a little light
   // diffuse into the voids without painting solid glyphs or blurring the UI.
@@ -247,7 +298,7 @@ export function createScene({ createCanvas }) {
       light: rng(), color: rng() < .28 ? 2 : route.color,
     })));
 
-  function draw(ctx, frame) {
+  function* drawSteps(ctx, frame) {
     const { width, height } = frame;
     if (!(width > 0 && height > 0)) return;
     const time = frame.reducedMotion ? 12 : frame.time;
@@ -317,8 +368,10 @@ export function createScene({ createCanvas }) {
           trace(ctx, fiber.points, start, end, interaction ? bend : null, fiber.clearances);
           ctx.stroke();
         }
+        yield;
       }
       for (let i = 0; i < route.particles.length; i += mobile ? 2 : 1) {
+        if (i % 64 === 0) yield;
         const particle = route.particles[i];
         const u = (particle.phase + time * particle.speed) % 1;
         const point = bend(sampleFlowPoint(route.index, u, particle.lane));
@@ -353,6 +406,7 @@ export function createScene({ createCanvas }) {
       }
     }
     for (let i = 0; i < drifters.length; i += mobile ? 2 : 1) {
+      if (i % 32 === 0) yield;
       const particle = drifters[i];
       const u = (particle.phase + time * particle.speed) % 1;
       const [x, y] = bend(sampleDriftPoint(particle.route, u, particle.lane, time), undefined, true);
@@ -370,5 +424,10 @@ export function createScene({ createCanvas }) {
     }
     ctx.restore();
   }
-  return { draw };
+  return {
+    draw: (ctx, frame) => completeSteps(drawSteps(ctx, frame)),
+    // Only offscreen warmup is incremental. A visible animation frame stays
+    // atomic, so users never see a partially painted stream.
+    prepareFrame: (ctx, frame, options = {}) => runPreparation(drawSteps(ctx, frame), options),
+  };
 }

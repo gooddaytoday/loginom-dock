@@ -1,7 +1,89 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { createHash } from 'node:crypto';
 import { voidDistance, voidIntervalsAtX, segmentAvoidsVoids } from '../../landing/variants/voids-geometry.mjs';
-import { FLOW_ROUTES, sampleFlowPoint, sampleDriftPoint, createScene } from '../../landing/variants/voids.mjs';
+import { FLOW_ROUTES, sampleFlowPoint, sampleDriftPoint, createScene, prepareScene } from '../../landing/variants/voids.mjs';
+
+function paintRecorder() {
+  const hash = createHash('sha256');
+  let canvases = 0;
+  const record = (...args) => hash.update(JSON.stringify(args));
+  function context(id) {
+    return new Proxy({}, {
+      get: (_, name) => (...args) => {
+        record(id, name, ...args);
+        if (String(name).startsWith('create')) return { addColorStop: (...stops) => record(id, 'stop', ...stops) };
+      },
+      set: (_, name, value) => { record(id, name, value); return true; },
+    });
+  }
+  return {
+    context,
+    createCanvas() {
+      const id = ++canvases;
+      const ctx = context(id);
+      return { id, getContext: () => ctx };
+    },
+    get canvases() { return canvases; },
+    finish(scene) {
+      for (const time of [12, 18]) scene.draw(context('visible'), {
+        width: 1000, height: 700, time, progress: 1, detail: 1, reducedMotion: false,
+      });
+      return hash.digest('hex');
+    },
+  };
+}
+
+test('incremental preparation yields to other tasks and produces identical cached and animated drawing', async () => {
+  const sync = paintRecorder();
+  const expected = sync.finish(createScene(sync));
+  const incremental = paintRecorder();
+  let clock = 0, yields = 0, ticks = 0;
+  const heartbeat = setInterval(() => { ticks++; }, 0);
+  let scene;
+  try {
+    scene = await prepareScene({
+      createCanvas: incremental.createCanvas,
+      now: () => (clock += 2),
+      yieldControl: async () => { yields++; await new Promise(resolve => setImmediate(resolve)); },
+    });
+  } finally { clearInterval(heartbeat); }
+  assert.ok(yields > 20, 'geometry is split across many turns, not just deferred once');
+  assert.ok(ticks > 1, 'unrelated tasks run before preparation finishes');
+  assert.equal(incremental.finish(scene), expected, 'cached body, fibers and moving particles are unchanged');
+});
+
+test('incremental preparation stops at cancellation without building the body or resolving a scene', async () => {
+  const abort = new AbortController(), recorder = paintRecorder();
+  let clock = 0, yields = 0;
+  await assert.rejects(prepareScene({
+    createCanvas: recorder.createCanvas, signal: abort.signal,
+    now: () => (clock += 10),
+    yieldControl: async () => { yields++; abort.abort(); },
+  }), { name: 'AbortError' });
+  assert.equal(yields, 1);
+  assert.equal(recorder.canvases, 4, 'only glow sprites existed before cancellation');
+  const stopped = new AbortController();
+  stopped.abort();
+  await assert.rejects(prepareScene({
+    signal: stopped.signal, createCanvas() { assert.fail('cancelled work must not start'); },
+  }), { name: 'AbortError' });
+});
+
+test('incremental first bitmap matches atomic painting while yielding during drawing', async () => {
+  const offscreen = paintRecorder();
+  const scene = createScene(offscreen);
+  const atomic = paintRecorder(), incremental = paintRecorder();
+  const frame = { width: 1000, height: 700, time: 12, progress: 1, detail: 1, reducedMotion: false };
+  scene.draw(atomic.context('warm'), frame);
+  let clock = 0, yields = 0;
+  await scene.prepareFrame(incremental.context('warm'), frame, {
+    now: () => (clock += 2), yieldControl: async () => { yields++; },
+  });
+  assert.ok(yields > 20, 'painting also yields rather than blocking after geometry is ready');
+  // finish adds identical ordinary frames before hashing both command streams.
+  assert.equal(incremental.finish(scene), atomic.finish(scene));
+});
 
 test('void strokes contain known points while table cells and chart gaps remain free', () => {
   const inside = [

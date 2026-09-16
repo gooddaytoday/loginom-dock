@@ -121,6 +121,82 @@ test('preparation failures propagate and preserve the active scene and animation
   s.dispose();
 });
 
+test('async preparation keeps the current renderer running and uses the latest viewport', async () => {
+  const s = setup();
+  s.visible(true);
+  let ready;
+  const preparing = s.dispose.prepareScene(() => new Promise(resolve => { ready = resolve; }));
+  s.frame(0);
+  s.frame(34);
+  assert.equal(s.frames.at(-1).name, 'old');
+  assert.equal(s.pending, 1);
+  s.resize({ width: 400, height: 300 });
+  ready(s.factory('async', [0, 1, 0, 1])());
+  const token = await preparing;
+  assert.equal(s.bitmaps.at(-1).width, 600);
+  assert.equal(s.frames.at(-1).frame.detail, .6);
+  s.reduce(true);
+  assert.equal(await s.dispose.transitionTo(token), true);
+  assert.deepEqual(s.canvas.color, [0, 1, 0, 1]);
+  s.dispose();
+});
+
+test('disposal aborts async preparation and ignores a factory that resolves after cancellation', async () => {
+  const s = setup();
+  let ready, signal;
+  const preparing = s.dispose.prepareScene(options => {
+    signal = options.signal;
+    return new Promise(resolve => { ready = resolve; });
+  });
+  s.dispose();
+  assert.equal(signal.aborted, true);
+  const allocations = s.bitmaps.length;
+  ready({ draw() { assert.fail('a late scene must not draw'); } });
+  assert.equal(await preparing, null);
+  assert.equal(s.bitmaps.length, allocations);
+  assert.equal(s.pending, 0);
+});
+
+test('async preparation rejection preserves the current scene and allows retry', async () => {
+  const s = setup();
+  s.visible(true);
+  await assert.rejects(s.dispose.prepareScene(async () => { throw new Error('async failure'); }), /async failure/);
+  s.frame(0);
+  assert.equal(s.frames.at(-1).name, 'old');
+  assert.equal(s.pending, 1);
+  assert.ok(await s.dispose.prepareScene(async () => s.factory('retry', [0, 1, 0, 1])()));
+  s.dispose();
+});
+
+test('incremental bitmap preparation stays invisible until complete and releases cancelled surfaces', async () => {
+  for (const cancel of [false, true]) {
+    const s = setup({ reduced: true });
+    let finish, signal;
+    const preparing = s.dispose.prepareScene(() => ({
+      draw() { assert.fail('warmup must use incremental painting'); },
+      prepareFrame(context, frame, options) {
+        signal = options.signal;
+        assert.equal(frame.progress, 1);
+        context.paint([0, 1, 0, 1]);
+        return new Promise(resolve => { finish = resolve; });
+      },
+    }));
+    assert.deepEqual(s.canvas.color, [1, 0, 0, 1], 'partial bitmap is never presented');
+    if (cancel) s.dispose();
+    finish();
+    const token = await preparing;
+    if (cancel) {
+      assert.equal(signal.aborted, true);
+      assert.equal(token, null);
+      assert.equal(s.bitmaps.at(-1).width, 1);
+    } else {
+      assert.equal(await s.dispose.transitionTo(token), true);
+      assert.deepEqual(s.canvas.color, [0, 1, 0, 1]);
+      s.dispose();
+    }
+  }
+});
+
 test('crossfade interpolates both images without a blank frame and animates only the incoming scene', async () => {
   const s = setup();
   s.visible(true);

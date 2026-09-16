@@ -44,9 +44,9 @@ function enableClickCycle(engine, variant, root, win, doc, loadScene) {
   function prepare(id) {
     if (preparation?.id === id) return preparation.promise;
     const entry = { id };
-    entry.promise = Promise.resolve().then(() => loadScene(id)).then(({ createScene }) => {
+    entry.promise = Promise.resolve().then(() => loadScene(id)).then(({ createScene, prepareScene }) => {
       if (disposed) return null;
-      return engine.prepareScene(createScene);
+      return engine.prepareScene(prepareScene ?? createScene);
     }).catch(error => {
       if (preparation === entry) preparation = null;
       throw error;
@@ -130,8 +130,12 @@ export function mountHeroCycle(root, win = window, doc = document, {
     // Select and persist exactly once per document. Pause, replay, resize and
     // a second mount reuse the chosen scene instead of consuming another turn.
     try {
-      const { createScene } = await loadScene(variant);
-      const engine = mountScene(createScene, root, win, doc);
+      const { createScene, prepareScene } = await loadScene(variant);
+      // The first visit to a heavy scene also keeps the poster and the rest of
+      // the page responsive until its geometry is ready.
+      const initialScene = prepareScene
+        ? await prepareScene({ createCanvas: () => doc.createElement('canvas') }) : null;
+      const engine = mountScene(initialScene ? () => initialScene : createScene, root, win, doc);
       return enableClickCycle(engine, variant, root, win, doc, loadScene);
     } catch {
       root.removeAttribute('data-rendered');

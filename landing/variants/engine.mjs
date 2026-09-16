@@ -15,6 +15,7 @@ export function mountVariant(createScene, root = document.querySelector('[data-f
   let visible = false, paused = false, disposed = false;
   let transition = null;
   let preparedScenes = new WeakMap();
+  const preparationAbort = new AbortController();
   const interaction = createFlowInteraction();
 
   function stop() {
@@ -25,6 +26,7 @@ export function mountVariant(createScene, root = document.querySelector('[data-f
   function dispose() {
     if (disposed) return;
     disposed = true;
+    preparationAbort.abort();
     interaction.reset();
     stop();
     finishTransition(false);
@@ -140,14 +142,38 @@ export function mountVariant(createScene, root = document.querySelector('[data-f
   // Tokens belong to this engine and are consumed once by transitionTo().
   dispose.prepareScene = nextFactory => {
     if (disposed) return null;
-    const nextScene = nextFactory({ createCanvas: () => doc.createElement('canvas') });
+    const nextScene = nextFactory({
+      createCanvas: () => doc.createElement('canvas'), signal: preparationAbort.signal,
+    });
+    // Async factories yield while computing geometry. A late completion must
+    // never allocate or paint after this engine has been disposed.
+    return typeof nextScene?.then === 'function'
+      ? Promise.resolve(nextScene).then(cacheScene)
+      : cacheScene(nextScene);
+  };
+
+  function cacheScene(nextScene) {
+    if (disposed) return null;
     if (typeof nextScene?.draw !== 'function') throw new TypeError('Scene must provide draw()');
     const incoming = surface();
-    render(incoming.bitmap, incoming.context, nextScene, true);
-    const token = Object.freeze({});
-    preparedScenes.set(token, { scene: nextScene, incoming });
-    return token;
-  };
+    const release = () => { incoming.bitmap.width = incoming.bitmap.height = 1; };
+    const remember = () => {
+      if (disposed) { release(); return null; }
+      const token = Object.freeze({});
+      preparedScenes.set(token, { scene: nextScene, incoming });
+      return token;
+    };
+    try {
+      if (nextScene.prepareFrame) {
+        resetContext(incoming.bitmap, incoming.context);
+        return Promise.resolve(nextScene.prepareFrame(incoming.context, frame(true), {
+          signal: preparationAbort.signal,
+        })).then(remember, error => { release(); throw error; });
+      }
+      render(incoming.bitmap, incoming.context, nextScene, true);
+      return remember();
+    } catch (error) { release(); throw error; }
+  }
 
   dispose.transitionTo = token => {
     const prepared = token && preparedScenes.get(token);
