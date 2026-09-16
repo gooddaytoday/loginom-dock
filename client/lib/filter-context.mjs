@@ -29,7 +29,7 @@ export function readFilterBrowser(prefix){
   if(d.RowNumberer===1){if(d.Value!==''||d.DataType!==4||++rowNumbers>1) return fail('filter_row_number');continue;}
   if(fields.length>=1000)return fail('filter_inventory');
   if(typeof d.Name!=='string'||!d.Name||d.Value!==d.Name||names.has(d.Name)||typeof d.DisplayText!=='string')return fail('filter_input_identity');
-  names.add(d.Name);fields.push({record_id:String(r.internalId),name:d.Name,label:d.DisplayText,type:types[d.DataType]});
+  names.add(d.Name);fields.push({record_id:String(r.internalId),name:d.Name,label:d.DisplayText,type:types[d.DataType],data_kind:({1:'Непрерывный',2:'Дискретный'})[d.DataKind]??null});
  }
  const literal=(v,type)=>{
   if(v===null)return null;
@@ -77,15 +77,35 @@ export function readFilterBrowser(prefix){
   dialogs.push({kind,root_tid:dom.getAttribute('data-tid'),record_id:String(ed[recordKey].internalId)});
  }
  if(dialogs.length>1)return fail('filter_dialog_ambiguous');
- const numericInputs=[];
- const inputRoots=[...(editing&&plugin.activeEditor?.el?.dom?[plugin.activeEditor.el.dom]:[]),...dialogs.flatMap(d=>exact(d.root_tid))];
- for(const dom of inputRoots)for(const el of dom.querySelectorAll('input')){
+ const numericInputs=[],datetimeInputs=[];
+ const inputRoots=[...(editing&&plugin.activeEditor?.el?.dom?[{dom:plugin.activeEditor.el.dom,record:context.record}]:[]),
+  ...dialogs.flatMap(d=>exact(d.root_tid).map(dom=>({dom,record:records.find(r=>String(r.internalId)===d.record_id)})))];
+ for(const {dom,record} of inputRoots)for(const el of dom.querySelectorAll('input')){
   const component=globalThis.Ext?.getCmp?.(el.getAttribute('componentid'));
+  const anchor=el.closest('[data-tid]')?.getAttribute('data-tid');
+  if(record?.data.DataType===2&&component?.$className==='Ext.form.field.ComboBox'&&component.inputEl?.dom===el&&anchor?.endsWith(';ValueContainer;cbx')){
+   // This local helper returns the already cached scalar parser configuration;
+   // it does not read a server/RPC property or change the editor's value.
+   const c=globalThis.bg?.GetParserConfigForLocale?.();
+   if(!c||![c.dayPos,c.monthPos,c.yearPos].sort().every((v,i)=>v===i+1)
+    ||!['.','/','-'].includes(c.dateSeparator)||![' ', ', ', '\u00a0', ',\u00a0'].includes(c.timePrefix)
+    ||c.timeSeparator!==':'||!['.',','].includes(c.mSecSeparator))return fail('filter_datetime_locale');
+   datetimeInputs.push({anchor_tid:anchor,format:{day_pos:c.dayPos,month_pos:c.monthPos,year_pos:c.yearPos,
+    date_separator:c.dateSeparator,time_prefix:c.timePrefix,time_separator:c.timeSeparator,millisecond_separator:c.mSecSeparator}});
+  }
+  if(record?.data.DataType===2&&component?.$className==='Ext.ux.DateTimeField'&&component.inputEl?.dom===el&&(anchor?.endsWith(';ValueContainer;datetimefield')||dialogs.some(d=>d.kind==='list'&&anchor?.startsWith(d.root_tid+';')&&anchor.endsWith(';VariantFieldEditor;datetimefield')))){
+   // Native DateTimeFields accept ISO through Ext.Date's documented c
+   // parser. Scalar/range property editors commit only whole seconds; the
+   // list editor retains milliseconds (verified in the native UI).
+   const formats=component.altFormatsArray??(typeof component.altFormats==='string'?component.altFormats.split('|'):null);
+   if(!Array.isArray(formats)||!formats.includes('c'))return fail('filter_datetime_iso_parser');
+   datetimeInputs.push({anchor_tid:anchor,format:{kind:'iso_local',precision:anchor.endsWith(';VariantFieldEditor;datetimefield')?'millisecond':'second'}});
+  }
   if(component?.$className!=='Ext.form.field.Number'||component.inputEl?.dom!==el)continue;
   if(!['.',','].includes(component.decimalSeparator))return fail('filter_number_locale');
   numericInputs.push({anchor_tid:el.closest('[data-tid]')?.getAttribute('data-tid'),decimal_separator:component.decimalSeparator});
  }
  const decimalSeparator=globalThis.Ext?.util?.Format?.decimalSeparator;
  return {verified:true,inventory_complete:true,state_source:'cached_filter_stores',input_fields:fields,rows,selection:selection.map(r=>String(r.internalId)),editor,dialogs,
-  numeric_inputs:numericInputs,decimal_separator:['.',','].includes(decimalSeparator)?decimalSeparator:null,settings_applied:false};
+  numeric_inputs:numericInputs,datetime_inputs:datetimeInputs,decimal_separator:['.',','].includes(decimalSeparator)?decimalSeparator:null,settings_applied:false};
 }
