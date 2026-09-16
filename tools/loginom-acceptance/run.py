@@ -36,6 +36,7 @@ import filter_upload_probe
 import sales_upload_probe
 import data_pipeline
 from hermes_auth_guard import POLICY as AUTH_POLICY
+from hermes_runtime_guard import POLICY as MODEL_POLICY
 from node_efficiency import USAGE_KEYS, node_efficiency
 
 WORK = Path(__file__).resolve().parent
@@ -111,8 +112,17 @@ def xiaomi_connection(home):
 def environment(connection_values, home, run):
     # Only OS/runtime variables and the existing approved connection are inherited.
     allowed = ("PATH", "HOME", "USER", "LOGNAME", "SHELL", "TMPDIR", "LANG", "LC_ALL", "TERM",
-               "SSL_CERT_FILE", "SSL_CERT_DIR", "REQUESTS_CA_BUNDLE", "DISPLAY")
+               "SSL_CERT_FILE", "SSL_CERT_DIR", "REQUESTS_CA_BUNDLE", "DISPLAY",
+               "HTTP_PROXY", "HTTPS_PROXY", "ALL_PROXY", "NO_PROXY",
+               "http_proxy", "https_proxy", "all_proxy", "no_proxy")
     result = {key: os.environ[key] for key in allowed if key in os.environ}
+    if sys.platform == 'linux':
+        for key in ('DISPLAY', 'XAUTHORITY', 'WAYLAND_DISPLAY', 'XDG_RUNTIME_DIR', 'XDG_SESSION_TYPE', 'XDG_CURRENT_DESKTOP'):
+            value = os.environ.get(key)
+            if value and not value.startswith('()'):
+                result[key] = value
+            else:
+                result.pop(key, None)
     result.update(connection_values)
     result.update(HERMES_HOME=str(home), HERMES_CWD=str(run), PYTHONDONTWRITEBYTECODE="1")
     return result
@@ -145,8 +155,8 @@ def validate_inputs(args):
         raise ValueError('This node acceptance requires an explicit Loginom target')
     if getattr(args, 'loginom_url', None) is not None:
         validate_loginom_url(args.loginom_url)
-    if sys.platform != "darwin":
-        raise ValueError("This active acceptance iteration is approved only on the current Mac")
+    if sys.platform not in ('darwin', 'linux'):
+        raise ValueError('Acceptance supports macOS and Linux; other platforms require separate validation')
     profile=getattr(args,'model_profile','chatgpt-sol')
     if profile not in ('chatgpt-sol','xiaomi-mimo') or profile=='xiaomi-mimo' and getattr(args,'goal',None)!='data-pipeline':
         raise ValueError('Xiaomi comparison is authorized only for the full data-pipeline goal')
@@ -288,6 +298,7 @@ def execute(args):
         info['series']['pass_criteria']='collapse_node_acceptance.py FULL goal + independent new session; CASE_PASS is insufficient'
     if profile == 'chatgpt-sol':
         info['auth_policy'] = AUTH_POLICY
+        info['effective_model_policy'] = MODEL_POLICY
         with tempfile.TemporaryDirectory(prefix='dock-auth-guard-') as guard_temp:
             guarded_version = subprocess.run([str(args.hermes_python), str(WORK / 'hermes_auth_guard.py'),
                 str(args.hermes_source), str(Path(guard_temp) / 'receipt.json'),
@@ -407,8 +418,11 @@ def execute(args):
         argv = [str(args.hermes), "--provider", provider, "--model", model, "--reasoning", reasoning,
                 "--toolsets", "loginom-dock", "--skills", "loginom", "--usage-file", str(run / "private/usage.json"), "-z", prompt]
         if profile == 'chatgpt-sol':
-            argv = [str(args.hermes_python), str(WORK / 'hermes_auth_guard.py'), str(args.hermes_source),
-                    str(run / 'private/auth-guard.json'), *argv[1:]]
+            argv = [str(args.hermes_python), str(WORK / 'hermes_runtime_guard.py'), str(args.hermes_source),
+                    str(run / 'private/auth-guard.json'), str(run / 'private/model-policy.json'),
+                    str(run / 'private/usage.json'), 'chat', '--provider', provider, '--model', model,
+                    '--reasoning', reasoning, '--max-turns', str(args.max_turns),
+                    '--toolsets', 'loginom-dock', '--skills', 'loginom', '-q', prompt]
         child = subprocess.Popen(argv, cwd=run, env=env, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, start_new_session=True)
         started = True
         status = "FAILED_MODEL_OR_EXPORT"
@@ -435,6 +449,14 @@ def execute(args):
                                 "usage": {key: usage.get(key) for key in USAGE_KEYS}},
                     "tools": tool_results, "calls": calls,
                     "events": exported_events(dock_home, secrets)}
+        if profile == 'chatgpt-sol':
+            policy_path = run / 'private/model-policy.json'
+            policy = json.loads(policy_path.read_text()) if policy_path.exists() else {}
+            evidence['effective_model_policy'] = policy
+            write(run / 'model-policy.json', policy)
+            if (policy.get('constructor_verified') is not True or policy.get('blocked') is not False
+                    or not policy.get('wire_requests_verified', 0)):
+                raise ValueError('Effective Hermes model policy was not verified')
         receipt = dock_home / "fault-receipt.json"
         if goal_id in rc_combined_goal.GOALS:
             evidence['package_cleanup'] = []

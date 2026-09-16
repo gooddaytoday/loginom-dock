@@ -14,6 +14,7 @@ import {closePreparedWizard} from './node-wizard-close.mjs';
 import {openPreparedWizard} from './node-wizard-open.mjs';
 import {textImportConfigurationReadback} from './text-import-readback.mjs';
 import {textImportStepBudget} from './text-import-limits.mjs';
+import {textImportParametersSchema} from './node-api.mjs';
 
 const requireValue=(v,m)=>{if(!v)throw new Error(m);};
 const one=(xs,m)=>{requireValue(xs.length===1,m);return xs[0];};
@@ -97,6 +98,7 @@ export function bindConfiguredOutputColumns(configured,actual,native) {
 // catalog until execution, wide mapping and independent acceptance are complete.
 export function createTextImportNodeSupport({targetOrigin,targetBuild}) {
   const nodeApplyHandlers=new Map([['imports.text',{revision:'text-import-output-v2',modes:['delimited'],
+    parameter_schema:textImportParametersSchema,
     configurationReadback:textImportConfigurationReadback,
     validate:validateTextImportNodeParameters,
     configure:(ctx,p,drivers)=>drivers.configureTextImport(ctx,p)}]]);

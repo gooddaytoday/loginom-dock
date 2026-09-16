@@ -4,7 +4,65 @@ import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 import { fileURLToPath } from 'node:url';
 import { createRedactor } from '../lib/redact.mjs';
-import { actionReply } from '../lib/bridge.mjs';
+import { actionReply, browserProcessEnvironment } from '../lib/bridge.mjs';
+import { getDefaultEnvironment, StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js';
+
+const desktopEnvironment = { DISPLAY: ':98', XAUTHORITY: '/unit/Xauthority',
+  XDG_RUNTIME_DIR: '/unit/runtime', WAYLAND_DISPLAY: 'wayland-test',
+  XDG_SESSION_TYPE: 'wayland', XDG_CURRENT_DESKTOP: 'ubuntu:GNOME' };
+
+test('Linux browser receives only desktop settings in addition to the SDK environment', () => {
+  const environment = { ...desktopEnvironment, DOCK_TEST_SECRET: 'private',
+    NODE_OPTIONS: '--require=/untrusted.js', LD_PRELOAD: '/untrusted.so',
+    PLAYWRIGHT_BROWSERS_PATH: '/untrusted/browser' };
+  assert.deepEqual(browserProcessEnvironment('/pinned/browser', { platform: 'linux', environment }),
+    { ...getDefaultEnvironment(), ...desktopEnvironment, PLAYWRIGHT_BROWSERS_PATH: '/pinned/browser' });
+  assert.equal(environment.PLAYWRIGHT_BROWSERS_PATH, '/untrusted/browser');
+});
+
+test('SDK subprocess retains native Wayland selection without DISPLAY and omits unrelated environment', async () => {
+  const environment = { ...desktopEnvironment, DOCK_TEST_SECRET: 'private' };
+  delete environment.DISPLAY;
+  const keys = [...Object.keys(desktopEnvironment), 'PLAYWRIGHT_BROWSERS_PATH', 'DOCK_TEST_SECRET'];
+  const code = `process.stdout.write(JSON.stringify({jsonrpc:'2.0',method:'environment',params:
+    Object.fromEntries(${JSON.stringify(keys)}.map(key=>[key,process.env[key]??null]))})+'\\n')`;
+  const transport = new StdioClientTransport({ command: process.execPath, args: ['-e', code],
+    env: browserProcessEnvironment('/pinned/browser', { platform: 'linux', environment }), stderr: 'pipe' });
+  let timer;
+  try {
+    const received = new Promise((resolve, reject) => {
+      transport.onmessage = resolve; transport.onerror = reject;
+      timer = setTimeout(() => reject(Error('Environment probe timed out')), 5000);
+    });
+    await transport.start();
+    const message = await received;
+    assert.equal(message.method, 'environment');
+    assert.deepEqual(message.params, { ...desktopEnvironment, DISPLAY: null,
+      PLAYWRIGHT_BROWSERS_PATH: '/pinned/browser', DOCK_TEST_SECRET: null });
+  } finally { clearTimeout(timer); await transport.close(); }
+});
+
+for (const platform of ['darwin', 'win32']) {
+  test(`${platform} browser environment is identical to the pre-fix environment`, () => {
+    // Any accidental read of Linux settings on another platform fails the test.
+    const environment = new Proxy(desktopEnvironment, { get() { throw Error('Unexpected desktop environment access'); } });
+    assert.deepEqual(browserProcessEnvironment('/pinned/browser', { platform, environment }),
+      { ...getDefaultEnvironment(), PLAYWRIGHT_BROWSERS_PATH: '/pinned/browser' });
+  });
+}
+
+for (const [name, environment] of [
+  ['absent settings', {}],
+  ['empty settings', Object.fromEntries(Object.keys(desktopEnvironment).map(key => [key, '']))],
+  ['shell functions', Object.fromEntries(Object.keys(desktopEnvironment).map(key => [key, '() { echo unsafe; }']))],
+  ['non-string settings', { DISPLAY: undefined, XAUTHORITY: null, XDG_RUNTIME_DIR: 123, WAYLAND_DISPLAY: false,
+    XDG_SESSION_TYPE: false, XDG_CURRENT_DESKTOP: 123 }],
+]) {
+  test(`Linux browser omits ${name}`, () => {
+    assert.deepEqual(browserProcessEnvironment('/pinned/browser', { platform: 'linux', environment }),
+      { ...getDefaultEnvironment(), PLAYWRIGHT_BROWSERS_PATH: '/pinned/browser' });
+  });
+}
 
 test('observation usage is a separate bounded hint and never changes the authoritative receipt', () => {
   const receipt = { status: 'SUCCEEDED', action_key: 'workspace.observe', operation_id: 'receipt-only',
@@ -52,7 +110,7 @@ test('observation usage is a separate bounded hint and never changes the authori
 // Module mocks are isolated to this child process, so actual SDK and bridge
 // imports used by the other suites retain their original implementations.
 test('bridge keeps application feedback recoverable over the MCP protocol', async () => {
-  const environment = { ...process.env };
+  const environment = { ...process.env, ...desktopEnvironment, DOCK_TEST_SECRET: 'must-not-reach-browser' };
   delete environment.NODE_TEST_CONTEXT;
   let result;
   try {

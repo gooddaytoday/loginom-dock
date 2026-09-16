@@ -15,6 +15,17 @@ test('typed editor text preserves real precision and distinguishes native dateti
  assert.equal(filterInputText('2024-01-02T12:30:01','datetime',',',false),'02.01.2024 12:30:01');
  assert.throws(()=>filterInputText(1.2,'real',null),/separator/);
 });
+test('observed datetime formats preserve day/month identity and all time precision across locales',()=>{
+ const us={day_pos:2,month_pos:1,year_pos:3,date_separator:'/',time_prefix:', ',time_separator:':',millisecond_separator:'.'};
+ const ru={...us,day_pos:1,month_pos:2,date_separator:'.'};
+ for(const time of ['00:30:01.123','12:30:01','23:59:58.987']){
+  assert.equal(filterInputText('2024-02-29T'+time,'datetime','.',true,us),'02/29/2024, '+time);
+  assert.equal(filterInputText('2024-02-29T'+time,'datetime',',',true,ru),'29.02.2024, '+time);
+ }
+ assert.equal(filterInputText('2024-02-29T23:59:58.123','datetime','.',true,{...ru,millisecond_separator:','}),'29.02.2024, 23:59:58,123');
+ for(const patch of [{day_pos:2},{year_pos:'3'},{date_separator:'?'},{time_prefix:'at'},{time_separator:'.'},{millisecond_separator:':'}])
+  assert.throws(()=>filterInputText('2024-02-29T23:59:58.123','datetime','.',true,{...ru,...patch}),/datetime format/);
+});
 test('condition readback rejects wrong operator, value, position field, case and rounded dates',()=>{
  const wanted={field:{kind:'input_field',name:'Text'},type:'string',operator:'contains',value:'Ab',case_sensitive:true};
  const actual={kind:'condition',field:wanted.field,type:'string',operator_code:12,value:'Ab',case_sensitive:true};
@@ -99,4 +110,29 @@ test('field picker reveals distant and nearby off-screen fields without overshoo
 });
 test('field picker refuses stalled scrolling and input schema changes before selection',async()=>{
  for(const [options,error] of [[{noProgress:true},/no progress/],[{changeSchema:true},/schema changed/]]){const c=fieldPickerChannel(options);await assert.rejects(configureFilter(c,c.parameters),error);assert.equal(c.counts().selected,undefined);}
+});
+
+test('ISO native datetime fields preserve local whole seconds and refuse precision they cannot commit',()=>{
+ const format={kind:'iso_local',precision:'second'};
+ assert.equal(filterInputText('2024-01-02T12:30:01.123','datetime','.',false,{kind:'iso_local',precision:'millisecond'}),'2024-01-02T12:30:01.123');
+ for(const value of ['2024-01-02T12:30:01','2024-02-01T23:59:58.000'])
+  assert.equal(filterInputText(value,'datetime','.',false,format),value);
+ assert.throws(()=>filterInputText('2024-01-02T12:30:01.123','datetime','.',false,format),/whole seconds/);
+});
+test('fractional range edits with unknown data kind fail before deleting existing conditions',async()=>{
+ const baseline={verified:true,input_fields:[{name:'When',type:'datetime'}],rows:[{kind:'condition',record_id:'existing'}],dialogs:[],editor:null};
+ let edits=0;
+ const channel={observe:async()=>({wizard:{stage:'row_filter'},node_filter:baseline}),perform:async()=>{edits++;}};
+ for(const [operator,operands] of [['between',{lower:'2024-01-02T12:30:01.123',upper:'2024-02-01T12:30:01'}]] )
+  await assert.rejects(configureFilter(channel,{groups:[[{field:{kind:'input_field',name:'When'},operator,type:'datetime',...operands}]]}),/whole seconds/);
+ assert.equal(edits,0);
+});
+
+test('unsupported continuous scalar milliseconds refuse before changing existing filter conditions',async()=>{
+ for(const data_kind of ['Непрерывный',null,undefined]){
+  let edits=0;const baseline={verified:true,input_fields:[{name:'When',type:'datetime',data_kind}],rows:[{kind:'condition',record_id:'existing'}],dialogs:[],editor:null};
+  const channel={observe:async()=>({wizard:{stage:'row_filter'},node_filter:baseline}),perform:async()=>{edits++;throw Error('Unexpected mutation');}};
+  await assert.rejects(configureFilter(channel,{groups:[[{field:{kind:'input_field',name:'When'},operator:'>',type:'datetime',value:'2024-01-02T12:30:01.123'}]]}),/observed discrete/);
+  assert.equal(edits,0);
+ }
 });

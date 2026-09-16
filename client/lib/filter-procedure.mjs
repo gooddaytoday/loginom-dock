@@ -1,4 +1,4 @@
-import {FILTER_OPERATORS,resolveFilterConditions,filterGroupsFromNative} from './filter-parameters.mjs';
+import {FILTER_OPERATORS,resolveFilterConditions,filterGroupsFromNative,validateFilterConditions} from './filter-parameters.mjs';
 const need=(ok,message)=>{if(!ok)throw Error(message);};
 const same=(a,b)=>JSON.stringify(a)===JSON.stringify(b);
 const sameField=(a,b)=>a?.kind===b?.kind&&(a?.kind==='row_number'||a?.kind==='input_field'&&a.name===b.name);
@@ -14,8 +14,24 @@ export function filterConditionMatches(actual,wanted,code=FILTER_OPERATORS[wante
  if(arity==='list')return actual.values?.length===wanted.values.length&&actual.values.every((v,i)=>literal(v,wanted.values[i],wanted.type));
  return literal(actual.value,wanted.value,wanted.type);
 }
-export function filterInputText(value,type,decimalSeparator='.',datetimeCombo=false){
- if(type==='datetime'){const [d,t]=value.split('T');return d.split('-').reverse().join('.')+(datetimeCombo?', ':' ')+t;}
+export function filterInputText(value,type,decimalSeparator='.',datetimeCombo=false,datetimeFormat){
+ if(type==='datetime'){
+  const [d,t]=value.split('T');
+  if(datetimeFormat?.kind==='iso_local'){
+   need(['second','millisecond'].includes(datetimeFormat.precision)&&(datetimeFormat.precision==='millisecond'||!t.includes('.')||t.endsWith('.000')),'Native datetime property editor supports whole seconds; discrete datetime fields and list editors support milliseconds');
+   return value;
+  }
+  if(datetimeCombo&&datetimeFormat){
+   const f=datetimeFormat;
+   need([f.day_pos,f.month_pos,f.year_pos].sort().every((v,i)=>v===i+1)
+    &&['.','/','-'].includes(f.date_separator)&&[' ', ', ', '\u00a0', ',\u00a0'].includes(f.time_prefix)
+    &&f.time_separator===':'&&['.',','].includes(f.millisecond_separator),'Observed datetime format required');
+   const [year,month,day]=d.split('-'),parts=[];
+   parts[f.year_pos-1]=year;parts[f.month_pos-1]=month;parts[f.day_pos-1]=day;
+   return parts.join(f.date_separator)+f.time_prefix+t.replace('.',f.millisecond_separator);
+  }
+  return d.split('-').reverse().join('.')+(datetimeCombo?', ':' ')+t;
+ }
  if(type==='real'){need(['.',','].includes(decimalSeparator),'Observed numeric separator required');return String(value).replace('.',decimalSeparator);}
  return String(value);
 }
@@ -32,7 +48,15 @@ export async function configureFilter(channel,parameters){
   const groups=filterGroupsFromNative(baseline);
   return {verified:true,cleanup_complete:true,effect_possible:false,baseline,configuration:baseline,groups,preserved:true};
  }
+ validateFilterConditions(parameters);
  const groups=resolveFilterConditions(parameters,baseline.input_fields),expected=[];
+ for(const c of groups.flat())if(c.type==='datetime'){
+  const arity=FILTER_OPERATORS[c.operator]?.arity??1,values=arity===1?[c.value]:arity===2?[c.lower,c.upper]:[];
+  if(values.some(v=>v.length>19&&!v.endsWith('.000'))){
+   const field=baseline.input_fields.find(f=>f.name===c.field.name);
+   need(field?.data_kind==='Дискретный','Datetime scalar/range milliseconds require an observed discrete input field; the continuous native editor supports whole seconds');
+  }
+ }
  need(!baseline.dialogs.length,'Close an existing filter value dialog before replacing conditions');
  const one=(s,predicate,message)=>{const es=s.ui.elements.filter(predicate);need(es.length===1,message);return es[0];};
  const action=async(condition,s,resolve,identity=()=>s.prepared_node_context)=>channel.perform({condition,initialObservation:s,ready,identity,resolve});
@@ -130,7 +154,10 @@ export async function configureFilter(channel,parameters){
     const input=one(s,e=>predicate(e)&&e.allowed_actions.includes('fill'),'Typed filter input unavailable');
     const formats=s.node_filter.numeric_inputs?.filter(f=>f.anchor_tid===input.identity.anchor_tid)??[];
     need(formats.length<=1,'Ambiguous filter input numeric format');
-    return filterInputText(value,wanted.type,formats[0]?.decimal_separator??s.node_filter.decimal_separator,input.identity.anchor_tid?.endsWith(';cbx'));
+    const combo=input.identity.anchor_tid?.endsWith(';cbx');
+    const dates=s.node_filter.datetime_inputs?.filter(f=>f.anchor_tid===input.identity.anchor_tid)??[];
+    if(wanted.type==='datetime')need(dates.length===1,'Unique bound datetime format required');
+    return filterInputText(value,wanted.type,formats[0]?.decimal_separator??s.node_filter.decimal_separator,combo,dates[0]?.format);
    };
    const inputAction=async(value,predicate)=>{
     s=await observe('bound typed filter input',s=>s.ui.elements.some(e=>predicate(e)&&e.allowed_actions.includes('fill')));

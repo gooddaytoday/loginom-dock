@@ -10,7 +10,7 @@ function fixture(){
  const rows=[model(data)],rs=store(rows),controller={FFilterItemsStore:rs,FColumnInfoStore:store(inputs)};
  const grid={$className:'bg.components.filterdata.view.FilterDataPanel',el:{dom:root},Controller:controller,getStore:()=>rs,getView:()=>({getNode:()=>null}),getSelectionModel:()=>({getSelection:()=>[]})};controller.FView=grid;
  const context={document:{querySelectorAll:()=>[root]},Ext:{getCmp:()=>grid},Date};
- return {data,rows,inputs,rs,grid,controller,read:()=>JSON.parse(JSON.stringify(vm.runInNewContext('('+readFilterBrowser.toString()+')("WF")',context)))};
+ return {data,rows,inputs,rs,grid,controller,context,read:()=>JSON.parse(JSON.stringify(vm.runInNewContext('('+readFilterBrowser.toString()+')("WF")',context)))};
 }
 test('filter reads the complete ordered local condition inventory and preserves exact values',()=>{
  const f=fixture();f.rows.push({isModel:true,internalId:'or',data:{IsOperatorRecord:true}});
@@ -57,4 +57,66 @@ test('1000 actual fields plus the native row number option are within the input 
 test('duplicate native row number helpers are rejected',()=>{
  const f=fixture();f.inputs.push({...f.inputs[1],internalId:'second-row-number'});
  assert.equal(f.read().verified,false);
+});
+
+function datetimeEditor(){
+ const f=fixture();f.inputs[0].data.DataType=2;f.data.DataType=2;f.data.CompareValue=new Date(2024,0,2,12,30,1,123);
+ const anchor='WF;WizrdMCF;FilterDataWizard;FilterDataPanel;VariantPropEdit;ValueContainer;cbx';
+ const el={getAttribute:()=> 'date-input',closest:()=>({getAttribute:()=>anchor})};
+ const component={$className:'Ext.form.field.ComboBox',inputEl:{dom:el}};
+ const dom={getAttribute:()=> 'editor',querySelectorAll:()=>[el]};
+ f.grid.editingPlugin={editing:true,context:{record:f.rows[0],grid:f.grid,store:f.rs,field:'CompareValue'},activeEditor:{el:{dom}}};
+ const parser={dayPos:2,monthPos:1,yearPos:3,dateSeparator:'/',timePrefix:', ',timeSeparator:':',mSecSeparator:'.'};
+ f.context.Ext.getCmp=id=>id==='grid'?f.grid:component;
+ f.context.bg={GetParserConfigForLocale:()=>parser};
+ return {...f,component,parser,anchor};
+}
+test('datetime combo format is bound to its native input and cached parser, independent of UI language',()=>{
+ const f=datetimeEditor();const read=f.read();assert.equal(read.verified,true);
+ assert.deepEqual(read.datetime_inputs,[{anchor_tid:f.anchor,format:{day_pos:2,month_pos:1,year_pos:3,date_separator:'/',time_prefix:', ',time_separator:':',millisecond_separator:'.'}}]);
+ Object.assign(f.parser,{dayPos:1,monthPos:2,dateSeparator:'.'});
+ assert.equal(f.read().datetime_inputs[0].format.day_pos,1);
+ assert.equal(f.read().rows[0].value,'2024-01-02T12:30:01.123');
+});
+test('datetime input observation rejects malformed parser metadata and never binds a foreign input',()=>{
+ for(const mutate of [f=>delete f.context.bg,f=>f.parser.dayPos=1,f=>f.parser.monthPos='1',
+  f=>f.parser.dateSeparator='unknown',f=>f.parser.timePrefix='at',f=>f.parser.timeSeparator='.',f=>f.parser.mSecSeparator=':']){
+  const f=datetimeEditor();mutate(f);assert.equal(f.read().verified,false);
+ }
+ for(const mutate of [f=>f.component.inputEl.dom={},f=>f.component.$className='Other',f=>f.grid.editingPlugin.editing=false]){
+  const f=datetimeEditor();mutate(f);const read=f.read();assert.equal(read.verified,true);assert.deepEqual(read.datetime_inputs,[]);
+ }
+});
+
+test('native datetime fields bind the ISO parser to the exact input and reject absent or stale alternate formats',()=>{
+ const make=()=>{
+  const f=datetimeEditor(),el=f.component.inputEl.dom,anchor=f.anchor.replace(/;cbx$/,';datetimefield');
+  el.closest=()=>({getAttribute:()=>anchor});
+  Object.assign(f.component,{$className:'Ext.ux.DateTimeField',altFormats:'m/d/Y H:i:s|c'});
+  return {...f,anchor};
+ };
+ const f=make();assert.deepEqual(f.read().datetime_inputs,[{anchor_tid:f.anchor,format:{kind:'iso_local',precision:'second'}}]);
+ for(const mutate of [f=>f.component.altFormats='m/d/Y H:i:s',f=>f.component.altFormatsArray=['m/d/Y'],f=>f.component.altFormatsArray='c']){
+  const f=make();mutate(f);assert.equal(f.read().reason,'filter_datetime_iso_parser');
+ }
+ const other=make();other.component.inputEl.dom={};assert.deepEqual(other.read().datetime_inputs,[]);
+});
+test('native datetime list editor preserves millisecond capability only inside its owned list dialog',()=>{
+ const f=datetimeEditor(),el=f.component.inputEl.dom;
+ const tid='WF;WizrdMCF;ModalWindow_ValueListEditor',anchor=tid+';ValueListEditor;grdCheckList;tbl;celleditor;VariantFieldEditor;datetimefield';
+ el.closest=()=>({getAttribute:()=>anchor});Object.assign(f.component,{$className:'Ext.ux.DateTimeField',altFormats:'m/d/Y|c'});
+ const dom={checkVisibility:()=>true,getAttribute:()=>tid,contains:()=>true,querySelectorAll:()=>[el]};
+ const ed={FFilterRecord:f.rows[0],FView:{el:{dom:{}}}};
+ f.controller.FValueListEditor=ed;f.controller.FValueListWindow={FView:{el:{dom}},FModalWindowContent:ed};
+ f.grid.editingPlugin.editing=false;
+ const original=f.context.document.querySelectorAll;
+ f.context.document.querySelectorAll=selector=>selector.includes('ModalWindow_ValueListEditor')?[dom]:original(selector);
+ assert.deepEqual(f.read().datetime_inputs,[{anchor_tid:anchor,format:{kind:'iso_local',precision:'millisecond'}}]);
+ ed.FFilterRecord={};assert.equal(f.read().reason,'filter_dialog_owner');
+});
+
+test('filter input data kind comes from the bound native column metadata',()=>{
+ const f=fixture();f.inputs[0].data.DataKind=1;assert.equal(f.read().input_fields[0].data_kind,'Непрерывный');
+ f.inputs[0].data.DataKind=2;assert.equal(f.read().input_fields[0].data_kind,'Дискретный');
+ delete f.inputs[0].data.DataKind;assert.equal(f.read().input_fields[0].data_kind,null);
 });

@@ -19,6 +19,7 @@ from pathlib import Path
 GOAL = Path(__file__).parent / "goals/basic-graph.txt"
 from evidence import PREFIX, LOCAL_TOOLS, KNOWLEDGE_TOOLS
 from hermes_auth_guard import POLICY as AUTH_POLICY
+from hermes_runtime_guard import POLICY as MODEL_POLICY
 TOOLS = LOCAL_TOOLS | KNOWLEDGE_TOOLS
 MUTATIONS = {PREFIX + name for name in ("dock_action_run", "dock_ui_action", "dock_operation_recover", "dock_artifact_upload", "dock_artifact_verify")}
 EXPECTED = {
@@ -41,6 +42,14 @@ def approved_model(request,evidence):
     elif profile=='xiaomi-mimo' and request.get('goal_id')=='data-pipeline':expected=('xiaomi','mimo-v2.5')
     else:return False
     process=evidence.get('process',{});usage=process.get('usage',{})
+    if 'effective_model_policy' in request:
+        policy=evidence.get('effective_model_policy',{})
+        expected_policy={'provider':expected[0],'model':expected[1],'reasoning_effort':reasoning,
+                         'max_turns':request.get('budget',{}).get('max_turns')}
+        if (request['effective_model_policy']!=MODEL_POLICY or policy.get('policy')!=MODEL_POLICY
+                or policy.get('expected')!=expected_policy or policy.get('constructor_verified') is not True
+                or policy.get('blocked') is not False or not isinstance(policy.get('wire_requests_verified'),int)
+                or policy['wire_requests_verified']<1):return False
     return (process.get('returncode')==0 and process.get('timed_out') is False and (request.get('provider'),request.get('model'))==expected
             and (usage.get('provider'),usage.get('model'))==expected
             and request.get('reasoning_effort')==evidence.get('reasoning_effort')==reasoning)
