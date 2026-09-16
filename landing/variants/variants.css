@@ -1,4 +1,4 @@
-/* Local design studies; the original landing and its release stay intact. */
+/* Shared composition for the four hero scenes and their fixed previews. */
 .data-flow { width: 68%; height: 108%; right: -3%; top: -4%; }
 .data-flow-canvas, .data-flow-fallback { mask-image: linear-gradient(to right, transparent, #000 13%); }
 .flow-caption { top: 10%; left: 27%; font-size: 9px; color: #c7b0a7; letter-spacing: .19em; }

@@ -15,8 +15,9 @@
   <link rel="preload" href="/assets/SourceSansPro-Regular.woff2" as="font" type="font/woff2" crossorigin>
   <link rel="stylesheet" href="/styles.css">
   <link rel="stylesheet" href="/hero.css">
+  <link rel="stylesheet" href="/variants/variants.css">
   <script type="module" src="/app.js"></script>
-  <script type="module" src="/hero.mjs"></script>
+  <script type="module" src="/hero-cycle.mjs"></script>
 </head>
 <body>
 <a class="skip-link" href="#main">Перейти к содержимому</a>
@@ -40,8 +41,8 @@
       <p class="hero-agents">Для Codex и Hermes <span aria-hidden="true">/</span> В вашем браузере</p>
     </div>
     <div class="data-flow" data-flow>
-      <p class="sr-only">Пример workflow: данные о продажах и справочник объединяются, проходят расчёт и разделяются на результаты по товарам и регионам.</p>
-      <img class="data-flow-fallback" src="/assets/data-flow.svg" alt="" width="900" height="800" aria-hidden="true">
+      <p class="sr-only">Визуализация потока данных: входящие данные сходятся, преобразуются и расходятся по направлениям результата.</p>
+      <img class="data-flow-fallback" src="/variants/clouds-poster.jpg" alt="" width="1280" height="720" aria-hidden="true">
       <canvas class="data-flow-canvas" aria-hidden="true"></canvas>
       <div class="flow-caption" aria-hidden="true"><span class="flow-cross">+</span> ДАННЫЕ → СЦЕНАРИЙ → РЕЗУЛЬТАТ</div>
       <div class="flow-controls" hidden>

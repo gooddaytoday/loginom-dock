@@ -7,15 +7,16 @@ import { installation } from './instructions.mjs';
 
 const root = dirname(fileURLToPath(import.meta.url));
 const variants = [
+  { key: 'cycle', name: 'Лендинг с последовательной сменой потоков', port: 4173 },
   { key: 'clouds', number: '01', name: 'Скопления данных', port: 4174 },
   { key: 'glyphs', number: '02', name: 'Знаки из частиц', port: 4175 },
   { key: 'ribbons', number: '03', name: 'Световые русла', port: 4176 },
   { key: 'voids', number: '04', name: 'Пустоты в потоке', port: 4177 },
 ];
-// An optional key starts one additional study without restarting the others.
+// An optional key starts one preview without restarting the others.
 const selectedKey = process.argv[2];
 if (process.argv.length > 3 || (selectedKey && !variants.some(variant => variant.key === selectedKey))) {
-  throw new Error('Использование: node landing/preview-variants.mjs [clouds|glyphs|ribbons|voids]');
+  throw new Error('Использование: node landing/preview-variants.mjs [cycle|clouds|glyphs|ribbons|voids]');
 }
 const previews = selectedKey ? variants.filter(variant => variant.key === selectedKey) : variants;
 const mime = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript', '.mjs': 'text/javascript',
@@ -43,20 +44,20 @@ const escape = text => text.replaceAll('&', '&amp;').replaceAll('"', '&quot;').r
 
 async function page(variant, release, artOnly, staticOnly) {
   let html = await readFile(resolve(root, 'index.html'), 'utf8');
-  html = html.replace('<title>Loginom Dock — установка и работа с Codex и Hermes</title>',
-    `<title>${variant.number} · ${variant.name} — Loginom Dock</title>`);
-  html = html.replace('<body>', `<body data-variant="${variant.key}"${artOnly ? ' class="variant-art"' : ''}>`);
-  html = html.replace('<link rel="stylesheet" href="/hero.css">', '<link rel="stylesheet" href="/hero.css"><link rel="stylesheet" href="/variants/variants.css">');
-  html = html.replace('src="/assets/data-flow.svg"', `src="/variants/${variant.key}-poster.jpg"`);
-  html = html.replace('ДАННЫЕ → СЦЕНАРИЙ → РЕЗУЛЬТАТ', `${variant.number} / ${variant.name.toUpperCase()}`);
-  html = html.replace('Пример workflow: данные о продажах и справочник объединяются, проходят расчёт и разделяются на результаты по товарам и регионам.',
-    'Визуализация потока данных: входящие данные сходятся, преобразуются и расходятся по направлениям результата.');
+  if (variant.key !== 'cycle') {
+    html = html.replace('<title>Loginom Dock — установка и работа с Codex и Hermes</title>',
+      `<title>${variant.number} · ${variant.name} — Loginom Dock</title>`);
+    html = html.replace('<body>', `<body data-variant="${variant.key}">`);
+    html = html.replace('src="/variants/clouds-poster.jpg"', `src="/variants/${variant.key}-poster.jpg"`);
+    html = html.replace('ДАННЫЕ → СЦЕНАРИЙ → РЕЗУЛЬТАТ', `${variant.number} / ${variant.name.toUpperCase()}`);
+  }
   if (artOnly) {
+    html = html.replace(/<body([^>]*)>/, '<body$1 class="variant-art">');
     const stage = html.slice(html.indexOf('    <div class="data-flow"'), html.indexOf('    <div class="hero-foot'));
     html = `${html.slice(0, html.indexOf('<a class="skip-link"'))}${stage}</body></html>`;
     html = html.replace('<script type="module" src="/app.js"></script>', '');
   }
-  if (staticOnly) html = html.replace('<script type="module" src="/hero.mjs"></script>', '');
+  if (staticOnly) html = html.replace('<script type="module" src="/hero-cycle.mjs"></script>', '');
   const values = tokens(release);
   return html.replace(/\{\{([A-Z_]+)\}\}/g, (_, key) => {
     if (!(key in values)) throw new Error(`Unknown template token: ${key}`);
@@ -80,7 +81,7 @@ for (const variant of previews) {
       } else if (path === '/release.js') {
         body = `export default ${JSON.stringify(await metadata())};`;
         type = mime['.js'];
-      } else if (path === '/hero.mjs') {
+      } else if (path === '/hero-cycle.mjs' && variant.key !== 'cycle') {
         body = `import {mountVariant} from '/variants/engine.mjs'; import {createScene} from '/variants/${variant.key}.mjs'; mountVariant(createScene);`;
         type = mime['.mjs'];
       } else {
@@ -94,5 +95,5 @@ for (const variant of previews) {
     }
   });
   server.on('error', error => { console.error(`${variant.port}: ${error.message}`); process.exitCode = 1; });
-  server.listen(variant.port, '127.0.0.1', () => console.log(`${variant.number} ${variant.name}: http://127.0.0.1:${variant.port}/`));
+  server.listen(variant.port, '127.0.0.1', () => console.log(`${variant.number ? `${variant.number} ` : ''}${variant.name}: http://127.0.0.1:${variant.port}/`));
 }
