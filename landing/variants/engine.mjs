@@ -1,7 +1,8 @@
-// Shared lifecycle only. Each preview supplies an independent Canvas scene.
+import { createFlowInteraction } from '../flow-interaction.mjs';
+
+// Shared lifecycle and local cursor field; each preview supplies its own scene.
 const FRAME_INTERVAL = 1000 / 30;
 const APPEARANCE_SECONDS = 2.6;
-const clamp = value => Math.max(-1, Math.min(1, value));
 
 export function mountVariant(createScene, root = document.querySelector('[data-flow]'), win = window, doc = document) {
   if (!root) return () => {};
@@ -11,7 +12,7 @@ export function mountVariant(createScene, root = document.querySelector('[data-f
   let width = 0, height = 0, dpr = 1;
   let raf = null, lastTick = null, lastDraw = null, time = 0, entrance = 0;
   let visible = false, paused = false, disposed = false;
-  let pointerX = 0, pointerY = 0, smoothX = 0, smoothY = 0;
+  const interaction = createFlowInteraction();
 
   function stop() {
     if (raf !== null) win.cancelAnimationFrame(raf);
@@ -21,6 +22,7 @@ export function mountVariant(createScene, root = document.querySelector('[data-f
   function dispose() {
     if (disposed) return;
     disposed = true;
+    interaction.reset();
     stop();
     for (const cleanup of cleanups.splice(0).reverse()) cleanup();
     if (controls) controls.hidden = true;
@@ -61,7 +63,7 @@ export function mountVariant(createScene, root = document.querySelector('[data-f
         width, height,
         time: reducedMotion ? 12 : time,
         progress: reducedMotion ? 1 : 1 - (1 - progress) ** 3,
-        pointer: { x: reducedMotion ? 0 : smoothX, y: reducedMotion ? 0 : smoothY },
+        interaction: reducedMotion ? null : interaction,
         reducedMotion,
         detail: width < 600 ? .6 : 1,
       });
@@ -79,9 +81,7 @@ export function mountVariant(createScene, root = document.querySelector('[data-f
     lastTick = now;
     time += delta;
     entrance += delta;
-    const smoothing = 1 - Math.exp(-delta * 6);
-    smoothX += (pointerX - smoothX) * smoothing;
-    smoothY += (pointerY - smoothY) * smoothing;
+    interaction.step(delta);
     if (lastDraw === null || now - lastDraw >= FRAME_INTERVAL - .0001) {
       lastDraw = now;
       draw();
@@ -100,6 +100,7 @@ export function mountVariant(createScene, root = document.querySelector('[data-f
       const rect = root.getBoundingClientRect();
       width = Math.max(0, rect.width);
       height = Math.max(0, rect.height);
+      interaction.resize(width, height);
       dpr = Math.max(1, Math.min(win.devicePixelRatio || 1, 1.5));
       canvas.width = Math.max(1, Math.round(width * dpr));
       canvas.height = Math.max(1, Math.round(height * dpr));
@@ -111,6 +112,7 @@ export function mountVariant(createScene, root = document.querySelector('[data-f
   function onPause() {
     if (disposed || motion.matches) return;
     paused = !paused;
+    if (!paused) interaction.reset();
     syncControls();
     schedule();
   }
@@ -118,7 +120,7 @@ export function mountVariant(createScene, root = document.querySelector('[data-f
   function onReplay() {
     if (disposed || motion.matches) return;
     time = entrance = 0;
-    pointerX = pointerY = smoothX = smoothY = 0;
+    interaction.reset();
     paused = false;
     stop();
     syncControls();
@@ -130,22 +132,26 @@ export function mountVariant(createScene, root = document.querySelector('[data-f
     if (disposed) return;
     // Avoid replaying the entrance when returning from an already complete still.
     if (!motion.matches) entrance = APPEARANCE_SECONDS;
-    pointerX = pointerY = smoothX = smoothY = 0;
+    interaction.reset();
     syncControls();
     draw();
     schedule();
   }
 
   function onPointer(event) {
-    if (!finePointer.matches || !canAnimate()) return;
+    if (event.pointerType === 'touch' || !finePointer.matches || !canAnimate()) return;
     const rect = root.getBoundingClientRect();
-    pointerX = clamp((event.clientX - rect.left) / width * 2 - 1);
-    pointerY = clamp((event.clientY - rect.top) / height * 2 - 1);
+    interaction.move(event.clientX - rect.left, event.clientY - rect.top);
   }
 
-  function onPointerLeave() { pointerX = pointerY = 0; }
+  function onPointerLeave() { interaction.release(); }
+  function onPointerCancel() { interaction.reset(); }
+  function onVisibilityChange() {
+    if (doc.hidden) interaction.reset();
+    schedule();
+  }
   function onPointerChange() {
-    if (!finePointer.matches) pointerX = pointerY = smoothX = smoothY = 0;
+    if (!finePointer.matches) interaction.reset();
   }
 
   try {
@@ -168,7 +174,9 @@ export function mountVariant(createScene, root = document.querySelector('[data-f
     listen(replay, 'click', onReplay);
     listen(root, 'pointermove', onPointer, { passive: true });
     listen(root, 'pointerleave', onPointerLeave);
-    listen(doc, 'visibilitychange', schedule);
+    listen(root, 'pointercancel', onPointerCancel);
+    listen(win, 'blur', onPointerCancel);
+    listen(doc, 'visibilitychange', onVisibilityChange);
     listen(motion, 'change', onMotionChange);
     listen(finePointer, 'change', onPointerChange);
 
@@ -184,6 +192,7 @@ export function mountVariant(createScene, root = document.querySelector('[data-f
         const entry = entries.find(item => !item.target || item.target === root);
         if (!entry) return;
         visible = entry.isIntersecting;
+        if (!visible) interaction.reset();
         schedule();
       }, { threshold: 0 });
       cleanups.push(() => observer.disconnect());
@@ -193,6 +202,7 @@ export function mountVariant(createScene, root = document.querySelector('[data-f
         if (disposed) return;
         const rect = root.getBoundingClientRect();
         visible = rect.top < win.innerHeight && rect.top + rect.height > 0;
+        if (!visible) interaction.reset();
         schedule();
       };
       listen(win, 'scroll', checkVisibility, { passive: true });

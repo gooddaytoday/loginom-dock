@@ -1,4 +1,6 @@
 // A small, local Canvas renderer. No WebGL, media downloads or runtime dependencies.
+import { createFlowInteraction } from './flow-interaction.mjs';
+
 const TAU = Math.PI * 2;
 const COLORS = ['#e89a73', '#d66d60', '#ffe0b1', '#84bfc0'];
 
@@ -32,10 +34,10 @@ export function flowPoint(edge, progress, lane = 0) {
   ];
 }
 
-export function workflowProjection(width, height, tiltX = 0, tiltY = 0) {
+export function workflowProjection(width, height) {
   const scale = Math.min(width * (width < 550 ? .16 : .165), height * .29);
-  // A bounded camera tilt preserves the reading direction at every pointer position.
-  const rx = .3 + tiltY * .12, ry = -.16 + tiltX * .16, rz = -.24;
+  // The camera is fixed. Hover only bends the nearby flow after projection.
+  const rx = .3, ry = -.16, rz = -.24;
   const sx = Math.sin(rx), cx = Math.cos(rx), sy = Math.sin(ry), cy = Math.cos(ry);
   const sz = Math.sin(rz), cz = Math.cos(rz);
   return ([x, y, z]) => {
@@ -87,7 +89,7 @@ export function mountDataFlow(root, win = window, doc = document) {
   let width = 0, height = 0, dpr = 1;
   let frame = null, lastTime = null, elapsed = 0, entrance = 0;
   let visible = false, paused = false, disposed = false;
-  let pointerX = 0, pointerY = 0, tiltX = 0, tiltY = 0;
+  const interaction = createFlowInteraction();
 
   function syncControls() {
     // Respect the OS preference throughout the visit, including changes while open.
@@ -107,7 +109,18 @@ export function mountDataFlow(root, win = window, doc = document) {
     const t = staticScene ? 8 : elapsed;
     const progress = staticScene ? 1 : Math.min(1, entrance / 3.2);
     const assembled = 1 - (1 - progress) ** 3;
-    const project = workflowProjection(width, height, staticScene ? 0 : tiltX, staticScene ? 0 : tiltY);
+    const project = workflowProjection(width, height);
+    const projectFlow = (position, phase) => {
+      const point = project(position);
+      if (staticScene) return point;
+      const offset = interaction.sample(point[0], point[1]);
+      // The current stays attached to the stationary input/output ports.
+      const end = Math.min(1, phase * 7, (1 - phase) * 7);
+      const tether = end * end * (3 - 2 * end);
+      point[0] += offset.x * tether;
+      point[1] += offset.y * tether;
+      return point;
+    };
     const scale = project([0, 0, 0])[4];
     const centerX = width * .5, centerY = height * .48;
     ctx.globalCompositeOperation = 'source-over';
@@ -130,7 +143,7 @@ export function mountDataFlow(root, win = window, doc = document) {
       for (let strand = 0; strand < 16; strand++) {
         ctx.beginPath();
         for (let j = 0; j <= 70; j++) {
-          const [x, y] = project(flowPoint(edge, j / 70, strand / 16 * TAU));
+          const [x, y] = projectFlow(flowPoint(edge, j / 70, strand / 16 * TAU), j / 70);
           if (j === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
         }
         ctx.strokeStyle = edge[0] < 2 ? '#729d9b' : '#d89970';
@@ -147,7 +160,7 @@ export function mountDataFlow(root, win = window, doc = document) {
       const phase = (p.phase + t * (.115 + p.light * .035)) % 1;
       const target = flowPoint(p.edge, phase, p.v);
       const position = target.map((value, axis) => value * assembled + p.scatter[axis] * (1 - assembled));
-      const [x, y, depth] = project(position);
+      const [x, y, depth] = projectFlow(position, phase);
       // Fade at both ends: recycling never draws a backwards jump across an edge.
       const envelope = Math.min(1, phase * 14, (1 - phase) * 14);
       const brightness = envelope * (.45 + p.light * .5);
@@ -157,8 +170,9 @@ export function mountDataFlow(root, win = window, doc = document) {
       const size = p.size * depth;
       ctx.fillRect(x, y, size, size);
       if (p.light > .91) {
-        const tailTarget = flowPoint(p.edge, Math.max(0, phase - .035), p.v);
-        const tail = project(tailTarget.map((value, axis) => value * assembled + p.scatter[axis] * (1 - assembled)));
+        const tailPhase = Math.max(0, phase - .035);
+        const tailTarget = flowPoint(p.edge, tailPhase, p.v);
+        const tail = projectFlow(tailTarget.map((value, axis) => value * assembled + p.scatter[axis] * (1 - assembled)), tailPhase);
         ctx.beginPath();
         ctx.moveTo(x, y);
         ctx.lineTo(tail[0], tail[1]);
@@ -173,7 +187,7 @@ export function mountDataFlow(root, win = window, doc = document) {
 
     for (const edge of WORKFLOW_EDGES) {
       // Arrowheads keep the workflow direction visible even with motion disabled.
-      const a = project(flowPoint(edge, .66)), b = project(flowPoint(edge, .7));
+      const a = projectFlow(flowPoint(edge, .66), .66), b = projectFlow(flowPoint(edge, .7), .7);
       const angle = Math.atan2(b[1] - a[1], b[0] - a[0]);
       const arrow = Math.max(5, scale * .075);
       ctx.beginPath();
@@ -315,8 +329,7 @@ export function mountDataFlow(root, win = window, doc = document) {
     lastTime = now;
     elapsed += delta;
     entrance += delta;
-    tiltX += (pointerX - tiltX) * .045;
-    tiltY += (pointerY - tiltY) * .045;
+    interaction.step(delta);
     draw();
     frame = win.requestAnimationFrame(tick);
   }
@@ -328,36 +341,49 @@ export function mountDataFlow(root, win = window, doc = document) {
     const rect = root.getBoundingClientRect();
     width = rect.width;
     height = rect.height;
+    interaction.resize(width, height);
     dpr = Math.min(win.devicePixelRatio || 1, 1.5);
     canvas.width = Math.max(1, Math.round(width * dpr));
     canvas.height = Math.max(1, Math.round(height * dpr));
     draw();
   }
-  function onPause() { paused = !paused; syncControls(); schedule(); }
+  function onPause() {
+    paused = !paused;
+    if (!paused) interaction.reset();
+    syncControls();
+    schedule();
+  }
   function onReplay() {
     elapsed = entrance = 0;
     paused = false;
-    pointerX = pointerY = tiltX = tiltY = 0;
+    interaction.reset();
     syncControls();
     draw();
     schedule();
   }
   function onMotionChange() {
+    interaction.reset();
     syncControls();
     if (!motion.matches) entrance = 3.2;
     draw();
     schedule();
   }
   function onPointer(event) {
-    if (!finePointer.matches || !canAnimate()) return;
+    if (event.pointerType === 'touch' || !finePointer.matches || !canAnimate()) return;
     const rect = root.getBoundingClientRect();
-    pointerX = Math.max(-1, Math.min(1, (event.clientX - rect.left) / rect.width * 2 - 1));
-    pointerY = Math.max(-1, Math.min(1, (event.clientY - rect.top) / rect.height * 2 - 1));
+    interaction.move(event.clientX - rect.left, event.clientY - rect.top);
   }
-  function onPointerLeave() { pointerX = pointerY = 0; }
+  function onPointerLeave() { interaction.release(); }
+  function onPointerCancel() { interaction.reset(); }
+  function onPointerChange() { if (!finePointer.matches) interaction.reset(); }
+  function onVisibilityChange() {
+    if (doc.hidden) interaction.reset();
+    schedule();
+  }
   const resizeObserver = new win.ResizeObserver(resize);
   const intersectionObserver = new win.IntersectionObserver(entries => {
     visible = entries[0].isIntersecting;
+    if (!visible) interaction.reset();
     schedule();
   }, { threshold: 0 });
 
@@ -365,8 +391,11 @@ export function mountDataFlow(root, win = window, doc = document) {
   replay.addEventListener('click', onReplay);
   root.addEventListener('pointermove', onPointer, { passive: true });
   root.addEventListener('pointerleave', onPointerLeave);
-  doc.addEventListener('visibilitychange', schedule);
+  root.addEventListener('pointercancel', onPointerCancel);
+  win.addEventListener('blur', onPointerCancel);
+  doc.addEventListener('visibilitychange', onVisibilityChange);
   motion.addEventListener('change', onMotionChange);
+  finePointer.addEventListener('change', onPointerChange);
   resizeObserver.observe(root);
   intersectionObserver.observe(root);
   syncControls();
@@ -374,6 +403,7 @@ export function mountDataFlow(root, win = window, doc = document) {
 
   return () => {
     disposed = true;
+    interaction.reset();
     stop();
     resizeObserver.disconnect();
     intersectionObserver.disconnect();
@@ -381,8 +411,11 @@ export function mountDataFlow(root, win = window, doc = document) {
     replay.removeEventListener('click', onReplay);
     root.removeEventListener('pointermove', onPointer);
     root.removeEventListener('pointerleave', onPointerLeave);
-    doc.removeEventListener('visibilitychange', schedule);
+    root.removeEventListener('pointercancel', onPointerCancel);
+    win.removeEventListener('blur', onPointerCancel);
+    doc.removeEventListener('visibilitychange', onVisibilityChange);
     motion.removeEventListener('change', onMotionChange);
+    finePointer.removeEventListener('change', onPointerChange);
     controls.hidden = true;
   };
 }

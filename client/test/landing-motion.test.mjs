@@ -12,10 +12,16 @@ function scene({ reduced = false, contextAvailable = true } = {}) {
     getAttribute(name) { return this.attributes.get(name); }
     click() { this.dispatchEvent(new Event('click')); }
   }
-  let draws = 0;
+  let draws = 0, points = [], labels = [], rectangles = [];
   const context = new Proxy({}, { get: (_, name) => name === 'createRadialGradient'
     ? () => ({ addColorStop() {} })
-    : () => { if (name === 'clearRect') draws++; }, set: () => true });
+    : (...args) => {
+      if (name === 'clearRect') { draws++; points = []; labels = []; rectangles = []; }
+      else if (name === 'fillRect' && args[2] < 5 && args[3] < 5) {
+        points.push(args.slice(0, 2));
+        rectangles.push(args);
+      } else if (name === 'fillText') labels.push(args);
+    }, set: () => true });
   const canvas = { getContext: () => contextAvailable ? context : null };
   const pause = new Element(), replay = new Element(), controls = new Element();
   controls.hidden = true;
@@ -25,27 +31,33 @@ function scene({ reduced = false, contextAvailable = true } = {}) {
   root.getBoundingClientRect = () => ({ width: 800, height: 600, top: 0, left: 0 });
   const motion = new EventTarget();
   motion.matches = reduced;
+  const pointerMedia = new EventTarget();
+  pointerMedia.matches = true;
   const doc = new EventTarget();
   doc.hidden = false;
   doc.createElement = () => ({ getContext: () => context });
   const callbacks = new Map();
   let nextId = 0, intersection, resize;
-  const win = {
+  const win = Object.assign(new EventTarget(), {
     devicePixelRatio: 3,
-    matchMedia: query => query.includes('reduced-motion') ? motion : { matches: true },
+    matchMedia: query => query.includes('reduced-motion') ? motion : pointerMedia,
     requestAnimationFrame: callback => { callbacks.set(++nextId, callback); return nextId; },
     cancelAnimationFrame: id => callbacks.delete(id),
     ResizeObserver: class { constructor(callback) { resize = callback; } observe() {} disconnect() {} },
     IntersectionObserver: class { constructor(callback) { intersection = callback; } observe() {} disconnect() {} },
-  };
+  });
   const dispose = mountDataFlow(root, win, doc);
   return { root, pause, replay, controls, canvas, dispose,
     get pending() { return callbacks.size; }, get draws() { return draws; },
+    get points() { return points; },
+    get labels() { return labels; },
+    get rectangles() { return rectangles; },
     frame(now) { const pending = [...callbacks.values()]; callbacks.clear(); pending.forEach(callback => callback(now)); },
     visible(value) { intersection([{ isIntersecting: value }]); },
     hidden(value) { doc.hidden = value; doc.dispatchEvent(new Event('visibilitychange')); },
     reduce(value) { motion.matches = value; motion.dispatchEvent(new Event('change')); },
     resize() { resize(); },
+    point(x, y, pointerType = 'mouse') { root.dispatchEvent(Object.assign(new Event('pointermove'), { clientX: x, clientY: y, pointerType })); },
   };
 }
 
@@ -152,13 +164,13 @@ test('workflow has two sources, two reachable results and no directed cycles', (
   assert.equal(visited.size, WORKFLOW_NODES.length, 'every node belongs to the workflow');
 });
 
-test('workflow packets travel forward between ports at centered and extreme camera tilts', () => {
+test('workflow packets travel forward between ports in the fixed projection', () => {
   for (const edge of WORKFLOW_EDGES) {
     const from = WORKFLOW_NODES[edge[0]].position, to = WORKFLOW_NODES[edge[1]].position;
     assert.ok(Math.abs(flowPoint(edge, 0)[0] - from[0] - .29) < 1e-9);
     assert.ok(Math.abs(flowPoint(edge, 1)[0] - to[0] + .29) < 1e-9);
-    for (const tiltX of [-1, 0, 1]) for (const tiltY of [-1, 0, 1]) {
-      const project = workflowProjection(800, 600, tiltX, tiltY);
+    for (const [width, height] of [[800, 600], [450, 600], [1400, 800]]) {
+      const project = workflowProjection(width, height);
       for (const lane of [0, 1.5, 3, 4.5]) {
         let previous = -Infinity;
         for (let i = 0; i <= 100; i++) {
@@ -168,5 +180,53 @@ test('workflow packets travel forward between ports at centered and extreme came
         }
       }
     }
+  }
+});
+
+test('workflow hover moves nearby stream particles without rotating the distant branches or reacting to touch', () => {
+  for (const pointerType of ['mouse', 'touch']) {
+    const before = scene(), after = scene();
+    for (const s of [before, after]) {
+      s.reduce(true);
+      s.reduce(false);
+      s.visible(true);
+      s.frame(0);
+    }
+    for (let i = 1; i <= 8; i++) {
+      after.point(392 + i, 300, pointerType);
+      before.frame(i * 34);
+      after.frame(i * 34);
+    }
+    assert.ok(before.points.length > 1000);
+    assert.equal(after.points.length, before.points.length);
+    assert.equal(before.labels.length, WORKFLOW_NODES.length);
+    assert.deepEqual(after.labels, before.labels, 'all node labels retain their positions');
+    const project = workflowProjection(800, 600);
+    for (const edge of WORKFLOW_EDGES) for (const phase of [0, 1]) {
+      const [px, py] = project(flowPoint(edge, phase));
+      // The lit square at each workflow endpoint stays anchored even when the
+      // adjoining filament is pulled. Match it spatially, without color checks.
+      const candidates = before.rectangles.filter(([x, y, w, h]) =>
+        w >= 2 && h >= 2 && Math.hypot(x + w / 2 - px, y + h / 2 - py) < 1.5);
+      assert.ok(candidates.length > 0, 'endpoint has a rendered port');
+      assert.ok(candidates.some(port => after.rectangles.some(rect =>
+        rect.every((value, i) => Math.abs(value - port[i]) < 1e-9))), 'rendered port remains fixed');
+    }
+    let moved = 0, remote = 0;
+    for (let i = 0; i < before.points.length; i++) {
+      const [x, y] = before.points[i], [nx, ny] = after.points[i];
+      const offset = Math.hypot(nx - x, ny - y);
+      assert.ok(offset <= 30, 'deformation remains subtle');
+      if (offset > .01) moved++;
+      if (Math.hypot(x - 400, y - 300) > 200) {
+        remote++;
+        assert.ok(offset < 1e-9, 'distant geometry has no camera rotation');
+      }
+    }
+    assert.ok(remote > 100);
+    if (pointerType === 'mouse') assert.ok(moved > 20, 'nearby particles follow the mouse');
+    else assert.equal(moved, 0, 'touch input does not activate desktop hover');
+    before.dispose();
+    after.dispose();
   }
 });

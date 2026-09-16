@@ -103,14 +103,20 @@ export function sampleDriftPoint(routeIndex, u, lane, time = 0) {
     + Math.sin(position * 8.4 - time * .36 + spread * 3) * 5];
 }
 
-function trace(ctx, points, start = 0, end = points.length - 1) {
-  let drawing = false;
+function trace(ctx, points, start = 0, end = points.length - 1, bend = null, clearances = null) {
+  let previous = null, previousRaw = null;
   for (let i = start; i <= end; i++) {
-    const point = points[i];
-    if (!point) { drawing = false; continue; }
-    if (!drawing) ctx.moveTo(point[0], point[1]);
+    const raw = points[i];
+    if (!raw) { previous = previousRaw = null; continue; }
+    const point = bend ? bend(raw, clearances[i]) : raw;
+    // The endpoints alone cannot protect a curved/diagonal negative stroke.
+    // Recheck only segments touched by the cursor; cached rest geometry is safe.
+    const crossed = previous && (point !== raw || previous !== previousRaw)
+      && !segmentAvoidsVoids(previous, point, .6);
+    if (!previous || crossed) ctx.moveTo(point[0], point[1]);
     else ctx.lineTo(point[0], point[1]);
-    drawing = true;
+    previous = point;
+    previousRaw = raw;
   }
 }
 
@@ -176,7 +182,10 @@ export function createScene({ createCanvas }) {
         points.push(point);
         previous = point;
       }
-      return { points, lane, phase: rng() * TAU, light: rng() };
+      // Static distances keep the interactive path as inexpensive as the
+      // original cached fibers, even with hundreds of thousands of samples.
+      const clearances = points.map(point => point ? voidDistance(...point) : 0);
+      return { points, clearances, lane, phase: rng() * TAU, light: rng() };
     });
     const particles = Array.from({ length: route.count }, () => ({
       phase: rng(), lane: (rng() + rng() - 1) * .99,
@@ -243,11 +252,32 @@ export function createScene({ createCanvas }) {
     if (!(width > 0 && height > 0)) return;
     const time = frame.reducedMotion ? 12 : frame.time;
     const progress = frame.reducedMotion ? 1 : clamp(frame.progress, 0, 1);
-    const pointer = frame.reducedMotion ? { x: 0, y: 0 } : frame.pointer;
     const scale = Math.min(width / 1000, height / 700) * .96;
+    const interaction = frame.reducedMotion ? null : frame.interaction;
+    const bend = (point, clearance, free = false) => {
+      if (!interaction) return point;
+      const offset = interaction.sample(
+        width * .5 + (point[0] - 500) * scale,
+        height * .49 + (point[1] - 350) * scale,
+      );
+      if (!offset.x && !offset.y) return point;
+      let dx = offset.x / scale * .74, dy = offset.y / scale * .74;
+      if (!free) {
+        const distance = clearance ?? voidDistance(...point);
+        const edge = clamp((distance - 3.1) / 26, 0, 1);
+        const feather = edge * edge * (3 - 2 * edge);
+        // A distance field is 1-Lipschitz: limiting travel below the available
+        // clearance keeps the entire move outside the hole, in any direction.
+        const safe = Math.max(0, distance - 2) * .8;
+        const weight = Math.min(feather, safe / Math.max(.0001, Math.hypot(dx, dy)));
+        dx *= weight;
+        dy *= weight;
+      }
+      return dx || dy ? [point[0] + dx, point[1] + dy] : point;
+    };
     const mobile = (frame.detail ?? 1) < .8;
     ctx.save();
-    ctx.translate(width * .5 + pointer.x * 4 * scale, height * .49 + pointer.y * 4 * scale);
+    ctx.translate(width * .5, height * .49);
     ctx.scale(scale, scale);
     ctx.translate(-500, -350);
     ctx.globalCompositeOperation = 'lighter';
@@ -276,7 +306,7 @@ export function createScene({ createCanvas }) {
         ctx.globalAlpha = progress * route.alpha * shimmer * (.040 + (1 - Math.abs(fiber.lane)) * .072);
         ctx.lineWidth = i % 8 === 0 ? 1.08 : .60;
         ctx.beginPath();
-        trace(ctx, fiber.points);
+        trace(ctx, fiber.points, 0, fiber.points.length - 1, interaction ? bend : null, fiber.clearances);
         ctx.stroke();
         if (i % 9 === 0) {
           const start = Math.floor((time * .026 + fiber.light) % 1 * (fiber.points.length - 1));
@@ -284,16 +314,16 @@ export function createScene({ createCanvas }) {
           ctx.globalAlpha *= 1.2;
           ctx.lineWidth = .80;
           ctx.beginPath();
-          trace(ctx, fiber.points, start, end);
+          trace(ctx, fiber.points, start, end, interaction ? bend : null, fiber.clearances);
           ctx.stroke();
         }
       }
       for (let i = 0; i < route.particles.length; i += mobile ? 2 : 1) {
         const particle = route.particles[i];
         const u = (particle.phase + time * particle.speed) % 1;
-        const point = sampleFlowPoint(route.index, u, particle.lane);
-        const before = sampleFlowPoint(route.index, Math.max(0, u - .004), particle.lane);
-        const after = sampleFlowPoint(route.index, Math.min(1, u + .004), particle.lane);
+        const point = bend(sampleFlowPoint(route.index, u, particle.lane));
+        const before = bend(sampleFlowPoint(route.index, Math.max(0, u - .004), particle.lane));
+        const after = bend(sampleFlowPoint(route.index, Math.min(1, u + .004), particle.lane));
         if (!segmentAvoidsVoids(before, after, 1.6)) continue;
         const fade = Math.min(1, u * 13, (1 - u) * 13);
         const distance = voidDistance(point[0], point[1]);
@@ -325,7 +355,7 @@ export function createScene({ createCanvas }) {
     for (let i = 0; i < drifters.length; i += mobile ? 2 : 1) {
       const particle = drifters[i];
       const u = (particle.phase + time * particle.speed) % 1;
-      const [x, y] = sampleDriftPoint(particle.route, u, particle.lane, time);
+      const [x, y] = bend(sampleDriftPoint(particle.route, u, particle.lane, time), undefined, true);
       const fade = Math.min(1, u * 12, (1 - u) * 12);
       ctx.globalAlpha = progress * fade * (.38 + particle.light * .37);
       ctx.fillStyle = COLORS[particle.color];

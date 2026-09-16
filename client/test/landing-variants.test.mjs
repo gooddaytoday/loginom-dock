@@ -84,8 +84,10 @@ function setup({ reduced = false, fine = true, context = 'available', factory, o
     reduce(value) { motion.matches = value; motion.dispatchEvent(new Event('change')); },
     fine(value) { pointerMedia.matches = value; pointerMedia.dispatchEvent(new Event('change')); },
     resize(values = {}) { rect = { ...rect, ...values }; resize?.(); },
-    point(x, y) { root.dispatchEvent(Object.assign(new Event('pointermove'), { clientX: x, clientY: y })); },
+    point(x, y, pointerType = 'mouse') { root.dispatchEvent(Object.assign(new Event('pointermove'), { clientX: x, clientY: y, pointerType })); },
     leave() { root.dispatchEvent(new Event('pointerleave')); },
+    cancel() { root.dispatchEvent(new Event('pointercancel')); },
+    blur() { win.dispatchEvent(new Event('blur')); },
   };
 }
 
@@ -145,7 +147,7 @@ test('reduced motion renders a complete still with no RAF and follows preference
   assert.equal(s.controls.hidden, true);
   assert.equal(s.frames.at(-1).time, 12);
   assert.equal(s.frames.at(-1).progress, 1);
-  assert.deepEqual(s.frames.at(-1).pointer, { x: 0, y: 0 });
+  assert.equal(s.frames.at(-1).interaction, null);
   assert.equal(s.root.getAttribute('data-rendered'), '');
   s.reduce(false);
   assert.equal(s.controls.hidden, false);
@@ -183,27 +185,100 @@ test('variant caps DPR and animation at 30fps, eases entrance and lowers detail 
   s.dispose();
 });
 
-test('fine pointers are clamped and smoothed; touch preference and reduced motion stay centered', () => {
+const displacement = (s, x = 350, y = 300) => {
+  const point = s.frames.at(-1).interaction?.sample(x, y) ?? { x: 0, y: 0 };
+  return Math.hypot(point.x, point.y);
+};
+
+function excite(s, start = 0, pointerType = 'mouse') {
+  for (let i = 1; i <= 8; i++) {
+    // Client coordinates include the element's left/top offset (20, 10).
+    s.point(412 + i, 310, pointerType);
+    s.frame(start + i * 34);
+  }
+}
+
+test('fine mouse and pen movement attracts nearby particles in element coordinates; touch cannot activate it', () => {
+  for (const pointerType of ['mouse', 'pen', 'touch']) {
+    const s = setup();
+    s.visible(true);
+    s.frame(0);
+    excite(s, 0, pointerType);
+    const offset = s.frames.at(-1).interaction.sample(350, 300);
+    if (pointerType === 'touch') assert.deepEqual(offset, { x: 0, y: 0 });
+    else {
+      assert.ok(offset.x > .5, `${pointerType} attracts toward the cursor`);
+      assert.ok(Math.abs(offset.y) < .01, 'client position is converted to element coordinates');
+      assert.deepEqual(s.frames.at(-1).interaction.sample(20, 20), { x: 0, y: 0 }, 'remote scene does not rotate');
+    }
+    s.dispose();
+  }
+  const s = setup({ fine: false });
+  s.visible(true);
+  s.frame(0);
+  excite(s);
+  assert.equal(displacement(s), 0, 'coarse pointer preference disables attraction');
+  s.fine(true);
+  excite(s, 272);
+  assert.ok(displacement(s) > .5);
+  s.fine(false);
+  assert.equal(displacement(s), 0, 'losing fine-pointer support clears the field');
+  s.dispose();
+});
+
+test('pointerleave releases locally and settles without attracting particles toward the canvas center', () => {
   const s = setup();
   s.visible(true);
   s.frame(0);
-  s.point(10000, -10000);
-  s.frame(34);
-  const initial = s.frames.at(-1).pointer;
-  assert.ok(initial.x > 0 && initial.x < 1);
-  assert.ok(initial.y < 0 && initial.y > -1);
-  s.frame(1000);
-  assert.ok(s.frames.at(-1).pointer.x > initial.x && s.frames.at(-1).pointer.x <= 1);
+  excite(s);
+  const before = displacement(s);
+  assert.ok(before > .5);
   s.leave();
-  s.frame(1100);
-  assert.ok(s.frames.at(-1).pointer.x < .9);
-  s.fine(false);
-  s.point(10000, -10000);
-  s.frame(1200);
-  assert.deepEqual(s.frames.at(-1).pointer, { x: 0, y: 0 });
-  s.reduce(true);
-  assert.deepEqual(s.frames.at(-1).pointer, { x: 0, y: 0 });
+  assert.equal(displacement(s), before, 'leave does not snap the particles');
+  for (let i = 1; i <= 90; i++) s.frame(272 + i * 34);
+  assert.ok(displacement(s) < .25, 'the stream recovers after release');
+  assert.deepEqual(s.frames.at(-1).interaction.sample(20, 20), { x: 0, y: 0 });
   s.dispose();
+});
+
+test('pause freezes the local deformation and pointer input cannot start another animation loop', () => {
+  const s = setup();
+  s.visible(true);
+  s.frame(0);
+  excite(s);
+  const before = displacement(s), count = s.frames.length;
+  s.pause.click();
+  assert.equal(s.pending, 0);
+  s.point(770, 550);
+  s.frame(10000);
+  assert.equal(s.pending, 0);
+  assert.equal(s.frames.length, count);
+  assert.equal(displacement(s), before, 'paused geometry remains unchanged');
+  s.pause.click();
+  assert.equal(s.pending, 1);
+  s.frame(11000);
+  assert.equal(displacement(s), 0, 'resuming starts without a stale cursor');
+  assert.equal(s.frames.at(-1).time, .272, 'resuming does not catch up paused time');
+  s.dispose();
+});
+
+test('cancel, blur, hidden tab, offscreen, replay, resize and reduced motion clear stale attraction', () => {
+  for (const [name, clear] of [
+    ['cancel', s => s.cancel()], ['blur', s => s.blur()],
+    ['hidden tab', s => s.hidden(true)], ['offscreen', s => s.visible(false)],
+    ['replay', s => s.replay.click()], ['resize', s => s.resize({ width: 900 })],
+    ['reduced motion', s => s.reduce(true)],
+  ]) {
+    const s = setup();
+    s.visible(true);
+    s.frame(0);
+    excite(s);
+    assert.ok(displacement(s) > .5, `${name}: field was active before reset`);
+    clear(s);
+    assert.equal(displacement(s), 0, `${name}: no stale displacement remains`);
+    if (name === 'reduced motion') assert.equal(s.frames.at(-1).interaction, null);
+    s.dispose();
+  }
 });
 
 test('disposal removes all subscriptions, cancels animation and ignores queued observer deliveries', () => {

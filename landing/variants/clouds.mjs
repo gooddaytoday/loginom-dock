@@ -92,6 +92,8 @@ export function createScene({ createCanvas }) {
   // Reused frame buffers keep allocation and garbage collection out of animation.
   const pointsX = new Float32Array(COUNT);
   const pointsY = new Float32Array(COUNT);
+  const sourceX = new Float32Array(COUNT);
+  const sourceY = new Float32Array(COUNT);
   const pointsR = new Float32Array(COUNT);
   const pointsA = new Float32Array(COUNT);
   const pointsU = new Float32Array(COUNT);
@@ -110,10 +112,9 @@ export function createScene({ createCanvas }) {
     const scale = Math.min(width / 820, height / 620);
     const centerX = width * .51;
     const centerY = height * .49;
-    const pointerX = reducedMotion ? 0 : (frame.pointer?.x || 0);
-    const pointerY = reducedMotion ? 0 : (frame.pointer?.y || 0);
-    const yaw = -.1 + pointerX * .08;
-    const pitch = .24 + pointerY * .07;
+    const interaction = reducedMotion ? null : frame.interaction;
+    const yaw = -.1;
+    const pitch = .24;
     const sy = Math.sin(yaw), cy = Math.cos(yaw);
     const sp = Math.sin(pitch), cp = Math.cos(pitch);
     const globalFade = .15 + progress * .85;
@@ -192,9 +193,14 @@ export function createScene({ createCanvas }) {
       const cameraZ = y * sp + z * cp;
       const cameraX = x * cy + cameraZ * sy;
       const depth = 1 + (-x * sy + cameraZ * cy) / 1100;
-      pointsX[i] = centerX + cameraX * scale;
+      const screenX = centerX + cameraX * scale;
       // A slight upward slant opens the negative space around the sculpture.
-      pointsY[i] = centerY + (cameraY - x * .07) * scale;
+      const screenY = centerY + (cameraY - x * .07) * scale;
+      sourceX[i] = screenX;
+      sourceY[i] = screenY;
+      const displacement = interaction?.sample(screenX, screenY);
+      pointsX[i] = screenX + (displacement?.x ?? 0);
+      pointsY[i] = screenY + (displacement?.y ?? 0);
       pointsR[i] = p.size * depth * dotScale * (1 + core * .36);
       pointsU[i] = u;
       pointsCore[i] = core;
@@ -254,11 +260,18 @@ export function createScene({ createCanvas }) {
         - 11 * Math.PI * Math.cos(u * Math.PI)
         - 16 * TAU * Math.cos(u * TAU)) / 692 - .07;
       const length = (3.5 + p.light * 4) * scale * progress;
+      let tailX = sourceX[i] - length;
+      let tailY = sourceY[i] - length * slope;
+      if (interaction) {
+        const displacement = interaction.sample(tailX, tailY);
+        tailX += displacement.x;
+        tailY += displacement.y;
+      }
       ctx.globalAlpha = alpha * .43;
       ctx.strokeStyle = p.color < .08 && u < .4 ? PALETTE[5] : PALETTE[3];
       ctx.lineWidth = .6 * dotScale;
       ctx.beginPath();
-      ctx.moveTo(x - length, y - length * slope);
+      ctx.moveTo(tailX, tailY);
       ctx.lineTo(x, y);
       ctx.stroke();
       if ((j % 3 === 0 || pointsCore[i] > .4) && glows[3]) {

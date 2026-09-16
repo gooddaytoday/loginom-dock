@@ -46,16 +46,22 @@ export function createScene({ createCanvas }) {
   }
 
   return {
-    draw(ctx, { width, height, time, progress, pointer, detail }) {
+    draw(ctx, { width, height, time, progress, interaction, reducedMotion, detail }) {
       const scale = Math.min(width * .167, height * .31);
-      const rx = .48 + pointer.y * .16, ry = -.12 + pointer.x * .12, rz = -.2;
+      const rx = .48, ry = -.12, rz = -.2;
       const cx = Math.cos(rx), sx = Math.sin(rx), cy = Math.cos(ry), sy = Math.sin(ry);
       const cz = Math.cos(rz), sz = Math.sin(rz);
       const project = ([x, y, z]) => {
         const yy = y * cx - z * sx, zz = y * sx + z * cx;
         const xx = x * cy + zz * sy, depth = 5.5 / (5.5 + x * sy - zz * cy);
-        return [width * .5 + (xx * cz - yy * sz) * scale * depth,
-          height * .5 + (xx * sz + yy * cz) * scale * depth, depth];
+        let screenX = width * .5 + (xx * cz - yy * sz) * scale * depth;
+        let screenY = height * .5 + (xx * sz + yy * cz) * scale * depth;
+        if (!reducedMotion && interaction) {
+          const displacement = interaction.sample(screenX, screenY);
+          screenX += displacement.x;
+          screenY += displacement.y;
+        }
+        return [screenX, screenY, depth];
       };
       const atmosphere = ctx.createRadialGradient(width * .53, height * .5, 0, width * .53, height * .5, width * .5);
       atmosphere.addColorStop(0, '#b5694315');

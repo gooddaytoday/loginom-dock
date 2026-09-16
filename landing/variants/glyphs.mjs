@@ -169,13 +169,24 @@ export function createScene({ createCanvas }) {
     const motion = !frame.reducedMotion;
     const time = motion ? frame.time : 12;
     const progress = frame.reducedMotion ? 1 : clamp(frame.progress, 0, 1);
-    const pointer = motion ? frame.pointer : { x: 0, y: 0 };
     const scale = Math.min(width / 1000, height / 700) * .96;
+    const interaction = motion ? frame.interaction : null;
+    // The camera stays fixed. Every visible layer samples the same local
+    // displacement in CSS pixels, then returns to the scene's design space.
+    const bend = point => {
+      if (!interaction) return point;
+      const offset = interaction.sample(
+        width * .5 + (point[0] - 500) * scale,
+        height * .49 + (point[1] - 350) * scale,
+      );
+      if (!offset.x && !offset.y) return point;
+      return [point[0] + offset.x / scale, point[1] + offset.y / scale];
+    };
     const detail = frame.detail ?? 1;
     const stride = detail < .8 ? 2 : 1;
     const scatter = (1 - progress) ** 2;
     ctx.save();
-    ctx.translate(width * .5 + pointer.x * 5 * scale, height * .49 + pointer.y * 5 * scale);
+    ctx.translate(width * .5, height * .49);
     ctx.scale(scale, scale);
     ctx.translate(-500, -350);
 
@@ -214,11 +225,11 @@ export function createScene({ createCanvas }) {
           const halfWidth = 1.06 - sheet * .082;
           ctx.beginPath();
           for (let step = 0; step <= steps; step++) {
-            const point = ribbon(route, step / steps, center - halfWidth, time);
+            const point = bend(ribbon(route, step / steps, center - halfWidth, time));
             if (step === 0) ctx.moveTo(...point); else ctx.lineTo(...point);
           }
           for (let step = steps; step >= 0; step--) {
-            ctx.lineTo(...ribbon(route, step / steps, center + halfWidth, time));
+            ctx.lineTo(...bend(ribbon(route, step / steps, center + halfWidth, time)));
           }
           ctx.closePath();
           ctx.fillStyle = gradient;
@@ -234,7 +245,7 @@ export function createScene({ createCanvas }) {
         const lane = (strand / (strandCount - 1) - .5) * 2.02;
         ctx.beginPath();
         for (let step = 0; step <= steps; step++) {
-          const point = ribbon(route, step / steps, lane, time, lane * .6);
+          const point = bend(ribbon(route, step / steps, lane, time, lane * .6));
           if (step === 0) ctx.moveTo(...point); else ctx.lineTo(...point);
         }
         const depth = Math.max(0, 1 - Math.abs(lane));
@@ -253,7 +264,7 @@ export function createScene({ createCanvas }) {
           ctx.beginPath();
           for (let step = 0; step <= 18; step++) {
             const u = mix(start, end, step / 18);
-            const point = ribbon(route, u, lane, time);
+            const point = bend(ribbon(route, u, lane, time));
             if (step === 0) ctx.moveTo(...point); else ctx.lineTo(...point);
           }
           ctx.strokeStyle = gradient;
@@ -266,8 +277,10 @@ export function createScene({ createCanvas }) {
         const particle = route.particles[i];
         const u = (particle.u + time * particle.speed) % 1;
         const target = ribbon(route, u, particle.lane, time, particle.phase);
-        const x = mix(target[0], particle.scatterX, scatter);
-        const y = mix(target[1], particle.scatterY, scatter);
+        const [x, y] = bend([
+          mix(target[0], particle.scatterX, scatter),
+          mix(target[1], particle.scatterY, scatter),
+        ]);
         const fade = Math.min(1, u * 13, (1 - u) * 13);
         const shimmer = .74 + .26 * Math.sin(time * 1.3 + particle.phase);
         const light = alpha * fade * (.19 + particle.light * .48) * shimmer;
@@ -275,7 +288,7 @@ export function createScene({ createCanvas }) {
         dot(ctx, x, y, particle.size * .82, particle.color, light, isGlow);
         if (particle.light > .82 && progress > .9 && !route.input) {
           // Short tapered dashes move with the current and expose its direction.
-          const tail = ribbon(route, Math.max(0, u - .020), particle.lane, time, particle.phase);
+          const tail = bend(ribbon(route, Math.max(0, u - .020), particle.lane, time, particle.phase));
           ctx.globalAlpha = light * .35;
           ctx.strokeStyle = COLORS[particle.color];
           ctx.lineWidth = .6;
@@ -296,8 +309,9 @@ export function createScene({ createCanvas }) {
         for (let j = 0; j < path.length; j++) {
           const [x, y] = path[j];
           const wave = Math.sin((sign.x + x) * .013 - time * .37) * 2;
-          if (j === 0) ctx.moveTo(sign.x + x, sign.y + y + wave);
-          else ctx.lineTo(sign.x + x, sign.y + y + wave);
+          const point = bend([sign.x + x, sign.y + y + wave]);
+          if (j === 0) ctx.moveTo(...point);
+          else ctx.lineTo(...point);
         }
         ctx.strokeStyle = COLORS[sign.color];
         ctx.lineWidth = sign.weight * 3.8;
@@ -311,8 +325,10 @@ export function createScene({ createCanvas }) {
         const release = Math.pow(clamp((age - .63) / .37, 0, 1), 1.4);
         const u = Math.min(.999, point.u + release * (signIndex < 2 ? .20 : .14));
         const current = ribbon(point.route, u, 0, time);
-        const x = mix(current[0], sign.x + point.scatterX, scatter);
-        const y = mix(current[1] + point.offset * (1 - release * .44), sign.y + point.scatterY, scatter);
+        const [x, y] = bend([
+          mix(current[0], sign.x + point.scatterX, scatter),
+          mix(current[1] + point.offset * (1 - release * .44), sign.y + point.scatterY, scatter),
+        ]);
         const fade = Math.min(1, age * 15) * (1 - release) ** 1.25;
         const color = point.glow > .78 ? point.route.color : sign.color;
         dot(ctx, x, y, point.size, color,
@@ -327,7 +343,8 @@ export function createScene({ createCanvas }) {
             const flowU = clamp(point.u - .035 + travel * .20, 0, .999);
             const flow = ribbon(point.route, flowU, 0, time);
             const fiberY = flow[1] + point.offset * (1 - travel * .30);
-            if (step === 0) ctx.moveTo(flow[0], fiberY); else ctx.lineTo(flow[0], fiberY);
+            const position = bend([flow[0], fiberY]);
+            if (step === 0) ctx.moveTo(...position); else ctx.lineTo(...position);
           }
           ctx.strokeStyle = COLORS[point.route.color];
           ctx.lineWidth = .65;
@@ -342,7 +359,7 @@ export function createScene({ createCanvas }) {
       const route = streams[i];
       for (let j = 0; j < 2; j++) {
         const u = (time * .043 + i * .27 + j * .49) % 1;
-        const [x, y] = ribbon(route, u, j ? -.33 : .21, time);
+        const [x, y] = bend(ribbon(route, u, j ? -.33 : .21, time));
         const fade = Math.min(1, u * 10, (1 - u) * 10);
         dot(ctx, x, y, 1.25, route.color, progress * fade * .43, true);
       }
