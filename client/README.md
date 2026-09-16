@@ -222,3 +222,14 @@ MCP-запись меняется штатным `hermes config set mcp_servers.
 пакеты ОС; Node/Python пользователя не заменяются. Для обычной работы агента нужен
 рабочий стол с `DISPLAY` или `WAYLAND_DISPLAY`; наличие графического окружения
 проверяется отдельно и не выдаётся за выполненную авторизацию Loginom.
+
+Целевая Linux-платформа комплекта — x64: Ubuntu 22.04/24.04/26.04 и Debian 12/13
+([требования Playwright](https://playwright.dev/docs/intro#system-requirements)).
+Для X11 нужен действующий `DISPLAY` и доступ к X-серверу; при нестандартном файле
+авторизации — `XAUTHORITY`. Для нативного Wayland нужны socket compositor,
+`WAYLAND_DISPLAY`, `XDG_RUNTIME_DIR` и `XDG_SESSION_TYPE=wayland`.
+`XDG_CURRENT_DESKTOP` сохраняет определение рабочего стола Chromium, в том числе
+выбор нативных настроек прокси. Bridge передаёт эти шесть переменных только на Linux.
+XWayland и нативный Wayland проверяются отдельно: успех X11 не подтверждает оба.
+Текущие доказательства и ограничения приёмки перечислены в
+[плане Linux](../docs/plans/2026-09-15-loginom-dock-linux-maintenance.md).

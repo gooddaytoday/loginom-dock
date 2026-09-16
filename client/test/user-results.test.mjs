@@ -54,3 +54,24 @@ test('export result retains byte evidence but excludes host paths and private bi
  assert.equal(r.output.file_artifacts[0].sha256,file.sha256);assert.equal(r.output.file_artifacts[0].destination,file.destination);
  assert.equal(r.output.file_artifacts[0].path,undefined);assert.equal(r.output.file_artifacts[0].session_id,undefined);assert.equal(validate(r).valid,true);
 });
+
+test('installed import discovery supplies its complete parameter vocabulary in compact knowledge', async () => {
+  const { createCandidateNodeSupport } = await import('../lib/node-support.mjs');
+  const { describeNodeTypes } = await import('../lib/node-contracts.mjs');
+  const { nodeApplyInputSchema } = await import('../lib/node-api.mjs');
+  const support = createCandidateNodeSupport({ targetOrigin: 'http://example.test', targetBuild: '7.4.2' });
+  const cards = describeNodeTypes([...support.nodeApplyHandlers.keys()], { runtime: 'pin' }, new Map(), support.nodeApplyHandlers);
+  const knowledge = compactKnowledgeBundle({ session_manifest: { runtime: 'pin' }, actions: [], node_types: cards });
+  for (const card of knowledge.node_types) assert.ok(card.parameter_schema, card.type);
+  const schema = knowledge.node_types.find(card => card.type === 'imports.text').parameter_schema;
+  assert.deepEqual(schema.required, ['source', 'settings']);
+  for (const key of ['source', 'settings']) {
+    const { description, ...shape } = schema.properties[key];
+    assert.deepEqual(shape, nodeApplyInputSchema.properties.parameters.properties[key]);
+  }
+  assert.deepEqual(Object.keys(schema.properties.settings.properties), ['source', 'format', 'columns']);
+  schema.properties.settings.properties.columns.maxItems = 0;
+  const fresh = describeNodeTypes(['imports.text'], {}, new Map(), support.nodeApplyHandlers)[0];
+  assert.equal(fresh.parameter_schema.properties.settings.properties.columns.maxItems, 1000);
+  assert.equal(nodeApplyInputSchema.properties.parameters.properties.settings.properties.columns.maxItems, 1000);
+});

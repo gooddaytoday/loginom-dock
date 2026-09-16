@@ -30,7 +30,23 @@ export function verifyGroupingAutosyncRestore(before,after,value){
  return true;
 }
 export function configureGroupingInlineMapping(channel,configuration){
- return configureDerivedInlineMapping(channel,configuration,validateGroupingInlineSources);
+ return configureDerivedInlineMapping(channel,configuration,validateGroupingInlineSources,
+  (before,after,missing)=>verifyGroupingInlineSync(configuration,before,after,missing));
+}
+export function verifyGroupingInlineSync(configuration,before,after,missing){
+ need(same(before.node_context,after.node_context),'Grouping synchronization changed port ownership');
+ const resolved=resolveGeneratedGroupingSources(configuration,before);
+ const retainedSources=new Set(before.target_fields.map(f=>f.source?.record_id));
+ // With one aggregate Loginom can append target Other bound to source
+ // Other_Sum. The existing grouping definitions resolve both native spellings.
+ // Normalize only that generated name for the shared strict comparison; keep
+ // the original source record, label, type and all retained fields unchanged.
+ const comparable={...after,target_fields:after.target_fields.map(f=>{
+  if(retainedSources.has(f.source?.record_id))return f;
+  const generated=resolved.find(e=>e.source.record_id===f.source?.record_id);
+  return generated&&f.name===generated.name?{...f,name:generated.source.name}:f;
+ })};
+ return verifyCalculatorInlineSync(before,comparable,missing);
 }
 // Both grouping and sorting expose this same conditional native output page
 // after their input-derived schema changes. Each supplies its source contract.
