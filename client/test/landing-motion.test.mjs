@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { mountDataFlow } from '../../landing/hero.mjs';
+import { mountDataFlow, WORKFLOW_NODES, WORKFLOW_EDGES, flowPoint, workflowProjection } from '../../landing/hero.mjs';
 
 function scene({ reduced = false, contextAvailable = true } = {}) {
   class Element extends EventTarget {
@@ -131,4 +131,42 @@ test('hero keeps its SVG fallback and hides animation controls when Canvas is un
   assert.equal(s.root.attributes.has('data-rendered'), false);
   assert.equal(s.draws, 0);
   s.dispose();
+});
+
+test('workflow has two sources, two reachable results and no directed cycles', () => {
+  const incoming = WORKFLOW_NODES.map((_, index) => WORKFLOW_EDGES.filter(([, to]) => to === index).length);
+  const outgoing = WORKFLOW_NODES.map((_, index) => WORKFLOW_EDGES.filter(([from]) => from === index).length);
+  const sources = incoming.flatMap((count, index) => count === 0 ? [index] : []);
+  assert.equal(sources.length, 2);
+  assert.equal(outgoing.filter(count => count === 0).length, 2);
+  const visited = new Set();
+  function visit(node, path = new Set()) {
+    assert.ok(!path.has(node), 'no cycle or return path');
+    visited.add(node);
+    for (const [from, to] of WORKFLOW_EDGES) {
+      assert.ok(WORKFLOW_NODES[from] && WORKFLOW_NODES[to], 'edge endpoints exist');
+      if (from === node) visit(to, new Set([...path, node]));
+    }
+  }
+  sources.forEach(source => visit(source));
+  assert.equal(visited.size, WORKFLOW_NODES.length, 'every node belongs to the workflow');
+});
+
+test('workflow packets travel forward between ports at centered and extreme camera tilts', () => {
+  for (const edge of WORKFLOW_EDGES) {
+    const from = WORKFLOW_NODES[edge[0]].position, to = WORKFLOW_NODES[edge[1]].position;
+    assert.ok(Math.abs(flowPoint(edge, 0)[0] - from[0] - .29) < 1e-9);
+    assert.ok(Math.abs(flowPoint(edge, 1)[0] - to[0] + .29) < 1e-9);
+    for (const tiltX of [-1, 0, 1]) for (const tiltY of [-1, 0, 1]) {
+      const project = workflowProjection(800, 600, tiltX, tiltY);
+      for (const lane of [0, 1.5, 3, 4.5]) {
+        let previous = -Infinity;
+        for (let i = 0; i <= 100; i++) {
+          const [x] = project(flowPoint(edge, i / 100, lane));
+          assert.ok(x > previous, 'screen direction must remain left to right');
+          previous = x;
+        }
+      }
+    }
+  }
 });
