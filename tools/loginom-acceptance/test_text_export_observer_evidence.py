@@ -8,9 +8,11 @@ def encoded(value):return json.dumps(value,ensure_ascii=False,separators=(',',':
 class ObserverEvidenceTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
-        import subprocess,shutil
+        import os,subprocess,shutil
         cls.template=tempfile.TemporaryDirectory(prefix='node17-cross-runtime-');cls.addClassCleanup(cls.template.cleanup)
-        node='/Users/kartamyshev/.loginom-dock/releases/0.1.0-dev.20260910.3-80ca61417ec7/runtime/node'
+        bundled=Path.home()/'.loginom-dock/current/runtime/node'
+        node=os.environ.get('DOCK_TEST_NODE') or (str(bundled) if bundled.is_file() else shutil.which('node'))
+        if not node:raise RuntimeError('Node is required; set DOCK_TEST_NODE to the pinned runtime')
         script=Path(__file__).with_name('text-export-observer-offline.mjs')
         subprocess.run([node,str(script),'--synthetic-fixture',cls.template.name],check=True,capture_output=True,text=True,timeout=10)
 
