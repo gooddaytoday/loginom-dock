@@ -95,5 +95,5 @@ for (const variant of previews) {
     }
   });
   server.on('error', error => { console.error(`${variant.port}: ${error.message}`); process.exitCode = 1; });
-  server.listen(variant.port, '127.0.0.1', () => console.log(`${variant.number ? `${variant.number} ` : ''}${variant.name}: http://127.0.0.1:${variant.port}/`));
+  server.listen(variant.port, '0.0.0.0', () => console.log(`${variant.number ? `${variant.number} ` : ''}${variant.name}: http://127.0.0.1:${variant.port}/`));
 }
