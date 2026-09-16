@@ -232,6 +232,28 @@ class ClientPackagingTest(unittest.TestCase):
                 self.assertFalse((target / "runtime").exists())
                 self.assertFalse((target / "release.json").exists())
 
+    def test_landing_suites_resolve_in_snapshot_and_both_bundle_layouts(self):
+        # These dependency-free suites must remain runnable even on a source
+        # checker without the pinned client runtime or npm dependencies.
+        node = os.environ.get("DOCK_TEST_NODE") or shutil.which("node")
+        if not node:
+            self.skipTest("Node is required to check isolated landing imports")
+        builder = load_script(self.source / "deploy/loginom-dock/build-client-bundle.py")
+        layouts = [self.source]
+        for windows in (False, True):
+            staged = self.directory / f"landing-staged-{windows}"
+            builder.copy_client_sources(self.source, staged, windows=windows)
+            layouts.append(staged)
+        for layout in layouts:
+            with self.subTest(layout=layout.name):
+                tests = sorted((layout / "client/test").glob("landing*.test.mjs"))
+                self.assertTrue(tests)
+                result = subprocess.run(
+                    [node, "--test", *map(str, tests)], cwd=layout / "client",
+                    capture_output=True, text=True, timeout=120,
+                )
+                self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+
     def test_isolated_staged_sources_run_the_complete_client_suite(self):
         pinned = Path.home() / ".loginom-dock/current/runtime/node"
         node = os.environ.get("DOCK_TEST_NODE") or (str(pinned) if pinned.is_file() else shutil.which("node"))

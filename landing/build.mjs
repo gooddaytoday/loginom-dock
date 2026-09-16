@@ -33,7 +33,8 @@ const html = template.replace(/\{\{([A-Z_]+)\}\}/g, (_, name) => {
 await rm(out, { recursive: true, force: true });
 await mkdir(out, { recursive: true });
 await cp(join(root, 'assets'), join(out, 'assets'), { recursive: true });
-for (const file of ['styles.css', 'app.js', 'instructions.mjs', 'robots.txt', 'sitemap.xml']) await cp(join(root, file), join(out, file));
+await cp(join(root, 'variants'), join(out, 'variants'), { recursive: true });
+for (const file of ['styles.css', 'hero.css', 'hero.mjs', 'hero-cycle.mjs', 'hero-selection.mjs', 'flow-interaction.mjs', 'app.js', 'instructions.mjs', 'robots.txt', 'sitemap.xml']) await cp(join(root, file), join(out, file));
 await writeFile(join(out, 'index.html'), html);
 await writeFile(join(out, 'release.js'), `export default ${JSON.stringify(release)};\n`);
 await writeFile(join(out, '404.html'), '<!doctype html><html lang="ru"><meta charset="utf-8"><meta name="viewport" content="width=device-width"><title>Страница не найдена · Loginom Dock</title><link rel="stylesheet" href="/styles.css"><main class="container section"><p class="eyebrow">404</p><h1>Страница не найдена</h1><p>Начните со страницы установки Loginom Dock.</p><a class="button" href="/">На главную →</a></main></html>');
