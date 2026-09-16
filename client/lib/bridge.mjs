@@ -64,10 +64,11 @@ const diagnosticTool = {
 
 export function browserProcessEnvironment(browserRoot, { platform = process.platform, environment = process.env } = {}) {
   const inherited = { ...getDefaultEnvironment(), PLAYWRIGHT_BROWSERS_PATH: browserRoot };
-  // Only Linux needs these additional desktop connection settings. Other
+  // Linux needs the display connection, Chromium backend selection and desktop
+  // identity (including native proxy discovery). Other
   // platforms retain the SDK environment and pinned browser path unchanged.
   if (platform === 'linux') {
-    for (const key of ['DISPLAY', 'XAUTHORITY', 'XDG_RUNTIME_DIR', 'WAYLAND_DISPLAY']) {
+    for (const key of ['DISPLAY', 'XAUTHORITY', 'XDG_RUNTIME_DIR', 'WAYLAND_DISPLAY', 'XDG_SESSION_TYPE', 'XDG_CURRENT_DESKTOP']) {
       const value = environment[key];
       if (typeof value === 'string' && value.length > 0 && !value.startsWith('()')) inherited[key] = value;
     }

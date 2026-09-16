@@ -65,7 +65,7 @@ test('MCP application refusals remain typed normal content and the same connecti
     const admitted=await session.artifactStore.admit({sourcePath,name:'sales.csv',bytes:3,
       sha256:createHash('sha256').update('abc').digest('hex')});
     bridge = await createBridge(config, session);
-    for (const key of ['DISPLAY', 'XAUTHORITY', 'XDG_RUNTIME_DIR', 'WAYLAND_DISPLAY']) {
+    for (const key of ['DISPLAY', 'XAUTHORITY', 'XDG_RUNTIME_DIR', 'WAYLAND_DISPLAY', 'XDG_SESSION_TYPE', 'XDG_CURRENT_DESKTOP']) {
       if (process.platform === 'linux' && process.env[key] && !process.env[key].startsWith('()'))
         assert.equal(browserEnvironment[key], process.env[key]);
       else assert.equal(Object.hasOwn(browserEnvironment, key), false);
