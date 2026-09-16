@@ -10,7 +10,14 @@ const variants = [
   { key: 'clouds', number: '01', name: 'Скопления данных', port: 4174 },
   { key: 'glyphs', number: '02', name: 'Знаки из частиц', port: 4175 },
   { key: 'ribbons', number: '03', name: 'Световые русла', port: 4176 },
+  { key: 'voids', number: '04', name: 'Пустоты в потоке', port: 4177 },
 ];
+// An optional key starts one additional study without restarting the others.
+const selectedKey = process.argv[2];
+if (process.argv.length > 3 || (selectedKey && !variants.some(variant => variant.key === selectedKey))) {
+  throw new Error('Использование: node landing/preview-variants.mjs [clouds|glyphs|ribbons|voids]');
+}
+const previews = selectedKey ? variants.filter(variant => variant.key === selectedKey) : variants;
 const mime = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript', '.mjs': 'text/javascript',
   '.css': 'text/css', '.svg': 'image/svg+xml', '.png': 'image/png', '.jpg': 'image/jpeg', '.woff2': 'font/woff2', '.csv': 'text/csv' };
 const csp = "default-src 'self'; script-src 'self'; style-src 'self'; font-src 'self'; img-src 'self'; connect-src 'none'; object-src 'none'; base-uri 'none'; frame-ancestors 'none'; form-action 'none'";
@@ -57,7 +64,7 @@ async function page(variant, release, artOnly, staticOnly) {
   });
 }
 
-for (const variant of variants) {
+for (const variant of previews) {
   const server = http.createServer(async (req, res) => {
     try {
       const url = new URL(req.url, 'http://localhost');

@@ -7,6 +7,7 @@
 body[data-variant="clouds"] .hero-atmosphere { background: radial-gradient(ellipse at 76% 48%, #65302923, transparent 56%); }
 body[data-variant="glyphs"] .hero-atmosphere { background: radial-gradient(ellipse at 76% 48%, #5d2d391c, transparent 56%); }
 body[data-variant="ribbons"] .hero-atmosphere { background: radial-gradient(ellipse at 76% 48%, #69463518, transparent 56%); }
+body[data-variant="voids"] .hero-atmosphere { background: radial-gradient(ellipse at 76% 48%, #74443121, transparent 56%); }
 @media (max-width: 1050px) and (min-width: 761px) {
   .data-flow { width: 65%; right: -1%; }
   .flow-caption { left: 20%; font-size: 8px; }
