@@ -12,17 +12,18 @@ function storageFor(backing = new Map()) {
   };
 }
 
-function pageFixture({ storage = storageFor(), reduced = false } = {}) {
+function pageFixture({ storage = storageFor(), reduced = false, nextButton = false } = {}) {
   class Element extends EventTarget {
     attributes = new Map();
     hidden = false;
+    disabled = false;
     textContent = '';
     setAttribute(name, value) { this.attributes.set(name, String(value)); }
     getAttribute(name) { return this.attributes.get(name) ?? null; }
     removeAttribute(name) { this.attributes.delete(name); }
     hasAttribute(name) { return this.attributes.has(name); }
     toggleAttribute(name, value) { if (value) this.setAttribute(name, ''); else this.removeAttribute(name); }
-    click() { this.dispatchEvent(new Event('click')); }
+    click() { if (!this.disabled) this.dispatchEvent(new Event('click')); }
     get dataset() {
       const attribute = key => `data-${key.replace(/[A-Z]/g, letter => `-${letter.toLowerCase()}`)}`;
       return new Proxy({}, {
@@ -33,6 +34,8 @@ function pageFixture({ storage = storageFor(), reduced = false } = {}) {
   }
   const root = new Element(), body = new Element(), poster = new Element(), description = new Element();
   const controls = new Element(), pause = new Element(), replay = new Element(), canvas = new Element();
+  const next = nextButton ? new Element() : null;
+  if (next) next.hidden = true;
   const motion = new Element(), pointer = new Element(), doc = new Element(), win = new Element();
   motion.matches = reduced;
   pointer.matches = true;
@@ -43,23 +46,79 @@ function pageFixture({ storage = storageFor(), reduced = false } = {}) {
   root.querySelector = selector => ({
     '.data-flow-fallback': poster, '.sr-only': description, canvas,
     '.flow-controls': controls, '[data-flow-pause]': pause, '[data-flow-replay]': replay,
+    '[data-flow-next]': next,
   })[selector] ?? null;
   doc.body = body;
   doc.hidden = false;
   doc.querySelector = selector => selector === '[data-flow]' ? root : null;
   doc.createElement = () => ({ getContext: () => context });
-  const pending = new Map();
+  const pending = new Map(), idle = new Map(), timers = new Map();
   let nextFrame = 0;
   Object.assign(win, {
     localStorage: storage, innerHeight: 720, devicePixelRatio: 1,
     matchMedia: query => query.includes('reduced-motion') ? motion : pointer,
     requestAnimationFrame(callback) { pending.set(++nextFrame, callback); return nextFrame; },
     cancelAnimationFrame(id) { pending.delete(id); },
+    requestIdleCallback(callback) { idle.set(++nextFrame, callback); return nextFrame; },
+    cancelIdleCallback(id) { idle.delete(id); },
+    setTimeout(callback) { timers.set(++nextFrame, callback); return nextFrame; },
+    clearTimeout(id) { timers.delete(id); },
   });
   return {
-    root, body, poster, description, controls, pause, replay, canvas, doc, win, storage,
+    root, body, poster, description, controls, pause, replay, next, canvas, doc, win, storage,
     frame(now) { const callbacks = [...pending.values()]; pending.clear(); callbacks.forEach(callback => callback(now)); },
+    idle() {
+      const callbacks = [...idle.values()]; idle.clear();
+      callbacks.forEach(callback => callback({ didTimeout: false, timeRemaining: () => 50 }));
+    },
+    timers() { const callbacks = [...timers.values()]; timers.clear(); callbacks.forEach(callback => callback()); },
     get pendingFrames() { return pending.size; },
+    get pendingIdle() { return idle.size; },
+    get pendingTimers() { return timers.size; },
+  };
+}
+
+const settle = () => new Promise(resolve => setImmediate(resolve));
+
+function deferred() {
+  let resolve, reject;
+  const promise = new Promise((yes, no) => { resolve = yes; reject = no; });
+  return { promise, resolve, reject };
+}
+
+function sceneModule(id) {
+  const createScene = () => ({ id });
+  createScene.id = id;
+  return { createScene };
+}
+
+function clickFixture(options = {}) {
+  const p = pageFixture({ ...options, nextButton: true });
+  const loaded = [], prepared = [], transitions = [];
+  const behavior = {
+    load: async id => sceneModule(id),
+    prepare: factory => ({ id: factory.id }),
+    transition: async () => true,
+  };
+  let disposed = 0;
+  const engine = Object.assign(() => { disposed++; }, {
+    prepareScene(factory) {
+      const result = behavior.prepare(factory);
+      prepared.push(result);
+      return result;
+    },
+    transitionTo(scene) { transitions.push(scene); return behavior.transition(scene); },
+  });
+  const mountOptions = {
+    async loadScene(id) { loaded.push(id); return behavior.load(id); },
+    mountScene: () => { p.root.setAttribute('data-rendered', ''); return engine; },
+  };
+  return {
+    ...p, loaded, prepared, transitions, behavior, mountOptions,
+    mount: () => mountHeroCycle(p.root, p.win, p.doc, mountOptions),
+    get disposed() { return disposed; },
+    get pendingIdle() { return p.pendingIdle; },
+    get pendingTimers() { return p.pendingTimers; },
   };
 }
 
@@ -290,4 +349,249 @@ test('unavailable Web Locks falls back to one deterministic selection', async ()
     });
     assert.deepEqual(p.storage.writes, [[HERO_STORAGE_KEY, 'glyphs']]);
   }
+});
+
+test('click switching warms only the following scene during idle time and leaves storage alone', async () => {
+  const p = clickFixture();
+  const dispose = await p.mount();
+  assert.equal(p.next.hidden, false);
+  assert.deepEqual(p.loaded, ['clouds'], 'mount does not synchronously warm all four scenes');
+  assert.equal(p.prepared.length, 0);
+  p.idle();
+  await settle();
+  assert.deepEqual(p.loaded, ['clouds', 'glyphs']);
+  assert.deepEqual(p.prepared.map(scene => scene.id), ['glyphs']);
+  assert.equal(p.transitions.length, 0);
+  assert.equal(p.root.getAttribute('data-variant'), 'clouds');
+  assert.deepEqual(p.storage.writes, [[HERO_STORAGE_KEY, 'glyphs']]);
+  p.pause.click();
+  p.replay.click();
+  await settle();
+  assert.equal(p.transitions.length, 0, 'animation controls are separate from scene selection');
+  assert.deepEqual(p.storage.writes, [[HERO_STORAGE_KEY, 'glyphs']]);
+  dispose();
+});
+
+test('clicks reuse the warmed scene, commit after the fade, wrap in order, and persist for reload', async () => {
+  const p = clickFixture();
+  const dispose = await p.mount();
+  p.idle();
+  await settle();
+  const fade = deferred();
+  p.behavior.transition = () => fade.promise;
+  p.next.click();
+  await settle();
+  assert.equal(p.transitions.length, 1);
+  assert.equal(p.transitions[0], p.prepared[0], 'the engine receives its prewarmed instance');
+  assert.equal(p.root.getAttribute('data-variant'), 'clouds');
+  assert.deepEqual(p.storage.writes, [[HERO_STORAGE_KEY, 'glyphs']], 'a pending fade must not advance reload order');
+  fade.resolve(true);
+  await settle();
+  assert.equal(p.root.getAttribute('data-variant'), 'glyphs');
+  assert.equal(p.body.getAttribute('data-variant'), 'glyphs');
+  assert.equal(p.poster.getAttribute('src'), '/variants/glyphs-poster.jpg');
+  assert.equal(p.storage.backing.get(HERO_STORAGE_KEY), 'ribbons');
+  p.behavior.transition = async () => true;
+  for (const id of ['ribbons', 'voids', 'clouds']) {
+    p.idle();
+    await settle();
+    p.next.click();
+    await settle();
+    assert.equal(p.root.getAttribute('data-variant'), id);
+  }
+  assert.deepEqual(p.transitions.map(scene => scene.id), ['glyphs', 'ribbons', 'voids', 'clouds']);
+  assert.deepEqual(p.storage.writes.map(([, id]) => id), ['glyphs', 'ribbons', 'voids', 'clouds', 'glyphs']);
+  dispose();
+  const reloaded = clickFixture({ storage: storageFor(p.storage.backing) });
+  const stopReloaded = await reloaded.mount();
+  assert.equal(reloaded.root.getAttribute('data-variant'), 'glyphs');
+  assert.equal(reloaded.storage.backing.get(HERO_STORAGE_KEY), 'ribbons');
+  stopReloaded();
+});
+
+test('new roots in the same document reuse the last successfully clicked scene', async () => {
+  const p = clickFixture();
+  const dispose = await p.mount();
+  p.next.click();
+  await settle();
+  assert.equal(p.root.getAttribute('data-variant'), 'glyphs');
+  const replacement = pageFixture();
+  const ids = [];
+  await mountHeroCycle(replacement.root, p.win, p.doc, {
+    loadScene: async id => { ids.push(id); return sceneModule(id); },
+    mountScene: () => () => {},
+  });
+  assert.deepEqual(ids, ['glyphs']);
+  assert.deepEqual(p.storage.writes.map(([, id]) => id), ['glyphs', 'ribbons']);
+  dispose();
+});
+
+test('rapid clicks during an unfinished import or fade consume exactly one scene', async () => {
+  const p = clickFixture();
+  const dispose = await p.mount();
+  const download = deferred(), fade = deferred();
+  p.behavior.load = id => id === 'glyphs' ? download.promise : Promise.resolve(sceneModule(id));
+  p.behavior.transition = () => fade.promise;
+  p.next.click();
+  p.next.dispatchEvent(new Event('click'));
+  p.next.dispatchEvent(new Event('click'));
+  p.idle();
+  await settle();
+  assert.deepEqual(p.loaded, ['clouds', 'glyphs']);
+  assert.equal(p.transitions.length, 0);
+  download.resolve(sceneModule('glyphs'));
+  await settle();
+  assert.equal(p.transitions.length, 1);
+  p.next.dispatchEvent(new Event('click'));
+  await settle();
+  assert.equal(p.transitions.length, 1);
+  fade.resolve(true);
+  await settle();
+  assert.equal(p.root.getAttribute('data-variant'), 'glyphs');
+  assert.deepEqual(p.storage.writes.map(([, id]) => id), ['glyphs', 'ribbons']);
+  dispose();
+});
+
+test('failed preloading retains the current scene and a click can retry successfully', async () => {
+  const p = clickFixture();
+  const dispose = await p.mount();
+  p.behavior.load = async () => { throw new Error('Offline'); };
+  p.idle();
+  await settle();
+  assert.equal(p.root.getAttribute('data-variant'), 'clouds');
+  assert.deepEqual(p.storage.writes.map(([, id]) => id), ['glyphs']);
+  assert.equal(p.transitions.length, 0);
+  p.behavior.load = async id => sceneModule(id);
+  p.next.click();
+  await settle();
+  assert.equal(p.root.getAttribute('data-variant'), 'glyphs');
+  assert.deepEqual(p.loaded, ['clouds', 'glyphs', 'glyphs']);
+  assert.deepEqual(p.storage.writes.map(([, id]) => id), ['glyphs', 'ribbons']);
+  dispose();
+});
+
+test('preparation and transition failures do not advance order and leave the control retryable', async t => {
+  for (const failure of ['prepare', 'reject-transition', 'cancel-transition']) {
+    await t.test(failure, async () => {
+      const p = clickFixture();
+      const dispose = await p.mount();
+      if (failure === 'prepare') p.behavior.prepare = () => { throw new Error('Canvas unavailable'); };
+      else p.behavior.transition = failure === 'reject-transition'
+        ? async () => { throw new Error('Draw failed'); }
+        : async () => false;
+      p.next.click();
+      await settle();
+      assert.equal(p.root.getAttribute('data-variant'), 'clouds');
+      assert.equal(p.poster.getAttribute('src'), '/variants/clouds-poster.jpg');
+      assert.deepEqual(p.storage.writes.map(([, id]) => id), ['glyphs']);
+      p.behavior.prepare = factory => ({ id: factory.id });
+      p.behavior.transition = async () => true;
+      p.next.click();
+      await settle();
+      assert.equal(p.root.getAttribute('data-variant'), 'glyphs');
+      assert.equal(p.storage.backing.get(HERO_STORAGE_KEY), 'ribbons');
+      dispose();
+    });
+  }
+});
+
+test('storage denial still allows the local click cycle to advance and wrap', async () => {
+  const p = clickFixture();
+  Object.defineProperty(p.win, 'localStorage', { get() { throw new DOMException('Denied', 'SecurityError'); } });
+  const dispose = await p.mount();
+  for (const id of ['glyphs', 'ribbons', 'voids', 'clouds', 'glyphs']) {
+    p.next.click();
+    await settle();
+    assert.equal(p.root.getAttribute('data-variant'), id);
+  }
+  assert.deepEqual(p.storage.reads, []);
+  assert.deepEqual(p.storage.writes, []);
+  dispose();
+});
+
+test('disposing cancels scheduled warming and removes click selection', async () => {
+  const p = clickFixture();
+  const dispose = await p.mount();
+  assert.ok(p.pendingIdle + p.pendingTimers > 0, 'warming is deferred until idle');
+  dispose();
+  dispose();
+  assert.equal(p.disposed, 1, 'engine cleanup is idempotent');
+  assert.equal(p.pendingIdle + p.pendingTimers, 0);
+  p.idle();
+  p.timers();
+  p.next.dispatchEvent(new Event('click'));
+  await settle();
+  assert.deepEqual(p.loaded, ['clouds']);
+  assert.equal(p.transitions.length, 0);
+  assert.deepEqual(p.storage.writes.map(([, id]) => id), ['glyphs']);
+});
+
+test('disposing during a next-scene download prevents late preparation, switching, and persistence', async () => {
+  const p = clickFixture();
+  const dispose = await p.mount();
+  const download = deferred();
+  p.behavior.load = () => download.promise;
+  p.next.click();
+  await settle();
+  dispose();
+  download.resolve(sceneModule('glyphs'));
+  await settle();
+  assert.equal(p.prepared.length, 0);
+  assert.equal(p.transitions.length, 0);
+  assert.equal(p.root.getAttribute('data-variant'), 'clouds');
+  assert.deepEqual(p.storage.writes.map(([, id]) => id), ['glyphs']);
+  assert.equal(p.disposed, 1);
+});
+
+test('disposing during a fade prevents a late completion from changing selection or storage', async () => {
+  const p = clickFixture();
+  const dispose = await p.mount();
+  const fade = deferred();
+  p.behavior.transition = () => fade.promise;
+  p.next.click();
+  await settle();
+  assert.equal(p.transitions.length, 1);
+  dispose();
+  fade.resolve(true);
+  await settle();
+  assert.equal(p.root.getAttribute('data-variant'), 'clouds');
+  assert.deepEqual(p.storage.writes.map(([, id]) => id), ['glyphs']);
+  assert.equal(p.pendingIdle + p.pendingTimers, 0);
+  assert.equal(p.disposed, 1);
+});
+
+test('the click surface stays hidden without transition support or a successfully rendered frame', async () => {
+  for (const failure of ['missing-methods', 'not-rendered']) {
+    const p = pageFixture({ nextButton: true });
+    const engine = () => {};
+    if (failure === 'missing-methods') p.root.setAttribute('data-rendered', '');
+    else Object.assign(engine, {
+      prepareScene() { assert.fail('failed initial renderer must not prepare another scene'); },
+      transitionTo() { assert.fail('failed initial renderer must not transition'); },
+    });
+    const dispose = await mountHeroCycle(p.root, p.win, p.doc, {
+      loadScene: async id => sceneModule(id),
+      mountScene: () => engine,
+    });
+    assert.equal(p.next.hidden, true, failure);
+    p.next.click();
+    p.idle();
+    await settle();
+    assert.deepEqual(p.storage.writes.map(([, id]) => id), ['glyphs']);
+    dispose();
+  }
+});
+
+test('next-scene warming falls back to a cancelable timer when idle callbacks are unavailable', async () => {
+  const p = clickFixture();
+  delete p.win.requestIdleCallback;
+  delete p.win.cancelIdleCallback;
+  const dispose = await p.mount();
+  assert.ok(p.pendingTimers > 0);
+  assert.deepEqual(p.loaded, ['clouds']);
+  p.timers();
+  await settle();
+  assert.deepEqual(p.loaded, ['clouds', 'glyphs']);
+  assert.equal(p.transitions.length, 0);
+  dispose();
 });

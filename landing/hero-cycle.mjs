@@ -1,5 +1,5 @@
 import { mountVariant } from './variants/engine.mjs';
-import { HERO_STORAGE_KEY, selectNextVariant } from './hero-selection.mjs';
+import { HERO_STORAGE_KEY, selectNextVariant, variantAfter, persistNextVariant } from './hero-selection.mjs';
 
 const selections = new WeakMap();
 const mounts = new WeakMap();
@@ -10,13 +10,13 @@ const sceneLoaders = {
   voids: () => import('./variants/voids.mjs'),
 };
 
+function storageFor(win) {
+  try { return win.localStorage; } catch { /* SecurityError on access. */ }
+}
+
 function selectForDocument(doc, win) {
   if (!selections.has(doc)) {
-    const choose = () => {
-      let storage;
-      try { storage = win.localStorage; } catch { /* SecurityError on access. */ }
-      return selectNextVariant(storage);
-    };
+    const choose = () => selectNextVariant(storageFor(win));
     let selection;
     try {
       // Serialize simultaneous tabs where Web Locks is available. The lock is
@@ -28,6 +28,92 @@ function selectForDocument(doc, win) {
     selections.set(doc, Promise.resolve(selection).catch(choose));
   }
   return selections.get(doc);
+}
+
+function enableClickCycle(engine, variant, root, win, doc, loadScene) {
+  const next = root.querySelector('[data-flow-next]');
+  if (!next || !root.hasAttribute('data-rendered') || !engine.prepareScene || !engine.transitionTo) return engine;
+  let current = variant, busy = false, disposed = false;
+  let preparation = null, cancelWarmup = null;
+
+  function cancelScheduledWarmup() {
+    cancelWarmup?.();
+    cancelWarmup = null;
+  }
+
+  function prepare(id) {
+    if (preparation?.id === id) return preparation.promise;
+    const entry = { id };
+    entry.promise = Promise.resolve().then(() => loadScene(id)).then(({ createScene }) => {
+      if (disposed) return null;
+      return engine.prepareScene(createScene);
+    }).catch(error => {
+      if (preparation === entry) preparation = null;
+      throw error;
+    });
+    preparation = entry;
+    return entry.promise;
+  }
+
+  function scheduleWarmup() {
+    if (disposed) return;
+    const warm = () => {
+      cancelWarmup = null;
+      if (!disposed) void prepare(variantAfter(current)).catch(() => {});
+    };
+    if (win.requestIdleCallback) {
+      const id = win.requestIdleCallback(warm, { timeout: 1600 });
+      cancelWarmup = () => win.cancelIdleCallback(id);
+    } else {
+      const id = win.setTimeout(warm, 200);
+      cancelWarmup = () => win.clearTimeout(id);
+    }
+  }
+
+  async function advance() {
+    // Coalesce rapid taps instead of building a queue of animations.
+    if (busy || disposed) return;
+    busy = true;
+    next.setAttribute('aria-busy', 'true');
+    cancelScheduledWarmup();
+    const id = variantAfter(current);
+    try {
+      const prepared = await prepare(id);
+      if (!prepared || disposed) return;
+      const changed = await engine.transitionTo(prepared);
+      if (!changed || disposed) return;
+      current = id;
+      root.setAttribute('data-variant', id);
+      doc.body?.setAttribute('data-variant', id);
+      root.querySelector('.data-flow-fallback')?.setAttribute('src', `/variants/${id}-poster.jpg`);
+      // A click follows the visible scene even if another tab has advanced.
+      // Reloads continue after the most recently completed selection.
+      persistNextVariant(storageFor(win), id);
+      selections.set(doc, Promise.resolve(id));
+    } catch { /* Keep the current flow on import or preparation failure. */ }
+    finally {
+      preparation = null;
+      busy = false;
+      next.removeAttribute('aria-busy');
+      if (!disposed) scheduleWarmup();
+    }
+  }
+
+  next.hidden = false;
+  root.setAttribute('data-click-cycle', '');
+  next.addEventListener('click', advance);
+  scheduleWarmup();
+  return () => {
+    if (disposed) return;
+    disposed = true;
+    cancelScheduledWarmup();
+    preparation = null;
+    next.removeEventListener('click', advance);
+    next.hidden = true;
+    next.removeAttribute('aria-busy');
+    root.removeAttribute('data-click-cycle');
+    engine();
+  };
 }
 
 export function mountHeroCycle(root, win = window, doc = document, {
@@ -45,7 +131,8 @@ export function mountHeroCycle(root, win = window, doc = document, {
     // a second mount reuse the chosen scene instead of consuming another turn.
     try {
       const { createScene } = await loadScene(variant);
-      return mountScene(createScene, root, win, doc);
+      const engine = mountScene(createScene, root, win, doc);
+      return enableClickCycle(engine, variant, root, win, doc, loadScene);
     } catch {
       root.removeAttribute('data-rendered');
       const controls = root.querySelector('.flow-controls');
