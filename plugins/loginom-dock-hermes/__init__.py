@@ -8,7 +8,7 @@ import re
 import functools
 from pathlib import Path
 
-ADAPTER_REVISION = "0.1.0-rc.8"
+ADAPTER_REVISION = "0.1.0-rc.9"
 
 
 def user_input_prefix(message):
@@ -141,6 +141,7 @@ def register(ctx):
     active = set()
     prompts = {}
     input_tickets = {}
+    input_errors = {}
 
     native_inputs = {}
     session_tickets = {}
@@ -172,6 +173,7 @@ def register(ctx):
         if previous and previous["turn_id"] == turn:
             return
         input_tickets.pop(session, None)
+        input_errors.pop(session, None)
         message = kwargs.get("user_message")
         # Messaging gateways can prepend document contents before the user's
         # text. Their attachment envelope is not this Desktop/TUI contract.
@@ -200,12 +202,21 @@ def register(ctx):
             result = subprocess.run([str(launcher), "input", "hermes", ADAPTER_REVISION],
                 input=json.dumps({"session_id": session, **item}), text=True, timeout=15,
                 check=False, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL)
-            if result.returncode != 0:
-                return
             admitted = json.loads(result.stdout)
+            if result.returncode != 0:
+                known = {
+                    "INPUT_COUNT_LIMIT": "Можно приложить не более 8 файлов за один раз.",
+                    "INPUT_FORMAT_UNSUPPORTED": "Поддерживаются CSV, TSV, TXT, XLSX и JSON; ZIP не поддерживается.",
+                    "INPUT_FILE_TOO_LARGE": "Размер одного вложения превышает 16 МиБ.",
+                    "INPUT_BATCH_TOO_LARGE": "Общий размер вложений превышает 64 МиБ.",
+                }
+                code = admitted.get("code") if isinstance(admitted, dict) else None
+                input_errors[session] = {"turn_id": item["turn_id"], "message": known.get(code, "Не удалось подготовить вложение. Проверьте доступность исходного файла.")}
+                return
             if isinstance(admitted, dict) and re.fullmatch(r"[a-f0-9]{64}", admitted.get("token", "")) and native_inputs.get(session) is item:
                 input_tickets[session] = {"turn_id": item["turn_id"], "token": admitted["token"]}
         except (OSError, ValueError, TypeError, subprocess.TimeoutExpired):
+            input_errors[session] = {"turn_id": item["turn_id"], "message": "Не удалось подготовить вложение: локальный обработчик не вернул подтверждение."}
             return
 
     def host_context(**kwargs):
@@ -226,6 +237,9 @@ def register(ctx):
             admit_user_paths(session, prompts.get(session, ""))
         item = input_tickets.get(session)
         ticket = item["token"] if item and turn_matches and item["turn_id"] == current["turn_id"] else None
+        failure = input_errors.get(session)
+        if preparing and not ticket and turn_matches and failure and failure["turn_id"] == current["turn_id"]:
+            return {"action": "block", "message": "Loginom Dock: " + failure["message"] + " Передача в Loginom не началась; это ошибка вложения, а не пустой датасет."}
         if preparing and not ticket and isinstance(kwargs.get("args"), dict) and "host_context_token" in kwargs["args"]:
             return {"action":"block", "message":"Loginom Dock: этот токен не подтверждён вложением текущей задачи. Повтори dock_prepare без подставленного токена или приложи файл."}
         if isinstance(session, str) and isinstance(name, str) and (session in active or ("loginom" in name and name.endswith("dock_prepare"))):
